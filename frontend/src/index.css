@@ -1,0 +1,50 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #ff9f1c;
+  --color-brand-dark: #e85d04;
+  --color-brand-light: #ffce8f;
+  --color-accent-brown: #3d2b1f;
+  --color-accent-peach: #fdf0d5;
+  --color-accent-cream: #fffaf0;
+
+  --font-brand: "Outfit", sans-serif;
+
+  --radius-3xl: 1.5rem;
+  --radius-4xl: 2.5rem;
+  --radius-5xl: 3rem;
+}
+
+:root {
+  --brand-primary: #ff9f1c;
+  --brand-secondary: #e85d04;
+  --brand-bg: #fdf0d5;
+}
+
+body {
+  @apply font-brand bg-accent-peach text-accent-brown selection:bg-brand/30;
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/70 backdrop-blur-lg border border-white/20 rounded-4xl shadow-xl;
+  }
+
+  .btn-primary {
+    @apply bg-brand-dark text-white px-10 py-5 rounded-full font-black transition-all hover:scale-105 hover:bg-brand-dark/90 active:scale-95 shadow-lg shadow-brand/20 uppercase tracking-widest text-sm;
+  }
+
+  .heading-xl {
+    @apply text-5xl md:text-7xl font-black tracking-tighter leading-[0.9];
+  }
+
+  .arch-card {
+    @apply relative overflow-hidden rounded-t-[8rem] rounded-b-3xl aspect-[3/4] bg-accent-cream border border-brand/10 transition-all hover:shadow-2xl hover:-translate-y-2;
+  }
+
+  .paw-print {
+    @apply absolute w-16 h-16 text-brand/10 pointer-events-none z-0 opacity-20;
+  }
+}

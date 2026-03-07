@@ -2,6 +2,9 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react
 import { Hero } from './components/Hero';
 import { Features } from './components/Features';
 import { CatalogPreview } from './components/CatalogPreview';
+import { ReservationsSection } from './components/ReservationsSection';
+import { LoyaltySection } from './components/LoyaltySection';
+import { AboutSection } from './components/AboutSection';
 import { Logo } from './components/Logo';
 import { ShoppingCart, Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin } from 'lucide-react';
 import Login from './pages/Login';
@@ -11,9 +14,8 @@ import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import AdminDashboard from './pages/dashboard/AdminDashboard';
-import AdminOrders from './pages/dashboard/AdminOrders';
-import AdminCatalog from './pages/dashboard/AdminCatalog';
-import AdminCustomers from './pages/dashboard/AdminCustomers';
+import AdminBusinesses from './pages/dashboard/AdminBusinesses';
+import AdminUsers from './pages/dashboard/AdminUsers';
 import UserDashboard from './pages/dashboard/UserDashboard';
 import UserCatalog from './pages/dashboard/UserCatalog';
 import ProductDetail from './pages/dashboard/ProductDetail';
@@ -21,6 +23,11 @@ import UserReservations from './pages/dashboard/UserReservations';
 import UserLoyalty from './pages/dashboard/UserLoyalty';
 import UserAlerts from './pages/dashboard/UserAlerts';
 import Checkout from './pages/dashboard/Checkout';
+import BusinessDashboard from './pages/dashboard/BusinessDashboard';
+import BusinessOrders from './pages/dashboard/BusinessOrders';
+import BusinessCatalog from './pages/dashboard/BusinessCatalog';
+import BusinessAnalytics from './pages/dashboard/BusinessAnalytics';
+import AccountSettings from './pages/dashboard/AccountSettings';
 
 function Navigation() {
   const location = useLocation();
@@ -46,9 +53,9 @@ function Navigation() {
         <div className="hidden md:flex items-center gap-10 font-black text-accent-brown/60 text-sm uppercase tracking-widest">
           <Link to="/" className="hover:text-brand-dark transition-colors">Home</Link>
           <Link to="/catalog" className="hover:text-brand-dark transition-colors">Catalog</Link>
-          <Link to="/#reservations" className="hover:text-brand-dark transition-colors">Reservations</Link>
-          <Link to="/#loyalty" className="hover:text-brand-dark transition-colors">Loyalty</Link>
-          <Link to="/#about" className="hover:text-brand-dark transition-colors">About</Link>
+          <a href="/#reservations" className="hover:text-brand-dark transition-colors">Reservations</a>
+          <a href="/#loyalty" className="hover:text-brand-dark transition-colors">Loyalty</a>
+          <a href="/#about" className="hover:text-brand-dark transition-colors">About</a>
         </div>
 
         {/* Right: Actions */}
@@ -78,8 +85,11 @@ function Landing() {
       <Hero />
       <Features />
       <CatalogPreview />
+      <ReservationsSection />
+      <LoyaltySection />
+      <AboutSection />
 
-      {/* Footer or extra sections can go here */}
+      {/* Footer */}
       <footer className="py-24 bg-accent-brown text-accent-cream rounded-t-[5rem] mt-20">
         <div className="container mx-auto px-8">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-16 md:gap-8 pb-16">
@@ -108,9 +118,9 @@ function Landing() {
               <h4 className="text-sm font-black uppercase tracking-[0.2em] text-brand">Platform</h4>
               <ul className="space-y-4 text-accent-cream/60 font-medium">
                 <li><Link to="/catalog" className="hover:text-white transition-colors">Catalog</Link></li>
-                <li><Link to="/#reservations" className="hover:text-white transition-colors">Reservations</Link></li>
-                <li><Link to="/#loyalty" className="hover:text-white transition-colors">Loyalty Program</Link></li>
-                <li><Link to="/#about" className="hover:text-white transition-colors">About Us</Link></li>
+                <li><a href="/#reservations" className="hover:text-white transition-colors">Reservations</a></li>
+                <li><a href="/#loyalty" className="hover:text-white transition-colors">Loyalty Program</a></li>
+                <li><a href="/#about" className="hover:text-white transition-colors">About Us</a></li>
               </ul>
             </div>
 
@@ -182,32 +192,25 @@ function App() {
                 <Route path="/register" element={<Register />} />
 
                 {/* Protected Dashboard Routes */}
+                {/* Super Admin Routes */}
                 <Route
-                  path="/dashboard/admin/orders"
+                  path="/dashboard/admin/businesses"
                   element={
                     <ProtectedRoute allowedRole="admin">
-                      <AdminOrders />
+                      <AdminBusinesses />
                     </ProtectedRoute>
                   }
                 />
                 <Route
-                  path="/dashboard/admin/catalog"
+                  path="/dashboard/admin/users"
                   element={
                     <ProtectedRoute allowedRole="admin">
-                      <AdminCatalog />
+                      <AdminUsers />
                     </ProtectedRoute>
                   }
                 />
                 <Route
-                  path="/dashboard/admin/customers"
-                  element={
-                    <ProtectedRoute allowedRole="admin">
-                      <AdminCustomers />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/admin/*"
+                  path="/dashboard/admin"
                   element={
                     <ProtectedRoute allowedRole="admin">
                       <AdminDashboard />
@@ -267,6 +270,64 @@ function App() {
                   element={
                     <ProtectedRoute allowedRole="user">
                       <UserDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Business Routes */}
+                <Route
+                  path="/dashboard/business"
+                  element={
+                    <ProtectedRoute allowedRole="business">
+                      <BusinessDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/business/orders"
+                  element={
+                    <ProtectedRoute allowedRole="business">
+                      <BusinessOrders />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/business/catalog"
+                  element={
+                    <ProtectedRoute allowedRole="business">
+                      <BusinessCatalog />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/business/analytics"
+                  element={
+                    <ProtectedRoute allowedRole="business">
+                      <BusinessAnalytics />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/business/account"
+                  element={
+                    <ProtectedRoute allowedRole="business">
+                      <AccountSettings />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Account Settings – shared across all roles */}
+                <Route
+                  path="/dashboard/admin/account"
+                  element={
+                    <ProtectedRoute allowedRole="admin">
+                      <AccountSettings />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/user/account"
+                  element={
+                    <ProtectedRoute allowedRole="user">
+                      <AccountSettings />
                     </ProtectedRoute>
                   }
                 />

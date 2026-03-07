@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { NavLink, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { LogOut, LayoutDashboard, ShoppingBag, Users, Settings, Bell, Calendar, Award, ShoppingCart, X, Plus, Minus, CreditCard } from 'lucide-react';
+import { LogOut, LayoutDashboard, ShoppingBag, Users, Settings, Bell, Calendar, Award, ShoppingCart, X, Plus, Minus, CreditCard, BarChart2, UserCircle } from 'lucide-react';
 import { Logo } from './Logo';
 
 interface DashboardLayoutProps {
@@ -23,11 +23,12 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
         navigate('/login');
     };
 
-    const adminLinks = [
-        { name: 'Business Overview', path: '/dashboard/admin', icon: LayoutDashboard },
-        { name: 'Order Management', path: '/dashboard/admin/orders', icon: ShoppingBag },
-        { name: 'Catalog Control', path: '/dashboard/admin/catalog', icon: Settings },
-        { name: 'Customer Data', path: '/dashboard/admin/customers', icon: Users },
+    const businessLinks = [
+        { name: 'Overview', path: '/dashboard/business', icon: LayoutDashboard },
+        { name: 'Orders', path: '/dashboard/business/orders', icon: ShoppingBag },
+        { name: 'Catalog', path: '/dashboard/business/catalog', icon: Settings },
+        { name: 'Analytics', path: '/dashboard/business/analytics', icon: BarChart2 },
+        { name: 'Account', path: '/dashboard/business/account', icon: UserCircle },
     ];
 
     const userLinks = [
@@ -36,9 +37,17 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
         { name: 'Reservations', path: '/dashboard/user/reservations', icon: Calendar },
         { name: 'Loyalty Rewards', path: '/dashboard/user/loyalty', icon: Award },
         { name: 'Alert Center', path: '/dashboard/user/alerts', icon: Bell },
+        { name: 'Account', path: '/dashboard/user/account', icon: UserCircle },
     ];
 
-    const links = user?.role === 'admin' ? adminLinks : userLinks;
+    const adminLinks = [
+        { name: 'Platform Overview', path: '/dashboard/admin', icon: LayoutDashboard },
+        { name: 'Partner Businesses', path: '/dashboard/admin/businesses', icon: ShoppingBag },
+        { name: 'Global Users', path: '/dashboard/admin/users', icon: Users },
+        { name: 'Account', path: '/dashboard/admin/account', icon: UserCircle },
+    ];
+
+    const links = user?.role === 'admin' ? adminLinks : user?.role === 'business' ? businessLinks : userLinks;
 
     return (
         <div className="min-h-screen bg-accent-peach/20 flex flex-col">
@@ -53,7 +62,7 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
                         <div>
                             <h2 className="text-2xl font-black text-accent-brown tracking-tight leading-none">Hi-Vet</h2>
                             <p className="text-[9px] mt-1 font-black uppercase tracking-widest text-brand-dark">
-                                {user?.role === 'admin' ? 'Business Portal' : 'Patient Portal'}
+                                {user?.role === 'admin' ? 'Super Admin Portal' : user?.role === 'business' ? 'Partner Portal' : 'Patient Portal'}
                             </p>
                         </div>
                     </Link>
@@ -102,8 +111,8 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
 
                         <div className="flex items-center gap-4">
                             <div className="hidden sm:flex flex-col items-end">
-                                <span className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40">Logged in</span>
-                                <span className="text-[11px] font-bold text-accent-brown truncate max-w-[150px]">{user?.email}</span>
+                                <span className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40">Logged in as</span>
+                                <span className="text-[11px] font-bold text-accent-brown truncate max-w-[150px]">{user?.name ?? user?.email}</span>
                             </div>
                             <button
                                 onClick={handleLogout}

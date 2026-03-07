@@ -19,13 +19,16 @@ const Login = () => {
         setError('');
 
         if (email === 'admin@hivet.com' && password === 'admin123') {
-            login(email, 'admin');
+            login(email, 'admin', 'Admin');
             navigate('/dashboard/admin');
         } else if (email === 'user@hivet.com' && password === 'user123') {
-            login(email, 'user');
+            login(email, 'user', 'Sarah');
             navigate('/dashboard/user');
+        } else if (email === 'business@hivet.com' && password === 'business123') {
+            login(email, 'business', 'Paws & Co.');
+            navigate('/dashboard/business');
         } else {
-            setError('Invalid credentials. Use admin@hivet.com/admin123 or user@hivet.com/user123');
+            setError('Invalid credentials. Try admin@hivet.com / admin123, user@hivet.com / user123, or business@hivet.com / business123');
         }
     };
 

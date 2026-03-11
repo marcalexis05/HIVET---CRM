@@ -138,14 +138,14 @@ const UserLoyalty = () => {
                 {!loading && loyalty && (
                     <>
                         {/* Status Overview */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
                             {/* Points Card */}
                             <motion.div
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
-                                className="lg:col-span-2 bg-gradient-to-br from-brand-dark to-[#3A2D28] rounded-[2rem] p-8 md:p-12 text-white relative overflow-hidden"
+                                className="lg:col-span-2 bg-gradient-to-br from-brand-dark to-[#3A2D28] rounded-3xl sm:rounded-[2rem] p-5 xs:p-8 md:p-12 text-white relative overflow-hidden"
                             >
-                                <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-8 h-full">
+                                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8 h-full">
                                     <div>
                                         <div className="flex items-center gap-3 mb-6">
                                             <div className={`w-12 h-12 bg-gradient-to-tr ${TIER_GRADIENT[loyalty.tier] ?? TIER_GRADIENT['Gold']} rounded-full flex items-center justify-center shadow-lg`}>
@@ -156,13 +156,13 @@ const UserLoyalty = () => {
                                                 <span className="font-black text-xl tracking-tight text-brand">{loyalty.tier} Member</span>
                                             </div>
                                         </div>
-                                        <h3 className="text-6xl lg:text-7xl font-black tracking-tighter mb-2">
-                                            {loyalty.points.toLocaleString()} <span className="text-2xl text-white/40 font-bold">pts</span>
+                                        <h3 className="text-4xl xs:text-5xl sm:text-6xl lg:text-7xl font-black tracking-tighter mb-2 break-all sm:break-normal">
+                                            {loyalty.points.toLocaleString()} <span className="text-lg sm:text-2xl text-white/40 font-bold">pts</span>
                                         </h3>
                                         <p className="text-white/60 font-medium text-sm">You earn 10 points for every ₱1 spent in our catalog.</p>
                                     </div>
 
-                                    <div className="w-full md:w-64 bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/10">
+                                    <div className="w-full md:w-64 bg-white/10 backdrop-blur-md rounded-2xl p-5 sm:p-6 border border-white/10">
                                         <span className="text-[10px] font-black uppercase tracking-widest text-white/50 block mb-2">Next Tier: {loyalty.next_tier}</span>
                                         <div className="w-full h-2 bg-white/10 rounded-full mb-3 overflow-hidden">
                                             <div className="h-full bg-brand rounded-full transition-all duration-700" style={{ width: `${tierProgress}%` }} />
@@ -187,7 +187,7 @@ const UserLoyalty = () => {
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 transition={{ delay: 0.2 }}
-                                className="bg-accent-peach/20 rounded-[2rem] p-8 border border-white flex flex-col justify-center"
+                                className="bg-accent-peach/20 rounded-3xl sm:rounded-[2rem] p-5 xs:p-8 border border-white flex flex-col justify-center"
                             >
                                 <h3 className="text-sm font-black uppercase tracking-widest text-accent-brown mb-6 flex items-center gap-2">
                                     <TrendingUp className="w-4 h-4 text-brand-dark" /> How to Earn
@@ -223,7 +223,7 @@ const UserLoyalty = () => {
                                         initial={{ opacity: 0, y: 20 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: 0.3 + i * 0.1 }}
-                                        className={`bg-white rounded-2xl p-6 shadow-xl shadow-accent-brown/5 border-2 transition-all relative overflow-hidden group flex flex-col ${voucher.active ? 'border-transparent hover:border-brand/30 cursor-pointer' : 'border-transparent opacity-60'}`}
+                                        className={`bg-white rounded-2xl p-5 sm:p-6 shadow-xl shadow-accent-brown/5 border-2 transition-all relative overflow-hidden group flex flex-col ${voucher.active ? 'border-transparent hover:border-brand/30 cursor-pointer' : 'border-transparent opacity-60'}`}
                                     >
                                         <div className="flex justify-between items-start mb-6">
                                             <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${VOUCHER_COLORS[voucher.type] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -261,7 +261,7 @@ const UserLoyalty = () => {
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.5 }}
-                                className="bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white"
+                                className="bg-white rounded-3xl sm:rounded-[2rem] p-5 xs:p-8 shadow-xl shadow-accent-brown/5 border border-white overflow-hidden"
                             >
                                 <h3 className="text-xl font-black text-accent-brown tracking-tight mb-6">Points History</h3>
                                 <div className="space-y-3">
@@ -271,7 +271,7 @@ const UserLoyalty = () => {
                                                 {entry.points > 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="font-bold text-accent-brown text-sm truncate">{entry.desc}</p>
+                                                <p className="font-bold text-accent-brown text-sm truncate pr-2">{entry.desc}</p>
                                                 <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest">{entry.date}</p>
                                             </div>
                                             <span className={`font-black text-sm shrink-0 ${entry.points > 0 ? 'text-green-600' : 'text-red-500'}`}>
@@ -287,7 +287,7 @@ const UserLoyalty = () => {
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.6 }}
-                                className="bg-gradient-to-br from-brand-dark to-[#3A2D28] rounded-[2rem] p-8 text-white relative overflow-hidden"
+                                className="bg-gradient-to-br from-brand-dark to-[#3A2D28] rounded-3xl sm:rounded-[2rem] p-5 xs:p-8 text-white relative overflow-hidden"
                             >
                                 <div className="relative z-10">
                                     <div className="w-12 h-12 bg-brand/20 rounded-2xl flex items-center justify-center mb-6">
@@ -295,11 +295,11 @@ const UserLoyalty = () => {
                                     </div>
                                     <h3 className="text-2xl font-black tracking-tight mb-2">Refer a Friend</h3>
                                     <p className="text-white/50 text-sm font-medium mb-8">Share your code and earn 500 bonus points for every successful referral.</p>
-                                    <div className="bg-white/10 rounded-2xl p-4 border border-white/10 flex items-center justify-between gap-4">
-                                        <span className="font-black text-brand tracking-widest text-lg">{loyalty.referral_code}</span>
+                                    <div className="bg-white/10 rounded-2xl p-3 sm:p-4 border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+                                        <span className="font-black text-brand tracking-widest text-sm xs:text-base sm:text-lg break-all text-center sm:text-left">{loyalty.referral_code}</span>
                                         <button
                                             onClick={handleCopy}
-                                            className="w-10 h-10 bg-white/10 hover:bg-brand hover:text-brand-dark text-white rounded-xl flex items-center justify-center transition-all shrink-0"
+                                            className="w-full sm:w-10 h-10 bg-white/10 hover:bg-brand hover:text-brand-dark text-white rounded-xl flex items-center justify-center transition-all shrink-0"
                                         >
                                             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                         </button>

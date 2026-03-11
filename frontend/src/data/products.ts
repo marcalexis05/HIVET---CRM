@@ -28,7 +28,7 @@ export const products = [
     {
         id: 6, category: 'Cats', type: 'Food', name: 'Sensitive Stomach Quail', price: '68.00',
         description: 'Hydrolyzed quail protein for cats with dermatological conditions or digestive sensitivities.',
-        image: '/images/product_cat_nest.png', tag: 'Sensitive', stars: 4
+        image: '/images/food_cat_quail.png', tag: 'Sensitive', stars: 4
     },
     {
         id: 7, category: 'Dogs', type: 'Food', name: 'High-Performance Bison', price: '95.00',
@@ -38,17 +38,17 @@ export const products = [
     {
         id: 8, category: 'Cats', type: 'Food', name: 'Seafood Medley Pate', price: '32.00',
         description: 'A luxurious blend of shrimp, crab, and whitefish in a silk-textured gourmet pate.',
-        image: '/images/product_cat_collar.png', tag: 'Gourmet', stars: 5
+        image: '/images/food_cat_pate.png', tag: 'Gourmet', stars: 5
     },
     {
         id: 9, category: 'Dogs', type: 'Food', name: 'Sustainable Insect Protein', price: '58.00',
         description: 'Eco-friendly alternative protein source with zero-waste packaging for the modern pet parent.',
-        image: '/images/food_bison.png', tag: 'Sustainable', stars: 4
+        image: '/images/food_dog_insect_protein.png', tag: 'Sustainable', stars: 4
     },
     {
         id: 10, category: 'Cats', type: 'Food', name: 'Kitten First-Year Mousse', price: '42.00',
         description: 'Ultra-soft transition food with colostrum to support a developing immune system.',
-        image: '/images/product_cat_fountain.png', tag: 'Kitten', stars: 5
+        image: '/images/food_cat_mousse.png', tag: 'Kitten', stars: 5
     },
 
     // --- ACCESSORIES (10 Items) ---
@@ -65,7 +65,7 @@ export const products = [
     {
         id: 13, category: 'Dogs', type: 'Accessories', name: 'Night-Safe Reflective Lead', price: '45.00',
         description: 'Ultra-bright reflective threading integrated into high-tensile nylon for night walks.',
-        image: '/images/product_dog_raincoat.png', tag: 'Night-Safe', stars: 4
+        image: '/images/acc_dog_reflective_lead.png', tag: 'Night-Safe', stars: 4
     },
     {
         id: 14, category: 'Cats', type: 'Accessories', name: 'Ceramic Water Fountain', price: '124.00',
@@ -80,7 +80,7 @@ export const products = [
     {
         id: 16, category: 'Cats', type: 'Accessories', name: 'Premium Velvet Nest', price: '89.00',
         description: 'Self-warming velvet sanctuary designed to reduce anxiety in nervous felines.',
-        image: '/images/acc_cat_premium.png', tag: 'Designer', stars: 5
+        image: '/images/acc_cat_nest.png', tag: 'Designer', stars: 5
     },
     {
         id: 17, category: 'Dogs', type: 'Accessories', name: 'Elevated Bamboo Bowls', price: '78.00',
@@ -112,7 +112,7 @@ export const products = [
     {
         id: 22, category: 'Cats', type: 'Vitamins', name: 'Joint Support Glucosamine', price: '44.00',
         description: 'Liquid formula with Glucosamine and Chondroitin for senior cat hip and joint health.',
-        image: '/images/product_cat_tree.png', tag: 'Joint-Support', stars: 5
+        image: '/images/vit_cat_joint.png', tag: 'Joint-Support', stars: 5
     },
     {
         id: 23, category: 'Dogs', type: 'Vitamins', name: 'Daily Pet Vitamins', price: '28.00',
@@ -127,12 +127,12 @@ export const products = [
     {
         id: 25, category: 'Dogs', type: 'Vitamins', name: 'Dental Care Enzymes', price: '19.00',
         description: 'Enzymatic water additive that dissolves plaque and prevents tartar buildup.',
-        image: '/images/product_dog_bowl.png', tag: 'Dental-Care', stars: 4
+        image: '/images/vit_dog_dental.png', tag: 'Dental-Care', stars: 4
     },
     {
         id: 26, category: 'Cats', type: 'Vitamins', name: 'Multivitamin Soft Chews', price: '24.00',
         description: 'Comprehensive daily nutrition in a delicious chicken-flavored soft chew.',
-        image: '/images/product_cat_collar.png', tag: 'Multivitamin', stars: 5
+        image: '/images/vit_cat_multi.png', tag: 'Multivitamin', stars: 5
     },
     {
         id: 27, category: 'Dogs', type: 'Vitamins', name: 'Sensitive Skin Remedy', price: '52.00',
@@ -142,16 +142,16 @@ export const products = [
     {
         id: 28, category: 'Cats', type: 'Vitamins', name: 'Vision Advance Eyes', price: '65.00',
         description: 'Advanced antioxidant formula to support retina health and visual acuity.',
-        image: '/images/product_cat_nest.png', tag: 'Eye-Care', stars: 4
+        image: '/images/vit_cat_vision.png', tag: 'Eye-Care', stars: 4
     },
     {
         id: 29, category: 'Dogs', type: 'Vitamins', name: 'Digestive Probiotic Blend', price: '48.00',
         description: 'A blend of 5 billion CFU per serving to restore gut flora and improve stool quality.',
-        image: '/images/product_dog_harness.png', tag: 'Probiotic', stars: 5
+        image: '/images/vit_dog_probiotic.png', tag: 'Probiotic', stars: 5
     },
     {
         id: 30, category: 'Cats', type: 'Vitamins', name: 'Urinary Tract Support', price: '36.00',
         description: 'D-Mannose and Cranberry blend to maintain healthy urinary tract function.',
-        image: '/images/product_cat_fountain.png', tag: 'Urinary-Support', stars: 4
+        image: '/images/vit_cat_urinary.png', tag: 'Urinary-Support', stars: 4
     }
 ];

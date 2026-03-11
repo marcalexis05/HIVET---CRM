@@ -22,6 +22,9 @@ export default {
         '3xl': '1.5rem',
         '4xl': '2rem',
       },
+      screens: {
+        'xs': '480px',
+      },
       fontFamily: {
         brand: ['Outfit', 'sans-serif'],
       }

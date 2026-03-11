@@ -1,18 +1,37 @@
 ﻿import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    User, Phone, MapPin, Mail,
+    User, Phone,
+    Mail,
     Lock, ArrowRight, ArrowLeft,
     ShieldCheck, MailCheck,
-    Home
+    Home, Eye, EyeOff
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
+import { PasswordStrength } from '../components/PasswordStrength';
+import { useAuth } from '../context/AuthContext';
 
 const Register = () => {
     const [step, setStep] = useState(1);
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+    // Form state
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
+    const [middleName, setMiddleName] = useState('');
+    const [suffix, setSuffix] = useState('');
+    const [phone, setPhone] = useState('');
+    const [email, setEmail] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+
     const navigate = useNavigate();
+    const { loginWithToken } = useAuth();
 
     const handleOtpChange = (index: number, value: string) => {
         if (!/^\d*$/.test(value)) return;
@@ -26,8 +45,109 @@ const Register = () => {
         }
     };
 
-    const nextStep = () => setStep(s => Math.min(3, s + 1));
+    const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Backspace' && !otp[index] && index > 0) {
+            const prevInput = document.getElementById(`otp-${index - 1}`);
+            prevInput?.focus();
+        }
+    };
+
+    const handlePaste = (e: React.ClipboardEvent) => {
+        e.preventDefault();
+        const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+        if (pastedData) {
+            const newOtp = [...otp];
+            for (let i = 0; i < pastedData.length; i++) {
+                newOtp[i] = pastedData[i];
+            }
+            setOtp(newOtp);
+            // Focus the last filled input or the next empty one
+            const nextIndex = Math.min(pastedData.length, 5);
+            const nextInput = document.getElementById(`otp-${nextIndex}`);
+            nextInput?.focus();
+        }
+    };
+
+    const handleSendOtp = async () => {
+        if (!email || !password || password !== confirmPassword) {
+            return setError('Please check your email and passwords');
+        }
+        if (password.length < 8) {
+            return setError('Password must be at least 8 characters');
+        }
+
+        setLoading(true);
+        setError('');
+        try {
+            const res = await fetch('http://localhost:8000/api/auth/send-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setStep(3);
+            } else {
+                setError(data.detail || 'Failed to send verification email');
+            }
+        } catch (err) {
+            setError('An error occurred while sending the email.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const nextStep = () => {
+        if (step === 1) {
+            setStep(2);
+        } else if (step === 2) {
+            if (password !== confirmPassword) {
+                setError('Passwords do not match');
+                return;
+            }
+            if (password.length < 8) {
+                setError('Password must be at least 8 characters');
+                return;
+            }
+            handleSendOtp();
+        }
+    };
     const prevStep = () => setStep(s => Math.max(1, s - 1));
+
+    const handleRegister = async () => {
+        const otpCode = otp.join('');
+        if (otpCode.length !== 6) return setError('Please enter the full 6-digit code');
+        setLoading(true);
+        setError('');
+        try {
+            const res = await fetch('http://localhost:8000/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email,
+                    password,
+                    otp: otpCode,
+                    first_name: firstName,
+                    last_name: lastName,
+                    middle_name: middleName,
+                    suffix,
+                    phone
+                })
+            });
+            const data = await res.json();
+            if (res.ok && data.token) {
+                loginWithToken(data.token);
+                navigate('/dashboard/user');
+            } else {
+                setError(data.detail || 'Registration failed');
+            }
+        } catch (err) {
+            console.error(err);
+            setError('An error occurred during registration.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const renderStep = () => {
         switch (step) {
@@ -41,37 +161,85 @@ const Register = () => {
                         className="space-y-6"
                     >
                         <div className="space-y-2">
-                            <h3 className="text-2xl font-black text-accent-brown tracking-tighter">Personal Information</h3>
-                            <p className="text-sm text-accent-brown/50 font-medium italic">Let's start with your profile details.</p>
+                            <h3 className="text-xl xs:text-2xl font-black text-accent-brown tracking-tighter">Personal Information</h3>
+                            <p className="text-xs xs:text-sm text-accent-brown/50 font-medium italic">Let's start with your profile details.</p>
+                        </div>
+
+                        {/* Google OAuth Button */}
+                        <button
+                            type="button"
+                            onClick={() => window.location.href = 'http://localhost:8000/auth/google'}
+                            className="w-full flex items-center justify-center gap-3 bg-white border-2 border-accent-brown/10 hover:border-brand/30 hover:bg-accent-peach/20 text-accent-brown font-bold rounded-[2rem] py-5 px-6 transition-all shadow-sm"
+                        >
+                            <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
+                                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                            </svg>
+                            <span>Sign up with Google</span>
+                        </button>
+
+                        {/* Divider */}
+                        <div className="flex items-center gap-4">
+                            <div className="flex-1 h-px bg-accent-brown/10" />
+                            <span className="text-xs font-bold text-accent-brown/30 uppercase tracking-widest">or fill in manually</span>
+                            <div className="flex-1 h-px bg-accent-brown/10" />
                         </div>
 
                         <div className="space-y-4">
-                            <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Full Name</label>
-                                <div className="relative">
-                                    <User className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                    <input type="text" placeholder="Johnathan Doe" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-5 pl-16 pr-8 text-accent-brown font-semibold outline-none transition-all" />
+                            {/* First Name & Last Name */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="group space-y-2">
+                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">First Name</label>
+                                    <div className="relative">
+                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
+                                        <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Juan" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-4 pl-11 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm" />
+                                    </div>
+                                </div>
+                                <div className="group space-y-2">
+                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Last Name</label>
+                                    <div className="relative">
+                                        <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Dela Cruz" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-4 pl-5 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm" />
+                                    </div>
                                 </div>
                             </div>
+                            {/* Middle Name & Suffix */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="group space-y-2">
+                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Middle Name</label>
+                                    <div className="relative">
+                                        <input type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} placeholder="Santos" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-4 pl-5 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm" />
+                                    </div>
+                                </div>
+                                <div className="group space-y-2">
+                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Suffix <span className="normal-case font-medium opacity-60">(optional)</span></label>
+                                    <select value={suffix} onChange={e => setSuffix(e.target.value)} className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-4 pl-5 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm appearance-none cursor-pointer">
+                                        <option value="">None</option>
+                                        <option value="Jr.">Jr.</option>
+                                        <option value="Sr.">Sr.</option>
+                                        <option value="II">II</option>
+                                        <option value="III">III</option>
+                                        <option value="IV">IV</option>
+                                    </select>
+                                </div>
+                            </div>
+                            {/* Phone with +63 prefix */}
                             <div className="group space-y-2">
                                 <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Phone Number</label>
-                                <div className="relative">
-                                    <Phone className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                    <input type="tel" placeholder="+1 (555) 000-0000" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-5 pl-16 pr-8 text-accent-brown font-semibold outline-none transition-all" />
-                                </div>
-                            </div>
-                            <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Address / Region</label>
-                                <div className="relative">
-                                    <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                    <input type="text" placeholder="Beverly Hills, CA" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-5 pl-16 pr-8 text-accent-brown font-semibold outline-none transition-all" />
+                                <div className="relative flex items-center bg-accent-peach/20 border-2 border-transparent focus-within:border-brand/30 focus-within:bg-white rounded-[2rem] transition-all overflow-hidden">
+                                    <div className="flex items-center gap-2 pl-5 pr-3 shrink-0 text-accent-brown font-black text-sm border-r border-accent-brown/10">
+                                        <Phone className="w-4 h-4 text-accent-brown/30" />
+                                        <span>+63</span>
+                                    </div>
+                                    <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="9XX XXX XXXX" className="flex-1 bg-transparent py-4 pl-4 pr-6 text-accent-brown font-semibold outline-none text-sm" />
                                 </div>
                             </div>
                         </div>
 
-                        <button onClick={nextStep} className="btn-primary w-full group flex items-center justify-center gap-3 h-16">
+                        <button onClick={nextStep} className="btn-primary w-full group flex items-center justify-center gap-3 h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6">
                             Proceed to Basics
-                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                            <ArrowRight className="w-4 h-4 xs:w-5 xs:h-5 group-hover:translate-x-1 transition-transform" />
                         </button>
                     </motion.div>
                 );
@@ -85,8 +253,8 @@ const Register = () => {
                         className="space-y-6"
                     >
                         <div className="space-y-2">
-                            <h3 className="text-2xl font-black text-accent-brown tracking-tighter">Account Basics</h3>
-                            <p className="text-sm text-accent-brown/50 font-medium italic">Secure your professional credentials.</p>
+                            <h3 className="text-xl xs:text-2xl font-black text-accent-brown tracking-tighter">Account Basics</h3>
+                            <p className="text-xs xs:text-sm text-accent-brown/50 font-medium italic">Secure your professional credentials.</p>
                         </div>
 
                         <div className="space-y-4">
@@ -94,22 +262,56 @@ const Register = () => {
                                 <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Email Address</label>
                                 <div className="relative">
                                     <Mail className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                    <input type="email" placeholder="john@hi-vet.com" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-5 pl-16 pr-8 text-accent-brown font-semibold outline-none transition-all" />
+                                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="john@hi-vet.com" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-5 pl-16 pr-8 text-accent-brown font-semibold outline-none transition-all" />
                                 </div>
                             </div>
                             <div className="group space-y-2">
                                 <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Password</label>
                                 <div className="relative">
                                     <Lock className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                    <input type="password" placeholder="••••••••" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-5 pl-16 pr-8 text-accent-brown font-semibold outline-none transition-all" />
+                                    <input
+                                        type={showPassword ? "text" : "password"}
+                                        value={password}
+                                        onChange={e => setPassword(e.target.value)}
+                                        placeholder="••••••••"
+                                        className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-5 pl-16 pr-12 text-accent-brown font-semibold outline-none transition-all"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-6 top-1/2 -translate-y-1/2 text-accent-brown/30 hover:text-brand-dark transition-colors"
+                                    >
+                                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    </button>
                                 </div>
+                                {password && (
+                                    <div className="px-4">
+                                        <PasswordStrength password={password} />
+                                    </div>
+                                )}
                             </div>
                             <div className="group space-y-2">
                                 <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Confirm Security</label>
                                 <div className="relative">
                                     <ShieldCheck className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                    <input type="password" placeholder="••••••••" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-5 pl-16 pr-8 text-accent-brown font-semibold outline-none transition-all" />
+                                    <input
+                                        type={showConfirmPassword ? "text" : "password"}
+                                        value={confirmPassword}
+                                        onChange={e => setConfirmPassword(e.target.value)}
+                                        placeholder="••••••••"
+                                        className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-5 pl-16 pr-12 text-accent-brown font-semibold outline-none transition-all"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                        className="absolute right-6 top-1/2 -translate-y-1/2 text-accent-brown/30 hover:text-brand-dark transition-colors"
+                                    >
+                                        {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    </button>
                                 </div>
+                                {confirmPassword && password !== confirmPassword && (
+                                    <p className="text-red-500 text-xs font-bold pl-4">Passwords do not match</p>
+                                )}
                             </div>
                         </div>
 
@@ -117,9 +319,9 @@ const Register = () => {
                             <button onClick={prevStep} className="flex-1 px-8 py-5 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
                                 <ArrowLeft className="w-4 h-4" /> Back
                             </button>
-                            <button onClick={nextStep} className="btn-primary flex-[2] group flex items-center justify-center gap-3 h-16">
+                            <button onClick={nextStep} className="btn-primary flex-[2] group flex items-center justify-center gap-2 xs:gap-3 h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6">
                                 Verify Now
-                                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                <ArrowRight className="w-4 h-4 xs:w-5 xs:h-5 group-hover:translate-x-1 transition-transform" />
                             </button>
                         </div>
                     </motion.div>
@@ -134,19 +336,25 @@ const Register = () => {
                         className="space-y-8"
                     >
                         <div className="space-y-4">
-                            <div className="w-16 h-16 bg-brand/10 text-brand-dark rounded-full flex items-center justify-center">
-                                <MailCheck className="w-8 h-8" />
+                            <div className="w-12 h-12 xs:w-16 xs:h-16 bg-brand/10 text-brand-dark rounded-full flex items-center justify-center">
+                                <MailCheck className="w-6 h-6 xs:w-8 xs:h-8" />
                             </div>
                             <div className="space-y-2">
-                                <h3 className="text-2xl font-black text-accent-brown tracking-tighter">Verification Code</h3>
-                                <p className="text-sm text-accent-brown/50 font-medium italic">
+                                <h3 className="text-xl xs:text-2xl font-black text-accent-brown tracking-tighter">Verification Code</h3>
+                                <p className="text-xs xs:text-sm text-accent-brown/50 font-medium italic">
                                     We've sent a 6-digit code to <br />
-                                    <span className="text-accent-brown font-bold not-italic">john@hi-vet.com</span>
+                                    <span className="text-accent-brown font-bold not-italic">{email || 'your email'}</span>
                                 </p>
                             </div>
                         </div>
 
-                        <div className="flex justify-between gap-3">
+                        {error && (
+                            <div className="bg-red-50 text-red-500 text-sm font-bold p-4 rounded-2xl text-center">
+                                {error}
+                            </div>
+                        )}
+
+                        <div className="flex justify-between gap-2 xs:gap-3">
                             {otp.map((digit, idx) => (
                                 <input
                                     key={idx}
@@ -155,7 +363,9 @@ const Register = () => {
                                     maxLength={1}
                                     value={digit}
                                     onChange={(e) => handleOtpChange(idx, e.target.value)}
-                                    className="w-12 md:w-14 h-16 md:h-18 text-center text-3xl font-black text-brand-dark bg-accent-peach/20 border-2 border-transparent focus:border-brand focus:bg-white rounded-2xl outline-none transition-all"
+                                    onKeyDown={(e) => handleKeyDown(idx, e)}
+                                    onPaste={handlePaste}
+                                    className="w-10 xs:w-12 md:w-14 h-14 xs:h-16 md:h-18 text-center text-xl xs:text-3xl font-black text-brand-dark bg-accent-peach/20 border-2 border-brand-dark focus:border-brand-dark focus:bg-white rounded-xl xs:rounded-2xl outline-none transition-all"
                                 />
                             ))}
                         </div>
@@ -163,15 +373,15 @@ const Register = () => {
                         <div className="space-y-6">
                             <p className="text-xs font-bold text-accent-brown/40 ml-4">
                                 No code yet? {' '}
-                                <button className="text-brand-dark hover:underline underline-offset-4">Resend Protocol</button>
+                                <button onClick={handleSendOtp} disabled={loading} className="text-brand-dark hover:underline underline-offset-4 disabled:opacity-50">Resend Protocol</button>
                             </p>
 
                             <div className="flex gap-4">
-                                <button onClick={prevStep} className="flex-1 px-8 py-5 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px]">
+                                <button onClick={prevStep} disabled={loading} className="flex-1 px-8 py-5 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] disabled:opacity-50">
                                     Review
                                 </button>
-                                <button onClick={() => navigate('/')} className="btn-primary flex-[2] bg-brand-dark h-16">
-                                    Complete Sign Up
+                                <button onClick={handleRegister} disabled={loading} className="btn-primary flex-[2] bg-brand-dark h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6 disabled:opacity-50">
+                                    {loading ? 'Creating...' : 'Complete Sign Up'}
                                 </button>
                             </div>
                         </div>
@@ -182,12 +392,12 @@ const Register = () => {
     };
 
     return (
-        <div className="min-h-screen bg-accent-cream flex items-center justify-center p-4 md:p-8 select-none overflow-hidden relative">
+        <div className="min-h-screen bg-accent-cream flex items-center justify-center p-4 xs:p-6 sm:p-8 select-none relative py-12 xs:py-20">
 
             <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="max-w-6xl w-full grid md:grid-cols-2 bg-white rounded-[3.5rem] shadow-2xl shadow-brand/10 border border-brand/5 overflow-hidden relative z-10"
+                className="max-w-6xl w-full grid md:grid-cols-2 bg-white rounded-[2.5rem] xs:rounded-[3.5rem] shadow-2xl shadow-brand/10 border border-brand/5 overflow-hidden relative z-10"
             >
                 {/* Left Side: Illustration Hero */}
                 <div className="hidden md:flex flex-col justify-between p-16 bg-accent-peach/30 relative overflow-hidden group">
@@ -232,7 +442,7 @@ const Register = () => {
                 </div>
 
                 {/* Right Side: Register Form */}
-                <div className="p-10 md:p-20 flex flex-col justify-center">
+                <div className="p-6 xs:p-10 md:p-20 flex flex-col justify-center">
                     <div className="mb-10 flex items-center justify-between">
                         <div className="flex gap-2">
                             {[1, 2, 3].map(i => (

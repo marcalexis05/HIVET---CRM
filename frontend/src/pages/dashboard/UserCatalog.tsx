@@ -1,7 +1,7 @@
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Tag, Star, Search, Filter as FilterIcon, Award } from 'lucide-react';
+import { ShoppingCart, Tag, Star, Search, Filter as FilterIcon, Award, ArrowUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import { products } from '../../data/products';
@@ -13,6 +13,15 @@ const UserCatalog = () => {
     const [petFilter, setPetFilter] = useState<'All' | 'Cats' | 'Dogs'>('All');
     const [typeFilter, setTypeFilter] = useState<'All' | 'Food' | 'Accessories' | 'Vitamins'>('All');
     const [searchQuery, setSearchQuery] = useState('');
+    const [showScrollTop, setShowScrollTop] = useState(false);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            setShowScrollTop(window.scrollY > 400);
+        };
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
 
     const filteredProducts = useMemo(() => {
         return products.filter(p => {
@@ -35,7 +44,7 @@ const UserCatalog = () => {
         <DashboardLayout title="Catalog & Ordering">
             <div className="space-y-8">
                 {/* Search and Filters Header */}
-                <div className="bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/5 border border-white flex flex-col lg:flex-row gap-6 justify-between items-center">
+                <div className="bg-white rounded-3xl sm:rounded-[2rem] p-5 sm:p-6 shadow-xl shadow-accent-brown/5 border border-white flex flex-col lg:flex-row gap-4 sm:gap-6 justify-between items-center">
                     {/* Search Bar */}
                     <div className="relative group w-full lg:w-96">
                         <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/30 group-focus-within:text-brand transition-colors" />
@@ -69,12 +78,12 @@ const UserCatalog = () => {
                         </div>
 
                         {/* Type Filter */}
-                        <div className="flex bg-accent-peach/20 p-1.5 rounded-2xl border border-transparent overflow-x-auto no-scrollbar">
+                        <div className="grid grid-cols-2 sm:flex bg-accent-peach/20 p-1.5 rounded-2xl border border-transparent w-full sm:w-auto gap-1">
                             {['All', 'Food', 'Accessories', 'Vitamins'].map((type) => (
                                 <button
                                     key={type}
                                     onClick={() => setTypeFilter(type as any)}
-                                    className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap ${typeFilter === type
+                                    className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap flex-1 sm:flex-none justify-center ${typeFilter === type
                                         ? 'bg-accent-brown text-white shadow-md'
                                         : 'text-accent-brown/60 hover:text-accent-brown hover:bg-white/50'
                                         }`}
@@ -110,7 +119,7 @@ const UserCatalog = () => {
                                 exit={{ opacity: 0, scale: 0.95 }}
                                 transition={{ duration: 0.3 }}
                                 onClick={() => navigate(`/dashboard/user/catalog/${p.id}`)}
-                                className="group flex flex-col bg-white rounded-[2rem] p-5 shadow-xl shadow-accent-brown/5 border border-white hover:border-brand/20 transition-all relative cursor-pointer"
+                                className="group flex flex-col bg-white rounded-3xl sm:rounded-[2rem] p-4 sm:p-5 shadow-xl shadow-accent-brown/5 border border-white hover:border-brand/20 transition-all relative cursor-pointer"
                             >
                                 {/* Active Tag */}
                                 <div className="absolute top-5 left-5 z-20">
@@ -140,7 +149,7 @@ const UserCatalog = () => {
                                         </div>
                                     </div>
 
-                                    <h3 className="text-lg font-black text-accent-brown leading-tight tracking-tight mb-2 line-clamp-2">{p.name}</h3>
+                                    <h3 className="text-base sm:text-lg font-black text-accent-brown leading-tight tracking-tight mb-2 line-clamp-2">{p.name}</h3>
                                     <p className="text-xs text-accent-brown/50 font-medium line-clamp-2 mb-4">
                                         {p.description}
                                     </p>
@@ -217,6 +226,21 @@ const UserCatalog = () => {
                     </motion.div>
                 )}
             </div>
+
+            {/* Scroll to Top Button */}
+            <AnimatePresence>
+                {showScrollTop && (
+                    <motion.button
+                        initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.5, y: 20 }}
+                        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                        className="fixed bottom-8 right-6 md:bottom-12 md:right-10 z-[60] w-12 h-12 md:w-16 md:h-16 bg-brand-dark text-white rounded-full shadow-2xl shadow-brand/40 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+                    >
+                        <ArrowUp className="w-5 h-5 md:w-6 md:h-6" />
+                    </motion.button>
+                )}
+            </AnimatePresence>
         </DashboardLayout>
     );
 };

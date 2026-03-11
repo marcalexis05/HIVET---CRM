@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, Lock, Bell, Trash2, Check, Loader2, Eye, EyeOff, AlertTriangle, CheckCircle } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { PasswordStrength } from '../../components/PasswordStrength';
 
 type Section = 'profile' | 'password' | 'notifications' | 'danger';
 
@@ -22,14 +23,46 @@ const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void 
 );
 
 const AccountSettings = () => {
-    const { user, logout } = useAuth();
+    const { user, logout, loginWithToken } = useAuth();
     const navigate = useNavigate();
     const [section, setSection] = useState<Section>('profile');
 
-    // Profile
-    const [name, setName] = useState(user?.name ?? '');
+    // Profile – separate name fields from DB
+    const [firstName, setFirstName] = useState(user?.first_name ?? '');
+    const [middleName, setMiddleName] = useState(user?.middle_name ?? '');
+    const [lastName, setLastName] = useState(user?.last_name ?? '');
+    const [suffix, setSuffix] = useState(user?.suffix ?? '');
     const [email, setEmail] = useState(user?.email ?? '');
+    const [phone, setPhone] = useState(user?.phone ?? '');
     const [savingProfile, setSavingProfile] = useState(false);
+    const [isGoogleUser, setIsGoogleUser] = useState(false);
+    const [hasPassword, setHasPassword] = useState(true);
+
+    // Fetch fresh data from DB on mount
+    useEffect(() => {
+        const fetchProfile = async () => {
+            if (!user?.token || user.role !== 'user') return;
+            try {
+                const res = await fetch('http://localhost:8000/api/auth/me', {
+                    headers: { 'Authorization': `Bearer ${user.token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setFirstName(data.first_name || '');
+                    setMiddleName(data.middle_name || '');
+                    setLastName(data.last_name || '');
+                    setSuffix(data.suffix || '');
+                    setEmail(data.email || '');
+                    setPhone(data.phone || '');
+                    setIsGoogleUser(!!data.google_id);
+                    setHasPassword(!!data.has_password);
+                }
+            } catch (err) {
+                console.error('Failed to fetch profile', err);
+            }
+        };
+        fetchProfile();
+    }, [user?.token, user?.role]);
 
     // Password
     const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
@@ -38,10 +71,12 @@ const AccountSettings = () => {
     const [pwError, setPwError] = useState('');
 
     // Notifications
-    const [notifs, setNotifs] = useState({ orderUpdates: true, loyaltyAlerts: true, newsletter: false, smsAlerts: false });
+    const [notifs, setNotifs] = useState({ orderUpdates: true, loyaltyAlerts: true, newsletter: false, gmailNotifications: false });
 
-    // Toast
+    // Toast & Modals
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+    const [showGooglePwModal, setShowGooglePwModal] = useState(false);
+
     const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
         setToast({ msg, type });
         setTimeout(() => setToast(null), 3000);
@@ -51,22 +86,77 @@ const AccountSettings = () => {
     const [deleteConfirm, setDeleteConfirm] = useState('');
 
     const handleSaveProfile = async () => {
+        if (!user?.token) return;
         setSavingProfile(true);
-        await new Promise(r => setTimeout(r, 700));
-        setSavingProfile(false);
-        showToast('Profile updated successfully!');
+        try {
+            const res = await fetch('http://localhost:8000/api/customer/profile', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.token}`
+                },
+                body: JSON.stringify({
+                    first_name: firstName || null,
+                    middle_name: middleName || null,
+                    last_name: lastName || null,
+                    suffix: suffix || null,
+                    email: email || null,
+                    phone: phone || null,
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.token) {
+                    loginWithToken(data.token);
+                }
+                showToast('Profile updated successfully!');
+            } else {
+                showToast('Failed to update profile.', 'error');
+            }
+        } catch (err) {
+            console.error('Save profile error:', err);
+            showToast('Error updating profile.', 'error');
+        } finally {
+            setSavingProfile(false);
+        }
     };
 
     const handleSavePassword = async () => {
+        if (!user?.token) return;
         setPwError('');
-        if (!pw.current) return setPwError('Enter your current password.');
+        if (hasPassword && !pw.current) return setPwError('Enter your current password.');
         if (pw.next.length < 8) return setPwError('New password must be at least 8 characters.');
         if (pw.next !== pw.confirm) return setPwError('Passwords do not match.');
+
         setSavingPw(true);
-        await new Promise(r => setTimeout(r, 700));
-        setSavingPw(false);
-        setPw({ current: '', next: '', confirm: '' });
-        showToast('Password changed successfully!');
+        try {
+            const res = await fetch('http://localhost:8000/api/customer/password', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.token}`
+                },
+                body: JSON.stringify({
+                    current_password: pw.current || null,
+                    new_password: pw.next
+                })
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                if (data.token) loginWithToken(data.token);
+                setPw({ current: '', next: '', confirm: '' });
+                setHasPassword(true);
+                showToast('Password changed successfully!');
+            } else {
+                setPwError(data.detail || 'Failed to update password.');
+            }
+        } catch (err) {
+            console.error('Password update error:', err);
+            setPwError('An error occurred while updating the password.');
+        } finally {
+            setSavingPw(false);
+        }
     };
 
     const handleDelete = () => {
@@ -94,10 +184,18 @@ const AccountSettings = () => {
 
                 {/* Profile Header */}
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-                    className="bg-brand-dark rounded-[2rem] p-8 text-white flex items-center gap-6 relative overflow-hidden">
-                    <div className="w-20 h-20 rounded-full bg-brand text-brand-dark flex items-center justify-center font-black text-2xl shrink-0 z-10">
-                        {initials}
-                    </div>
+                    className="bg-brand-dark rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 text-white flex flex-col sm:flex-row items-center gap-4 sm:gap-6 relative overflow-hidden text-center sm:text-left">
+                    {user?.avatar ? (
+                        <img
+                            src={user.avatar}
+                            alt={user.name}
+                            className="w-20 h-20 rounded-full object-cover ring-4 ring-white/20 shrink-0 z-10"
+                        />
+                    ) : (
+                        <div className="w-20 h-20 rounded-full bg-brand text-brand-dark flex items-center justify-center font-black text-2xl shrink-0 z-10">
+                            {initials}
+                        </div>
+                    )}
                     <div className="z-10">
                         <h2 className="text-2xl font-black tracking-tight">{user?.name ?? 'User'}</h2>
                         <p className="text-white/50 font-medium text-sm">{user?.email}</p>
@@ -109,12 +207,17 @@ const AccountSettings = () => {
                 </motion.div>
 
                 {/* Tab nav + Content */}
-                <div className="grid md:grid-cols-4 gap-6">
+                <div className="grid lg:grid-cols-4 gap-6">
                     {/* Sidebar nav */}
                     <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
                         className="bg-white rounded-[2rem] p-4 shadow-xl shadow-accent-brown/5 border border-white h-fit">
                         {NAV.map(n => (
-                            <button key={n.id} onClick={() => setSection(n.id)}
+                            <button key={n.id} onClick={() => {
+                                setSection(n.id);
+                                if (n.id === 'password' && isGoogleUser && !hasPassword) {
+                                    setShowGooglePwModal(true);
+                                }
+                            }}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-black transition-all mb-1 ${section === n.id ? 'bg-brand-dark text-white' : 'text-accent-brown/50 hover:bg-accent-peach/30 hover:text-accent-brown'} ${n.id === 'danger' ? 'text-red-400 hover:bg-red-50 hover:text-red-500 mt-4 border-t border-accent-brown/5 pt-4' : ''}`}>
                                 <n.icon className="w-4 h-4 shrink-0" /> {n.label}
                             </button>
@@ -123,22 +226,65 @@ const AccountSettings = () => {
 
                     {/* Panel */}
                     <motion.div key={section} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-                        className="md:col-span-3 bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white">
+                        className="lg:col-span-3 bg-white rounded-3xl sm:rounded-[2rem] p-5 sm:p-8 shadow-xl shadow-accent-brown/5 border border-white">
 
                         {section === 'profile' && (
                             <div>
                                 <h3 className="text-xl font-black text-accent-brown tracking-tight mb-6">Profile Information</h3>
                                 <div className="space-y-5">
-                                    {[
-                                        { label: 'Display Name', value: name, setter: setName, placeholder: 'Your name', type: 'text' },
-                                        { label: 'Email Address', value: email, setter: setEmail, placeholder: 'email@example.com', type: 'email' },
-                                    ].map(f => (
-                                        <div key={f.label}>
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">{f.label}</label>
-                                            <input type={f.type} value={f.value} onChange={e => f.setter(e.target.value)} placeholder={f.placeholder}
-                                                className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                    {/* First & Last Name */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">First Name</label>
+                                            <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Juan"
+                                                className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
                                         </div>
-                                    ))}
+                                        <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Last Name</label>
+                                            <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Dela Cruz"
+                                                className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                        </div>
+                                    </div>
+                                    {/* Middle Name & Suffix */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Middle Name <span className="normal-case font-normal opacity-60">(optional)</span></label>
+                                            <input type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} placeholder="Santos"
+                                                className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Suffix <span className="normal-case font-normal opacity-60">(optional)</span></label>
+                                            <select value={suffix} onChange={e => setSuffix(e.target.value)}
+                                                className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all appearance-none cursor-pointer">
+                                                <option value="">None</option>
+                                                <option value="Jr.">Jr.</option>
+                                                <option value="Sr.">Sr.</option>
+                                                <option value="II">II</option>
+                                                <option value="III">III</option>
+                                                <option value="IV">IV</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    {/* Email & Phone */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Email Address</label>
+                                            <input type="email" value={email} readOnly
+                                                className="w-full bg-accent-peach/10 border-2 border-transparent rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown/50 outline-none cursor-not-allowed" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Contact Number</label>
+                                            <div className="relative">
+                                                <span className="absolute left-5 top-1/2 -translate-y-1/2 text-sm font-bold text-accent-brown/50">+63</span>
+                                                <input type="tel" value={phone.replace(/^\+63/, '')} onChange={e => {
+                                                    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                    setPhone(val ? `+63${val}` : '');
+                                                }} placeholder="912 345 6789"
+                                                    className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 pl-14 pr-4 sm:pr-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {/* Role (read-only) */}
                                     <div>
                                         <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Role</label>
                                         <div className="bg-accent-peach/10 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown/50 capitalize">{user?.role ?? '—'}</div>
@@ -164,22 +310,29 @@ const AccountSettings = () => {
                                         { label: 'Current Password', key: 'current' as const },
                                         { label: 'New Password', key: 'next' as const },
                                         { label: 'Confirm New Password', key: 'confirm' as const },
-                                    ].map(f => (
-                                        <div key={f.key}>
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">{f.label}</label>
-                                            <div className="relative">
-                                                <input type={showPw ? 'text' : 'password'} value={pw[f.key]} onChange={e => setPw(p => ({ ...p, [f.key]: e.target.value }))}
-                                                    placeholder="••••••••"
-                                                    className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 pl-5 pr-12 text-sm font-bold text-accent-brown outline-none transition-all placeholder:text-accent-brown/20" />
-                                                {f.key === 'next' && (
-                                                    <button type="button" onClick={() => setShowPw(!showPw)}
-                                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-accent-brown/30 hover:text-brand-dark transition-colors">
-                                                        {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                                    </button>
+                                    ]
+                                        .filter(f => !(!hasPassword && f.key === 'current'))
+                                        .map(f => (
+                                            <div key={f.key}>
+                                                <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">{f.label}</label>
+                                                <div className="relative">
+                                                    <input type={showPw ? 'text' : 'password'} value={pw[f.key]} onChange={e => setPw(p => ({ ...p, [f.key]: e.target.value }))}
+                                                        placeholder="••••••••"
+                                                        className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 pl-5 pr-12 text-sm font-bold text-accent-brown outline-none transition-all placeholder:text-accent-brown/20" />
+                                                    {f.key === 'next' && (
+                                                        <button type="button" onClick={() => setShowPw(!showPw)}
+                                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-accent-brown/30 hover:text-brand-dark transition-colors">
+                                                            {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                {f.key === 'next' && pw.next && (
+                                                    <div className="mt-2">
+                                                        <PasswordStrength password={pw.next} />
+                                                    </div>
                                                 )}
                                             </div>
-                                        </div>
-                                    ))}
+                                        ))}
                                     <button onClick={handleSavePassword} disabled={savingPw}
                                         className="flex items-center gap-2 bg-brand-dark text-white px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors disabled:opacity-50">
                                         {savingPw ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />} Update Password
@@ -196,7 +349,7 @@ const AccountSettings = () => {
                                         { key: 'orderUpdates', label: 'Order Updates', sub: 'Status changes for your orders and reservations' },
                                         { key: 'loyaltyAlerts', label: 'Loyalty Alerts', sub: 'Points earned, tier upgrades, and reward availability' },
                                         { key: 'newsletter', label: 'Promotions', sub: 'Special offers, seasonal deals, and new product launches' },
-                                        { key: 'smsAlerts', label: 'SMS Alerts', sub: 'Text notifications for time-sensitive updates' },
+                                        { key: 'gmailNotifications', label: 'Gmail Notifications', sub: 'Email notifications for time-sensitive updates' },
                                     ] as const).map(n => (
                                         <div key={n.key} className="flex items-center justify-between py-4 border-b border-accent-brown/5 last:border-0">
                                             <div>
@@ -241,6 +394,43 @@ const AccountSettings = () => {
 
                     </motion.div>
                 </div>
+
+                {/* Google Password Modal */}
+                <AnimatePresence>
+                    {showGooglePwModal && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setShowGooglePwModal(false)}
+                                className="absolute inset-0 bg-accent-brown/40 backdrop-blur-sm"
+                            />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                className="relative bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl overflow-hidden"
+                            >
+                                <div className="absolute top-0 left-0 w-full h-2 bg-brand-dark" />
+                                <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center text-brand-dark mb-6">
+                                    <Lock className="w-8 h-8" />
+                                </div>
+                                <h3 className="text-2xl font-black text-accent-brown tracking-tighter mb-2">Google Login User</h3>
+                                <p className="text-sm font-medium text-accent-brown/60 mb-8 leading-relaxed">
+                                    Since you logged in using your Google account, you don't have a separate password for Hi-Vet CRM.
+                                    Your account security is managed directly by Google.
+                                </p>
+                                <button
+                                    onClick={() => setShowGooglePwModal(false)}
+                                    className="w-full bg-brand-dark text-white px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors"
+                                >
+                                    Understood
+                                </button>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
 
             </div>
         </DashboardLayout>

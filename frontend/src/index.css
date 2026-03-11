@@ -12,6 +12,8 @@
 
   --font-brand: "Outfit", sans-serif;
 
+  --breakpoint-xs: 480px;
+
   --radius-3xl: 1.5rem;
   --radius-4xl: 2.5rem;
   --radius-5xl: 3rem;
@@ -23,21 +25,37 @@
   --brand-bg: #fdf0d5;
 }
 
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 100px;
+}
+
 body {
-  @apply font-brand bg-accent-peach text-accent-brown selection:bg-brand/30;
+  @apply font-brand bg-accent-peach text-accent-brown selection:bg-brand/30 overflow-x-hidden;
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 @layer components {
   .glass-card {
-    @apply bg-white/70 backdrop-blur-lg border border-white/20 rounded-4xl shadow-xl;
+    @apply bg-white/70 backdrop-blur-lg border border-white/20 rounded-2xl sm:rounded-4xl shadow-xl;
   }
 
   .btn-primary {
-    @apply bg-brand-dark text-white px-10 py-5 rounded-full font-black transition-all hover:scale-105 hover:bg-brand-dark/90 active:scale-95 shadow-lg shadow-brand/20 uppercase tracking-widest text-sm;
+    @apply bg-brand-dark text-white px-6 xs:px-10 py-3 xs:py-5 rounded-full font-black transition-all hover:scale-105 hover:bg-brand-dark/90 active:scale-95 shadow-lg shadow-brand/20 uppercase tracking-widest text-[10px] xs:text-sm;
   }
 
   .heading-xl {
-    @apply text-5xl md:text-7xl font-black tracking-tighter leading-[0.9];
+    @apply text-5xl xs:text-6xl md:text-7xl font-black tracking-tighter leading-[0.9];
   }
 
   .arch-card {

@@ -118,7 +118,7 @@ const UserReservations = () => {
                 </AnimatePresence>
 
                 {/* Header Bar */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                     <p className="text-sm font-medium text-accent-brown/50">{reservations.length} reservation{reservations.length !== 1 ? 's' : ''} total</p>
                     <button
                         onClick={() => setShowModal(true)}
@@ -164,9 +164,9 @@ const UserReservations = () => {
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="bg-brand-dark rounded-[2rem] p-8 md:p-12 text-white relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-8"
+                        className="bg-brand-dark rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-12 text-white relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-8"
                     >
-                        <div className="relative z-10 w-full md:w-2/3">
+                        <div className="relative z-10 w-full lg:w-2/3">
                             <div className="flex items-center gap-3 mb-4">
                                 <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${activeReservation.status === 'Ready for Pickup' ? 'bg-green-500/20 text-green-300 border-green-500/30' : activeReservation.status === 'Confirmed' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'}`}>
                                     {activeReservation.status}
@@ -222,7 +222,7 @@ const UserReservations = () => {
                                     initial={{ opacity: 0, x: -20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     transition={{ delay: i * 0.08 }}
-                                    className="bg-white rounded-2xl p-6 shadow-xl shadow-accent-brown/5 border border-white hover:border-brand/20 transition-all flex flex-col md:flex-row md:items-center justify-between gap-6 group"
+                                    className="bg-white rounded-2xl p-4 sm:p-6 shadow-xl shadow-accent-brown/5 border border-white hover:border-brand/20 transition-all flex flex-col md:flex-row md:items-center justify-between gap-6 group"
                                 >
                                     <div className="flex items-start gap-4">
                                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${STATUS_STYLES[res.status]}`}>
@@ -274,117 +274,128 @@ const UserReservations = () => {
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
                                 onClick={() => setShowModal(false)}
-                                className="fixed inset-0 bg-accent-brown/30 backdrop-blur-sm z-50"
+                                className="fixed inset-0 bg-accent-brown/20 backdrop-blur-sm z-50"
                             />
                             <motion.div
-                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                                className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                                initial={{ scale: 0.95, opacity: 0, y: 100 }}
+                                animate={{ scale: 1, opacity: 1, y: 0 }}
+                                exit={{ scale: 0.95, opacity: 0, y: 100 }}
+                                className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
                                 onClick={e => e.stopPropagation()}
                             >
-                                <div className="bg-white rounded-[2rem] p-8 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-                                    <div className="flex items-center justify-between mb-8">
-                                        <div>
-                                            <h2 className="text-2xl font-black text-accent-brown tracking-tight">New Reservation</h2>
-                                            <p className="text-xs font-medium text-accent-brown/50 mt-1">Fill in the details to book an appointment.</p>
+                                <div className="bg-white rounded-t-[2rem] sm:rounded-[2rem] p-0 w-full max-w-4xl shadow-2xl max-h-[85vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
+                                    <div className="flex flex-row items-center justify-between p-5 xs:p-6 sm:p-8 border-b border-accent-brown/5 shrink-0 bg-accent-peach/5 gap-4">
+                                        <div className="min-w-0">
+                                            <h2 className="text-xl sm:text-2xl font-black text-accent-brown tracking-tighter">New Reservation</h2>
+                                            <p className="text-[10px] sm:text-xs font-medium text-accent-brown/50 mt-1 uppercase tracking-widest font-black">Book an appointment</p>
                                         </div>
-                                        <button onClick={() => setShowModal(false)} className="w-10 h-10 bg-accent-peach/30 text-accent-brown/50 hover:bg-red-50 hover:text-red-500 rounded-xl flex items-center justify-center transition-colors">
+                                        <button onClick={() => setShowModal(false)} className="w-10 h-10 bg-white hover:bg-red-50 text-accent-brown/50 hover:text-red-500 rounded-xl flex items-center justify-center transition-colors shadow-sm shrink-0">
                                             <X className="w-5 h-5" />
                                         </button>
                                     </div>
 
-                                    <form onSubmit={handleSubmit} className="space-y-5">
-                                        {/* Pet Name */}
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Pet Name *</label>
-                                            <input
-                                                required
-                                                type="text"
-                                                value={form.pet_name}
-                                                onChange={e => setForm(f => ({ ...f, pet_name: e.target.value }))}
-                                                placeholder="e.g. Max"
-                                                className="w-full px-4 py-3 border-2 border-accent-brown/10 rounded-xl text-sm font-medium text-accent-brown focus:border-brand/40 outline-none transition-colors placeholder:text-accent-brown/30"
-                                            />
-                                        </div>
+                                    <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 xs:p-6 sm:p-8 no-scrollbar">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 xs:gap-y-6">
 
-                                        {/* Service */}
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Service *</label>
-                                            <select
-                                                value={form.service}
-                                                onChange={e => setForm(f => ({ ...f, service: e.target.value }))}
-                                                className="w-full px-4 py-3 border-2 border-accent-brown/10 rounded-xl text-sm font-medium text-accent-brown focus:border-brand/40 outline-none transition-colors bg-white"
-                                            >
-                                                {Object.keys(SERVICE_PRICES).map(s => (
-                                                    <option key={s} value={s}>{s} — ₱{SERVICE_PRICES[s]}</option>
-                                                ))}
-                                            </select>
-                                        </div>
+                                            {/* Left Column */}
+                                            <div className="space-y-4 xs:space-y-6">
+                                                {/* Pet Name */}
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Pet Name *</label>
+                                                    <input
+                                                        required
+                                                        type="text"
+                                                        value={form.pet_name}
+                                                        onChange={e => setForm(f => ({ ...f, pet_name: e.target.value }))}
+                                                        placeholder="e.g. Max"
+                                                        className="w-full px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-sm font-bold text-accent-brown outline-none transition-colors placeholder:text-accent-brown/30"
+                                                    />
+                                                </div>
 
-                                        {/* Date & Time */}
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Date *</label>
-                                                <input
-                                                    required
-                                                    type="date"
-                                                    value={form.date}
-                                                    min={new Date().toISOString().split('T')[0]}
-                                                    onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                                                    className="w-full px-4 py-3 border-2 border-accent-brown/10 rounded-xl text-sm font-medium text-accent-brown focus:border-brand/40 outline-none transition-colors"
-                                                />
+                                                {/* Service */}
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Service *</label>
+                                                    <select
+                                                        value={form.service}
+                                                        onChange={e => setForm(f => ({ ...f, service: e.target.value }))}
+                                                        className="w-full px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-sm font-bold text-accent-brown outline-none transition-colors appearance-none cursor-pointer"
+                                                    >
+                                                        {Object.keys(SERVICE_PRICES).map(s => (
+                                                            <option key={s} value={s}>{s} — ₱{SERVICE_PRICES[s]}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+
+                                                {/* Location */}
+                                                <div>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Location *</label>
+                                                    <select
+                                                        value={form.location}
+                                                        onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+                                                        className="w-full px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-sm font-bold text-accent-brown outline-none transition-colors appearance-none cursor-pointer"
+                                                    >
+                                                        {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                                                    </select>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Time *</label>
-                                                <select
-                                                    value={form.time}
-                                                    onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
-                                                    className="w-full px-4 py-3 border-2 border-accent-brown/10 rounded-xl text-sm font-medium text-accent-brown focus:border-brand/40 outline-none transition-colors bg-white"
-                                                >
-                                                    {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
-                                                </select>
+
+                                            {/* Right Column */}
+                                            <div className="space-y-4 xs:space-y-6 flex flex-col">
+                                                {/* Date & Time */}
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Date *</label>
+                                                        <input
+                                                            required
+                                                            type="date"
+                                                            value={form.date}
+                                                            min={new Date().toISOString().split('T')[0]}
+                                                            onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                                                            className="w-full px-3 xs:px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-xs xs:text-sm font-bold text-accent-brown outline-none transition-colors cursor-pointer"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Time *</label>
+                                                        <select
+                                                            value={form.time}
+                                                            onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
+                                                            className="w-full px-3 xs:px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-xs xs:text-sm font-bold text-accent-brown outline-none transition-colors appearance-none cursor-pointer"
+                                                        >
+                                                            {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                {/* Notes */}
+                                                <div className="flex-1 min-h-[80px] xs:min-h-[100px]">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Notes (optional)</label>
+                                                    <textarea
+                                                        value={form.notes}
+                                                        onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                                                        placeholder="Any special requirements..."
+                                                        className="w-full h-[calc(100%-24px)] px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-xs sm:text-sm font-medium text-accent-brown outline-none transition-colors resize-none placeholder:text-accent-brown/30"
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
 
-                                        {/* Location */}
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Location *</label>
-                                            <select
-                                                value={form.location}
-                                                onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
-                                                className="w-full px-4 py-3 border-2 border-accent-brown/10 rounded-xl text-sm font-medium text-accent-brown focus:border-brand/40 outline-none transition-colors bg-white"
+                                        {/* Footer Actions */}
+                                        <div className="mt-6 xs:mt-8 pt-6 xs:pt-8 border-t border-accent-brown/5 flex flex-col sm:flex-row items-center justify-between gap-4 xs:gap-6">
+                                            {/* Price estimate */}
+                                            <div className="w-full sm:w-auto bg-brand/10 rounded-xl px-6 py-4 flex items-center justify-between sm:min-w-[200px] border border-brand/20">
+                                                <span className="text-[10px] font-black text-brand-dark uppercase tracking-widest">Est. Total</span>
+                                                <span className="font-black text-brand-dark text-xl">₱{SERVICE_PRICES[form.service]?.toFixed(2) || '0.00'}</span>
+                                            </div>
+
+                                            <button
+                                                type="submit"
+                                                disabled={submitting}
+                                                className="w-full sm:w-auto px-10 bg-brand text-brand-dark py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-brand-dark hover:text-white transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand/20 disabled:opacity-50 flex-1 sm:max-w-[300px]"
                                             >
-                                                {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
-                                            </select>
+                                                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                                                Confirm Reservation
+                                            </button>
                                         </div>
-
-                                        {/* Notes */}
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Notes (optional)</label>
-                                            <textarea
-                                                value={form.notes}
-                                                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                                                rows={3}
-                                                placeholder="Any special requirements or notes..."
-                                                className="w-full px-4 py-3 border-2 border-accent-brown/10 rounded-xl text-sm font-medium text-accent-brown focus:border-brand/40 outline-none transition-colors resize-none placeholder:text-accent-brown/30"
-                                            />
-                                        </div>
-
-                                        {/* Price estimate */}
-                                        <div className="bg-accent-peach/20 rounded-xl p-4 flex items-center justify-between">
-                                            <span className="text-xs font-bold text-accent-brown/60 uppercase tracking-widest">Estimated Total</span>
-                                            <span className="font-black text-accent-brown text-xl">₱{SERVICE_PRICES[form.service]?.toFixed(2)}</span>
-                                        </div>
-
-                                        <button
-                                            type="submit"
-                                            disabled={submitting}
-                                            className="w-full bg-brand-dark text-white py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors flex items-center justify-center gap-2 shadow-lg shadow-brand-dark/20 disabled:opacity-50"
-                                        >
-                                            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                                            Confirm Reservation
-                                        </button>
                                     </form>
                                 </div>
                             </motion.div>

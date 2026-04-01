@@ -45,13 +45,43 @@ const UserAlerts = () => {
     const markAllAsRead = async () => {
         const token = localStorage.getItem('hivet_token');
         try {
-            await fetch(`http://localhost:8000/api/notifications/read-all`, {
+            await fetch('http://localhost:8000/api/notifications/read-all', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             setNotifications(prev => prev.map(n => ({ ...n, read: true })));
         } catch (err) {
             console.error('Failed to mark all read:', err);
+        }
+    };
+
+    const deleteNotification = async (id: number) => {
+        const token = localStorage.getItem('hivet_token');
+        try {
+            const res = await fetch(`http://localhost:8000/api/notifications/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                setNotifications(prev => prev.filter(n => n.id !== id));
+            }
+        } catch (err) {
+            console.error('Failed to delete notification:', err);
+        }
+    };
+
+    const deleteAllNotifications = async () => {
+        const token = localStorage.getItem('hivet_token');
+        try {
+            const res = await fetch('http://localhost:8000/api/notifications/all', {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                setNotifications([]);
+            }
+        } catch (err) {
+            console.error('Failed to delete all notifications:', err);
         }
     };
 
@@ -97,12 +127,20 @@ const UserAlerts = () => {
                             Unread ({notifications.filter(n => !n.read).length})
                         </button>
                     </div>
-                    <button
-                        onClick={markAllAsRead}
-                        className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-brand-dark transition-colors flex items-center gap-2"
-                    >
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Mark all as read
-                    </button>
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={markAllAsRead}
+                            className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-brand-dark transition-colors flex items-center gap-2"
+                        >
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Mark all read
+                        </button>
+                        <button
+                            onClick={deleteAllNotifications}
+                            className="text-[10px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-500 transition-colors flex items-center gap-2"
+                        >
+                            <Bell className="w-3.5 h-3.5 rotate-[15deg]" /> Clear All
+                        </button>
+                    </div>
                 </div>
 
                 {/* Alerts List */}
@@ -151,10 +189,20 @@ const UserAlerts = () => {
                                         </div>
                                     </div>
 
-                                    <div className="sm:text-right pl-[68px] sm:pl-0">
+                                    <div className="flex flex-col items-end gap-3 pl-[68px] sm:pl-0 shrink-0">
                                         <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 whitespace-nowrap">
                                             {new Date(alert.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                                         </span>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteNotification(alert.id);
+                                            }}
+                                            className="w-10 h-10 rounded-2xl bg-accent-peach/20 hover:bg-red-50 text-accent-brown/20 hover:text-red-500 flex items-center justify-center transition-all shadow-sm"
+                                            title="Remove Notification"
+                                        >
+                                            <Bell className="w-4 h-4" />
+                                        </button>
                                     </div>
                                 </motion.div>
                             );

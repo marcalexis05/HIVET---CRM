@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { BarChart3, Users, PackageCheck, Activity, ShieldCheck, Mail, Phone, Facebook, Twitter, Instagram, Youtube } from 'lucide-react';
-import { Logo } from '../components/Logo';
+import { BarChart3, Users, PackageCheck, Activity, ShieldCheck } from 'lucide-react';
+import { Footer } from '../components/Footer';
 
 export default function BusinessLanding() {
     return (
@@ -101,59 +101,7 @@ export default function BusinessLanding() {
                 </div>
             </section>
 
-            {/* Business Footer */}
-            <footer className="py-16 xs:py-24 bg-accent-brown text-accent-cream rounded-t-[3rem] xs:rounded-t-[5rem] mt-12 xs:mt-20">
-                <div className="container mx-auto px-6 xs:px-8">
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-12 xs:gap-16 pb-12 xs:pb-16">
-                        <div className="md:col-span-6 space-y-6 xs:space-y-8">
-                            <Link to="/" className="flex items-center gap-3 group w-fit">
-                                <div className="w-12 h-12 xs:w-14 xs:h-14 bg-white rounded-2xl flex items-center justify-center p-2 group-hover:scale-110 transition-transform">
-                                    <Logo className="w-full h-full text-brand-dark" />
-                                </div>
-                                <span className="text-xl xs:text-2xl font-black tracking-tighter text-white">Hi-Vet Partners</span>
-                            </Link>
-                            <p className="text-accent-cream/50 text-sm xs:text-base leading-relaxed max-w-sm">
-                                The ultimate business management platform designed exclusively for veterinary professionals and clinic owners.
-                            </p>
-                            <div className="flex gap-3 xs:gap-4">
-                                {[Facebook, Twitter, Instagram, Youtube].map((Icon, i) => (
-                                    <button key={i} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-brand hover:text-white transition-all">
-                                        <Icon className="w-5 h-5" />
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="md:col-span-6 space-y-6 xs:space-y-8">
-                            <h4 className="text-xs xs:text-sm font-black uppercase tracking-[0.2em] text-brand">Partner Support</h4>
-                            <div className="space-y-3 xs:space-y-4">
-                                <div className="flex items-center gap-3 xs:gap-4 text-accent-cream/60">
-                                    <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center shrink-0">
-                                        <Mail className="w-5 h-5" />
-                                    </div>
-                                    <span className="font-medium text-sm xs:text-base">partners@hi-vet.com</span>
-                                </div>
-                                <div className="flex items-center gap-3 xs:gap-4 text-accent-cream/60">
-                                    <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center shrink-0">
-                                        <Phone className="w-5 h-5" />
-                                    </div>
-                                    <span className="font-medium text-sm xs:text-base">+1 (800) VET-PRO1</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Bottom Bar */}
-                    <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-[8px] xs:text-[10px] font-black uppercase tracking-[0.2em] xs:tracking-[0.3em] text-accent-cream/20 text-center md:text-left">
-                        <p>© 2026 Hi-Vet Professional CRM. All Rights Reserved.</p>
-                        <div className="flex gap-6 xs:gap-8">
-                            <button className="hover:text-white transition-colors">Security</button>
-                            <button className="hover:text-white transition-colors">Partner Terms</button>
-                            <button className="hover:text-white transition-colors">API Status</button>
-                        </div>
-                    </div>
-                </div>
-            </footer>
+            <Footer variant="business" />
         </div>
     );
 }

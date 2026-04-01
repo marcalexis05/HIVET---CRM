@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 
-type Role = 'admin' | 'user' | 'business' | 'rider' | null;
+type Role = 'super_admin' | 'system_admin' | 'user' | 'business' | 'rider' | null;
 
 interface AuthUser {
     email: string;
@@ -12,12 +12,15 @@ interface AuthUser {
     last_name?: string;
     suffix?: string;
     phone?: string;
+    gender?: string;
+    birthday?: string;
     avatar?: string;
     token?: string;
 }
 
 interface AuthContextType {
     user: AuthUser | null;
+    isLoading: boolean;
     login: (email: string, role: Role, name: string) => void;
     loginWithToken: (token: string) => void;
     logout: () => void;
@@ -36,6 +39,7 @@ function parseJwt(token: string): Record<string, unknown> | null {
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<AuthUser | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
     // Rehydrate session from localStorage on first load
     useEffect(() => {
@@ -52,6 +56,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     last_name: payload.last_name as string | undefined,
                     suffix: payload.suffix as string | undefined,
                     phone: payload.phone as string | undefined,
+                    gender: payload.gender as string | undefined,
+                    birthday: payload.birthday as string | undefined,
                     avatar: payload.avatar as string | undefined,
                     token: stored,
                 });
@@ -59,6 +65,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 localStorage.removeItem('hivet_token');
             }
         }
+        setIsLoading(false);
     }, []);
 
     const login = (email: string, role: Role, name: string) => {
@@ -78,6 +85,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             last_name: payload.last_name as string | undefined,
             suffix: payload.suffix as string | undefined,
             phone: payload.phone as string | undefined,
+            gender: payload.gender as string | undefined,
+            birthday: payload.birthday as string | undefined,
             avatar: payload.avatar as string | undefined,
             token,
         });
@@ -89,7 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, loginWithToken, logout }}>
+        <AuthContext.Provider value={{ user, isLoading, login, loginWithToken, logout }}>
             {children}
         </AuthContext.Provider>
     );

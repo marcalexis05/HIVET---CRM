@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
     children: ReactNode;
-    allowedRole?: 'admin' | 'user' | 'business';
+    allowedRoles?: ('super_admin' | 'system_admin' | 'user' | 'business' | 'rider')[];
 }
 
 function getTokenPayload(): { role?: string } | null {
@@ -13,7 +14,6 @@ function getTokenPayload(): { role?: string } | null {
         if (!token) return null;
         const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
         const payload = JSON.parse(atob(base64));
-        // Check expiry
         if (payload.exp && payload.exp * 1000 < Date.now()) {
             localStorage.removeItem('hivet_token');
             return null;
@@ -24,19 +24,30 @@ function getTokenPayload(): { role?: string } | null {
     }
 }
 
-export const ProtectedRoute = ({ children, allowedRole }: ProtectedRouteProps) => {
-    const { user } = useAuth();
+export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
+    const { user, isLoading } = useAuth();
     const location = useLocation();
 
-    // If React state isn't hydrated yet, fall back to reading localStorage directly
+    // While AuthContext is hydrating, show a loading state instead of redirecting
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-accent-peach flex flex-col items-center justify-center gap-4">
+                <Loader2 className="w-10 h-10 text-brand animate-spin" />
+                <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest">Restoring secure session...</p>
+            </div>
+        );
+    }
+
     const effectiveRole = user?.role ?? (getTokenPayload()?.role as string | undefined);
 
     if (!effectiveRole) {
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
-    if (allowedRole && effectiveRole !== allowedRole) {
-        return <Navigate to={`/dashboard/${effectiveRole}`} replace />;
+    if (allowedRoles && !allowedRoles.includes(effectiveRole as any)) {
+        // Fallback for unauthorized role access
+        const fallbackPath = ['super_admin', 'system_admin'].includes(effectiveRole) ? 'admin' : effectiveRole;
+        return <Navigate to={`/dashboard/${fallbackPath}`} replace />;
     }
 
     return <>{children}</>;

@@ -27,6 +27,8 @@ interface LoyaltyData {
     history: HistoryEntry[];
     vouchers: Voucher[];
     referral_code: string;
+    points_per_peso: number;
+    points_per_reservation: number;
 }
 
 const VOUCHER_COLORS: Record<string, string> = {
@@ -57,8 +59,14 @@ const UserLoyalty = () => {
     };
 
     useEffect(() => {
-        fetch(`${API}/api/loyalty`)
-            .then(r => r.json())
+        const token = localStorage.getItem('hivet_token');
+        fetch(`${API}/api/loyalty`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to fetch');
+                return res.json();
+            })
             .then(d => { setLoyalty(d); setLoading(false); })
             .catch(() => { setError('Could not load loyalty data. Is the backend running?'); setLoading(false); });
     }, []);
@@ -66,10 +74,14 @@ const UserLoyalty = () => {
     const handleRedeem = async () => {
         if (!confirmVoucher || !loyalty) return;
         setRedeeming(true);
+        const token = localStorage.getItem('hivet_token');
         try {
             const res = await fetch(`${API}/api/loyalty/redeem`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ voucher_id: confirmVoucher.id }),
             });
             if (!res.ok) {
@@ -151,19 +163,19 @@ const UserLoyalty = () => {
                                             <div className={`w-12 h-12 bg-gradient-to-tr ${TIER_GRADIENT[loyalty.tier] ?? TIER_GRADIENT['Gold']} rounded-full flex items-center justify-center shadow-lg`}>
                                                 <Award className="w-6 h-6 text-white" />
                                             </div>
-                                            <div>
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-white/50 block">Current Status</span>
-                                                <span className="font-black text-xl tracking-tight text-brand">{loyalty.tier} Member</span>
-                                            </div>
+                                             <div>
+                                                 <span className="text-xs font-black uppercase tracking-widest text-white/70 block">Current Status</span>
+                                                 <span className="font-black text-xl tracking-tight text-brand-light">{loyalty.tier} Member</span>
+                                             </div>
                                         </div>
                                         <h3 className="text-4xl xs:text-5xl sm:text-6xl lg:text-7xl font-black tracking-tighter mb-2 break-all sm:break-normal">
-                                            {loyalty.points.toLocaleString()} <span className="text-lg sm:text-2xl text-white/40 font-bold">pts</span>
+                                             {loyalty.points.toLocaleString()} <span className="text-lg sm:text-2xl text-white/40 font-bold">pts</span>
                                         </h3>
-                                        <p className="text-white/60 font-medium text-sm">You earn 10 points for every ₱1 spent in our catalog.</p>
+                                         <p className="text-white/80 font-medium text-sm">Earn loyalty points for every purchase based on items in our catalog.</p>
                                     </div>
 
                                     <div className="w-full md:w-64 bg-white/10 backdrop-blur-md rounded-2xl p-5 sm:p-6 border border-white/10">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/50 block mb-2">Next Tier: {loyalty.next_tier}</span>
+                                         <span className="text-xs font-black uppercase tracking-widest text-white/70 block mb-2">Next Tier: {loyalty.next_tier}</span>
                                         <div className="w-full h-2 bg-white/10 rounded-full mb-3 overflow-hidden">
                                             <div className="h-full bg-brand rounded-full transition-all duration-700" style={{ width: `${tierProgress}%` }} />
                                         </div>
@@ -171,11 +183,11 @@ const UserLoyalty = () => {
                                             <span className="text-brand">{loyalty.points.toLocaleString()}</span>
                                             <span className="text-white/40">{loyalty.next_tier_points.toLocaleString()} pts</span>
                                         </div>
-                                        {loyalty.next_tier_points - loyalty.points > 0 && (
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-white/80 mt-4 text-center">
-                                                Just {(loyalty.next_tier_points - loyalty.points).toLocaleString()} pts to upgrade!
-                                            </p>
-                                        )}
+                                         {loyalty.next_tier_points - loyalty.points > 0 && (
+                                             <p className="text-xs font-black uppercase tracking-widest text-white mt-4 text-center">
+                                                 Just {(loyalty.next_tier_points - loyalty.points).toLocaleString()} pts to upgrade!
+                                             </p>
+                                         )}
                                     </div>
                                 </div>
                                 <div className="absolute top-0 right-0 w-96 h-96 bg-brand/10 rounded-full blur-[80px]" />
@@ -194,16 +206,16 @@ const UserLoyalty = () => {
                                 </h3>
                                 <ul className="space-y-6">
                                     {[
-                                        ['Shop the Catalog', '10 pts per ₱1'],
-                                        ['Book Reservations', '50 pts per Visit'],
+                                        ['Shop the Catalog', 'Points vary per item'],
+                                        ['Book Reservations', 'Points vary by clinic'],
                                         ['Refer a Friend', '500 pts Bonus'],
                                     ].map(([label, pts], idx) => (
                                         <li key={label} className="flex items-start gap-4">
                                             <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm text-brand-dark font-black">{idx + 1}</div>
-                                            <div>
-                                                <p className="font-bold text-accent-brown text-sm mb-0.5">{label}</p>
-                                                <p className="text-[10px] text-accent-brown/50 font-bold uppercase tracking-widest">{pts}</p>
-                                            </div>
+                                             <div>
+                                                 <p className="font-bold text-accent-brown text-sm mb-0.5">{label}</p>
+                                                 <p className="text-xs text-accent-brown/80 font-bold uppercase tracking-widest">{pts}</p>
+                                             </div>
                                         </li>
                                     ))}
                                 </ul>
@@ -212,10 +224,10 @@ const UserLoyalty = () => {
 
                         {/* Vouchers Grid */}
                         <div>
-                            <div className="flex items-center justify-between mb-6">
-                                <h3 className="text-xl font-black text-accent-brown tracking-tighter">Available Rewards</h3>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Redeem your points</span>
-                            </div>
+                             <div className="flex items-center justify-between mb-6">
+                                 <h3 className="text-xl font-black text-accent-brown tracking-tighter">Available Rewards</h3>
+                                 <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/60">Redeem your points</span>
+                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                 {loyalty.vouchers.map((voucher, i) => (
                                     <motion.div
@@ -226,28 +238,28 @@ const UserLoyalty = () => {
                                         className={`bg-white rounded-2xl p-5 sm:p-6 shadow-xl shadow-accent-brown/5 border-2 transition-all relative overflow-hidden group flex flex-col ${voucher.active ? 'border-transparent hover:border-brand/30 cursor-pointer' : 'border-transparent opacity-60'}`}
                                     >
                                         <div className="flex justify-between items-start mb-6">
-                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${VOUCHER_COLORS[voucher.type] ?? 'bg-gray-100 text-gray-600'}`}>
-                                                <Gift className="w-6 h-6" />
-                                            </div>
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 bg-accent-peach/50 px-2 py-0.5 rounded-full">{voucher.type}</span>
-                                        </div>
+                                             <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${VOUCHER_COLORS[voucher.type] ?? 'bg-gray-100 text-gray-600'}`}>
+                                                 <Gift className="w-6 h-6" />
+                                             </div>
+                                              <span className="text-xs font-black uppercase tracking-widest text-accent-brown/80 bg-accent-peach/50 px-3 py-1 rounded-full">{voucher.type}</span>
+                                         </div>
                                         <h4 className="font-black text-accent-brown text-lg leading-tight tracking-tight mb-2 pr-4 flex-1">{voucher.title}</h4>
                                         <div className="mt-4 pt-4 border-t border-accent-brown/5 flex items-center justify-between">
                                             <span className="flex items-center gap-1 font-bold text-sm text-brand-dark">
                                                 <Star className="w-3.5 h-3.5 fill-brand-dark" /> {voucher.cost.toLocaleString()}
                                             </span>
-                                            {voucher.active ? (
-                                                <button
-                                                    onClick={() => setConfirmVoucher(voucher)}
-                                                    className="text-[10px] font-black uppercase tracking-widest bg-brand text-white px-3 py-1.5 rounded-lg group-hover:bg-brand-dark transition-colors"
-                                                >
-                                                    Redeem
-                                                </button>
-                                            ) : (
-                                                <span className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">
-                                                    Need {(voucher.cost - loyalty.points).toLocaleString()} more
-                                                </span>
-                                            )}
+                                             {voucher.active ? (
+                                                  <button
+                                                      onClick={() => setConfirmVoucher(voucher)}
+                                                      className="text-xs font-black uppercase tracking-widest bg-brand text-white px-4 py-2 rounded-xl group-hover:bg-brand-dark transition-colors"
+                                                  >
+                                                      Redeem
+                                                  </button>
+                                             ) : (
+                                                 <span className="text-[9px] font-black uppercase tracking-widest text-accent-brown/60">
+                                                     Need {(voucher.cost - loyalty.points).toLocaleString()} more
+                                                  </span>
+                                             )}
                                         </div>
                                     </motion.div>
                                 ))}
@@ -270,10 +282,10 @@ const UserLoyalty = () => {
                                             <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${entry.points > 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'}`}>
                                                 {entry.points > 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-bold text-accent-brown text-sm truncate pr-2">{entry.desc}</p>
-                                                <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest">{entry.date}</p>
-                                            </div>
+                                             <div className="flex-1 min-w-0">
+                                                 <p className="font-bold text-accent-brown text-sm truncate pr-2">{entry.desc}</p>
+                                                 <p className="text-xs font-bold text-accent-brown/80 uppercase tracking-widest">{entry.date}</p>
+                                             </div>
                                             <span className={`font-black text-sm shrink-0 ${entry.points > 0 ? 'text-green-600' : 'text-red-500'}`}>
                                                 {entry.points > 0 ? '+' : ''}{entry.points.toLocaleString()}
                                             </span>
@@ -294,7 +306,7 @@ const UserLoyalty = () => {
                                         <Gift className="w-6 h-6 text-brand" />
                                     </div>
                                     <h3 className="text-2xl font-black tracking-tight mb-2">Refer a Friend</h3>
-                                    <p className="text-white/50 text-sm font-medium mb-8">Share your code and earn 500 bonus points for every successful referral.</p>
+                                     <p className="text-white/70 text-sm font-medium mb-8">Share your code and earn 500 bonus points for every successful referral.</p>
                                     <div className="bg-white/10 rounded-2xl p-3 sm:p-4 border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
                                         <span className="font-black text-brand tracking-widest text-sm xs:text-base sm:text-lg break-all text-center sm:text-left">{loyalty.referral_code}</span>
                                         <button
@@ -304,9 +316,9 @@ const UserLoyalty = () => {
                                             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                         </button>
                                     </div>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-white/30 mt-4 text-center">
-                                        {copied ? '✓ Copied to clipboard!' : 'Tap to copy'}
-                                    </p>
+                                     <p className="text-xs font-black uppercase tracking-widest text-white/50 mt-4 text-center">
+                                         {copied ? '✓ Copied to clipboard!' : 'Tap to copy'}
+                                     </p>
                                 </div>
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-brand/10 rounded-full blur-[60px]" />
                             </motion.div>
@@ -350,13 +362,13 @@ const UserLoyalty = () => {
                                             {redeeming ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                                             Confirm Redemption
                                         </button>
-                                        <button
-                                            onClick={() => setConfirmVoucher(null)}
-                                            disabled={redeeming}
-                                            className="w-full py-3 text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-accent-brown transition-colors flex items-center justify-center gap-1"
-                                        >
-                                            <X className="w-3 h-3" /> Cancel
-                                        </button>
+                                         <button
+                                             onClick={() => setConfirmVoucher(null)}
+                                             disabled={redeeming}
+                                             className="w-full py-3 text-xs font-black uppercase tracking-widest text-accent-brown/60 hover:text-accent-brown transition-colors flex items-center justify-center gap-1"
+                                         >
+                                             <X className="w-3 h-3" /> Cancel
+                                         </button>
                                     </div>
                                 </div>
                             </motion.div>

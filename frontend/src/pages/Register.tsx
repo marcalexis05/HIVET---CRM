@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     User, Phone,
@@ -131,7 +131,8 @@ const Register = () => {
                     last_name: lastName,
                     middle_name: middleName,
                     suffix,
-                    phone
+                    phone,
+                    role: 'user'
                 })
             });
             const data = await res.json();

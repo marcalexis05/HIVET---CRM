@@ -14,12 +14,16 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import Catalog from './pages/Catalog';
 import ScrollToTop from './components/ScrollToTop';
+import { Footer } from './components/Footer';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import AdminDashboard from './pages/dashboard/AdminDashboard';
 import AdminBusinesses from './pages/dashboard/AdminBusinesses';
+import AdminCompliance from './pages/dashboard/AdminCompliance';
+import AdminRiders from './pages/dashboard/AdminRiders';
 import AdminUsers from './pages/dashboard/AdminUsers';
+import AdminAlerts from './pages/dashboard/AdminAlerts';
 import UserDashboard from './pages/dashboard/UserDashboard';
 import UserCatalog from './pages/dashboard/UserCatalog';
 import ProductDetail from './pages/dashboard/ProductDetail';
@@ -32,6 +36,7 @@ import BusinessDashboard from './pages/dashboard/BusinessDashboard';
 import BusinessOrders from './pages/dashboard/BusinessOrders';
 import BusinessCatalog from './pages/dashboard/BusinessCatalog';
 import BusinessAnalytics from './pages/dashboard/BusinessAnalytics';
+import BusinessReservations from './pages/dashboard/BusinessReservations';
 import AccountSettings from './pages/dashboard/AccountSettings';
 import GoogleCallback from './pages/GoogleCallback';
 import BusinessLanding from './pages/BusinessLanding';
@@ -40,6 +45,9 @@ import BusinessRegister from './pages/BusinessRegister';
 import RiderLanding from './pages/RiderLanding';
 import RiderLogin from './pages/RiderLogin';
 import RiderRegister from './pages/RiderRegister';
+import RiderDashboard from './pages/dashboard/RiderDashboard';
+
+
 
 function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -114,10 +122,10 @@ function Navigation() {
             </div>
           ) : isRiderLanding ? (
             <div className="hidden sm:flex items-center gap-4 xs:gap-6">
-              <Link to="/login" className="text-xs xs:text-sm font-black text-accent-brown/80 hover:text-brand transition-colors uppercase tracking-widest">
+              <Link to="/login/rider" className="text-xs xs:text-sm font-black text-accent-brown/80 hover:text-brand transition-colors uppercase tracking-widest">
                 Rider Login
               </Link>
-              <Link to="/register" className="bg-brand-dark text-white hover:bg-brand px-6 xs:px-8 py-2.5 xs:py-3 rounded-full text-[10px] xs:text-xs font-black transition-colors uppercase tracking-widest shadow-md">
+              <Link to="/register/rider" className="bg-brand-dark text-white hover:bg-brand px-6 xs:px-8 py-2.5 xs:py-3 rounded-full text-[10px] xs:text-xs font-black transition-colors uppercase tracking-widest shadow-md">
                 Apply to Drive
               </Link>
             </div>
@@ -208,16 +216,16 @@ function Navigation() {
               ) : isRiderLanding ? (
                 <div className="space-y-4">
                   <Link
-                    to="/login"
+                    to="/login/rider"
                     onClick={() => setIsMenuOpen(false)}
                     className="block w-full text-center py-4 rounded-2xl font-black text-accent-brown/80 uppercase tracking-widest bg-brand/10 border border-brand/20"
                   >
                     Rider Login
                   </Link>
                   <Link
-                    to="/register"
+                    to="/register/rider"
                     onClick={() => setIsMenuOpen(false)}
-                    className="block w-full text-center py-5 rounded-2xl font-black text-white uppercase tracking-widest bg-brand-dark shadow-lg shadow-brand/20"
+                    className="block w-full text-center py-4 rounded-2xl font-black text-white uppercase tracking-widest bg-brand-dark shadow-lg shadow-brand-dark/20"
                   >
                     Apply to Drive
                   </Link>
@@ -257,275 +265,240 @@ function Landing() {
       <ReservationsSection />
       <LoyaltySection />
       <AboutSection />
-
-      {/* Footer */}
-      <footer className="py-16 xs:py-24 bg-accent-brown text-accent-cream rounded-t-[3rem] xs:rounded-t-[5rem] mt-12 xs:mt-20">
-        <div className="container mx-auto px-6 xs:px-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-12 xs:gap-16 md:gap-8 pb-12 xs:pb-16">
-            {/* Branding Column */}
-            <div className="md:col-span-4 space-y-6 xs:space-y-8">
-              <Link to="/" className="flex items-center gap-3 group w-fit">
-                <div className="w-12 h-12 xs:w-14 xs:h-14 bg-white rounded-2xl flex items-center justify-center p-2 group-hover:scale-110 transition-transform">
-                  <Logo className="w-full h-full" />
-                </div>
-                <span className="text-xl xs:text-2xl font-black tracking-tighter text-white">Hi-Vet</span>
-              </Link>
-              <p className="text-accent-cream/50 text-sm xs:text-base leading-relaxed max-w-sm">
-                Redefining the standard of pet care with professional tools and a community-driven approach. Your pet's wellbeing is our priority.
-              </p>
-              <div className="flex gap-3 xs:gap-4">
-                {[Facebook, Twitter, Instagram, Youtube].map((Icon, i) => (
-                  <button key={i} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-brand hover:text-white transition-all">
-                    <Icon className="w-5 h-5" />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Quick Links */}
-            <div className="md:col-span-2 space-y-6 xs:space-y-8">
-              <h4 className="text-xs xs:text-sm font-black uppercase tracking-[0.2em] text-brand">Platform</h4>
-              <ul className="space-y-3 xs:space-y-4 text-accent-cream/60 font-medium text-sm xs:text-base">
-                <li><Link to="/catalog" className="hover:text-white transition-colors">Catalog</Link></li>
-                <li><a href="/#orders" className="hover:text-white transition-colors">Orders</a></li>
-                <li><a href="/#loyalty" className="hover:text-white transition-colors">Loyalty Program</a></li>
-                <li><Link to="/for-clinics" className="hover:text-brand transition-colors text-brand font-bold">For Clinic Owners</Link></li>
-                <li><Link to="/for-riders" className="hover:text-brand transition-colors text-brand font-bold">For Riders</Link></li>
-                <li><a href="/#about" className="hover:text-white transition-colors">About Us</a></li>
-              </ul>
-            </div>
-
-            {/* Support */}
-            <div className="md:col-span-2 space-y-6 xs:space-y-8">
-              <h4 className="text-xs xs:text-sm font-black uppercase tracking-[0.2em] text-brand">Support</h4>
-              <ul className="space-y-3 xs:space-y-4 text-accent-cream/60 font-medium text-sm xs:text-base">
-                <li><button className="hover:text-white transition-colors text-left uppercase text-[10px] tracking-widest font-black">Help Center</button></li>
-                <li><button className="hover:text-white transition-colors text-left uppercase text-[10px] tracking-widest font-black">Safety Center</button></li>
-                <li><button className="hover:text-white transition-colors text-left uppercase text-[10px] tracking-widest font-black">Privacy Policy</button></li>
-                <li><button className="hover:text-white transition-colors text-left uppercase text-[10px] tracking-widest font-black">Terms of Service</button></li>
-              </ul>
-            </div>
-
-            {/* Contact */}
-            <div className="md:col-span-4 space-y-6 xs:space-y-8">
-              <h4 className="text-xs xs:text-sm font-black uppercase tracking-[0.2em] text-brand">Stay Connected</h4>
-              <div className="space-y-3 xs:space-y-4">
-                <div className="flex items-center gap-3 xs:gap-4 text-accent-cream/60">
-                  <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center shrink-0">
-                    <Mail className="w-5 h-5" />
-                  </div>
-                  <span className="font-medium text-sm xs:text-base truncate">hello@hi-vet.com</span>
-                </div>
-                <div className="flex items-center gap-3 xs:gap-4 text-accent-cream/60">
-                  <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center shrink-0">
-                    <Phone className="w-5 h-5" />
-                  </div>
-                  <span className="font-medium text-sm xs:text-base">+1 (555) 123-4567</span>
-                </div>
-                <div className="flex items-start gap-3 xs:gap-4 text-accent-cream/60 pt-2">
-                  <div className="w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center shrink-0">
-                    <MapPin className="w-5 h-5" />
-                  </div>
-                  <span className="font-medium text-sm xs:text-base">123 Vet Street, <br />Los Angeles, CA 90210</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Bar */}
-          <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-[8px] xs:text-[10px] font-black uppercase tracking-[0.2em] xs:tracking-[0.3em] text-accent-cream/20 text-center md:text-left">
-            <p>© 2026 Hi-Vet Professional CRM. All Rights Reserved.</p>
-            <div className="flex gap-6 xs:gap-8">
-              <button className="hover:text-white transition-colors">Security</button>
-              <button className="hover:text-white transition-colors">Cookies</button>
-              <button className="hover:text-white transition-colors">API Status</button>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </>
   );
 }
 
 function App() {
   return (
-    <AuthProvider>
-      <CartProvider>
-        <Router>
-          <ScrollToTop />
-          <div className="min-h-screen bg-accent-peach font-brand selection:bg-brand/30 selection:text-accent-brown overflow-x-hidden">
-            <Navigation />
+      <AuthProvider>
+        <CartProvider>
+          <Router>
+            <ScrollToTop />
+            <div className="min-h-screen bg-accent-peach font-brand selection:bg-brand/30 selection:text-accent-brown overflow-x-hidden">
+              <Navigation />
 
-            <main>
-              <Routes>
-                <Route path="/" element={<Landing />} />
-                <Route path="/catalog" element={<Catalog />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/login/business" element={<BusinessLogin />} />
-                <Route path="/login/rider" element={<RiderLogin />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/register/business" element={<BusinessRegister />} />
-                <Route path="/register/rider" element={<RiderRegister />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/auth/callback" element={<GoogleCallback />} />
-                <Route path="/for-clinics" element={<BusinessLanding />} />
-                <Route path="/for-riders" element={<RiderLanding />} />
+              <main>
+                <Routes>
+                  <Route path="/" element={<Landing />} />
+                  <Route path="/catalog" element={<Catalog />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/login/business" element={<BusinessLogin />} />
+                  <Route path="/login/rider" element={<RiderLogin />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/register/business" element={<BusinessRegister />} />
+                  <Route path="/register/rider" element={<RiderRegister />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/auth/callback" element={<GoogleCallback />} />
+                  <Route path="/for-clinics" element={<BusinessLanding />} />
+                  <Route path="/for-riders" element={<RiderLanding />} />
 
-                {/* Protected Dashboard Routes */}
-                {/* Super Admin Routes */}
-                <Route
-                  path="/dashboard/admin/businesses"
-                  element={
-                    <ProtectedRoute allowedRole="admin">
-                      <AdminBusinesses />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/admin/users"
-                  element={
-                    <ProtectedRoute allowedRole="admin">
-                      <AdminUsers />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/admin"
-                  element={
-                    <ProtectedRoute allowedRole="admin">
-                      <AdminDashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/user/catalog"
-                  element={
-                    <ProtectedRoute allowedRole="user">
-                      <UserCatalog />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/user/catalog/:id"
-                  element={
-                    <ProtectedRoute allowedRole="user">
-                      <ProductDetail />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/user/reservations"
-                  element={
-                    <ProtectedRoute allowedRole="user">
-                      <UserReservations />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/user/loyalty"
-                  element={
-                    <ProtectedRoute allowedRole="user">
-                      <UserLoyalty />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/user/alerts"
-                  element={
-                    <ProtectedRoute allowedRole="user">
-                      <UserAlerts />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/user/orders"
-                  element={
-                    <ProtectedRoute allowedRole="user">
-                      <UserOrders />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/user/checkout"
-                  element={
-                    <ProtectedRoute allowedRole="user">
-                      <Checkout />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/user/*"
-                  element={
-                    <ProtectedRoute allowedRole="user">
-                      <UserDashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                {/* Business Routes */}
-                <Route
-                  path="/dashboard/business"
-                  element={
-                    <ProtectedRoute allowedRole="business">
-                      <BusinessDashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/business/orders"
-                  element={
-                    <ProtectedRoute allowedRole="business">
-                      <BusinessOrders />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/business/catalog"
-                  element={
-                    <ProtectedRoute allowedRole="business">
-                      <BusinessCatalog />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/business/analytics"
-                  element={
-                    <ProtectedRoute allowedRole="business">
-                      <BusinessAnalytics />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/business/account"
-                  element={
-                    <ProtectedRoute allowedRole="business">
-                      <AccountSettings />
-                    </ProtectedRoute>
-                  }
-                />
-                {/* Account Settings – shared across all roles */}
-                <Route
-                  path="/dashboard/admin/account"
-                  element={
-                    <ProtectedRoute allowedRole="admin">
-                      <AccountSettings />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard/user/account"
-                  element={
-                    <ProtectedRoute allowedRole="user">
-                      <AccountSettings />
-                    </ProtectedRoute>
-                  }
-                />
-              </Routes>
-            </main>
-          </div>
-        </Router>
-      </CartProvider>
-    </AuthProvider>
+                  {/* Protected Dashboard Routes */}
+                  {/* Super Admin Routes */}
+                  <Route
+                    path="/dashboard/admin/businesses"
+                    element={
+                      <ProtectedRoute allowedRoles={['super_admin']}>
+                        <AdminBusinesses />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/admin/riders"
+                    element={
+                      <ProtectedRoute allowedRoles={['super_admin']}>
+                        <AdminRiders />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/admin/users"
+                    element={
+                      <ProtectedRoute allowedRoles={['super_admin']}>
+                        <AdminUsers />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/admin"
+                    element={
+                      <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
+                        <AdminDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/admin/alerts"
+                    element={
+                      <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
+                        <AdminAlerts />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/user/catalog"
+                    element={
+                      <ProtectedRoute allowedRoles={['user']}>
+                        <UserCatalog />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/user/catalog/:id"
+                    element={
+                      <ProtectedRoute allowedRoles={['user']}>
+                        <ProductDetail />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/user/reservations"
+                    element={
+                      <ProtectedRoute allowedRoles={['user']}>
+                        <UserReservations />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/user/loyalty"
+                    element={
+                      <ProtectedRoute allowedRoles={['user']}>
+                        <UserLoyalty />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/user/alerts"
+                    element={
+                      <ProtectedRoute allowedRoles={['user']}>
+                        <UserAlerts />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/user/orders"
+                    element={
+                      <ProtectedRoute allowedRoles={['user']}>
+                        <UserOrders />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/user/checkout"
+                    element={
+                      <ProtectedRoute allowedRoles={['user']}>
+                        <Checkout />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/user/*"
+                    element={
+                      <ProtectedRoute allowedRoles={['user']}>
+                        <UserDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Business Routes */}
+                  <Route
+                    path="/dashboard/business"
+                    element={
+                      <ProtectedRoute allowedRoles={['business']}>
+                        <BusinessDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/business/orders"
+                    element={
+                      <ProtectedRoute allowedRoles={['business']}>
+                        <BusinessOrders />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/business/catalog"
+                    element={
+                      <ProtectedRoute allowedRoles={['business']}>
+                        <BusinessCatalog />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/business/reservations"
+                    element={
+                      <ProtectedRoute allowedRoles={['business']}>
+                        <BusinessReservations />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/business/analytics"
+                    element={
+                      <ProtectedRoute allowedRoles={['business']}>
+                        <BusinessAnalytics />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/business/account"
+                    element={
+                      <ProtectedRoute allowedRoles={['business']}>
+                        <AccountSettings />
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Rider Routes */}
+                  <Route
+                    path="/dashboard/rider"
+                    element={
+                      <ProtectedRoute allowedRoles={['rider']}>
+                        <RiderDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/rider/account"
+                    element={
+                      <ProtectedRoute allowedRoles={['rider']}>
+                        <AccountSettings />
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Account Settings â€“ shared across all roles */}
+                  <Route
+                    path="/dashboard/admin/compliance"
+                    element={
+                      <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
+                        <AdminCompliance />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/admin/account"
+                    element={
+                      <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
+                        <AccountSettings />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/user/account"
+                    element={
+                      <ProtectedRoute allowedRoles={['user']}>
+                        <AccountSettings />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Routes>
+              </main>
+            </div>
+          </Router>
+        </CartProvider>
+      </AuthProvider>
   );
 }
 
 export default App;
+

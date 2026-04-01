@@ -1,20 +1,10 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, ShoppingBag, Package, Award, ArrowRight, ChevronRight } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Package, Award, ArrowRight, ChevronRight, Loader2, Filter, ArrowUp, ArrowDown } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Link } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
-
-const revenueData = [42000, 58000, 51000, 67000, 73000, 89000];
-const months = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
-const maxRevenue = Math.max(...revenueData);
-
-const recentOrders = [
-    { id: 'ORD-0091', customer: 'Maria Santos', product: 'Premium Dog Food 5kg', total: '₱1,240', status: 'Completed', date: 'Mar 06' },
-    { id: 'ORD-0090', customer: 'Juan Reyes', product: 'Cat Vitamin Complex', total: '₱580', status: 'Processing', date: 'Mar 06' },
-    { id: 'ORD-0089', customer: 'Ana Cruz', product: 'Grooming Accessory Set', total: '₱920', status: 'Completed', date: 'Mar 05' },
-    { id: 'ORD-0088', customer: 'Mark Villanueva', product: 'Dental Chew Pack', total: '₱340', status: 'Pending', date: 'Mar 05' },
-    { id: 'ORD-0087', customer: 'Lea Torres', product: 'Harness + Leash Bundle', total: '₱760', status: 'Completed', date: 'Mar 04' },
-];
 
 const STATUS = {
     Completed: 'bg-green-100 text-green-700',
@@ -23,22 +13,55 @@ const STATUS = {
     Cancelled: 'bg-red-100 text-red-500',
 };
 
-const topProducts = [
-    { name: 'Premium Dog Food 5kg', sold: 142, revenue: '₱176,080', pct: 100 },
-    { name: 'Cat Vitamin Complex', sold: 98, revenue: '₱56,840', pct: 69 },
-    { name: 'Grooming Set', sold: 74, revenue: '₱68,080', pct: 52 },
-    { name: 'Dental Chew Pack', sold: 61, revenue: '₱20,740', pct: 43 },
-];
-
 const BusinessDashboard = () => {
     const { user } = useAuth();
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState<any[]>([]);
+    const [recentOrders, setRecentOrders] = useState<any[]>([]);
+    const [revenueData, setRevenueData] = useState<any>({ trend: '+21%', chartData: [] });
+    const [revenuePeriod, setRevenuePeriod] = useState('6m');
+    const [topProducts, setTopProducts] = useState<any[]>([]);
 
-    const stats = [
-        { label: 'Total Orders', value: '1,284', sub: '+12% this month', icon: ShoppingBag, color: 'bg-blue-50 text-blue-600' },
-        { label: 'Monthly Revenue', value: '₱89k', sub: '+21% vs last mo', icon: TrendingUp, color: 'bg-green-50 text-green-600' },
-        { label: 'Active Products', value: '47', sub: '3 low stock', icon: Package, color: 'bg-orange-50 text-orange-600' },
-        { label: 'Loyalty Redemptions', value: '38', sub: 'This month', icon: Award, color: 'bg-purple-50 text-purple-600' },
-    ];
+    useEffect(() => {
+        if (user?.token) {
+            fetchDashboardData();
+        }
+    }, [user?.token, revenuePeriod]);
+
+    const fetchDashboardData = async () => {
+        setLoading(true);
+        try {
+            const headers = { 'Authorization': `Bearer ${user?.token}` };
+            
+            // Fetch stats
+            const statsResp = await fetch('http://localhost:8000/api/business/dashboard/stats', { headers });
+            const statsData = await statsResp.json();
+            
+            const formattedStats = [
+                { label: 'Total Orders', value: statsData.total_orders, sub: statsData.orders_change, icon: ShoppingBag, color: 'bg-blue-50 text-blue-600' },
+                { label: 'Monthly Revenue', value: `₱${(statsData.monthly_revenue/1000).toFixed(0)}k`, sub: statsData.revenue_change, icon: TrendingUp, color: 'bg-green-50 text-green-600' },
+                { label: 'Active Products', value: statsData.active_products, sub: 'Live', icon: Package, color: 'bg-orange-50 text-orange-600' },
+                { label: 'Low Stock', value: statsData.low_stock_count, sub: 'Needs attention', icon: Award, color: 'bg-purple-50 text-purple-600' },
+            ];
+            setStats(formattedStats);
+
+            // Fetch recent orders
+            const ordersResp = await fetch('http://localhost:8000/api/business/dashboard/recent-orders', { headers });
+            setRecentOrders(await ordersResp.json());
+
+            // Fetch analytics/trend
+            const analyticsResp = await fetch(`http://localhost:8000/api/business/dashboard/analytics?period=${revenuePeriod}`, { headers });
+            const analyticsData = await analyticsResp.json();
+            setRevenueData(analyticsData.revenue_trend || { trend: '+0%', chartData: [] });
+            setTopProducts(analyticsData.top_products || []);
+
+        } catch (err) {
+            console.error('Error fetching dashboard data:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
 
     return (
         <DashboardLayout title="Overview">
@@ -73,7 +96,11 @@ const BusinessDashboard = () => {
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                    {stats.map((s, i) => (
+                    {loading ? (
+                        [1,2,3,4].map(i => (
+                            <div key={i} className="bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/5 border border-white h-32 animate-pulse" />
+                        ))
+                    ) : stats.map((s, i) => (
                         <motion.div
                             key={s.label}
                             initial={{ opacity: 0, y: 20 }}
@@ -94,36 +121,119 @@ const BusinessDashboard = () => {
                 </div>
 
                 <div className="grid lg:grid-cols-5 gap-8">
-                    {/* Revenue Chart */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.3 }}
-                        className="lg:col-span-3 bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white"
+                        className="lg:col-span-3 bg-white rounded-[2.5rem] p-8 shadow-xl shadow-accent-brown/5 border border-white"
                     >
-                        <div className="flex items-center justify-between mb-8">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
                             <div>
                                 <h3 className="text-xl font-black text-accent-brown tracking-tight">Revenue Trend</h3>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mt-1">Last 6 months</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mt-1">Personal Sales Performance</p>
                             </div>
-                            <div className="flex items-center gap-2 bg-green-50 text-green-700 px-4 py-2 rounded-full">
-                                <TrendingUp className="w-3 h-3" />
-                                <span className="text-[10px] font-black uppercase tracking-widest">+21%</span>
+                            
+                            <div className="flex items-center gap-2 bg-accent-brown/5 p-1 rounded-2xl self-start">
+                                {[
+                                    { id: '7d', label: '7D' },
+                                    { id: '30d', label: '30D' },
+                                    { id: '6m', label: '6M' },
+                                    { id: '1y', label: '1Y' },
+                                ].map((p) => (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => setRevenuePeriod(p.id)}
+                                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                            revenuePeriod === p.id 
+                                            ? 'bg-brand text-white shadow-lg shadow-brand/20' 
+                                            : 'text-accent-brown/40 hover:text-accent-brown'
+                                        }`}
+                                    >
+                                        {p.label}
+                                    </button>
+                                ))}
                             </div>
                         </div>
-                        <div className="flex items-end gap-3 h-44">
-                            {revenueData.map((val, i) => (
-                                <div key={months[i]} className="flex-1 flex flex-col items-center gap-2">
-                                    <span className="text-[9px] font-black text-accent-brown/40">₱{(val / 1000).toFixed(0)}k</span>
-                                    <motion.div
-                                        initial={{ height: 0 }}
-                                        animate={{ height: `${(val / maxRevenue) * 100}%` }}
-                                        transition={{ duration: 0.6, delay: 0.4 + i * 0.07 }}
-                                        className={`w-full rounded-xl ${i === revenueData.length - 1 ? 'bg-brand-dark' : 'bg-accent-peach/60'}`}
-                                    />
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40">{months[i]}</span>
+
+                        <div className="flex items-center gap-6 mb-8">
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-4xl font-black text-accent-brown tracking-tighter">
+                                    ₱{(revenueData.chartData?.reduce((acc: number, d: any) => acc + d.value, 0) || 0).toLocaleString()}
+                                </span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30">Total Period Revenue</span>
+                            </div>
+                            <div className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                revenueData.trend?.startsWith('+') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                            }`}>
+                                {revenueData.trend?.startsWith('+') ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+                                {revenueData.trend}
+                            </div>
+                        </div>
+
+                        <div className="h-72 w-full">
+                            {loading ? (
+                                <div className="h-full flex flex-col items-center justify-center opacity-20">
+                                    <Loader2 className="w-8 h-8 animate-spin mb-4" />
+                                    <p className="text-[10px] font-black uppercase tracking-widest">Aggregating Sales...</p>
                                 </div>
-                            ))}
+                            ) : revenueData.chartData?.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={revenueData.chartData}>
+                                        <defs>
+                                            <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#FB8500" stopOpacity={0.1}/>
+                                                <stop offset="95%" stopColor="#FB8500" stopOpacity={0}/>
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAE0D5" opacity={0.5} />
+                                        <XAxis 
+                                            dataKey="name" 
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fill: '#8D6E63', fontSize: 10, fontWeight: 800 }} 
+                                            dy={10}
+                                            tickFormatter={(val) => {
+                                                if (revenuePeriod === '6m' || revenuePeriod === '1y') {
+                                                    const d = new Date(val + "-01");
+                                                    return d.toLocaleString('default', { month: 'short' }).toUpperCase();
+                                                }
+                                                return val;
+                                            }}
+                                        />
+                                        <YAxis 
+                                            hide 
+                                            domain={['auto', 'auto']}
+                                        />
+                                        <Tooltip 
+                                            content={({ active, payload }) => {
+                                                if (active && payload && payload.length) {
+                                                    return (
+                                                        <div className="bg-white p-4 rounded-2xl shadow-2xl border border-accent-brown/5">
+                                                            <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mb-1">{payload[0].payload.name}</p>
+                                                            <p className="text-xl font-black text-brand-dark">₱{payload[0].value?.toLocaleString()}</p>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            }}
+                                        />
+                                        <Line 
+                                            type="monotone" 
+                                            dataKey="value" 
+                                            stroke="#FB8500" 
+                                            strokeWidth={4} 
+                                            dot={{ fill: '#FB8500', strokeWidth: 2, r: 4, stroke: '#FFF' }} 
+                                            activeDot={{ r: 6, fill: '#FFB703', stroke: '#FFF', strokeWidth: 2 }}
+                                            animationDuration={1500}
+                                        />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full flex flex-col items-center justify-center opacity-30 grayscale saturate-0">
+                                    <Filter className="w-12 h-12 mb-4" />
+                                    <p className="text-sm font-black uppercase tracking-widest">No order data available for this period</p>
+                                </div>
+                            )}
                         </div>
                     </motion.div>
 

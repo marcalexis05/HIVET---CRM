@@ -5,15 +5,11 @@ import { Link } from 'react-router-dom';
 const tiers = [
     { name: 'Bronze', range: '0 – 999 pts', color: 'from-orange-700 to-orange-500', ring: 'ring-orange-400/30' },
     { name: 'Silver', range: '1,000 – 1,999', color: 'from-slate-400 to-slate-300', ring: 'ring-slate-400/30' },
-    { name: 'Gold', range: '2,000 – 2,999', color: 'from-yellow-500 to-yellow-300', ring: 'ring-yellow-400/30', active: true },
+    { name: 'Gold', range: '2,000 – 2,999', color: 'from-yellow-500 to-yellow-300', ring: 'ring-yellow-400/30' },
     { name: 'Platinum', range: '3,000 + pts', color: 'from-cyan-400 to-indigo-400', ring: 'ring-cyan-400/30' },
 ];
 
-const earning = [
-    { icon: ShoppingBag, label: 'Shop the Catalog', pts: '10 pts / ₱1' },
-    { icon: Calendar, label: 'Book Reservations', pts: '50 pts / Visit' },
-    { icon: Users, label: 'Refer a Friend', pts: '500 pts Bonus' },
-];
+// earning list moved inside component to support dynamic props
 
 const rewards = [
     { icon: Gift, title: 'Free Grooming Add-on', cost: 500 },
@@ -22,7 +18,19 @@ const rewards = [
     { icon: Gift, title: '₱10 Store Credit', cost: 1000 },
 ];
 
-export function LoyaltySection() {
+interface LoyaltySectionProps {
+    pointsPerPeso?: number;
+    pointsPerReservation?: number;
+}
+
+export function LoyaltySection({
+
+}: LoyaltySectionProps) {
+    const earning = [
+        { icon: ShoppingBag, label: 'Shop the Catalog', pts: 'Points vary per item' },
+        { icon: Calendar, label: 'Book Reservations', pts: 'Points vary by clinic' },
+        { icon: Users, label: 'Refer a Friend', pts: '500 pts Bonus' },
+    ];
     return (
         <section id="loyalty" className="py-20 md:py-32 bg-accent-cream/20">
             <div className="container mx-auto px-4 xs:px-6 sm:px-8">
@@ -62,19 +70,14 @@ export function LoyaltySection() {
                             whileInView={{ opacity: 1, scale: 1 }}
                             viewport={{ once: true }}
                             transition={{ duration: 0.4, delay: i * 0.1 }}
-                            className={`relative rounded-[1.5rem] xs:rounded-[2rem] p-4 xs:p-6 flex flex-col items-center gap-3 xs:gap-4 text-center border-2 transition-all ${tier.active ? 'bg-accent-brown border-accent-brown text-white shadow-2xl shadow-accent-brown/30 scale-105 z-10' : 'bg-white border-transparent'}`}
+                            className="relative rounded-[1.5rem] xs:rounded-[2rem] p-4 xs:p-6 flex flex-col items-center gap-3 xs:gap-4 text-center border-2 transition-all bg-white border-transparent"
                         >
-                            {tier.active && (
-                                <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand text-brand-dark text-[7px] xs:text-[8px] font-black uppercase tracking-widest px-2 xs:px-3 py-1 rounded-full whitespace-nowrap">
-                                    Your Tier
-                                </span>
-                            )}
                             <div className={`w-12 h-12 xs:w-16 xs:h-16 rounded-full bg-gradient-to-br ${tier.color} ring-4 ${tier.ring} flex items-center justify-center shadow-lg shrink-0`}>
                                 <Award className="w-6 h-6 xs:w-8 xs:h-8 text-white" />
                             </div>
                             <div>
-                                <h3 className={`font-black text-lg xs:text-xl tracking-tight ${tier.active ? 'text-white' : 'text-accent-brown'}`}>{tier.name}</h3>
-                                <p className={`text-[8px] xs:text-[10px] font-bold uppercase tracking-widest mt-1 ${tier.active ? 'text-white/50' : 'text-accent-brown/40'}`}>{tier.range}</p>
+                                <h3 className="font-black text-lg xs:text-xl tracking-tight text-accent-brown">{tier.name}</h3>
+                                <p className="text-[8px] xs:text-[10px] font-bold uppercase tracking-widest mt-1 text-accent-brown/40">{tier.range}</p>
                             </div>
                         </motion.div>
                     ))}

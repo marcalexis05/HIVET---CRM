@@ -226,7 +226,7 @@ const Catalog = () => {
                                                     });
                                                     setTimeout(() => navigate('/login'), 400);
                                                 }}
-                                                className="bg-brand text-brand-dark px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-dark hover:text-white transition-all shadow-lg shadow-brand/20 whitespace-nowrap block"
+                                                className="bg-brand text-white px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-dark hover:text-white transition-all shadow-lg shadow-brand/20 whitespace-nowrap block"
                                             >
                                                 Buy Now
                                             </button>

@@ -4,15 +4,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { NavLink, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { LogOut, LayoutDashboard, ShoppingBag, Users, Settings, Bell, Calendar, Award, ShoppingCart, X, Plus, Minus, CreditCard, BarChart2, UserCircle, Menu } from 'lucide-react';
+import { LogOut, LayoutDashboard, ShoppingBag, Users, Settings, Bell, Calendar, Award, ShoppingCart, X, Plus, Minus, CreditCard, BarChart2, UserCircle, Menu, Store, Truck } from 'lucide-react';
 import { Logo } from './Logo';
 
 interface DashboardLayoutProps {
     children: ReactNode;
     title: string;
+    hideHeader?: boolean;
 }
 
-const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
+const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayoutProps) => {
     const { user, logout } = useAuth();
     const { items, totalItems, totalAmount, removeFromCart, updateQuantity } = useCart();
     const navigate = useNavigate();
@@ -24,8 +25,11 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
     const fetchNotifications = async () => {
         const token = localStorage.getItem('hivet_token');
         if (!token) return;
+        const isAdmin = ['super_admin', 'system_admin'].includes(user?.role || '');
+        const endpoint = isAdmin ? 'http://localhost:8000/api/admin/alerts' : 'http://localhost:8000/api/notifications';
+        
         try {
-            const res = await fetch('http://localhost:8000/api/notifications', {
+            const res = await fetch(endpoint, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -69,6 +73,21 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
         }
     };
 
+    const deleteNotification = async (id: number) => {
+        const token = localStorage.getItem('hivet_token');
+        try {
+            const res = await fetch(`http://localhost:8000/api/notifications/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                setNotifications(prev => prev.filter(n => n.id !== id));
+            }
+        } catch (err) {
+            console.error('Failed to delete notification:', err);
+        }
+    };
+
     const unreadCount = notifications.filter(n => !n.read).length;
 
     const handleLogout = () => {
@@ -78,6 +97,7 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
 
     const businessLinks = [
         { name: 'Overview', path: '/dashboard/business', icon: LayoutDashboard },
+        { name: 'Reservations', path: '/dashboard/business/reservations', icon: Calendar },
         { name: 'Orders', path: '/dashboard/business/orders', icon: ShoppingBag },
         { name: 'Catalog', path: '/dashboard/business/catalog', icon: Settings },
         { name: 'Analytics', path: '/dashboard/business/analytics', icon: BarChart2 },
@@ -94,29 +114,56 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
         { name: 'Account', path: '/dashboard/user/account', icon: UserCircle },
     ];
 
-    const adminLinks = [
+    const superAdminLinks = [
         { name: 'Platform Overview', path: '/dashboard/admin', icon: LayoutDashboard },
-        { name: 'Partner Businesses', path: '/dashboard/admin/businesses', icon: ShoppingBag },
+        { name: 'Clinic Compliance', path: '/dashboard/admin/compliance?tab=clinics', icon: Store },
+        { name: 'Rider Compliance', path: '/dashboard/admin/compliance?tab=riders', icon: Truck },
+        { name: 'Partner Businesses', path: '/dashboard/admin/businesses', icon: Store },
+        { name: 'Rider Fleet', path: '/dashboard/admin/riders', icon: Truck },
         { name: 'Global Users', path: '/dashboard/admin/users', icon: Users },
-        { name: 'Account', path: '/dashboard/admin/account', icon: UserCircle },
+        { name: 'System Alerts', path: '/dashboard/admin/alerts', icon: Bell },
     ];
 
-    const links = user?.role === 'admin' ? adminLinks : user?.role === 'business' ? businessLinks : userLinks;
+    const systemAdminLinks = [
+        { name: 'Platform Overview', path: '/dashboard/admin', icon: LayoutDashboard },
+        { name: 'Clinic Compliance', path: '/dashboard/admin/compliance?tab=clinics', icon: Store },
+        { name: 'Rider Compliance', path: '/dashboard/admin/compliance?tab=riders', icon: Truck },
+        { name: 'System Alerts', path: '/dashboard/admin/alerts', icon: Bell },
+    ];
+
+    const riderLinks = [
+        { name: 'Dashboard', path: '/dashboard/rider', icon: LayoutDashboard },
+        { name: 'Earnings', path: '/dashboard/rider/earnings', icon: CreditCard },
+        { name: 'Account', path: '/dashboard/rider/account', icon: UserCircle },
+    ];
+
+    const links = user?.role === 'super_admin' ? superAdminLinks : 
+                  user?.role === 'system_admin' ? systemAdminLinks : 
+                  user?.role === 'business' ? businessLinks : 
+                  user?.role === 'rider' ? riderLinks : 
+                  userLinks;
+
+    const basePath = ['super_admin', 'system_admin'].includes(user?.role || '') ? 'admin' : user?.role;
 
     return (
         <div className="min-h-screen bg-accent-peach/20 flex flex-col">
             {/* Top Navigation Bar */}
-            <nav className="bg-white/80 backdrop-blur-md border-b border-accent-brown/5 shadow-xl shadow-accent-brown/5 fixed top-0 left-0 right-0 z-50 h-20 sm:h-24">
+            {!hideHeader && (
+                <nav className="bg-white/80 backdrop-blur-md border-b border-accent-brown/5 shadow-xl shadow-accent-brown/5 fixed top-0 left-0 right-0 z-50 h-20 sm:h-24">
                 <div className="max-w-[1920px] mx-auto px-4 sm:px-6 h-full flex items-center justify-between gap-4">
                     {/* Brand */}
-                    <Link to={`/dashboard/${user?.role}`} className="flex items-center gap-2 sm:gap-3 shrink-0 hover:opacity-80 transition-opacity">
+                    <Link to={`/dashboard/${basePath}`} className="flex items-center gap-2 sm:gap-3 shrink-0 hover:opacity-80 transition-opacity">
                         <div className="w-9 h-9 sm:w-11 sm:h-11 bg-white rounded-xl shadow-md shadow-brand/10 flex items-center justify-center p-1 shrink-0">
                             <Logo className="w-full h-full" />
                         </div>
                         <div className="flex flex-col min-w-0">
                             <h2 className="text-base sm:text-xl lg:text-2xl font-black text-accent-brown tracking-tight leading-none truncate">Hi-Vet</h2>
                             <p className="text-[6px] sm:text-[8px] lg:text-[9px] mt-0.5 sm:mt-1 font-black uppercase tracking-widest text-brand-dark transition-all whitespace-nowrap">
-                                {user?.role === 'admin' ? 'Super Admin Portal' : user?.role === 'business' ? 'Partner Portal' : 'Customer Portal'}
+                                {user?.role === 'super_admin' ? 'Super Admin Portal' : 
+                                 user?.role === 'system_admin' ? 'System Admin Portal' : 
+                                 user?.role === 'business' ? 'Partner Portal' : 
+                                 user?.role === 'rider' ? 'Rider Portal' : 
+                                 'Customer Portal'}
                             </p>
                         </div>
                     </Link>
@@ -127,13 +174,15 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
                             <NavLink
                                 key={link.name}
                                 to={link.path}
-                                end={link.path === `/dashboard/${user?.role}`}
-                                className={({ isActive }) =>
-                                    `flex items-center gap-2 px-3 xl:px-4 py-2.5 rounded-full font-black text-[9px] xl:text-[10px] uppercase tracking-widest transition-all ${isActive
+                                end={link.path === `/dashboard/${basePath}`}
+                                className={({ isActive }) => {
+                                    const hasSearch = link.path.includes('?');
+                                    const actuallyActive = hasSearch ? (location.pathname + location.search === link.path) : isActive;
+                                    return `flex items-center gap-2 px-3 xl:px-4 py-2.5 rounded-full font-black text-[9px] xl:text-[10px] uppercase tracking-widest transition-all ${actuallyActive
                                         ? 'bg-brand text-white shadow-lg shadow-brand/20'
                                         : 'text-accent-brown/50 hover:bg-accent-peach/50 hover:text-accent-brown'
                                     }`
-                                }
+                                }}
                             >
                                 <link.icon className="w-3.5 h-3.5" />
                                 <span className="hidden xl:inline">{link.name}</span>
@@ -196,7 +245,9 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
                                                         <div className="w-16 h-16 bg-accent-peach/20 rounded-full flex items-center justify-center mx-auto mb-4">
                                                             <Bell className="w-8 h-8 text-accent-brown/10" />
                                                         </div>
-                                                        <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-widest">No notifications yet</p>
+                                                        <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-widest">
+                                                            {basePath === 'admin' ? "No pending applications" : "No notifications yet"}
+                                                        </p>
                                                     </div>
                                                 ) : (
                                                     notifications.map((n) => (
@@ -216,7 +267,18 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="flex items-center justify-between gap-2 mb-1">
                                                                     <span className="font-black text-[11px] sm:text-xs text-accent-brown truncate">{n.title}</span>
-                                                                    <span className="text-[8px] font-bold text-accent-brown/30 uppercase shrink-0">Just now</span>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-[8px] font-bold text-accent-brown/30 uppercase shrink-0">Just now</span>
+                                                                        <button 
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                deleteNotification(n.id);
+                                                                            }}
+                                                                            className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-50 text-accent-brown/20 hover:text-red-500 transition-all"
+                                                                        >
+                                                                            <X className="w-3 h-3" />
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                                 <p className="text-[10px] sm:text-[11px] text-accent-brown/60 leading-relaxed line-clamp-2 font-medium">{n.desc}</p>
                                                             </div>
@@ -226,7 +288,7 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
                                             </div>
                                             <div className="p-4 bg-accent-peach/5 text-center border-t border-accent-brown/5">
                                                 <Link
-                                                    to="/dashboard/user/alerts"
+                                                    to={`/dashboard/${basePath}/alerts`}
                                                     onClick={() => setIsNotificationsOpen(false)}
                                                     className="inline-flex items-center gap-2 text-[10px] font-black text-brand-dark uppercase tracking-widest hover:gap-3 transition-all"
                                                 >
@@ -266,9 +328,10 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
                     </div>
                 </div>
             </nav>
+            )}
 
             {/* Main Content */}
-            <main className="flex-1 flex flex-col w-full max-w-[1920px] mx-auto px-3 sm:px-8 xl:px-12 pt-24 sm:pt-28 pb-10 lg:pt-32 lg:pb-16 relative z-10 transition-all">
+            <main className={`flex-1 flex flex-col w-full max-w-[1920px] mx-auto px-3 sm:px-8 xl:px-12 ${hideHeader ? 'pt-6' : 'pt-24 sm:pt-28 lg:pt-32'} pb-10 lg:pb-16 relative z-10 transition-all`}>
 
                 <div className="mb-8 sm:mb-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                     <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-accent-brown tracking-tighter leading-none">
@@ -318,11 +381,13 @@ const DashboardLayout = ({ children, title }: DashboardLayoutProps) => {
                                     <NavLink
                                         key={link.name}
                                         to={link.path}
-                                        end={link.path === `/dashboard/${user?.role}`}
+                                        end={link.path === `/dashboard/${basePath}`}
                                         onClick={() => setIsMobileMenuOpen(false)}
-                                        className={({ isActive }) =>
-                                            `flex items-center gap-3 px-5 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${isActive ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-accent-brown/60 hover:bg-accent-peach/30 hover:text-accent-brown'}`
-                                        }
+                                        className={({ isActive }) => {
+                                            const hasSearch = link.path.includes('?');
+                                            const actuallyActive = hasSearch ? (location.pathname + location.search === link.path) : isActive;
+                                            return `flex items-center gap-3 px-5 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${actuallyActive ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-accent-brown/60 hover:bg-accent-peach/30 hover:text-accent-brown'}`;
+                                        }}
                                     >
                                         <link.icon className="w-4 h-4" />
                                         {link.name}

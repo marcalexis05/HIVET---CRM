@@ -13,7 +13,7 @@ const Login = () => {
     const [searchParams] = useSearchParams();
 
     const navigate = useNavigate();
-    const { login, loginWithToken } = useAuth();
+    const { loginWithToken } = useAuth();
 
     useEffect(() => {
         if (searchParams.get('error') === 'google_auth_failed') {
@@ -25,31 +25,32 @@ const Login = () => {
         e.preventDefault();
         setError('');
 
-        if (email === 'admin@hivet.com' && password === 'admin123') {
-            login(email, 'admin', 'Admin');
-            navigate('/dashboard/admin');
-        } else if (email === 'business@hivet.com' && password === 'business123') {
-            login(email, 'business', 'Paws & Co.');
-            navigate('/dashboard/business');
-        } else {
-            // Attempt customer login via backend
-            try {
-                const res = await fetch('http://localhost:8000/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    loginWithToken(data.token);
-                    navigate('/dashboard/user');
-                } else {
-                    setError('Invalid email or password.');
-                }
-            } catch (err) {
-                console.error(err);
-                setError('Login failed. Please try again.');
+        try {
+            const res = await fetch('http://localhost:8000/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                loginWithToken(data.token);
+                
+                // Parse the token to determine where to redirect
+                const base64 = data.token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+                const payload = JSON.parse(atob(base64));
+                const role = payload.role;
+
+                if (role === 'super_admin') navigate('/dashboard/admin');
+                else if (role === 'system_admin') navigate('/dashboard/admin/compliance');
+                else if (role === 'business') navigate('/dashboard/business');
+                else if (role === 'rider') navigate('/dashboard/rider');
+                else navigate('/dashboard/user');
+            } else {
+                setError('Invalid email or password.');
             }
+        } catch (err) {
+            console.error(err);
+            setError('Login failed. Please try again.');
         }
     };
 

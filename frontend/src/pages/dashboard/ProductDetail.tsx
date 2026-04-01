@@ -1,27 +1,59 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ShoppingCart, Star, Heart, ChevronRight, CheckCircle2, Award } from 'lucide-react';
+import { ShoppingCart, Star, Heart, ChevronRight, CheckCircle2, Award, Loader2 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
-import { products } from '../../data/products';
 import { useCart } from '../../context/CartContext';
 
 const ProductDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const product = products.find(p => p.id === Number(id));
     const { addToCart, triggerFlyAnimation } = useCart();
 
+    const [product, setProduct] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
     const [selectedVariant, setSelectedVariant] = useState('Standard');
     const [selectedSize, setSelectedSize] = useState('Medium');
     const [added, setAdded] = useState(false);
+
+    useEffect(() => {
+        const fetchProduct = async () => {
+            setLoading(true);
+            try {
+                const resp = await fetch(`http://localhost:8000/api/catalog/${id}`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    setProduct(data);
+                } else {
+                    setProduct(null);
+                }
+            } catch (err) {
+                console.error('Fetch error:', err);
+                setProduct(null);
+            } finally {
+                setLoading(false);
+            }
+        };
+        if (id) fetchProduct();
+    }, [id]);
+
+    if (loading) {
+        return (
+            <DashboardLayout title="Loading Product...">
+                <div className="flex flex-col items-center justify-center py-40 gap-4 opacity-40">
+                    <Loader2 className="w-12 h-12 animate-spin text-brand" />
+                    <p className="font-black text-xs uppercase tracking-widest">Retrieving Premium Item...</p>
+                </div>
+            </DashboardLayout>
+        );
+    }
 
     if (!product) {
         return (
             <DashboardLayout title="Product Not Found">
                 <div className="flex flex-col items-center justify-center py-20">
                     <h2 className="text-2xl font-black text-accent-brown mb-4">Product Not Found</h2>
-                    <button onClick={() => navigate('/dashboard/user/catalog')} className="btn-primary">
+                    <button onClick={() => navigate('/dashboard/user/catalog')} className="bg-brand-dark text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all">
                         Return to Catalog
                     </button>
                 </div>
@@ -149,22 +181,27 @@ const ProductDetail = () => {
                                     <span className="text-3xl font-black text-accent-brown tracking-tighter">₱{product.price}</span>
                                     <div className="flex items-center justify-end gap-1 text-brand mt-1">
                                         <Award className="w-3 h-3" />
-                                        <span className="text-[10px] font-black uppercase tracking-widest">Earn {Math.floor(Number(product.price) * 0.10)} Loyalty Points</span>
+                                        <span className="text-[10px] font-black uppercase tracking-widest">Earn {product.loyalty_points || 0} Loyalty Points</span>
                                     </div>
+                                    <p className={`text-[10px] font-black uppercase tracking-widest mt-2 ${product.stock > 0 ? "text-green-600" : "text-red-500"}`}>
+                                        {product.stock > 0 ? `${product.stock} items available` : 'Currently out of stock'}
+                                    </p>
                                 </div>
                             </div>
 
                             <div className="flex flex-col sm:flex-row gap-4">
                                 <button
+                                    disabled={product.stock <= 0}
                                     onClick={handleBuyNow}
-                                    className="flex-1 bg-brand-dark hover:bg-black text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-colors shadow-lg shadow-brand-dark/20 text-center"
+                                    className={`flex-1 py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-colors shadow-lg text-center ${product.stock > 0 ? "bg-brand-dark hover:bg-black text-white shadow-brand-dark/20" : "bg-accent-brown/20 text-accent-brown/50 cursor-not-allowed"}`}
                                 >
-                                    Buy Now
+                                    {product.stock > 0 ? "Buy Now" : "Sold Out"}
                                 </button>
                                 <div className="flex flex-1 gap-4">
                                     <button
+                                        disabled={product.stock <= 0}
                                         onClick={handleAddToCart}
-                                        className={`flex-1 text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg ${added ? 'bg-green-500 shadow-green-500/20' : 'bg-brand hover:bg-orange-500 text-brand-dark hover:text-white shadow-brand/20'}`}
+                                        className={`flex-1 py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg ${product.stock <= 0 ? "bg-accent-brown/20 text-accent-brown/50 cursor-not-allowed text-white" : added ? 'bg-green-500 text-white shadow-green-500/20' : 'bg-brand hover:bg-orange-500 text-white shadow-brand/20'}`}
                                     >
                                         {added ? (
                                             <>
@@ -174,7 +211,7 @@ const ProductDetail = () => {
                                         ) : (
                                             <>
                                                 <ShoppingCart className="w-4 h-4" />
-                                                Add to Cart
+                                                {product.stock > 0 ? "Add to Cart" : "Out of Stock"}
                                             </>
                                         )}
                                     </button>

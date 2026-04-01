@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingCart, Tag, Star, Search, Filter as FilterIcon, Award, ArrowUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
-import { products } from '../../data/products';
 import { useCart } from '../../context/CartContext';
+import { Loader2 } from 'lucide-react';
 
 const UserCatalog = () => {
     const navigate = useNavigate();
@@ -14,25 +14,43 @@ const UserCatalog = () => {
     const [typeFilter, setTypeFilter] = useState<'All' | 'Food' | 'Accessories' | 'Vitamins'>('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [showScrollTop, setShowScrollTop] = useState(false);
+    const [products, setProducts] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const handleScroll = () => {
             setShowScrollTop(window.scrollY > 400);
         };
         window.addEventListener('scroll', handleScroll);
+        fetchProducts();
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
+
+    const fetchProducts = async () => {
+        setLoading(true);
+        try {
+            const resp = await fetch('http://localhost:8000/api/catalog');
+            if (resp.ok) {
+                const data = await resp.json();
+                setProducts(data);
+            }
+        } catch (err) {
+            console.error('Fetch error:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const filteredProducts = useMemo(() => {
         return products.filter(p => {
             const matchesPet = petFilter === 'All' || p.category === petFilter;
             const matchesType = typeFilter === 'All' || p.type === typeFilter;
             const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                p.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                p.tag.toLowerCase().includes(searchQuery.toLowerCase());
+                (p.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (p.tag || '').toLowerCase().includes(searchQuery.toLowerCase());
             return matchesPet && matchesType && matchesSearch;
         });
-    }, [petFilter, typeFilter, searchQuery]);
+    }, [petFilter, typeFilter, searchQuery, products]);
 
     const resetFilters = () => {
         setPetFilter('All');
@@ -108,6 +126,12 @@ const UserCatalog = () => {
                 </div>
 
                 {/* Product Grid */}
+                {loading ? (
+                    <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-40">
+                        <Loader2 className="w-10 h-10 animate-spin text-brand" />
+                        <p className="font-bold text-sm tracking-widest uppercase">Loading High-Quality Catalog...</p>
+                    </div>
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     <AnimatePresence mode="popLayout">
                         {filteredProducts.map((p) => (
@@ -155,13 +179,19 @@ const UserCatalog = () => {
                                     </p>
 
                                     <div className="mt-auto pt-4 border-t border-accent-brown/5 flex items-center justify-between gap-3">
-                                        <p className="font-black text-accent-brown tracking-tighter text-sm">₱{p.price}</p>
+                                        <div>
+                                            <p className="font-black text-accent-brown tracking-tighter text-sm">₱{p.price}</p>
+                                            <p className={`text-[9px] font-black uppercase tracking-widest mt-0.5 ${p.stock > 0 ? "text-green-600" : "text-red-500"}`}>
+                                                {p.stock > 0 ? `${p.stock} In Stock` : 'Out of Stock'}
+                                            </p>
+                                        </div>
                                         <div className="flex items-center gap-1 text-brand">
                                             <Award className="w-3 h-3" />
-                                            <span className="text-[9px] font-black uppercase tracking-widest">+{Math.floor(Number(p.price) * 0.10)} Pts</span>
+                                            <span className="text-[9px] font-black uppercase tracking-widest">+{p.loyalty_points || 0} Pts</span>
                                         </div>
                                         <div className="flex items-center gap-2 relative z-10">
                                             <button
+                                                disabled={p.stock <= 0}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     addToCart({
@@ -175,11 +205,12 @@ const UserCatalog = () => {
                                                     });
                                                     navigate('/dashboard/user/checkout');
                                                 }}
-                                                className="bg-brand text-brand-dark px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-dark hover:text-white transition-all shadow-lg shadow-brand/20 whitespace-nowrap"
+                                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg whitespace-nowrap ${p.stock > 0 ? "bg-brand text-white hover:bg-brand-dark shadow-brand/20" : "bg-accent-brown/20 text-accent-brown/40 cursor-not-allowed"}`}
                                             >
-                                                Buy Now
+                                                {p.stock > 0 ? "Buy Now" : "Sold Out"}
                                             </button>
                                             <button
+                                                disabled={p.stock <= 0}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     triggerFlyAnimation(e, p.image);
@@ -193,7 +224,7 @@ const UserCatalog = () => {
                                                         size: 'Medium'
                                                     });
                                                 }}
-                                                className="bg-accent-peach/30 text-brand-dark w-10 h-10 shrink-0 rounded-xl flex items-center justify-center hover:bg-brand-dark hover:text-white transition-all shadow-sm"
+                                                className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all shadow-sm ${p.stock > 0 ? "bg-accent-peach/30 text-brand-dark hover:bg-brand-dark hover:text-white" : "bg-accent-brown/10 text-accent-brown/40 cursor-not-allowed"}`}
                                             >
                                                 <ShoppingCart className="w-4 h-4" />
                                             </button>
@@ -204,6 +235,7 @@ const UserCatalog = () => {
                         ))}
                     </AnimatePresence>
                 </div>
+                )}
 
                 {/* Empty State */}
                 {filteredProducts.length === 0 && (

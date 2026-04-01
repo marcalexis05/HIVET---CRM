@@ -22,13 +22,6 @@ const pillars = [
     },
 ];
 
-const stats = [
-    { value: '12+', label: 'Years in Business' },
-    { value: '24k+', label: 'Happy Pets Treated' },
-    { value: '5', label: 'Clinic Locations' },
-    { value: '98%', label: 'Satisfaction Rate' },
-];
-
 
 export function AboutSection() {
     return (
@@ -47,38 +40,45 @@ export function AboutSection() {
                             Built for pets,<br />driven by love.
                         </h2>
                         <p className="text-accent-brown/60 text-base xs:text-lg font-medium leading-relaxed mb-4 xs:mb-6">
-                            Hi-Vet was built with a single mission: make professional pet care accessible, stress-free, and rewarding. From our first tiny clinic in Los Angeles to five locations today, we've never stopped putting pets first.
+                            Hi-Vet was built with a single mission: make professional pet care accessible, stress-free, and rewarding. We've never stopped putting pets first.
                         </p>
                         <p className="text-accent-brown/50 text-sm xs:text-base font-medium leading-relaxed">
                             We combine licensed veterinary expertise with a modern CRM platform so every pet owner gets a seamless, personalised experience.
                         </p>
                         <div className="mt-6 xs:mt-8 flex items-center gap-2">
                             <Heart className="w-5 h-5 text-red-400 fill-red-400" />
-                            <span className="text-xs xs:text-sm font-bold text-accent-brown/60">Serving the LA pet community</span>
+                            <span className="text-xs xs:text-sm font-bold text-accent-brown/60">Serving the local community</span>
                         </div>
                     </motion.div>
 
-                    {/* Stats */}
+                    {/* Image Grid */}
                     <motion.div
                         initial={{ opacity: 0, x: 30 }}
                         whileInView={{ opacity: 1, x: 0 }}
                         viewport={{ once: true }}
                         transition={{ duration: 0.6 }}
-                        className="grid grid-cols-2 gap-4"
+                        className="grid grid-cols-2 gap-3 xs:gap-4 relative w-full max-w-md mx-auto md:max-w-none"
                     >
-                        {stats.map((s, i) => (
+                        {[1, 2, 3, 4].map((num) => (
                             <motion.div
-                                key={s.label}
+                                key={num}
                                 initial={{ opacity: 0, scale: 0.9 }}
                                 whileInView={{ opacity: 1, scale: 1 }}
                                 viewport={{ once: true }}
-                                transition={{ duration: 0.4, delay: i * 0.1 }}
-                                className="bg-white rounded-[1.5rem] xs:rounded-[2rem] p-6 xs:p-8 shadow-xl shadow-accent-brown/5 border border-white text-center"
+                                transition={{ duration: 0.4, delay: num * 0.1 }}
+                                className={`aspect-square rounded-[1.5rem] xs:rounded-[2rem] overflow-hidden shadow-xl shadow-accent-brown/5 border-4 xs:border-8 border-white bg-accent-peach/20 relative group ${num === 2 || num === 4 ? 'translate-y-4 xs:translate-y-8' : ''}`}
                             >
-                                <p className="text-4xl xs:text-5xl font-black text-accent-brown tracking-tighter leading-none mb-1 xs:mb-2">{s.value}</p>
-                                <p className="text-[8px] xs:text-[10px] font-black uppercase tracking-widest text-accent-brown/40">{s.label}</p>
+                                <img 
+                                    src={`/about-grid-${num}.png`} 
+                                    alt={`Hi-Vet Clinic snapshot ${num}`} 
+                                    className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-700"
+                                />
+                                <div className="absolute inset-0 bg-brand/0 group-hover:bg-brand/10 transition-colors duration-500 mix-blend-overlay"></div>
                             </motion.div>
                         ))}
+                        {/* Decorative background blurs */}
+                        <div className="absolute top-1/2 right-0 -translate-y-1/2 translate-x-1/4 w-3/4 aspect-square bg-brand/20 rounded-full blur-[80px] -z-10 pointer-events-none"></div>
+                        <div className="absolute bottom-0 left-0 -translate-x-1/4 translate-y-1/4 w-2/3 aspect-square bg-accent-peach/60 rounded-full blur-[60px] -z-10 pointer-events-none"></div>
                     </motion.div>
                 </div>
 

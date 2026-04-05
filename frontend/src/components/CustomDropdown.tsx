@@ -5,6 +5,8 @@ import { ChevronDown } from 'lucide-react';
 interface Option {
     label: string | number;
     value: any;
+    disabled?: boolean;
+    badge?: string;
 }
 
 interface CustomDropdownProps {
@@ -55,14 +57,31 @@ export const CustomDropdown = ({ value, options, onChange, className = "", label
                         {options.map(opt => {
                             const label = typeof opt === 'object' ? opt.label : opt;
                             const val = typeof opt === 'object' ? opt.value : opt;
+                            const isDisabled = typeof opt === 'object' && opt.disabled;
+                            const badge = typeof opt === 'object' ? opt.badge : null;
+                            
                             return (
                                 <button
                                     key={String(val)}
                                     type="button"
-                                    onClick={() => { onChange(val); setIsOpen(false); }}
-                                    className={`w-full px-5 py-3 text-left text-sm font-bold transition-colors ${value === val ? 'bg-brand text-white' : 'text-accent-brown hover:bg-accent-peach/5'}`}
+                                    disabled={isDisabled}
+                                    onClick={() => { if (!isDisabled) { onChange(val); setIsOpen(false); } }}
+                                    className={`w-full px-5 py-3 text-left text-sm font-bold transition-all ${
+                                        isDisabled 
+                                            ? 'text-accent-brown/20 bg-accent-peach/5 cursor-not-allowed italic line-through' 
+                                            : value === val 
+                                                ? 'bg-brand text-white' 
+                                                : 'text-accent-brown hover:bg-accent-peach/5'
+                                    }`}
                                 >
-                                    {label}
+                                    <div className="flex items-center justify-between">
+                                        <span>{label}</span>
+                                        {isDisabled && (
+                                            <span className="text-[8px] font-black uppercase tracking-widest opacity-40">
+                                                {badge || 'Unavailable'}
+                                            </span>
+                                        )}
+                                    </div>
                                 </button>
                             );
                         })}

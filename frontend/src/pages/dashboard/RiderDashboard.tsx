@@ -5,7 +5,7 @@ import {
     Clock, Navigation as NavIcon,
     AlertCircle, ChevronRight, Power,
     MapPin, Phone, CheckCircle2, Loader2,
-    Store, Navigation
+    Store
 } from 'lucide-react';
 import { Map, Marker } from '@vis.gl/react-google-maps';
 import DashboardLayout from '../../components/DashboardLayout';

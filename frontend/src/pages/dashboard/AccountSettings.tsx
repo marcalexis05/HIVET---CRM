@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     User, Lock, Bell, Trash2, Check, Loader2, Eye, EyeOff, 
-    AlertTriangle, CheckCircle, MapPin, Plus, Edit2, Trash 
+    AlertTriangle, CheckCircle, MapPin, Plus, Edit2, Trash,
+    Store, ShieldCheck 
 } from 'lucide-react';
+import { Map, AdvancedMarker, APIProvider } from '@vis.gl/react-google-maps';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -11,6 +13,7 @@ import { PasswordStrength } from '../../components/PasswordStrength';
 import { CustomDatePicker } from '../../components/CustomDatePicker';
 import { CustomDropdown } from '../../components/CustomDropdown';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
+import MapPickerModal from '../../components/MapPickerModal';
 
 type Section = 'profile' | 'addresses' | 'password' | 'notifications' | 'danger';
 
@@ -390,6 +393,8 @@ const AccountSettings = () => {
     // Password
     const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
     const [showPw, setShowPw] = useState(false);
+    const [showMapPicker, setShowMapPicker] = useState(false);
+    const [pickerMode, setPickerMode] = useState<'main' | 'branch'>('branch');
     const [savingPw, setSavingPw] = useState(false);
     const [pwError, setPwError] = useState('');
 
@@ -649,7 +654,67 @@ const AccountSettings = () => {
                                                         className="!py-4 !rounded-2xl shadow-xl border-2 border-white focus:border-brand/30 bg-white"
                                                     />
                                                     <p className="text-[9px] font-bold text-accent-brown/20 uppercase tracking-widest pl-1">Click the pin icon to open the detailed landscape map editor.</p>
+                                                    <div className="flex flex-col sm:flex-row items-center gap-4 pt-2">
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setPickerMode('main');
+                                                                setShowMapPicker(true);
+                                                            }}
+                                                            className="w-full sm:w-auto bg-brand text-brand-dark px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-brand-dark hover:text-white transition-all shadow-xl shadow-brand/10"
+                                                        >
+                                                            Pin Location on Map
+                                                        </button>
+                                                        {clinicLat && clinicLng && (
+                                                            <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-lg border border-green-100">
+                                                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                                                                <span className="text-[9px] font-black text-green-600 uppercase tracking-widest">Pin Active</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
+
+                                                {/* Map & Reality Port Preview */}
+                                                {(clinicLat !== null && clinicLng !== null) && (
+                                                    <div className="h-72 relative group/map rounded-[2.5rem] overflow-hidden border-2 border-brand/10 shadow-2xl">
+                                                        <div className="absolute inset-0">
+                                                            <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
+                                                                <Map
+                                                                    defaultCenter={{ lat: clinicLat, lng: clinicLng }}
+                                                                    defaultZoom={15}
+                                                                    gestureHandling={'greedy'}
+                                                                    disableDefaultUI={true}
+                                                                >
+                                                                    <AdvancedMarker position={{ lat: clinicLat, lng: clinicLng }}>
+                                                                        <div className="w-10 h-10 bg-brand-dark rounded-xl flex items-center justify-center text-white shadow-2xl border-2 border-white ring-4 ring-brand/20">
+                                                                            <Store className="w-5 h-5 text-white" />
+                                                                        </div>
+                                                                    </AdvancedMarker>
+                                                                </Map>
+                                                            </APIProvider>
+                                                        </div>
+                                                        <div className="absolute bottom-4 right-4 z-20 flex gap-2">
+                                                            <button 
+                                                                type="button"
+                                                                onClick={() => window.open(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${clinicLat},${clinicLng}`, '_blank')}
+                                                                className="bg-brand-dark/90 backdrop-blur-md text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-2xl border border-white/20 hover:bg-black transition-all flex items-center gap-2"
+                                                            >
+                                                                <Eye className="w-4 h-4" /> Reality Port
+                                                            </button>
+                                                        </div>
+                                                        
+                                                        {/* Precision Seal Overlay */}
+                                                        <div className="absolute top-4 left-4 z-20 pointer-events-none">
+                                                            <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-xl shadow-lg border border-brand/20 flex flex-col items-center gap-0.5">
+                                                                <div className="flex items-center gap-2">
+                                                                    <ShieldCheck className="w-3.5 h-3.5 text-brand" />
+                                                                    <span className="text-[10px] font-black text-brand-dark uppercase tracking-widest">Hi-Vet Precision</span>
+                                                                </div>
+                                                                <span className="text-[7px] font-bold text-accent-brown/30 uppercase">Geographic Identity Verified</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 {/* Hidden display of current address for confirmation */}
                                                 <div className="p-5 bg-white rounded-2xl border border-accent-peach/10 shadow-sm">
@@ -1289,7 +1354,7 @@ const AccountSettings = () => {
                                     onClick={() => setConfirmModal(null)}
                                     className="flex-1 py-4 bg-accent-peach/10 text-accent-brown font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-accent-peach/20 transition-all"
                                 >
-                                    Cancel
+                                    Cancel
                                 </button>
                                 <button
                                     onClick={confirmModal.onConfirm}
@@ -1302,6 +1367,46 @@ const AccountSettings = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            <MapPickerModal
+                isOpen={showMapPicker}
+                onClose={() => setShowMapPicker(false)}
+                initialLocation={(pickerMode === 'main' ? (clinicLat && clinicLng ? { lat: clinicLat, lng: clinicLng } : undefined) : (addrForm.lat && addrForm.lng ? { lat: addrForm.lat, lng: addrForm.lng } : undefined))}
+                onSelection={(_address, lat, lng, _components, granular) => {
+                    if (pickerMode === 'main') {
+                        setClinicLat(lat);
+                        setClinicLng(lng);
+                        setClinicHouseNumber(granular.houseNumber || '');
+                        setClinicBlockNumber(granular.blockNumber || '');
+                        setClinicStreet(granular.street || '');
+                        setClinicSubdivision(granular.subdivision || '');
+                        setClinicSitio(granular.sitio || '');
+                        setClinicBarangay(granular.barangay || '');
+                        setClinicCity(granular.city || '');
+                        setClinicDistrict(granular.district || '');
+                        setClinicProvince(granular.province || '');
+                        setClinicZip(granular.zip || '');
+                        setClinicRegion(granular.region || '');
+                    } else {
+                        setAddrForm(prev => ({
+                            ...prev,
+                            lat,
+                            lng,
+                            house_number: granular.houseNumber,
+                            block_number: granular.blockNumber,
+                            street: granular.street,
+                            subdivision: granular.subdivision,
+                            sitio: granular.sitio,
+                            barangay: granular.barangay,
+                            city: granular.city,
+                            district: granular.district,
+                            province: granular.province,
+                            zip_code: granular.zip,
+                            region: granular.region
+                        }));
+                    }
+                }}
+            />
 
         </DashboardLayout>
     );

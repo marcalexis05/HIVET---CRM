@@ -43,6 +43,19 @@ body {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 5px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-gray-200 rounded-full;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-300;
+  }
 }
 
 @layer components {
@@ -87,4 +100,40 @@ body.map-modal-active main {
 body.map-modal-active {
     overflow: hidden !important;
     height: 100vh !important;
+}
+
+/* ============================================================
+   GLOBAL BRAND CONSISTENCY — Orange Hover + Click System
+   ============================================================ */
+
+/* Ensure ALL buttons can animate transform (required for press effect).
+   transition-colors alone only watches color — this adds transform + shadow. */
+button,
+a[role="button"] {
+    transition-property: background-color, color, transform, box-shadow, opacity, border-color, filter !important;
+    transition-duration: 150ms !important;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Universal tactile press — fires on every button click app-wide */
+button:not(:disabled):active,
+a[role="button"]:not(:disabled):active {
+    transform: scale(0.95) !important;
+}
+
+/* Brand-dark buttons: hover → darker orange, never black */
+.bg-brand-dark:hover:not(:disabled) {
+    background-color: #c94f03 !important;
+    box-shadow: 0 8px 25px -5px rgba(232, 93, 4, 0.4) !important;
+}
+
+/* Intercept any explicit hover:bg-black utility on brand buttons */
+button.hover\:bg-black:hover:not(:disabled),
+a.hover\:bg-black:hover:not(:disabled) {
+    background-color: #c94f03 !important;
+}
+
+/* brand (amber) buttons — subtle brightness on hover */
+.bg-brand:hover:not(:disabled) {
+    filter: brightness(0.93);
 }

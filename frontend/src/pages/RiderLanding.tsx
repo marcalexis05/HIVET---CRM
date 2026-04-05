@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
 import { Clock, Wallet, HeartHandshake, Bike, Car, Smartphone, CheckCircle2 } from 'lucide-react';
 import { Footer } from '../components/Footer';
 

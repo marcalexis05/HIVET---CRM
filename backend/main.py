@@ -43,6 +43,8 @@ TOKEN_EXPIRE_DAYS    = 30
 EMAIL_SENDER = "hivetveterinary3@gmail.com"
 EMAIL_APP_PWD = "dpan oejd uzvs tepw"
 
+PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY", "test_key_placeholder")
+
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
@@ -184,8 +186,8 @@ class BusinessProfile(Base):
     compliance_status     = Column(String, default="pending")
     
     # Loyalty Settings
-    loyalty_points_per_peso        = Column(Float, default=10.0)
-    loyalty_points_per_reservation = Column(Integer, default=50)
+    loyalty_points_per_peso        = Column(Float, default=0.01) # ₱100 = 1 pt (Pro Level)
+    loyalty_points_per_reservation = Column(Integer, default=10) # flat reward (fallback)
     
     created_at            = Column(DateTime, default=datetime.utcnow)
 
@@ -322,6 +324,15 @@ class LoyaltyHistory(Base):
     description = Column(String, nullable=False)
     points      = Column(Integer, nullable=False) # Positive for earn, negative for redeem
     created_at  = Column(DateTime, default=datetime.utcnow)
+
+class UserVoucher(Base):
+    __tablename__ = "user_vouchers"
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(Integer, nullable=False)
+    voucher_id  = Column(Integer, ForeignKey("loyalty_vouchers.id"), nullable=False)
+    code        = Column(String, nullable=False, unique=True)
+    is_used     = Column(Boolean, default=False)
+    redeemed_at = Column(DateTime, default=datetime.utcnow)
 
 class Reservation(Base):
     __tablename__ = "reservations"
@@ -715,6 +726,10 @@ class ProductSchema(BaseModel):
     stars: int
     loyalty_points: Optional[int] = 0
     created_at: datetime
+    clinic_name: Optional[str] = None
+    clinic_phone: Optional[str] = None
+    clinic_lat: Optional[float] = None
+    clinic_lng: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -759,6 +774,11 @@ class OrderCreate(BaseModel):
     clinic_id: Optional[int] = None
     branch_id: Optional[int] = None
     deliveryDetails: Optional[dict] = None
+    delivery_lat: Optional[float] = None
+    delivery_lng: Optional[float] = None
+
+class PayMongoSessionResponse(BaseModel):
+    checkout_url: str
 
 class CancelOrderRequest(BaseModel):
     reason: str
@@ -942,115 +962,11 @@ async def get_stats():
         "revenue_trend": [1200, 1500, 1100, 2000, 2500, 3000],
     }
 
-@app.post("/api/orders")
-async def create_order(body: OrderCreate, request: Request, db: Session = Depends(get_db)):
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = decode_token(auth_header.split(" ", 1)[1])
-        customer_id = int(payload["sub"])
-    except (JWTError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid token")
+# POST /api/orders moved to "Orders" section.
 
-    delivery_details = body.deliveryDetails or {}
-    
-    # Create the order
-    order = Order(
-        customer_id=customer_id,
-        status="Pending",
-        total_amount=body.totalAmount,
-        fulfillment_method=body.fulfillmentMethod,
-        payment_method=body.paymentMethod,
-        clinic_id=body.clinic_id,
-        branch_id=body.branch_id,
-        delivery_address=delivery_details.get("address"),
-        contact_name=delivery_details.get("contactName"),
-        contact_phone=delivery_details.get("phone"),
-    )
-    db.add(order)
-    db.commit()
-    db.refresh(order)
+# GET /api/orders moved to "Orders" section.
 
-    # Create order items (loyalty points awarded only when order status = 'Order Received')
-    for item in body.items:
-        db_item = OrderItem(
-            order_id=order.id,
-            product_id=item.id,
-            product_name=item.name,
-            price=item.price,
-            quantity=item.quantity,
-            variant=item.variant,
-            size=item.size,
-            image=item.image
-        )
-        db.add(db_item)
-
-    db.commit()
-
-    return {"message": "Order placed successfully", "order_id": order.id, "loyalty_points_earned": 0}
-
-@app.get("/api/orders")
-async def get_customer_orders(request: Request, db: Session = Depends(get_db)):
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = decode_token(auth_header.split(" ", 1)[1])
-        customer_id = int(payload["sub"])
-    except (JWTError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    orders = db.query(Order).filter(Order.customer_id == customer_id).order_by(Order.created_at.desc()).all()
-    results = []
-    for o in orders:
-        items = db.query(OrderItem).filter(OrderItem.order_id == o.id).all()
-        results.append({
-            "id": o.id,
-            "status": o.status,
-            "total_amount": o.total_amount,
-            "fulfillment_method": o.fulfillment_method,
-            "payment_method": o.payment_method,
-            "cancellation_reason": o.cancellation_reason,
-            "created_at": str(o.created_at),
-            "items": [{
-                "id": i.product_id,
-                "name": i.product_name,
-                "price": i.price,
-                "quantity": i.quantity,
-                "variant": i.variant,
-                "size": i.size,
-                "image": i.image
-            } for i in items]
-        })
-    return {"orders": results}
-
-class CancelOrderRequest(BaseModel):
-    reason: str
-
-@app.patch("/api/orders/{order_id}/cancel")
-async def cancel_customer_order(order_id: int, body: CancelOrderRequest, request: Request, db: Session = Depends(get_db)):
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = decode_token(auth_header.split(" ", 1)[1])
-        customer_id = int(payload["sub"])
-    except (JWTError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    order = db.query(Order).filter(Order.id == order_id, Order.customer_id == customer_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-        
-    if order.status != "Pending":
-        raise HTTPException(status_code=400, detail="Only pending orders can be cancelled")
-
-    order.status = "Cancelled"
-    order.cancellation_reason = body.reason
-    db.commit()
-
-    return {"message": "Order cancelled successfully"}
+# Order cancellation moved to "Orders" section.
 
 @app.get("/api/business/orders")
 async def get_business_orders(request: Request, db: Session = Depends(get_db)):
@@ -1073,6 +989,7 @@ async def get_business_orders(request: Request, db: Session = Depends(get_db)):
         .join(Order, OrderItem.order_id == Order.id)\
         .join(Customer, Order.customer_id == Customer.id)\
         .filter(Product.business_id == business_id)\
+        .filter(Order.status != "Payment Pending")\
         .order_by(Order.created_at.desc())\
         .all()
         
@@ -1135,26 +1052,36 @@ async def update_business_order_status(order_id: int, body: BusinessOrderStatusU
 
     previous_status = order.status
     order.status = body.status
-
-    # Award loyalty points ONLY when status changes to 'Order Received' for the first time
-    if body.status == "Order Received" and previous_status != "Order Received":
+    # Award loyalty points ONLY when status changes to 'Completed' for the first time
+    if body.status == "Completed" and previous_status != "Completed":
+        # Find business profile to get loyalty rates
+        # Primary: Fetch from business_id of the requester (since they own this order)
+        biz = db.query(BusinessProfile).filter(BusinessProfile.id == business_id).first()
+        
         items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
         total_loyalty_points = 0
+        
         for item in items:
+            # Use item-specific fixed points if available, otherwise calculate from price
             prod = db.query(Product).filter(Product.id == item.product_id).first()
-            if prod and prod.loyalty_points:
-                total_loyalty_points += (prod.loyalty_points * item.quantity)
+            if prod:
+                if prod.loyalty_points > 0:
+                    points = prod.loyalty_points * item.quantity
+                elif biz:
+                    points = int(item.price * item.quantity * biz.loyalty_points_per_peso)
+                else:
+                    points = int(item.price * item.quantity * 0.01) # fallback multiplier (1%)
+                total_loyalty_points += points
 
         if total_loyalty_points > 0:
             customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
             if customer:
                 customer.loyalty_points += total_loyalty_points
-                history = LoyaltyHistory(
+                db.add(LoyaltyHistory(
                     customer_id=order.customer_id,
-                    description=f"Earned from Order #{order.id} (Order Received)",
+                    description=f"Purchase Reward – Order #HV-{order.id:04d}",
                     points=total_loyalty_points
-                )
-                db.add(history)
+                ))
 
     db.commit()
     return {"message": f"Order status updated to {body.status}", "order_id": order_id, "status": body.status}
@@ -1678,6 +1605,15 @@ async def get_product_detail(product_id: int, db: Session = Depends(get_db)):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Inject clinic info
+    biz = db.query(BusinessProfile).filter(BusinessProfile.id == product.business_id).first()
+    if biz:
+        product.clinic_name = biz.clinic_name
+        product.clinic_phone = biz.clinic_phone
+        product.clinic_lat = biz.clinic_lat
+        product.clinic_lng = biz.clinic_lng
+        
     return product
 
 @app.get("/api/business/catalog", response_model=List[ProductSchema])
@@ -1813,14 +1749,92 @@ async def get_reservations(
         items = db.query(Reservation).filter(Reservation.customer_id == user_id).order_by(Reservation.created_at.desc()).all()
         return {"reservations": [_reservation_to_dict(r) for r in items]}
 
+@app.get("/api/reservations/booked")
+async def get_booked_slots(clinic_id: int, date: str, db: Session = Depends(get_db)):
+    """Fetch all booked time slots for a specific clinic and date."""
+    bookings = db.query(Reservation).filter(
+        Reservation.business_id == clinic_id,
+        Reservation.date == date,
+        Reservation.status.in_(["Pending", "Confirmed", "Ready for Pickup"])
+    ).all()
+    return {"booked_times": [b.time for b in bookings]}
+
 @app.post("/api/reservations")
 async def create_reservation(
     body: ReservationCreate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """Customer creates a new reservation."""
+    """Customer creates a new reservation with rigorous validation."""
     customer_id = int(current_user["sub"])
+    
+    # 1. Parse and validate requested date and time
+    try:
+        # Expected formats: date="YYYY-MM-DD", time="09:00 AM"
+        res_date_obj = datetime.strptime(body.date, "%Y-%m-%d").date()
+        res_time_obj = datetime.strptime(body.time, "%I:%M %p").time()
+        res_datetime = datetime.combine(res_date_obj, res_time_obj)
+        
+        # Check if in the past
+        if res_datetime < datetime.now():
+            raise HTTPException(status_code=400, detail="Cannot book a reservation in the past.")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date or time format.")
+
+    # 2. Check Operating Hours (Special Date Overrides first)
+    special = db.query(BusinessSpecialDateHours).filter(
+        BusinessSpecialDateHours.business_id == body.business_id,
+        BusinessSpecialDateHours.specific_date == body.date
+    ).first()
+    
+    selected_hours = None
+    if special:
+        if not special.is_open:
+            raise HTTPException(status_code=400, detail=f"Clinic is closed on {body.date}.")
+        selected_hours = special
+    else:
+        # Check regular hours (0=Sun in DB, 1=Mon, ..., 6=Sat)
+        # res_date_obj.weekday() returns 0=Mon, ..., 6=Sun
+        dow_db = (res_date_obj.weekday() + 1) % 7
+        hours = db.query(BusinessOperatingHours).filter(
+            BusinessOperatingHours.business_id == body.business_id,
+            BusinessOperatingHours.day_of_week == dow_db
+        ).first()
+        if not hours or not hours.is_open:
+            raise HTTPException(status_code=400, detail="Clinic is closed on this day.")
+        selected_hours = hours
+
+    # 3. Time range check (Clinic Open/Close and Break)
+    if selected_hours:
+        try:
+            open_t = datetime.strptime(selected_hours.open_time, "%I:%M %p").time()
+            close_t = datetime.strptime(selected_hours.close_time, "%I:%M %p").time()
+            
+            if res_time_obj < open_t or res_time_obj >= close_t:
+                raise HTTPException(status_code=400, detail=f"Clinic is only open from {selected_hours.open_time} to {selected_hours.close_time}.")
+            
+            # Check Break time
+            if getattr(selected_hours, 'break_start', None) and getattr(selected_hours, 'break_end', None):
+                break_s = datetime.strptime(selected_hours.break_start, "%I:%M %p").time()
+                break_e = datetime.strptime(selected_hours.break_end, "%I:%M %p").time()
+                if res_time_obj >= break_s and res_time_obj < break_e:
+                    raise HTTPException(status_code=400, detail="Clinic is on break during this requested time.")
+        except ValueError:
+            # If clinic hours in DB are misconfigured
+            pass
+
+    # 4. Double-Booking Prevention
+    # Check if any non-cancelled order already exists for this clinic, date, and time.
+    existing = db.query(Reservation).filter(
+        Reservation.business_id == body.business_id,
+        Reservation.date == body.date,
+        Reservation.time == body.time,
+        Reservation.status.in_(["Pending", "Confirmed", "Ready for Pickup"])
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="This time slot is already reserved. Please choose another time.")
+
+    # 5. Create the reservation
     new_res = Reservation(
         customer_id=customer_id,
         business_id=body.business_id,
@@ -1880,6 +1894,30 @@ async def cancel_reservation(
 
     return {"reservation": _reservation_to_dict(res)}
 
+@app.delete("/api/reservations/{reservation_id}")
+async def delete_reservation(reservation_id: int, request: Request, db: Session = Depends(get_db)):
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    try:
+        payload = decode_token(auth_header.split(" ", 1)[1])
+        customer_id = int(payload["sub"])
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    res = db.query(Reservation).filter(Reservation.id == reservation_id, Reservation.customer_id == customer_id).first()
+    if not res:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    
+    # Only allow deleting cancelled reservations
+    if res.status != "Cancelled":
+        raise HTTPException(status_code=400, detail="Only cancelled reservations can be deleted")
+
+    db.delete(res)
+    db.commit()
+    
+    return {"message": "Reservation deleted permanently"}
+
 @app.patch("/api/reservations/{reservation_id}/status")
 async def update_reservation_status(
     reservation_id: int,
@@ -1900,6 +1938,29 @@ async def update_reservation_status(
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
 
     old_status = res.status
+    
+    # Validation: Cannot confirm if time has passed
+    from datetime import datetime
+    try:
+        now = datetime.now()
+        res_dt = datetime.strptime(f"{res.date} {res.time}", "%Y-%m-%d %I:%M %p")
+        if body.status == "Confirmed" and res_dt < now:
+            raise HTTPException(status_code=400, detail="Cannot confirm a reservation whose time has already passed.")
+    except Exception as e:
+        print(f"Error parsing date/time: {e}")
+
+    # Validation: Prevention of double-booking on confirmation
+    if body.status == "Confirmed" and old_status != "Confirmed":
+        existing_confirmed = db.query(Reservation).filter(
+            Reservation.business_id == business_id,
+            Reservation.date == res.date,
+            Reservation.time == res.time,
+            Reservation.status == "Confirmed",
+            Reservation.id != reservation_id
+        ).first()
+        if existing_confirmed:
+            raise HTTPException(status_code=400, detail="This time slot is already booked and confirmed by another client.")
+
     res.status = body.status
     
     # Award Loyalty Points on Completion
@@ -1909,12 +1970,17 @@ async def update_reservation_status(
             customer = db.query(Customer).filter(Customer.id == res.customer_id).first()
             if customer:
                 points_to_award = 0
+                # 1. Check if the specific service has fixed fixed points
                 if res.service_id:
                     service_obj = db.query(BusinessService).filter(BusinessService.id == res.service_id).first()
-                    if service_obj:
+                    if service_obj and service_obj.loyalty_points > 0:
                         points_to_award = service_obj.loyalty_points
                 
-                # Fallback to global if 0
+                # 2. If no fixed points, calculate based on reservation total (Professional Scale)
+                if points_to_award == 0 and res.total_amount > 0:
+                    points_to_award = int(res.total_amount * biz.loyalty_points_per_peso)
+                
+                # 3. Fallback to flat rate if still 0
                 if points_to_award == 0:
                     points_to_award = biz.loyalty_points_per_reservation
 
@@ -1922,7 +1988,7 @@ async def update_reservation_status(
                     customer.loyalty_points += points_to_award
                     db.add(LoyaltyHistory(
                         customer_id=customer.id,
-                        description=f"Completed Reservation at {biz.clinic_name or 'Clinic'}",
+                        description=f"Service Reward – {res.service} at {biz.clinic_name or 'Clinic'}",
                         points=points_to_award
                     ))
     
@@ -2329,6 +2395,8 @@ async def get_clinics(db: Session = Depends(get_db)):
                 "phone": b.phone,
                 "address_line1": b.address_line1,
                 "address_line2": b.address_line2,
+                "lat": b.lat,
+                "lng": b.lng
             }
             for b in all_branches
         ]
@@ -3523,8 +3591,8 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
         fulfillment_method=body.fulfillmentMethod,
         payment_method=body.paymentMethod,
         delivery_address=body.deliveryDetails.get("address") if body.deliveryDetails else None,
-        delivery_lat=body.deliveryDetails.get("lat") if body.deliveryDetails else None,
-        delivery_lng=body.deliveryDetails.get("lng") if body.deliveryDetails else None,
+        delivery_lat=body.delivery_lat or (body.deliveryDetails.get("lat") if body.deliveryDetails else None),
+        delivery_lng=body.delivery_lng or (body.deliveryDetails.get("lng") if body.deliveryDetails else None),
         contact_name=body.deliveryDetails.get("contactName") if body.deliveryDetails else None,
         contact_phone=body.deliveryDetails.get("phone") if body.deliveryDetails else None,
         clinic_id=body.clinic_id,
@@ -3534,30 +3602,8 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
     db.commit()
     db.refresh(new_order)
 
-    # Award Loyalty Points
-    total_points_earned = 0
-    for item in body.items:
-        product = db.query(Product).filter(Product.id == item.id).first()
-        if product:
-            biz = db.query(BusinessProfile).filter(BusinessProfile.id == product.business_id).first()
-            if biz:
-                item_price = int(float(item.price))
-                if product.loyalty_points > 0:
-                    points = product.loyalty_points * item.quantity
-                else:
-                    points = int(item_price * item.quantity * biz.loyalty_points_per_peso)
-                total_points_earned += points
-
-    if total_points_earned > 0:
-        customer = db.query(Customer).filter(Customer.id == customer_id).first()
-        if customer:
-            customer.loyalty_points += total_points_earned
-            db.add(LoyaltyHistory(
-                customer_id=customer_id,
-                description=f"Earned from Order #HV-{new_order.id:04d}",
-                points=total_points_earned
-            ))
-            db.commit()
+    # Loyalty points are now awarded when the business accepts/receives the order
+    # for better accuracy and to prevent awarding for cancelled orders.
 
     for item in body.items:
         order_item = OrderItem(
@@ -3583,6 +3629,274 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
     
     return {"order_id": new_order.id}
 
+@app.post("/api/payments/paymongo/checkout")
+async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Session = Depends(get_db)):
+    """Create a PayMongo Checkout Session and persist order as 'Payment Pending'."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    try:
+        payload = decode_token(auth_header.split(" ", 1)[1])
+        customer_id = int(payload["sub"])
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    # 1. Create the Order in "Payment Pending" status
+    new_order = Order(
+        customer_id=customer_id,
+        status="Payment Pending",
+        total_amount=int(body.totalAmount),
+        fulfillment_method=body.fulfillmentMethod,
+        payment_method=body.paymentMethod,
+        delivery_address=body.deliveryDetails.get("address") if body.deliveryDetails else None,
+        delivery_lat=body.delivery_lat or (body.deliveryDetails.get("lat") if body.deliveryDetails else None),
+        delivery_lng=body.delivery_lng or (body.deliveryDetails.get("lng") if body.deliveryDetails else None),
+        contact_name=body.deliveryDetails.get("contactName") if body.deliveryDetails else None,
+        contact_phone=body.deliveryDetails.get("phone") if body.deliveryDetails else None,
+        clinic_id=body.clinic_id,
+        branch_id=body.branch_id
+    )
+    db.add(new_order)
+    db.commit()
+    db.refresh(new_order)
+
+    # 2. Add Order Items
+    for item in body.items:
+        order_item = OrderItem(
+            order_id=new_order.id,
+            product_id=item.id,
+            product_name=item.name,
+            price=int(float(item.price)),
+            quantity=item.quantity,
+            variant=item.variant,
+            size=item.size,
+            image=item.image
+        )
+        db.add(order_item)
+    db.commit()
+
+    # 3. Fetch Customer Details for Pre-filling
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    billing_name = "Guest User"
+    billing_email = "email@example.com"
+    billing_phone = None
+
+    if customer:
+        billing_email = customer.email
+        billing_phone = customer.phone
+        if customer.name:
+            billing_name = customer.name
+        elif customer.first_name and customer.last_name:
+            billing_name = f"{customer.first_name} {customer.last_name}"
+
+    # 4. Fetch Clinic Details for Branding
+    clinic = db.query(BusinessProfile).filter(BusinessProfile.id == body.clinic_id).first()
+    clinic_name = clinic.clinic_name if clinic and clinic.clinic_name else "Hi-Vet Clinic"
+
+    # 5. Prepare PayMongo Payload
+    billing_info = {
+        "name": billing_name,
+        "email": billing_email
+    }
+    if billing_phone:
+        billing_info["phone"] = billing_phone
+
+    line_items = []
+    for item in body.items:
+        line_items.append({
+            "amount": int(float(item.price) * 100),
+            "currency": "PHP",
+            "name": item.name,
+            "quantity": item.quantity,
+            "description": f"Product from Hi-Vet CRM"
+        })
+
+    if body.fulfillmentMethod == "delivery":
+        line_items.append({
+            "amount": 15000, # 150.00 PHP
+            "currency": "PHP",
+            "name": "Shipping Fee",
+            "quantity": 1,
+            "description": "Flat rate delivery fee"
+        })
+
+    enabled_methods = ["gcash", "paymaya"]
+    if body.paymentMethod == "maya":
+        enabled_methods = ["paymaya"]
+    elif body.paymentMethod == "gcash":
+        enabled_methods = ["gcash"]
+
+    # 6. Prepare PayMongo Payload (Dynamic Data from DB)
+    paymongo_payload = {
+        "data": {
+            "attributes": {
+                "line_items": line_items,
+                "billing": billing_info,
+                "payment_method_types": enabled_methods,
+                "success_url": f"{FRONTEND_URL}/dashboard/user/checkout/success?order_id={new_order.id}",
+                "cancel_url": f"{FRONTEND_URL}/dashboard/user/checkout",
+                "description": f"Payment for Order #HV-{new_order.id:04d} at {clinic_name}",
+                "send_email_receipt": False, # Disable static PayMongo receipts
+                "show_description": True,
+                "show_line_items": True,
+                "reference_number": f"HV-{new_order.id:04d}",
+                "statement_descriptor": clinic_name[:22]
+            }
+        }
+    }
+
+    import base64
+    auth_header_val = base64.b64encode(f"{PAYMONGO_SECRET_KEY}:".encode()).decode()
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                "https://api.paymongo.com/v1/checkout_sessions",
+                json=paymongo_payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Basic {auth_header_val}"
+                }
+            )
+            
+            if response.status_code != 200:
+                print(f"PayMongo Error: {response.text}")
+                # Revert order or keep for cleanup
+                raise HTTPException(status_code=500, detail="Failed to create payment session")
+            
+            res_data = response.json()
+            checkout_url = res_data["data"]["attributes"]["checkout_url"]
+            
+            return {"checkout_url": checkout_url}
+            
+        except HTTPException as he:
+            raise he
+        except Exception as e:
+            print(f"PayMongo Request Exception: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+def send_clinic_order_receipt(db: Session, order_id: int):
+    """Sends a professional branded order receipt using Clinic's DB information."""
+    print(f"--- ATTEMPTING TO SEND RECEIPT FOR ORDER #{order_id:04d} ---")
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order: 
+        print("ERROR: Order not found in database.")
+        return
+    
+    customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
+    if not customer:
+        print(f"ERROR: Customer #{order.customer_id} not found.")
+        return
+    
+    # Fetch real data from BusinessProfile
+    clinic = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
+    clinic_name = clinic.clinic_name if clinic and clinic.clinic_name else "Hi-Vet Clinic"
+    clinic_email = clinic.email if clinic else EMAIL_SENDER
+    clinic_phone = clinic.clinic_phone if clinic else "N/A"
+    
+    print(f"ORDER DETAILS: Clinic: {clinic_name}, Customer Email: {customer.email}")
+
+    order_items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
+    
+    # Construct Professional HTML
+    items_html = ""
+    for item in order_items:
+        items_html += f"<tr><td style='padding: 8px;'>{item.product_name} x {item.quantity}</td><td style='text-align: right; padding: 8px;'>P{item.price:,.2f}</td></tr>"
+    
+    html = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background-color: #fdf8f6;">
+            <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #eee; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(255,159,28,0.05);">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #ff9f1c; margin: 0; font-size: 28px;">{clinic_name}</h1>
+                    <p style="text-transform: uppercase; letter-spacing: 2px; font-size: 10px; font-weight: bold; color: #999;">Order Receipt</p>
+                </div>
+                
+                <p>Hi <strong>{customer.name or (f"{customer.first_name} {customer.last_name}")}</strong>,</p>
+                <p>Thank you for choosing {clinic_name}. Your payment for order <strong>#HV-{order.id:04d}</strong> has been successfully processed.</p>
+                
+                <table style="width: 100%; border-collapse: collapse; margin: 25px 0;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #fdf8f6;">
+                            <th style="text-align: left; padding: 10px; color: #999; font-size: 12px; text-transform: uppercase;">Item</th>
+                            <th style="text-align: right; padding: 10px; color: #999; font-size: 12px; text-transform: uppercase;">Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {items_html}
+                    </tbody>
+                    <tfoot>
+                        <tr style="border-top: 2px solid #fdf8f6;">
+                            <td style="padding: 20px 10px; font-weight: bold; font-size: 16px;">Total Amount Paid</td>
+                            <td style="padding: 20px 10px; text-align: right; font-weight: bold; font-size: 18px; color: #ff9f1c;">P{order.total_amount:,.2f}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+                
+                <div style="margin-top: 40px; padding: 20px; background: #fdf8f6; border-radius: 12px;">
+                    <p style="margin: 0; font-weight: bold; color: #555; font-size: 14px;">Need Help?</p>
+                    <p style="margin: 5px 0; color: #777; font-size: 13px;">Contact the clinic directly at:</p>
+                    <p style="margin: 2px 0; color: #333; font-size: 13px;"><strong>Email:</strong> {clinic_email}</p>
+                    <p style="margin: 2px 0; color: #333; font-size: 13px;"><strong>Phone:</strong> {clinic_phone}</p>
+                </div>
+                
+                <div style="margin-top: 30px; text-align: center; color: #bbb; font-size: 11px;">
+                    <p>This is an automated receipt from the Hi-Vet CRM System.</p>
+                </div>
+            </div>
+        </body>
+    </html>
+    """
+    
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = f"{clinic_name} <{EMAIL_SENDER}>"
+        msg['To'] = customer.email
+        msg['Subject'] = f"Success! Your receipt from {clinic_name} (#HV-{order.id:04d})"
+        msg.attach(MIMEText(html, 'html'))
+        
+        # Using Port 587 with STARTTLS
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(EMAIL_SENDER, EMAIL_APP_PWD)
+            server.send_message(msg)
+            print(f"SUCCESS: Receipt sent to {customer.email}")
+    except Exception as e:
+        print(f"CRITICAL ERROR: Failed to send custom receipt via SMTP: {e}")
+
+@app.post("/api/payments/paymongo/confirm/{order_id}")
+async def confirm_paymongo_payment(order_id: int, request: Request, db: Session = Depends(get_db)):
+    """Update order status after successful PayMongo checkout and send branded receipt."""
+    print(f"--- CONFIRMING PAYMENT FOR ORDER #{order_id} ---")
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    try:
+        payload = decode_token(auth_header.split(" ", 1)[1])
+        customer_id = int(payload["sub"])
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    order = db.query(Order).filter(Order.id == order_id, Order.customer_id == customer_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    if order.status == "Payment Pending":
+        order.status = "Pending"
+        db.commit()
+        
+        # TRIGGER CUSTOM RECEIPT
+        send_clinic_order_receipt(db, order_id)
+        
+        add_notification(
+            db, customer_id, "System", 
+            "Payment Received!", 
+            f"Your payment for order #HV-{order.id:04d} was successful. Check your email for the receipt.",
+            "/dashboard/user/orders"
+        )
+    
+    return {"message": "Payment confirmed", "status": order.status}
+
 @app.get("/api/orders")
 async def get_orders(request: Request, db: Session = Depends(get_db)):
     auth_header = request.headers.get("Authorization", "")
@@ -3598,6 +3912,34 @@ async def get_orders(request: Request, db: Session = Depends(get_db)):
     results = []
     for o in orders:
         items = db.query(OrderItem).filter(OrderItem.order_id == o.id).all()
+        
+        branch_lat = None
+        branch_lng = None
+        branch_name = None
+        branch_address = None
+        
+        if o.branch_id:
+            branch = db.query(BusinessBranch).filter(BusinessBranch.id == o.branch_id).first()
+            if branch:
+                branch_lat = branch.lat
+                branch_lng = branch.lng
+                branch_name = branch.name
+                # Construct branch address
+                parts = [branch.house_number, branch.block_number, branch.street, branch.subdivision, branch.barangay, branch.city, branch.province]
+                branch_address = ", ".join([p for p in parts if p])
+        
+        # Fallback to clinic coordinates if branch data is missing or incomplete
+        if (branch_lat is None or branch_lng is None) and o.clinic_id:
+            clinic = db.query(BusinessProfile).filter(BusinessProfile.id == o.clinic_id).first()
+            if clinic:
+                if branch_lat is None: branch_lat = clinic.clinic_lat
+                if branch_lng is None: branch_lng = clinic.clinic_lng
+                if branch_name is None: branch_name = clinic.clinic_name
+                if branch_address is None:
+                    # Construct clinic address
+                    parts = [clinic.clinic_house_number, clinic.clinic_block_number, clinic.clinic_street, clinic.clinic_subdivision, clinic.clinic_barangay, clinic.clinic_city, clinic.clinic_province]
+                    branch_address = ", ".join([p for p in parts if p])
+
         results.append({
             "id": o.id,
             "status": o.status,
@@ -3607,6 +3949,11 @@ async def get_orders(request: Request, db: Session = Depends(get_db)):
             "delivery_address": o.delivery_address,
             "delivery_lat": o.delivery_lat,
             "delivery_lng": o.delivery_lng,
+            "branch_id": o.branch_id,
+            "branch_lat": branch_lat,
+            "branch_lng": branch_lng,
+            "branch_name": branch_name,
+            "branch_address": branch_address,
             "contact_name": o.contact_name,
             "contact_phone": o.contact_phone,
             "cancellation_reason": o.cancellation_reason,
@@ -3653,6 +4000,32 @@ async def cancel_order(order_id: int, body: CancelOrderRequest, request: Request
     )
     
     return {"message": "Order cancelled successfully"}
+
+@app.delete("/api/orders/{order_id}")
+async def delete_order(order_id: int, request: Request, db: Session = Depends(get_db)):
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    try:
+        payload = decode_token(auth_header.split(" ", 1)[1])
+        customer_id = int(payload["sub"])
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    order = db.query(Order).filter(Order.id == order_id, Order.customer_id == customer_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # We only allow deleting cancelled orders as per request
+    if order.status != "Cancelled":
+        raise HTTPException(status_code=400, detail="Only cancelled orders can be deleted")
+
+    # Delete order items first (or depend on cascade if configured)
+    db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
+    db.delete(order)
+    db.commit()
+    
+    return {"message": "Order deleted permanently"}
 
 # ---------------------------------------------------------------------------
 # Routes â€“ Notifications
@@ -3794,6 +4167,22 @@ async def get_loyalty(db: Session = Depends(get_db), current_user: dict = Depend
     points_per_peso = representative_biz.loyalty_points_per_peso if representative_biz else 10.0
     points_per_reservation = representative_biz.loyalty_points_per_reservation if representative_biz else 50
 
+    # Fetch Active User Vouchers
+    active_user_vouchers = db.query(UserVoucher, LoyaltyVoucher).join(
+        LoyaltyVoucher, UserVoucher.voucher_id == LoyaltyVoucher.id
+    ).filter(
+        UserVoucher.customer_id == customer_id,
+        UserVoucher.is_used == False
+    ).all()
+    
+    my_vouchers = [{
+        "id": uv.UserVoucher.id,
+        "title": uv.LoyaltyVoucher.title,
+        "code": uv.UserVoucher.code,
+        "type": uv.LoyaltyVoucher.type,
+        "date": uv.UserVoucher.redeemed_at.strftime("%Y-%m-%d")
+    } for uv in active_user_vouchers]
+
     return {
         "points": customer.loyalty_points,
         "tier": loyalty_info["tier"],
@@ -3801,6 +4190,7 @@ async def get_loyalty(db: Session = Depends(get_db), current_user: dict = Depend
         "next_tier_points": loyalty_info["next_points"],
         "history": history,
         "vouchers": vouchers,
+        "my_vouchers": my_vouchers,
         "referral_code": customer.referral_code,
         "points_per_peso": points_per_peso,
         "points_per_reservation": points_per_reservation
@@ -3824,6 +4214,19 @@ async def redeem_voucher(body: RedeemRequest, db: Session = Depends(get_db), cur
     # Process Redemption
     customer.loyalty_points -= voucher.cost
     
+    # Generate unique voucher code
+    import string
+    import random
+    voucher_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    
+    # Create User Voucher
+    new_user_voucher = UserVoucher(
+        customer_id=customer_id,
+        voucher_id=voucher.id,
+        code=voucher_code
+    )
+    db.add(new_user_voucher)
+    
     # Add History Entry
     new_history = LoyaltyHistory(
         customer_id=customer_id,
@@ -3838,9 +4241,45 @@ async def redeem_voucher(body: RedeemRequest, db: Session = Depends(get_db), cur
         "points": customer.loyalty_points,
         "voucher": {
             "id": str(voucher.id),
-            "title": voucher.title
+            "title": voucher.title,
+            "code": voucher_code
         }
     }
+
+class VoucherCodeRequest(BaseModel):
+    code: str
+
+@app.post("/api/loyalty/validate-voucher")
+async def validate_voucher(body: VoucherCodeRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Validate a voucher code and return its discount details."""
+    customer_id = int(current_user["sub"])
+    
+    # Fetch UserVoucher joined with LoyaltyVoucher
+    result = db.query(UserVoucher, LoyaltyVoucher).join(
+        LoyaltyVoucher, UserVoucher.voucher_id == LoyaltyVoucher.id
+    ).filter(
+        UserVoucher.code == body.code.upper(),
+        UserVoucher.customer_id == customer_id,
+        UserVoucher.is_used == False
+    ).first()
+    
+    if not result:
+        raise HTTPException(404, detail="Invalid or already used voucher code.")
+    
+    user_v, loyalty_v = result
+    
+    # Calculate discount value (for simplicity, we assume fixed values or percentages)
+    # If loyalty_v.type == 'Discount', we might want to return the percentage
+    # If loyalty_v.type == 'Credit', we return the peso amount
+    
+    # For now, let's just return the info
+    return {
+        "id": user_v.id,
+        "title": loyalty_v.title,
+        "type": loyalty_v.type,
+        "discount_value": 0 # This would be calculated based on business logic
+    }
+
 
 # ---------------------------------------------------------------------------
 # Routes â€“ Rider
@@ -3969,10 +4408,36 @@ async def update_order_delivery_status(order_id: int, body: OrderStatusUpdate, r
     if body.status == "Picked Up":
         order.picked_up_at = datetime.utcnow()
     elif body.status == "Delivered":
-        order.status = "Completed"
-        order.delivered_at = datetime.utcnow()
-        # Add earnings (simplified logic)
-        profile.total_earnings += 5000 # ₱50.00
+        if order.status != "Completed":
+            order.status = "Completed"
+            order.delivered_at = datetime.utcnow()
+            
+            # Add earnings (simplified logic)
+            profile.total_earnings += 5000 # ₱50.00
+            
+            # --- AWARD LOYALTY POINTS TO CUSTOMER ---
+            # Fetch business profile for rates
+            biz = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
+            items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+            total_points = 0
+            for item in items:
+                prod = db.query(Product).filter(Product.id == item.product_id).first()
+                if prod and prod.loyalty_points > 0:
+                    total_points += prod.loyalty_points * item.quantity
+                elif biz:
+                    total_points += int(item.price * item.quantity * biz.loyalty_points_per_peso)
+                else:
+                    total_points += int(item.price * item.quantity * 0.01) # fallback multiplier (1%)
+                    
+            if total_points > 0:
+                customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
+                if customer:
+                    customer.loyalty_points += total_points
+                    db.add(LoyaltyHistory(
+                        customer_id=order.customer_id,
+                        description=f"Purchase Reward – Order #HV-{order.id:04d}",
+                        points=total_points
+                    ))
         
     db.commit()
     return {"message": f"Order status updated to {body.status}"}

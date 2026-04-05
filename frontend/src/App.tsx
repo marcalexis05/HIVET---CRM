@@ -8,7 +8,7 @@ import { ReservationsSection } from './components/ReservationsSection';
 import { LoyaltySection } from './components/LoyaltySection';
 import { AboutSection } from './components/AboutSection';
 import { Logo } from './components/Logo';
-import { ShoppingCart, Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, Menu, X } from 'lucide-react';
+import { ShoppingCart, Menu, X } from 'lucide-react';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -32,6 +32,7 @@ import UserLoyalty from './pages/dashboard/UserLoyalty';
 import UserAlerts from './pages/dashboard/UserAlerts';
 import UserOrders from './pages/dashboard/UserOrdersList';
 import Checkout from './pages/dashboard/Checkout';
+import PaymentSuccess from './pages/dashboard/PaymentSuccess';
 import BusinessDashboard from './pages/dashboard/BusinessDashboard';
 import BusinessOrders from './pages/dashboard/BusinessOrders';
 import BusinessCatalog from './pages/dashboard/BusinessCatalog';
@@ -389,6 +390,14 @@ function App() {
                     element={
                       <ProtectedRoute allowedRoles={['user']}>
                         <Checkout />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/user/checkout/success"
+                    element={
+                      <ProtectedRoute allowedRoles={['user']}>
+                        <PaymentSuccess />
                       </ProtectedRoute>
                     }
                   />

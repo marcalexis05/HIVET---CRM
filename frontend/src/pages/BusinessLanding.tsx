@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
 import { BarChart3, Users, PackageCheck, Activity, ShieldCheck } from 'lucide-react';
 import { Footer } from '../components/Footer';
 

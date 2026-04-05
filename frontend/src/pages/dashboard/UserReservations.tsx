@@ -5,7 +5,7 @@ import DashboardLayout from '../../components/DashboardLayout';
 import { CustomDatePicker } from '../../components/CustomDatePicker';
 import { CustomDropdown } from '../../components/CustomDropdown';
 
-const API = 'http://localhost:8000';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 interface Branch {
     id: number;
@@ -14,6 +14,8 @@ interface Branch {
     phone: string;
     address_line1: string;
     address_line2: string;
+    lat?: number;
+    lng?: number;
 }
 
 interface Clinic {
@@ -23,6 +25,8 @@ interface Clinic {
     address_line2: string;
     zip: string;
     phone: string;
+    lat?: number;
+    lng?: number;
     branches: Branch[];
     services: { id: number; name: string; price: number; description: string | null; duration_minutes: number }[];
     hours: { day_of_week: number; day_name: string; is_open: boolean; open_time: string; close_time: string; break_start: string | null; break_end: string | null }[];
@@ -40,6 +44,8 @@ interface ClinicOption {
     zip: string;
     phone: string;
     clinic_name: string;
+    lat?: number;
+    lng?: number;
     services: Clinic['services'];
     hours: Clinic['hours'];
     special_hours: Clinic['special_hours'];
@@ -67,7 +73,11 @@ const STATUS_STYLES: Record<string, string> = {
     'Cancelled': 'bg-red-100 text-red-500',
 };
 
-const TIMES = ['08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM'];
+const BASE_TIMES = [
+    '07:00 AM', '07:30 AM', '08:00 AM', '08:30 AM', '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
+    '12:00 PM', '12:30 PM', '01:00 PM', '01:30 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM', '04:00 PM', '04:30 PM',
+    '05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM', '07:00 PM', '07:30 PM', '08:00 PM', '08:30 PM', '09:00 PM'
+];
 
 const defaultForm = {
     pet_name: '',
@@ -80,6 +90,8 @@ const defaultForm = {
     notes: '',
 };
 
+const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+
 const UserReservations = () => {
     const [reservations, setReservations] = useState<Reservation[]>([]);
     const [clinics, setClinics] = useState<Clinic[]>([]);
@@ -91,6 +103,7 @@ const UserReservations = () => {
     const [cancellingId, setCancellingId] = useState<number | null>(null);
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [showBranches, setShowBranches] = useState(false);
+    const [bookedSlots, setBookedSlots] = useState<string[]>([]);
 
     const token = localStorage.getItem('hivet_token');
     const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
@@ -113,6 +126,8 @@ const UserReservations = () => {
                 zip: c.zip,
                 phone: c.phone,
                 clinic_name: c.name,
+                lat: c.lat,
+                lng: c.lng,
                 services: c.services,
                 hours: c.hours,
                 special_hours: c.special_hours,
@@ -128,6 +143,8 @@ const UserReservations = () => {
             zip: c.zip,
             phone: b.phone || c.phone,
             clinic_name: c.name,
+            lat: b.lat,
+            lng: b.lng,
             services: c.services,
             hours: c.hours,
             special_hours: c.special_hours,
@@ -151,6 +168,66 @@ const UserReservations = () => {
     // Reset show-branches when a different clinic/branch is selected
     useEffect(() => { setShowBranches(false); }, [form.clinic_option_key]);
 
+    // Fetch booked slots for selected clinic and date
+    useEffect(() => {
+        if (form.clinic_id && form.date) {
+            fetch(`${API}/api/reservations/booked?clinic_id=${form.clinic_id}&date=${form.date}`, { headers: authHeaders })
+                .then(res => res.json())
+                .then(data => setBookedSlots(data.booked_times || []))
+                .catch(() => setBookedSlots([]));
+        } else {
+            setBookedSlots([]);
+        }
+    }, [form.clinic_id, form.date]);
+
+    // Clear selected time if it becomes unavailable
+    useEffect(() => {
+        if (!form.time || !form.date || !form.clinic_id) return;
+        
+        const isStillAvailable = BASE_TIMES.filter(t => {
+            const isBooked = bookedSlots.includes(t);
+            let isPast = false;
+            try {
+                const [hourMin, meridiem] = t.split(' ');
+                const [h, m] = hourMin.split(':');
+                let hourInt = parseInt(h);
+                if (meridiem === 'PM' && hourInt !== 12) hourInt += 12;
+                if (meridiem === 'AM' && hourInt === 12) hourInt = 0;
+                const slotDate = new Date(form.date);
+                slotDate.setHours(hourInt, parseInt(m), 0, 0);
+                isPast = slotDate.getTime() < new Date().getTime();
+            } catch { return false; }
+            
+            let outsideHours = false;
+            if (todayHours && todayHours.is_open) {
+                try {
+                    const parseT = (s: string) => {
+                        const [hm, mer] = s.split(' ');
+                        let [h, min] = hm.split(':').map(Number);
+                        if (mer === 'PM' && h !== 12) h += 12;
+                        if (mer === 'AM' && h === 12) h = 0;
+                        return h * 60 + min;
+                    };
+                    const slotMins = parseT(t);
+                    const openMins = parseT(todayHours.open_time);
+                    const closeMins = parseT(todayHours.close_time);
+                    if (slotMins < openMins || slotMins >= closeMins) outsideHours = true;
+                    if (todayHours.break_start && todayHours.break_end) {
+                        const bStart = parseT(todayHours.break_start);
+                        const bEnd = parseT(todayHours.break_end);
+                        if (slotMins >= bStart && slotMins < bEnd) outsideHours = true;
+                    }
+                } catch { outsideHours = true; }
+            } else {
+                outsideHours = true;
+            }
+            return !isPast && !isBooked && !outsideHours;
+        }).includes(form.time);
+
+        if (!isStillAvailable) {
+            setForm(f => ({ ...f, time: '' }));
+        }
+    }, [form.date, form.clinic_id, todayHours, bookedSlots]);
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
@@ -218,6 +295,17 @@ const UserReservations = () => {
         }
     };
 
+    const handleDeleteReservation = async (dbId: number) => {
+        try {
+            const res = await fetch(`${API}/api/reservations/${dbId}`, { method: 'DELETE', headers: authHeaders });
+            if (!res.ok) throw new Error();
+            setReservations(prev => prev.filter(r => r.db_id !== dbId));
+            showToast('Reservation removed permanently.');
+        } catch {
+            showToast('Could not remove this reservation.', 'error');
+        }
+    };
+
     return (
         <DashboardLayout title="Reservations" hideHeader={showModal}>
             <div className="space-y-8">
@@ -236,10 +324,14 @@ const UserReservations = () => {
                 {/* Header Bar */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                     <p className="text-sm font-medium text-accent-brown/50">{reservations.length} reservation{reservations.length !== 1 ? 's' : ''} total</p>
-                    <button onClick={() => setShowModal(true)}
-                        className="flex items-center gap-2 bg-brand-dark text-white px-6 py-3 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors shadow-lg shadow-brand-dark/20">
+                    <motion.button 
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setShowModal(true)}
+                        className="flex items-center gap-2 bg-brand-dark text-white px-6 py-3 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-brand-dark/20 cursor-pointer"
+                    >
                         <Plus className="w-4 h-4" /> New Reservation
-                    </button>
+                    </motion.button>
                 </div>
 
                 {/* Loading */}
@@ -261,7 +353,7 @@ const UserReservations = () => {
                             <h3 className="font-black text-accent-brown text-2xl tracking-tight mb-2">No reservations yet</h3>
                             <p className="text-accent-brown/50 text-sm font-medium">Book your first appointment and we'll take care of the rest.</p>
                         </div>
-                        <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-brand-dark text-white px-8 py-3 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors shadow-lg shadow-brand-dark/20">
+                        <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-brand-dark text-white px-8 py-3 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors shadow-lg shadow-brand-dark/20 cursor-pointer">
                             <Plus className="w-4 h-4" /> Book Now
                         </button>
                     </div>
@@ -296,11 +388,16 @@ const UserReservations = () => {
                                 <Clock className="w-4 h-4 text-brand" /> {activeReservation.time}
                             </div>
                             {(activeReservation.status === 'Pending' || activeReservation.status === 'Confirmed') && (
-                                <button onClick={() => handleCancel(activeReservation.db_id)} disabled={cancellingId === activeReservation.db_id}
-                                    className="w-full bg-red-500/20 text-red-300 border border-red-500/30 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center gap-2">
+                                <motion.button 
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => handleCancel(activeReservation.db_id)} 
+                                    disabled={cancellingId === activeReservation.db_id}
+                                    className="w-full bg-red-500/20 text-red-300 border border-red-500/30 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                >
                                     {cancellingId === activeReservation.db_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
                                     Cancel Reservation
-                                </button>
+                                </motion.button>
                             )}
                         </div>
                         <div className="absolute top-[-20%] left-[-10%] w-96 h-96 bg-brand/20 rounded-full blur-[80px]" />
@@ -313,8 +410,15 @@ const UserReservations = () => {
                         <h3 className="text-xl font-black text-accent-brown tracking-tighter mb-6">All Reservations</h3>
                         <div className="space-y-4">
                             {reservations.map((res, i) => (
-                                <motion.div key={res.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.08 }}
-                                    className="bg-white rounded-2xl p-4 sm:p-6 shadow-xl shadow-accent-brown/5 border border-white hover:border-brand/20 transition-all flex flex-col md:flex-row md:items-center justify-between gap-6 group">
+                                <motion.div 
+                                    key={res.id} 
+                                    initial={{ opacity: 0, x: -20 }} 
+                                    animate={{ opacity: 1, x: 0 }} 
+                                    whileHover={{ scale: 1.01, borderColor: '#ff9f1c', boxShadow: '0 20px 25px -5px rgba(61, 43, 31, 0.05)' }}
+                                    whileTap={{ scale: 0.99 }}
+                                    transition={{ delay: i * 0.08 }}
+                                    className="bg-white rounded-2xl p-4 sm:p-6 shadow-xl shadow-accent-brown/5 border border-white transition-all flex flex-col md:flex-row md:items-center justify-between gap-6 group cursor-pointer"
+                                >
                                     <div className="flex items-start gap-4">
                                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${STATUS_STYLES[res.status]}`}>
                                             <Package className="w-6 h-6" />
@@ -332,15 +436,36 @@ const UserReservations = () => {
                                         </div>
                                     </div>
                                     <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center border-t md:border-t-0 md:border-l border-accent-brown/10 pt-4 md:pt-0 md:pl-6 gap-3">
-                                        <p className="font-black text-accent-brown text-lg">₱{res.total.toFixed(2)}</p>
+                                        <div className="flex items-center gap-2">
+                                            {res.status === 'Cancelled' && (
+                                                <motion.button
+                                                    whileHover={{ scale: 1.1, rotate: 90 }}
+                                                    whileTap={{ scale: 0.9 }}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDeleteReservation(res.db_id);
+                                                    }}
+                                                    className="w-7 h-7 bg-brand-dark text-white rounded-full flex items-center justify-center hover:bg-black transition-all shadow-md cursor-pointer"
+                                                    title="Remove reservation"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </motion.button>
+                                            )}
+                                            <p className="font-black text-accent-brown text-lg">₱{res.total.toFixed(2)}</p>
+                                        </div>
                                         {(res.status === 'Pending' || res.status === 'Confirmed') ? (
-                                            <button onClick={() => handleCancel(res.db_id)} disabled={cancellingId === res.db_id}
-                                                className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-600 transition-colors">
+                                            <motion.button 
+                                                whileHover={{ scale: 1.1 }}
+                                                whileTap={{ scale: 0.9 }}
+                                                onClick={() => handleCancel(res.db_id)} 
+                                                disabled={cancellingId === res.db_id}
+                                                className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-600 transition-all cursor-pointer"
+                                            >
                                                 {cancellingId === res.db_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
                                                 Cancel
-                                            </button>
+                                            </motion.button>
                                         ) : (
-                                            <div className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-brand-dark group-hover:text-brand transition-colors">
+                                            <div className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-brand-dark group-hover:text-brand transition-colors cursor-pointer">
                                                 View Details <ChevronRight className="w-3 h-3" />
                                             </div>
                                         )}
@@ -355,7 +480,7 @@ const UserReservations = () => {
                 <AnimatePresence>
                     {showModal && (
                         <>
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowModal(false)} className="fixed inset-0 bg-accent-brown/20 backdrop-blur-sm z-50" />
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowModal(false)} className="fixed inset-0 bg-accent-brown/20 backdrop-blur-sm z-50 cursor-pointer" />
                             <motion.div initial={{ scale: 0.95, opacity: 0, y: 100 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 100 }}
                                 className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={e => e.stopPropagation()}>
                                 <div className="bg-white rounded-t-[2rem] sm:rounded-[2rem] p-0 w-full max-w-4xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -364,9 +489,14 @@ const UserReservations = () => {
                                             <h2 className="text-xl sm:text-2xl font-black text-accent-brown tracking-tighter">New Reservation</h2>
                                             <p className="text-[10px] sm:text-xs font-black text-accent-brown/50 mt-1 uppercase tracking-widest">Book an appointment</p>
                                         </div>
-                                        <button onClick={() => setShowModal(false)} className="w-10 h-10 bg-white hover:bg-red-50 text-accent-brown/50 hover:text-red-500 rounded-xl flex items-center justify-center transition-colors shadow-sm shrink-0">
+                                        <motion.button 
+                                            whileHover={{ scale: 1.1, rotate: 90 }}
+                                            whileTap={{ scale: 0.9 }}
+                                            onClick={() => setShowModal(false)} 
+                                            className="w-10 h-10 bg-white hover:bg-red-50 text-accent-brown/50 hover:text-red-500 rounded-xl flex items-center justify-center transition-all shadow-sm shrink-0 cursor-pointer"
+                                        >
                                             <X className="w-5 h-5" />
-                                        </button>
+                                        </motion.button>
                                     </div>
 
                                     <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 xs:p-6 sm:p-8 no-scrollbar">
@@ -450,7 +580,60 @@ const UserReservations = () => {
                                                         <CustomDropdown
                                                             label="Time"
                                                             value={form.time}
-                                                            options={TIMES}
+                                                            options={BASE_TIMES.filter(t => {
+                                                                let isPast = false;
+                                                                if (form.date) {
+                                                                    try {
+                                                                        const [hourMin, meridiem] = t.split(' ');
+                                                                        const [h, m] = hourMin.split(':');
+                                                                        let hourInt = parseInt(h);
+                                                                        if (meridiem === 'PM' && hourInt !== 12) hourInt += 12;
+                                                                        if (meridiem === 'AM' && hourInt === 12) hourInt = 0;
+                                                                        const slotDate = new Date(form.date);
+                                                                        slotDate.setHours(hourInt, parseInt(m), 0, 0);
+                                                                        isPast = slotDate.getTime() < new Date().getTime();
+                                                                    } catch { /* ignore */ }
+                                                                }
+                                                                
+                                                                let outsideHours = false;
+                                                                if (todayHours && todayHours.is_open) {
+                                                                    try {
+                                                                        const parseT = (s: string) => {
+                                                                            const [hm, mer] = s.split(' ');
+                                                                            let [h, min] = hm.split(':').map(Number);
+                                                                            if (mer === 'PM' && h !== 12) h += 12;
+                                                                            if (mer === 'AM' && h === 12) h = 0;
+                                                                            return h * 60 + min;
+                                                                        };
+                                                                        const slotMins = parseT(t);
+                                                                        const openMins = parseT(todayHours.open_time);
+                                                                        const closeMins = parseT(todayHours.close_time);
+                                                                            
+                                                                        if (slotMins < openMins || slotMins >= closeMins) outsideHours = true;
+                                                                        
+                                                                        if (todayHours.break_start && todayHours.break_end) {
+                                                                            const bStart = parseT(todayHours.break_start);
+                                                                            const bEnd = parseT(todayHours.break_end);
+                                                                            if (slotMins >= bStart && slotMins < bEnd) outsideHours = true;
+                                                                        }
+                                                                    } catch { /* ignore */ }
+                                                                } else if (todayHours && !todayHours.is_open) {
+                                                                    outsideHours = true;
+                                                                } else if (!todayHours) {
+                                                                    outsideHours = true;
+                                                                }
+
+                                                                // HIDE IF past or outside hours, but KEEP if booked (it will be disabled below)
+                                                                return !isPast && !outsideHours;
+                                                            }).map(t => {
+                                                                const isBooked = bookedSlots.includes(t);
+                                                                return {
+                                                                    label: t,
+                                                                    value: t,
+                                                                    disabled: isBooked,
+                                                                    badge: isBooked ? 'Booked' : undefined
+                                                                };
+                                                            })}
                                                             onChange={val => setForm(f => ({ ...f, time: val }))}
                                                         />
                                                     </div>
@@ -518,12 +701,44 @@ const UserReservations = () => {
                                                                 </div>
                                                             </motion.div>
 
+                                                            {/* Street View Preview */}
+                                                            {selectedOption.lat && selectedOption.lng && (
+                                                                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                                                                    className="bg-white border-2 border-accent-peach/20 rounded-2xl p-4 shadow-xl shadow-accent-brown/[0.03] space-y-4 group overflow-hidden relative">
+                                                                    <div className="flex items-center justify-between mb-2">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="w-7 h-7 bg-brand/10 rounded-lg flex items-center justify-center">
+                                                                                <MapPin className="w-4 h-4 text-brand" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <h4 className="text-[10px] font-black uppercase tracking-widest text-accent-brown leading-tight">Live Street View</h4>
+                                                                                <p className="text-[8px] font-bold text-accent-brown/40 uppercase">Destination Visualization</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <button 
+                                                                            onClick={() => window.open(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${selectedOption.lat},${selectedOption.lng}`, '_blank')}
+                                                                            className="text-[9px] font-black uppercase tracking-widest text-brand-dark hover:text-brand transition-colors flex items-center gap-1.5 cursor-pointer"
+                                                                        >
+                                                                            Full Panora <Plus className="w-3 h-3" />
+                                                                        </button>
+                                                                    </div>
+                                                                    <div className="w-full aspect-[2/1] rounded-xl overflow-hidden bg-accent-peach/10 relative border border-accent-peach/10 group-hover:border-brand/30 transition-colors">
+                                                                        <img 
+                                                                            src={`https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${selectedOption.lat},${selectedOption.lng}&heading=151.78&pitch=-0.76&key=${MAPS_API_KEY}`}
+                                                                            alt="Clinic Street View"
+                                                                            className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700 ease-out"
+                                                                        />
+                                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                                                                    </div>
+                                                                </motion.div>
+                                                            )}
+
                                                             {/* See more branches */}
                                                             {otherBranches.length > 0 && (
                                                                 <div className="space-y-2">
                                                                     <button type="button"
                                                                         onClick={() => setShowBranches(v => !v)}
-                                                                        className="w-full text-center text-[9px] font-black uppercase tracking-widest text-accent-brown/30 hover:text-brand-dark transition-colors py-1 flex items-center justify-center gap-2"
+                                                                        className="w-full text-center text-[9px] font-black uppercase tracking-widest text-accent-brown/30 hover:text-brand-dark transition-colors py-1 flex items-center justify-center gap-2 cursor-pointer"
                                                                     >
                                                                         <span>{showBranches ? 'Hide other branches' : `See ${otherBranches.length} other branch${otherBranches.length > 1 ? 'es' : ''}`}</span>
                                                                         <motion.span animate={{ rotate: showBranches ? 180 : 0 }} className="inline-block">▾</motion.span>
@@ -546,10 +761,16 @@ const UserReservations = () => {
                                                                                 special_hours: selectedClinic!.special_hours,
                                                                             };
                                                                             return (
-                                                                                <motion.button key={b.id} type="button"
-                                                                                    initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                                                                                <motion.button 
+                                                                                    key={b.id} 
+                                                                                    type="button"
+                                                                                    whileHover={{ scale: 1.02, backgroundColor: 'rgba(255, 159, 28, 0.05)', borderColor: 'rgba(255, 159, 28, 0.2)' }}
+                                                                                    whileTap={{ scale: 0.98 }}
+                                                                                    initial={{ opacity: 0, y: -8 }} 
+                                                                                    animate={{ opacity: 1, y: 0 }} 
+                                                                                    exit={{ opacity: 0, y: -8 }}
                                                                                     onClick={() => setForm(f => ({ ...f, clinic_option_key: branchOpt.key, clinic_id: branchOpt.clinic_id, service: '', service_id: 0 }))}
-                                                                                    className="w-full text-left bg-accent-peach/5 hover:bg-brand/5 border border-transparent hover:border-brand/20 rounded-2xl px-4 py-3 flex flex-col gap-0.5 transition-all"
+                                                                                    className="w-full text-left bg-accent-peach/5 border border-transparent rounded-2xl px-4 py-3 flex flex-col gap-0.5 transition-all cursor-pointer"
                                                                                 >
                                                                                     <div className="flex items-center gap-2">
                                                                                         <span className="text-xs font-black text-accent-brown capitalize">{b.address_line1?.toLowerCase() || b.name}</span>
@@ -609,11 +830,16 @@ const UserReservations = () => {
                                                 <span className="text-[10px] font-black text-brand-dark uppercase tracking-widest">Est. Total</span>
                                                 <span className="font-black text-brand-dark text-xl">₱{estimatedTotal.toFixed(2)}</span>
                                             </div>
-                                            <button type="submit" disabled={submitting || !form.service || !form.pet_name || !form.date || !form.clinic_id}
-                                                className="w-full sm:w-auto px-10 bg-[#f97316] text-white py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-[#ea580c] transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#f97316]/20 disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:max-w-[300px]">
+                                            <motion.button 
+                                                type="submit" 
+                                                whileHover={{ scale: 1.05 }}
+                                                whileTap={{ scale: 0.95 }}
+                                                disabled={submitting || !form.service || !form.pet_name || !form.date || !form.clinic_id || !!(todayHours && !todayHours.is_open)}
+                                                className="w-full sm:w-auto px-10 bg-brand-dark text-white py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-dark/20 disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:max-w-[300px] cursor-pointer"
+                                            >
                                                 {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                                                 Confirm Reservation
-                                            </button>
+                                            </motion.button>
                                         </div>
                                     </form>
                                 </div>

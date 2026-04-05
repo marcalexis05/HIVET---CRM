@@ -1,7 +1,7 @@
 import psycopg2
 from passlib.hash import pbkdf2_sha256
 
-DATABASE_URL = "postgresql://postgres:tabios13@localhost:5432/hivet"
+DATABASE_URL = "postgresql://postgres:0428@localhost:5432/hivet"
 
 try:
     conn = psycopg2.connect(DATABASE_URL)

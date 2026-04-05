@@ -92,20 +92,24 @@ const UserDashboard = () => {
                         <h2 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tighter mb-6 sm:mb-8">Welcome back,<br />{firstName}!</h2>
 
                         <div className="flex flex-col xs:flex-row items-center gap-3 sm:gap-4 mt-8 sm:mt-10">
-                            <button
+                            <motion.button
+                                whileHover={{ scale: 1.05, y: -2 }}
+                                whileTap={{ scale: 0.95 }}
                                 onClick={() => navigate('/dashboard/user/catalog')}
-                                className="w-full xs:w-auto px-5 sm:px-8 py-3.5 sm:py-4 bg-brand hover:bg-white text-white hover:text-brand-dark rounded-xl sm:rounded-2xl font-black text-[8px] sm:text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-brand/20 flex items-center justify-center gap-2"
+                                className="w-full xs:w-auto px-5 sm:px-8 py-3.5 sm:py-4 bg-brand hover:bg-white text-white hover:text-brand-dark rounded-xl sm:rounded-2xl font-black text-[8px] sm:text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-brand/20 flex items-center justify-center gap-2 cursor-pointer"
                             >
                                 <ShoppingBag className="w-3 h-3 sm:w-4 sm:h-4" />
                                 Browse Catalog
-                            </button>
-                            <button
+                            </motion.button>
+                            <motion.button
+                                whileHover={{ scale: 1.05, y: -2 }}
+                                whileTap={{ scale: 0.95 }}
                                 onClick={() => navigate('/dashboard/user/account')}
-                                className="w-full xs:w-auto px-5 sm:px-8 py-3.5 sm:py-4 bg-white/10 hover:bg-white/20 text-white rounded-xl sm:rounded-2xl font-black text-[8px] sm:text-[10px] uppercase tracking-widest transition-all backdrop-blur-md flex items-center justify-center gap-2"
+                                className="w-full xs:w-auto px-5 sm:px-8 py-3.5 sm:py-4 bg-white/10 hover:bg-white/20 text-white rounded-xl sm:rounded-2xl font-black text-[8px] sm:text-[10px] uppercase tracking-widest transition-all backdrop-blur-md flex items-center justify-center gap-2 cursor-pointer"
                             >
                                 <Award className="w-3 h-3 sm:w-4 sm:h-4" />
                                 View Profile
-                            </button>
+                            </motion.button>
                         </div>
                     </div>
                     {/* Decorative blobs */}
@@ -120,8 +124,10 @@ const UserDashboard = () => {
                         <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.2 }}
-                            className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col justify-between group cursor-pointer hover:border-brand/20 transition-all"
+                            whileHover={{ scale: 1.02, y: -5, borderColor: 'var(--color-brand)' }}
+                            whileTap={{ scale: 0.98 }}
+                            transition={{ delay: 0.2, type: "spring", stiffness: 400, damping: 25 }}
+                            className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col justify-between group cursor-pointer transition-all"
                             onClick={() => navigate('/dashboard/user/loyalty')}
                         >
                             <div className="flex items-start justify-between mb-8">
@@ -152,8 +158,10 @@ const UserDashboard = () => {
                         <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.3 }}
-                            className="bg-white rounded-3xl sm:rounded-[2rem] p-5 xs:p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col justify-between group cursor-pointer hover:border-brand/20 transition-all"
+                            whileHover={{ scale: 1.02, y: -5, borderColor: 'var(--color-brand)' }}
+                            whileTap={{ scale: 0.98 }}
+                            transition={{ delay: 0.3, type: "spring", stiffness: 400, damping: 25 }}
+                            className="bg-white rounded-3xl sm:rounded-[2rem] p-5 xs:p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col justify-between group cursor-pointer transition-all"
                             onClick={() => navigate('/dashboard/user/orders')}
                         >
                             {stats?.recent_order ? (
@@ -186,12 +194,14 @@ const UserDashboard = () => {
                                 <div className="flex flex-col items-center justify-center h-full text-center py-4">
                                     <ShoppingBag className="w-10 h-10 text-accent-brown/10 mb-2" />
                                     <p className="text-sm font-bold text-accent-brown/40 uppercase tracking-widest">No recent orders</p>
-                                    <button
+                                    <motion.button
+                                        whileHover={{ scale: 1.1 }}
+                                        whileTap={{ scale: 0.9 }}
                                         onClick={(e) => { e.stopPropagation(); navigate('/dashboard/user/catalog'); }}
-                                        className="mt-4 text-xs font-black text-brand-dark hover:text-brand transition-colors"
+                                        className="mt-4 text-xs font-black text-brand-dark hover:text-brand transition-colors cursor-pointer"
                                     >
                                         START SHOPPING
-                                    </button>
+                                    </motion.button>
                                 </div>
                             )}
                         </motion.div>
@@ -219,7 +229,12 @@ const UserDashboard = () => {
                         <div className="space-y-4">
                             {stats?.alerts && stats.alerts.length > 0 ? (
                                 stats.alerts.map((alert) => (
-                                    <div key={alert.id} className="bg-white p-4 rounded-2xl shadow-sm cursor-pointer hover:shadow-md transition-shadow relative overflow-hidden group">
+                                    <motion.div 
+                                        key={alert.id} 
+                                        whileHover={{ scale: 1.03, x: 4 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        className="bg-white p-4 rounded-2xl shadow-sm cursor-pointer hover:shadow-md transition-all relative overflow-hidden group"
+                                    >
                                         <div className={`absolute left-0 top-0 bottom-0 w-1 ${alert.type === 'System' ? 'bg-brand-dark' : 'bg-orange-400'}`}></div>
                                         <div className="pl-3">
                                             <p className={`text-xs font-black uppercase tracking-widest ${alert.type === 'System' ? 'text-brand-dark' : 'text-orange-500'} mb-1 flex items-center gap-2`}>
@@ -228,7 +243,7 @@ const UserDashboard = () => {
                                             <p className="font-bold text-sm text-accent-brown mb-1 group-hover:text-brand-dark transition-colors">{alert.title}</p>
                                             <p className="text-[10px] text-accent-brown/40 font-medium line-clamp-2">{alert.desc}</p>
                                         </div>
-                                    </div>
+                                    </motion.div>
                                 ))
                             ) : (
                                 <div className="text-center py-10">

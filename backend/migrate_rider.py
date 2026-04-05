@@ -1,6 +1,6 @@
 import psycopg2
 
-DATABASE_URL = "postgresql://postgres:tabios13@localhost:5432/hivet"
+DATABASE_URL = "postgresql://postgres:0428@localhost:5432/hivet"
 
 def migrate():
     try:

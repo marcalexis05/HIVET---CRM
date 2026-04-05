@@ -1,11 +1,11 @@
-
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Tag, Star, Search, Filter as FilterIcon, Award, ArrowUp } from 'lucide-react';
+import { ShoppingCart, Tag, Star, Search, Filter as FilterIcon, Award, ArrowUp, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useCart } from '../../context/CartContext';
-import { Loader2 } from 'lucide-react';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const UserCatalog = () => {
     const navigate = useNavigate();
@@ -29,7 +29,7 @@ const UserCatalog = () => {
     const fetchProducts = async () => {
         setLoading(true);
         try {
-            const resp = await fetch('http://localhost:8000/api/catalog');
+            const resp = await fetch(`${API}/api/catalog`);
             if (resp.ok) {
                 const data = await resp.json();
                 setProducts(data);
@@ -68,7 +68,7 @@ const UserCatalog = () => {
                         <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/30 group-focus-within:text-brand transition-colors" />
                         <input
                             type="text"
-                            placeholder="Search catalog..."
+                            placeholder="Search catalog or rewards..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full pl-14 pr-6 py-4 bg-accent-peach/20 rounded-2xl border-2 border-transparent focus:border-brand/30 outline-none transition-all font-medium text-accent-brown placeholder:text-accent-brown/30"
@@ -80,34 +80,38 @@ const UserCatalog = () => {
                         {/* Pet Filter */}
                         <div className="flex bg-accent-peach/20 p-1.5 rounded-2xl border border-transparent">
                             {['All', 'Cats', 'Dogs'].map((cat) => (
-                                <button
+                                <motion.button
                                     key={cat}
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
                                     onClick={() => setPetFilter(cat as any)}
-                                    className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 ${petFilter === cat
-                                        ? 'bg-brand text-white shadow-md'
-                                        : 'text-accent-brown/60 hover:text-accent-brown hover:bg-white/50'
+                                    className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 cursor-pointer ${petFilter === cat
+                                        ? 'bg-brand-dark text-white shadow-xl shadow-brand-dark/20 border-2 border-brand-dark'
+                                        : 'bg-brand-dark/10 text-brand-dark hover:bg-brand-dark/20 border-2 border-transparent'
                                         }`}
                                 >
                                     {cat === 'Cats' && <span>🐱</span>}
                                     {cat === 'Dogs' && <span>🐶</span>}
                                     {cat}
-                                </button>
+                                </motion.button>
                             ))}
                         </div>
 
                         {/* Type Filter */}
                         <div className="grid grid-cols-2 sm:flex bg-accent-peach/20 p-1.5 rounded-2xl border border-transparent w-full sm:w-auto gap-1">
                             {['All', 'Food', 'Accessories', 'Vitamins'].map((type) => (
-                                <button
+                                <motion.button
                                     key={type}
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
                                     onClick={() => setTypeFilter(type as any)}
-                                    className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap flex-1 sm:flex-none justify-center ${typeFilter === type
-                                        ? 'bg-accent-brown text-white shadow-md'
-                                        : 'text-accent-brown/60 hover:text-accent-brown hover:bg-white/50'
+                                    className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap flex-1 sm:flex-none justify-center cursor-pointer ${typeFilter === type
+                                        ? 'bg-brand-dark text-white shadow-xl shadow-brand-dark/20 border-2 border-brand-dark'
+                                        : 'bg-brand-dark/10 text-brand-dark hover:bg-brand-dark/20 border-2 border-transparent'
                                         }`}
                                 >
                                     {type}
-                                </button>
+                                </motion.button>
                             ))}
                         </div>
                     </div>
@@ -125,11 +129,11 @@ const UserCatalog = () => {
                     )}
                 </div>
 
-                {/* Product Grid */}
+                {/* Grid */}
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-40">
                         <Loader2 className="w-10 h-10 animate-spin text-brand" />
-                        <p className="font-bold text-sm tracking-widest uppercase">Loading High-Quality Catalog...</p>
+                        <p className="font-bold text-sm tracking-widest uppercase">Fetching Latest Items...</p>
                     </div>
                 ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -141,20 +145,22 @@ const UserCatalog = () => {
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.95 }}
+                                whileHover={{ scale: 1.02, y: -8, borderColor: '#ff9f1c', boxShadow: '0 25px 50px -12px rgba(61, 43, 31, 0.15)' }}
+                                whileTap={{ scale: 0.98 }}
                                 transition={{ duration: 0.3 }}
                                 onClick={() => navigate(`/dashboard/user/catalog/${p.id}`)}
-                                className="group flex flex-col bg-white rounded-3xl sm:rounded-[2rem] p-4 sm:p-5 shadow-xl shadow-accent-brown/5 border border-white hover:border-brand/20 transition-all relative cursor-pointer"
+                                className="group flex flex-col bg-white rounded-3xl sm:rounded-[2rem] p-4 sm:p-5 shadow-xl shadow-accent-brown/5 border border-white cursor-pointer transition-all relative"
                             >
                                 {/* Active Tag */}
                                 <div className="absolute top-5 left-5 z-20">
-                                    <div className="bg-white/90 backdrop-blur px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1.5 border border-brand/10">
+                                    <div className="bg-white/90 text-accent-brown backdrop-blur px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1.5 border border-brand/10">
                                         <Tag className="w-3 h-3 text-brand-dark" />
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-accent-brown">{p.tag}</span>
+                                        <span className="text-[9px] font-black uppercase tracking-widest">{p.tag}</span>
                                     </div>
                                 </div>
 
                                 {/* Image */}
-                                <div className="w-full aspect-square rounded-[1.5rem] mb-4 bg-accent-peach/10 relative overflow-hidden flex items-center justify-center p-4">
+                                <div className="w-full aspect-square bg-accent-peach/10 rounded-[1.5rem] mb-4 relative overflow-hidden flex items-center justify-center p-4">
                                     <img
                                         src={p.image}
                                         alt={p.name}
@@ -165,7 +171,7 @@ const UserCatalog = () => {
                                 {/* Content */}
                                 <div className="flex-1 flex flex-col">
                                     <div className="flex items-center justify-between mb-2">
-                                        <p className="text-[9px] font-black text-brand-dark uppercase tracking-widest">{p.type} • {p.category}</p>
+                                        <p className="text-[9px] font-black text-brand-dark uppercase tracking-widest">{p.type} {p.category && `• ${p.category}`}</p>
                                         <div className="flex gap-0.5">
                                             {[...Array(5)].map((_, i) => (
                                                 <Star key={i} className={`w-2.5 h-2.5 ${i < p.stars ? 'text-brand fill-brand' : 'text-accent-brown/10'}`} />
@@ -181,21 +187,28 @@ const UserCatalog = () => {
                                     <div className="mt-auto pt-4 border-t border-accent-brown/5 flex items-center justify-between gap-3">
                                         <div>
                                             <p className="font-black text-accent-brown tracking-tighter text-sm">₱{p.price}</p>
-                                            <p className={`text-[9px] font-black uppercase tracking-widest mt-0.5 ${p.stock > 0 ? "text-green-600" : "text-red-500"}`}>
-                                                {p.stock > 0 ? `${p.stock} In Stock` : 'Out of Stock'}
-                                            </p>
+                                            {p.stock !== undefined && (
+                                                <p className={`text-[9px] font-black uppercase tracking-widest mt-0.5 ${p.stock > 0 ? "text-green-600" : "text-red-500"}`}>
+                                                    {p.stock > 0 ? `${p.stock} In Stock` : 'Out of Stock'}
+                                                </p>
+                                            )}
                                         </div>
+                                        
                                         <div className="flex items-center gap-1 text-brand">
                                             <Award className="w-3 h-3" />
                                             <span className="text-[9px] font-black uppercase tracking-widest">+{p.loyalty_points || 0} Pts</span>
                                         </div>
+
                                         <div className="flex items-center gap-2 relative z-10">
-                                            <button
+                                            <motion.button
                                                 disabled={p.stock <= 0}
+                                                whileHover={p.stock > 0 ? { scale: 1.05 } : {}}
+                                                whileTap={p.stock > 0 ? { scale: 0.95 } : {}}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     addToCart({
                                                         id: p.id,
+                                                        business_id: p.business_id,
                                                         name: p.name,
                                                         price: p.price,
                                                         image: p.image,
@@ -208,14 +221,17 @@ const UserCatalog = () => {
                                                 className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg whitespace-nowrap ${p.stock > 0 ? "bg-brand text-white hover:bg-brand-dark shadow-brand/20" : "bg-accent-brown/20 text-accent-brown/40 cursor-not-allowed"}`}
                                             >
                                                 {p.stock > 0 ? "Buy Now" : "Sold Out"}
-                                            </button>
-                                            <button
+                                            </motion.button>
+                                            <motion.button
                                                 disabled={p.stock <= 0}
+                                                whileHover={p.stock > 0 ? { scale: 1.1, rotate: 5 } : {}}
+                                                whileTap={p.stock > 0 ? { scale: 0.9, rotate: -5 } : {}}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     triggerFlyAnimation(e, p.image);
                                                     addToCart({
                                                         id: p.id,
+                                                        business_id: p.business_id,
                                                         name: p.name,
                                                         price: p.price,
                                                         image: p.image,
@@ -227,7 +243,7 @@ const UserCatalog = () => {
                                                 className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all shadow-sm ${p.stock > 0 ? "bg-accent-peach/30 text-brand-dark hover:bg-brand-dark hover:text-white" : "bg-accent-brown/10 text-accent-brown/40 cursor-not-allowed"}`}
                                             >
                                                 <ShoppingCart className="w-4 h-4" />
-                                            </button>
+                                            </motion.button>
                                         </div>
                                     </div>
                                 </div>

@@ -91,7 +91,7 @@ const AdminRiders = () => {
                     </div>
 
                     <div className="flex flex-wrap justify-center md:items-center gap-2 w-full md:w-auto pb-2 md:pb-0">
-                        {['All Fleet', 'Active', 'Pending', 'Inactive'].map((tab, i) => (
+                        {['All Fleet', 'Active', 'Pending', 'Inactive'].map((tab, _i) => (
                             <button 
                                 key={tab} 
                                 onClick={() => setActiveTab(tab)}

@@ -7,6 +7,9 @@ import { useCart } from '../context/CartContext';
 import { LogOut, LayoutDashboard, ShoppingBag, Users, Settings, Bell, Calendar, Award, ShoppingCart, X, Plus, Minus, CreditCard, BarChart2, UserCircle, Menu, Store, Truck } from 'lucide-react';
 import { Logo } from './Logo';
 
+const MotionLink = motion(Link);
+const MotionNavLink = motion(NavLink);
+
 interface DashboardLayoutProps {
     children: ReactNode;
     title: string;
@@ -152,7 +155,12 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                 <nav className="bg-white/80 backdrop-blur-md border-b border-accent-brown/5 shadow-xl shadow-accent-brown/5 fixed top-0 left-0 right-0 z-50 h-20 sm:h-24">
                 <div className="max-w-[1920px] mx-auto px-4 sm:px-6 h-full flex items-center justify-between gap-4">
                     {/* Brand */}
-                    <Link to={`/dashboard/${basePath}`} className="flex items-center gap-2 sm:gap-3 shrink-0 hover:opacity-80 transition-opacity">
+                    <MotionLink 
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        to={`/dashboard/${basePath}`} 
+                        className="flex items-center gap-2 sm:gap-3 shrink-0 transition-opacity cursor-pointer"
+                    >
                         <div className="w-9 h-9 sm:w-11 sm:h-11 bg-white rounded-xl shadow-md shadow-brand/10 flex items-center justify-center p-1 shrink-0">
                             <Logo className="w-full h-full" />
                         </div>
@@ -166,19 +174,21 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                                  'Customer Portal'}
                             </p>
                         </div>
-                    </Link>
+                    </MotionLink>
 
                     {/* Desktop Navigation Links */}
                     <div className="hidden lg:flex items-center justify-center flex-1 gap-1">
                         {links.map((link) => (
-                            <NavLink
+                            <MotionNavLink
                                 key={link.name}
+                                whileHover={{ scale: 1.05, y: -2 }}
+                                whileTap={{ scale: 0.95 }}
                                 to={link.path}
                                 end={link.path === `/dashboard/${basePath}`}
                                 className={({ isActive }) => {
                                     const hasSearch = link.path.includes('?');
                                     const actuallyActive = hasSearch ? (location.pathname + location.search === link.path) : isActive;
-                                    return `flex items-center gap-2 px-3 xl:px-4 py-2.5 rounded-full font-black text-[9px] xl:text-[10px] uppercase tracking-widest transition-all ${actuallyActive
+                                    return `flex items-center gap-2 px-3 xl:px-4 py-2.5 rounded-full font-black text-[9px] xl:text-[10px] uppercase tracking-widest transition-all cursor-pointer ${actuallyActive
                                         ? 'bg-brand text-white shadow-lg shadow-brand/20'
                                         : 'text-accent-brown/50 hover:bg-accent-peach/50 hover:text-accent-brown'
                                     }`
@@ -186,16 +196,18 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                             >
                                 <link.icon className="w-3.5 h-3.5" />
                                 <span className="hidden xl:inline">{link.name}</span>
-                            </NavLink>
+                            </MotionNavLink>
                         ))}
                     </div>
 
                     {/* Right Actions */}
                     <div className="flex items-center gap-2 sm:gap-6 shrink-0">
                         {user?.role === 'user' && (
-                            <button
+                            <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
                                 onClick={() => setIsCartOpen(true)}
-                                className="relative w-10 h-10 sm:w-12 sm:h-12 bg-accent-peach/30 rounded-xl sm:rounded-2xl flex items-center justify-center text-accent-brown/60 hover:text-brand-dark hover:bg-accent-peach/60 transition-colors"
+                                className="relative w-10 h-10 sm:w-12 sm:h-12 bg-accent-peach/30 rounded-xl sm:rounded-2xl flex items-center justify-center text-accent-brown/60 hover:text-brand-dark hover:bg-accent-peach/60 transition-colors cursor-pointer"
                             >
                                 <ShoppingCart className="w-5 h-5" />
                                 {totalItems > 0 && (
@@ -203,19 +215,21 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                                         {totalItems}
                                     </span>
                                 )}
-                            </button>
+                            </motion.button>
                         )}
                         <div className="relative">
-                            <button
+                            <motion.button
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
                                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                                className={`relative w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-colors ${isNotificationsOpen ? 'bg-brand shadow-lg shadow-brand/20 text-white' : 'bg-accent-peach/30 text-accent-brown/60 hover:text-brand-dark hover:bg-accent-peach/60'
+                                className={`relative w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-colors cursor-pointer ${isNotificationsOpen ? 'bg-brand shadow-lg shadow-brand/20 text-white' : 'bg-accent-peach/30 text-accent-brown/60 hover:text-brand-dark hover:bg-accent-peach/60'
                                     }`}
                             >
                                 <Bell className="w-5 h-5" />
                                 {unreadCount > 0 && (
                                     <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-brand-dark rounded-full border-2 border-white"></span>
                                 )}
-                            </button>
+                            </motion.button>
 
                             <AnimatePresence>
                                 {isNotificationsOpen && (
@@ -236,7 +250,7 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                                                     <h3 className="font-black text-accent-brown uppercase tracking-widest text-[10px]">Alert Center</h3>
                                                 </div>
                                                 {unreadCount > 0 && (
-                                                    <button onClick={markAllAsRead} className="text-[9px] font-black text-brand-dark uppercase tracking-widest hover:underline bg-white px-3 py-1 rounded-full shadow-sm">Mark all read</button>
+                                                    <button onClick={markAllAsRead} className="text-[9px] font-black text-brand-dark uppercase tracking-widest hover:underline bg-white px-3 py-1 rounded-full shadow-sm cursor-pointer">Mark all read</button>
                                                 )}
                                             </div>
                                             <div className="max-h-[350px] sm:max-h-[450px] overflow-y-auto no-scrollbar">
@@ -251,8 +265,10 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                                                     </div>
                                                 ) : (
                                                     notifications.map((n) => (
-                                                        <div
+                                                        <motion.div
                                                             key={n.id}
+                                                            whileHover={{ x: 4, backgroundColor: 'rgba(255, 159, 28, 0.08)' }}
+                                                            whileTap={{ scale: 0.99 }}
                                                             onClick={() => {
                                                                 if (!n.read) markAsRead(n.id);
                                                                 if (n.link) navigate(n.link);
@@ -269,20 +285,22 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                                                                     <span className="font-black text-[11px] sm:text-xs text-accent-brown truncate">{n.title}</span>
                                                                     <div className="flex items-center gap-2">
                                                                         <span className="text-[8px] font-bold text-accent-brown/30 uppercase shrink-0">Just now</span>
-                                                                        <button 
+                                                                        <motion.button 
+                                                                            whileHover={{ scale: 1.2, rotate: 90 }}
+                                                                            whileTap={{ scale: 0.8 }}
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
                                                                                 deleteNotification(n.id);
                                                                             }}
-                                                                            className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-50 text-accent-brown/20 hover:text-red-500 transition-all"
+                                                                            className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-50 text-accent-brown/20 hover:text-red-500 transition-all cursor-pointer"
                                                                         >
                                                                             <X className="w-3 h-3" />
-                                                                        </button>
+                                                                        </motion.button>
                                                                     </div>
                                                                 </div>
                                                                 <p className="text-[10px] sm:text-[11px] text-accent-brown/60 leading-relaxed line-clamp-2 font-medium">{n.desc}</p>
                                                             </div>
-                                                        </div>
+                                                        </motion.div>
                                                     ))
                                                 )}
                                             </div>
@@ -290,7 +308,7 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                                                 <Link
                                                     to={`/dashboard/${basePath}/alerts`}
                                                     onClick={() => setIsNotificationsOpen(false)}
-                                                    className="inline-flex items-center gap-2 text-[10px] font-black text-brand-dark uppercase tracking-widest hover:gap-3 transition-all"
+                                                    className="inline-flex items-center gap-2 text-[10px] font-black text-brand-dark uppercase tracking-widest hover:gap-3 transition-all cursor-pointer"
                                                 >
                                                     View Alert Center <Plus className="w-3 h-3" />
                                                 </Link>
@@ -309,19 +327,21 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                                 <span className="text-[7px] font-black uppercase tracking-widest text-accent-brown/40 leading-none">Welcome back,</span>
                                 <span className="text-[10px] font-bold text-accent-brown truncate max-w-[120px]">{user?.name ?? user?.email}</span>
                             </div>
-                            <button
+                            <motion.button
+                                whileHover={{ scale: 1.1, rotate: -5 }}
+                                whileTap={{ scale: 0.9, rotate: 5 }}
                                 onClick={handleLogout}
                                 className="w-9 h-9 sm:w-11 sm:h-11 bg-red-50 text-red-500 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white hover:shadow-lg hover:shadow-red-500/20 transition-all cursor-pointer shrink-0"
                                 title="Log Out"
                             >
                                 <LogOut className="w-4.5 h-4.5 sm:w-5 h-5" />
-                            </button>
+                            </motion.button>
                         </div>
 
                         {/* Mobile Menu Toggle */}
                         <button
                             onClick={() => setIsMobileMenuOpen(true)}
-                            className="lg:hidden w-9 h-9 sm:w-11 sm:h-11 bg-white border border-accent-brown/10 rounded-xl flex items-center justify-center text-accent-brown/60 hover:text-brand-dark transition-colors shrink-0"
+                            className="lg:hidden w-9 h-9 sm:w-11 sm:h-11 bg-white border border-accent-brown/10 rounded-xl flex items-center justify-center text-accent-brown/60 hover:text-brand-dark transition-colors shrink-0 cursor-pointer"
                         >
                             <Menu className="w-4.5 h-4.5 sm:w-5 h-5" />
                         </button>

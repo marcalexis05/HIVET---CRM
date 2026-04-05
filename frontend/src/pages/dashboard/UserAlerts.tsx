@@ -116,13 +116,13 @@ const UserAlerts = () => {
                     <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest">
                         <button
                             onClick={() => setFilter('all')}
-                            className={`px-4 py-2 rounded-full border transition-all ${filter === 'all' ? 'bg-brand/10 border-brand/20 text-brand-dark' : 'text-accent-brown/40 hover:text-accent-brown'}`}
+                            className={`px-4 py-2 rounded-full border transition-all cursor-pointer ${filter === 'all' ? 'bg-brand/10 border-brand/20 text-brand-dark' : 'text-accent-brown/40 hover:text-accent-brown'}`}
                         >
                             All Alerts ({notifications.length})
                         </button>
                         <button
                             onClick={() => setFilter('unread')}
-                            className={`px-4 py-2 rounded-full border transition-all ${filter === 'unread' ? 'bg-brand/10 border-brand/20 text-brand-dark' : 'text-accent-brown/40 hover:text-accent-brown'}`}
+                            className={`px-4 py-2 rounded-full border transition-all cursor-pointer ${filter === 'unread' ? 'bg-brand/10 border-brand/20 text-brand-dark' : 'text-accent-brown/40 hover:text-accent-brown'}`}
                         >
                             Unread ({notifications.filter(n => !n.read).length})
                         </button>
@@ -130,13 +130,13 @@ const UserAlerts = () => {
                     <div className="flex items-center gap-4">
                         <button
                             onClick={markAllAsRead}
-                            className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-brand-dark transition-colors flex items-center gap-2"
+                            className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-brand-dark transition-colors flex items-center gap-2 cursor-pointer"
                         >
                             <CheckCircle2 className="w-3.5 h-3.5" /> Mark all read
                         </button>
                         <button
                             onClick={deleteAllNotifications}
-                            className="text-[10px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-500 transition-colors flex items-center gap-2"
+                            className="text-[10px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-500 transition-colors flex items-center gap-2 cursor-pointer"
                         >
                             <Bell className="w-3.5 h-3.5 rotate-[15deg]" /> Clear All
                         </button>
@@ -198,7 +198,7 @@ const UserAlerts = () => {
                                                 e.stopPropagation();
                                                 deleteNotification(alert.id);
                                             }}
-                                            className="w-10 h-10 rounded-2xl bg-accent-peach/20 hover:bg-red-50 text-accent-brown/20 hover:text-red-500 flex items-center justify-center transition-all shadow-sm"
+                                            className="w-10 h-10 rounded-2xl bg-accent-peach/20 hover:bg-red-50 text-accent-brown/20 hover:text-red-500 flex items-center justify-center transition-all shadow-sm cursor-pointer"
                                             title="Remove Notification"
                                         >
                                             <Bell className="w-4 h-4" />

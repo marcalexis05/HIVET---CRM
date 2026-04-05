@@ -1,23 +1,71 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useCart } from '../../context/CartContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { Wallet, Banknote, ShieldCheck, MapPin, Store, Truck, Loader2, ArrowRight } from 'lucide-react';
+import {
+    Wallet, Banknote, ShieldCheck, MapPin, Store, Truck, Loader2,
+    ArrowRight, Tag, CheckCircle, X, Gift, Award, Sparkles, CreditCard,
+    Eye, User
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { Map, Marker } from '@vis.gl/react-google-maps';
-import AddressAutocomplete from '../../components/AddressAutocomplete';
+import { Map, AdvancedMarker, InfoWindow, useMap } from '@vis.gl/react-google-maps';
+import MapPickerModal from '../../components/MapPickerModal';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// Haversine distance
+const calcDist = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+    if (!lat1 || !lng1 || !lat2 || !lng2) return '...';
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+    const d = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return d < 1 ? `${Math.round(d*1000)}m` : `${d.toFixed(1)}km`;
+};
+
+// Draws a driving route between two points on a Map
+const DirectionsLine = ({ userLat, userLng, clinicLat, clinicLng }: { userLat: number, userLng: number, clinicLat: number, clinicLng: number }) => {
+    const map = useMap();
+    useEffect(() => {
+        const maps = (window as any).google?.maps;
+        if (!maps || !map) return;
+        const renderer = new maps.DirectionsRenderer({
+            map,
+            suppressMarkers: true,
+            polylineOptions: { strokeColor: '#F58634', strokeWeight: 5, strokeOpacity: 0.85 }
+        });
+        new maps.DirectionsService().route(
+            { origin: { lat: userLat, lng: userLng }, destination: { lat: clinicLat, lng: clinicLng }, travelMode: maps.TravelMode.DRIVING },
+            (result: any, status: any) => { if (status === 'OK') renderer.setDirections(result); }
+        );
+        return () => renderer.setMap(null);
+    }, [map, userLat, userLng, clinicLat, clinicLng]);
+    return null;
+};
+
+// Imperatively pans the Street View mini-map without re-rendering the Map component
+const PanoMapSyncer = ({ position }: { position: { lat: number; lng: number } | null }) => {
+    const map = useMap('sv-minimap');
+    useEffect(() => {
+        if (map && position) map.panTo(position);
+    }, [map, position]);
+    return null;
+};
 
 const Checkout = () => {
     const { items, totalAmount, totalItems, clearCart } = useCart();
     const { user } = useAuth();
     const navigate = useNavigate();
-    const [selectedPayment, setSelectedPayment] = useState('gcash');
+
+    // Fulfillment & payment
+    const [selectedPayment, setSelectedPayment] = useState<'gcash' | 'maya' | 'cash'>('gcash');
     const [fulfillmentMethod, setFulfillmentMethod] = useState<'delivery' | 'pickup'>('delivery');
     const [isPlacingOrder, setIsPlacingOrder] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
 
-    // Address & Profile State
+    // Address state
     const [loadingData, setLoadingData] = useState(true);
     interface Address {
         id: number;
@@ -32,6 +80,7 @@ const Checkout = () => {
     }
     const [allAddresses, setAllAddresses] = useState<Address[]>([]);
     const [showAddrModal, setShowAddrModal] = useState(false);
+    const [showPickerModal, setShowPickerModal] = useState(false);
     const [deliveryInfo, setDeliveryInfo] = useState({
         contactName: user?.name || '',
         address: '',
@@ -39,12 +88,75 @@ const Checkout = () => {
         clinic_id: null as number | null,
         branch_id: null as number | null,
         lat: null as number | null,
-        lng: null as number | null
+        lng: null as number | null,
     });
 
     const [clinics, setClinics] = useState<any[]>([]);
-
     const shippingFee = fulfillmentMethod === 'delivery' ? 150 : 0;
+
+    // Branch map state
+    const [selectedBranch, setSelectedBranch] = useState<any>(null);
+    const [selectedClinic, setSelectedClinic] = useState<any>(null);
+    const [showBranchStreetView, setShowBranchStreetView] = useState(false);
+    const [branchActiveMarker, setBranchActiveMarker] = useState<'branch' | 'user' | null>(null);
+    const [svStartPos, setSvStartPos] = useState<{ lat: number; lng: number } | null>(null);
+    const [panoPov, setPanoPov] = useState({ heading: 0, pitch: 0 });
+    const [panoPosition, setPanoPosition] = useState<{ lat: number; lng: number } | null>(null);
+    const branchSvRef = useRef<google.maps.StreetViewPanorama | null>(null);
+
+    // Voucher state
+    const [applyingVoucher, setApplyingVoucher] = useState(false);
+    const [appliedVoucher, setAppliedVoucher] = useState<{ id: number; title: string; discount: number } | null>(null);
+    const [myVouchers, setMyVouchers] = useState<any[]>([]);
+
+    // Fetch vouchers
+    useEffect(() => {
+        const fetchVouchers = async () => {
+            try {
+                const token = localStorage.getItem('hivet_token');
+                if (!token) return;
+                const res = await fetch(`${API}/api/loyalty`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setMyVouchers(data.my_vouchers || []);
+                }
+            } catch (err) {
+                console.error('Failed to fetch vouchers:', err);
+            }
+        };
+        fetchVouchers();
+    }, []);
+
+    const handleApplyVoucher = async (code: string) => {
+        setApplyingVoucher(true);
+        try {
+            const token = localStorage.getItem('hivet_token');
+            const res = await fetch(`${API}/api/loyalty/validate-voucher`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ code }),
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.detail || 'Invalid voucher code');
+            }
+            const data = await res.json();
+            setAppliedVoucher({
+                id: data.id,
+                title: data.title,
+                discount: data.discount_value
+            });
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setApplyingVoucher(false);
+        }
+    };
 
     const selectAddress = (addr: Address) => {
         setDeliveryInfo(prev => ({
@@ -58,62 +170,57 @@ const Checkout = () => {
         setShowAddrModal(false);
     };
 
+    // Fetch addresses & clinics on mount
     useEffect(() => {
         const fetchData = async () => {
             if (!user) return;
-
-            // Re-sync with user object in case it changed
             setLoadingData(true);
             try {
-                // Fetch addresses
                 const token = localStorage.getItem('hivet_token');
-                const res = await fetch('http://localhost:8000/api/customer/addresses', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const [addrRes, clinicsRes] = await Promise.all([
+                    fetch(`${API}/api/customer/addresses`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${API}/api/clinics`)
+                ]);
 
-                if (res.ok) {
-                    const data = await res.json();
-                    const addrList = data.addresses || []; // Access the addresses array from wrapper
+                if (addrRes.ok) {
+                    const data = await addrRes.json();
+                    const addrList = data.addresses || [];
                     setAllAddresses(addrList);
-
                     const defaultAddr = addrList.find((a: Address) => a.is_default) || addrList[0];
                     if (defaultAddr) {
                         setDeliveryInfo(prev => ({
                             ...prev,
-                            contactName: defaultAddr.full_name || user.name || '',
+                            contactName: defaultAddr.full_name || user?.name || '',
                             address: `${defaultAddr.address_line1}, ${defaultAddr.address_line2}`,
-                            phone: defaultAddr.phone || user.phone || '',
+                            phone: defaultAddr.phone || user?.phone || '',
                             lat: defaultAddr.lat || null,
                             lng: defaultAddr.lng || null
                         }));
                     } else {
-                        // No address found, use profile data
                         setDeliveryInfo(prev => ({
                             ...prev,
-                            contactName: user.name || '',
+                            contactName: user?.name || '',
                             address: '',
-                            phone: user.phone || ''
+                            phone: user?.phone || ''
                         }));
                     }
                 } else {
-                    // Fetch failed (e.g. 401), still set profile data fallbacks
                     setDeliveryInfo(prev => ({
                         ...prev,
-                        contactName: user.name || '',
+                        contactName: user?.name || '',
                         address: '',
-                        phone: user.phone || ''
+                        phone: user?.phone || ''
                     }));
                 }
 
-                // Fetch clinics for pickup
-                const clinicsRes = await fetch('http://localhost:8000/api/clinics');
                 if (clinicsRes.ok) {
                     const d = await clinicsRes.json();
                     setClinics(d.clinics || []);
                 }
             } catch (err) {
                 console.error('Error fetching checkout data:', err);
-                // On network error, still ensure we have profile names
                 setDeliveryInfo(prev => ({
                     ...prev,
                     contactName: user?.name || '',
@@ -128,65 +235,103 @@ const Checkout = () => {
     }, [user]);
 
     const handlePlaceOrder = async () => {
+        if (fulfillmentMethod === 'delivery' && !deliveryInfo.address) {
+            alert('Please add a delivery address before placing your order.');
+            return;
+        }
+        if (fulfillmentMethod === 'pickup' && !deliveryInfo.clinic_id) {
+            alert('Please select a clinic branch for pickup.');
+            return;
+        }
+
         setIsPlacingOrder(true);
         try {
             const token = localStorage.getItem('hivet_token');
-            const response = await fetch('http://localhost:8000/api/orders', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    items,
-                    totalAmount: totalAmount + shippingFee,
-                    fulfillmentMethod,
-                    paymentMethod: selectedPayment,
-                    deliveryDetails: deliveryInfo,
-                    clinic_id: deliveryInfo.clinic_id,
-                    branch_id: deliveryInfo.branch_id,
-                    delivery_lat: deliveryInfo.lat,
-                    delivery_lng: deliveryInfo.lng
-                })
-            });
+            const orderPayload = {
+                items,
+                totalAmount: totalAmount + shippingFee - (appliedVoucher?.discount || 0),
+                fulfillmentMethod,
+                paymentMethod: selectedPayment,
+                deliveryDetails: deliveryInfo,
+                clinic_id: deliveryInfo.clinic_id,
+                branch_id: deliveryInfo.branch_id,
+                delivery_lat: deliveryInfo.lat,
+                delivery_lng: deliveryInfo.lng,
+                voucher_id: appliedVoucher?.id || null,
+            };
 
-            if (response.ok) {
-                clearCart();
-                setShowSuccess(true);
-                setTimeout(() => {
-                    navigate('/dashboard/user/orders');
-                }, 2000);
+            if (selectedPayment === 'gcash' || selectedPayment === 'maya') {
+                // PayMongo flow — create session, redirect
+                const response = await fetch(`${API}/api/payments/paymongo/checkout`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(orderPayload)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    // Redirect to PayMongo checkout page
+                    window.location.href = data.checkout_url;
+                } else {
+                    const errData = await response.json();
+                    alert(errData.detail || 'Failed to create payment session. Please try again.');
+                }
             } else {
-                console.error('Failed to place order');
+                // Cash on Delivery / Pickup — direct order
+                const response = await fetch(`${API}/api/orders`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(orderPayload)
+                });
+
+                if (response.ok) {
+                    clearCart();
+                    setShowSuccess(true);
+                    setTimeout(() => {
+                        navigate('/dashboard/user/orders');
+                    }, 3000);
+                } else {
+                    console.error('Failed to place order');
+                    alert('Failed to place order. Please try again.');
+                }
             }
         } catch (error) {
             console.error('Error placing order:', error);
+            alert('An unexpected error occurred. Please try again.');
         } finally {
             setIsPlacingOrder(false);
         }
     };
 
+    const discount = appliedVoucher?.discount || 0;
+    const grandTotal = Math.max(0, totalAmount + shippingFee - discount);
+
     return (
         <DashboardLayout title="Checkout">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-10">
-                {/* Left Column: Details */}
+                {/* Left Column */}
                 <div className="lg:col-span-8 space-y-6 sm:space-y-8">
-                    {/* Delivery Section */}
+
+                    {/* Fulfillment + Delivery/Pickup Card */}
                     <div className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-10 shadow-sm border border-accent-brown/5">
-                        {/* Fulfillment Method Toggle */}
+                        {/* Toggle */}
                         <div className="flex gap-4 mb-8">
                             <button
                                 onClick={() => setFulfillmentMethod('delivery')}
-                                className={`flex-1 p-4 rounded-xl border-2 flex items-center justify-center gap-3 transition-all ${fulfillmentMethod === 'delivery' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'
-                                    }`}
+                                className={`flex-1 p-4 rounded-xl border-2 flex items-center justify-center gap-3 transition-all cursor-pointer ${fulfillmentMethod === 'delivery' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
                             >
                                 <Truck className="w-5 h-5 shrink-0" />
                                 <span className="text-xs font-black uppercase tracking-widest text-left leading-tight">Home<br />Delivery</span>
                             </button>
                             <button
                                 onClick={() => setFulfillmentMethod('pickup')}
-                                className={`flex-1 p-4 rounded-xl border-2 flex items-center justify-center gap-3 transition-all ${fulfillmentMethod === 'pickup' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'
-                                    }`}
+                                className={`flex-1 p-4 rounded-xl border-2 flex items-center justify-center gap-3 transition-all cursor-pointer ${fulfillmentMethod === 'pickup' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
                             >
                                 <Store className="w-5 h-5 shrink-0" />
                                 <span className="text-xs font-black uppercase tracking-widest text-left leading-tight">Clinic<br />Pick-up</span>
@@ -230,62 +375,71 @@ const Checkout = () => {
                                                     </div>
                                                     <div>
                                                         <p className="text-xs font-black uppercase tracking-widest text-red-500 leading-none mb-1">No saved address found</p>
-                                                        <p className="text-[10px] font-medium text-red-500/60">Please add a delivery address in your settings to proceed.</p>
+                                                        <p className="text-[10px] font-medium text-red-500/60">Please add a delivery address in your account settings to proceed.</p>
                                                     </div>
                                                 </div>
                                             )}
                                             <div className="space-y-4">
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Contact Name</label>
-                                                    <input 
-                                                        type="text" 
-                                                        value={deliveryInfo.contactName} 
+                                                    <input
+                                                        type="text"
+                                                        value={deliveryInfo.contactName}
                                                         onChange={e => setDeliveryInfo(prev => ({ ...prev, contactName: e.target.value }))}
-                                                        placeholder="Name of recipient" 
-                                                        className="w-full bg-white border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-3 outline-none text-accent-brown font-bold transition-all shadow-sm" 
+                                                        placeholder="Name of recipient"
+                                                        className="w-full bg-white border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-3 outline-none text-accent-brown font-bold transition-all shadow-sm"
                                                     />
                                                 </div>
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Delivery Address</label>
-                                                    <AddressAutocomplete 
-                                                        onAddressSelect={(full, _comp, geometry) => {
-                                                            setDeliveryInfo(prev => ({ 
-                                                                ...prev, 
-                                                                address: full,
-                                                                lat: geometry?.lat || null,
-                                                                lng: geometry?.lng || null
-                                                            }));
-                                                        }}
-                                                        defaultValue={deliveryInfo.address}
-                                                        placeholder="Enter or pick delivery address"
-                                                        className="!py-3 !rounded-xl shadow-sm border-2 border-transparent focus:border-brand/30"
-                                                    />
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            readOnly
+                                                            value={deliveryInfo.address}
+                                                            placeholder="Tap 'Edit' to set your delivery location"
+                                                            className="w-full bg-white border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-3 outline-none text-accent-brown font-bold transition-all shadow-sm pr-20 cursor-default"
+                                                        />
+                                                        <button
+                                                            onClick={() => setShowPickerModal(true)}
+                                                            className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-brand-dark text-white rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-black transition-all"
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 <div className="space-y-2">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Contact Number</label>
-                                                    <input 
-                                                        type="tel" 
-                                                        value={deliveryInfo.phone} 
+                                                    <input
+                                                        type="tel"
+                                                        value={deliveryInfo.phone}
                                                         onChange={e => setDeliveryInfo(prev => ({ ...prev, phone: e.target.value }))}
-                                                        placeholder="09XX XXX XXXX" 
-                                                        className="w-full bg-white border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-3 outline-none text-accent-brown font-bold transition-all shadow-sm" 
+                                                        placeholder="09XX XXX XXXX"
+                                                        className="w-full bg-white border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-3 outline-none text-accent-brown font-bold transition-all shadow-sm"
                                                     />
                                                 </div>
 
-                                                {deliveryInfo.address && (
-                                                    <div className="mt-4 rounded-2xl overflow-hidden border-2 border-accent-brown/5 h-48 relative shadow-inner shadow-black/5">
+                                                {/* Map Preview */}
+                                                {deliveryInfo.lat && deliveryInfo.lng && (
+                                                    <div className="mt-4 rounded-2xl overflow-hidden border-2 border-accent-brown/5 h-52 relative shadow-inner shadow-black/5">
                                                         <Map
-                                                            center={deliveryInfo.lat ? { lat: deliveryInfo.lat, lng: deliveryInfo.lng! } : { lat: 14.5995, lng: 120.9842 }}
-                                                            defaultZoom={15}
+                                                            mapId="4c730709b30c1be1"
+                                                            defaultCenter={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}
+                                                            defaultZoom={16}
                                                             disableDefaultUI={true}
-                                                            gestureHandling={'greedy'}
-                                                            className="w-full h-full grayscale-[0.5] contrast-[1.1]"
+                                                            gestureHandling="greedy"
+                                                            className="w-full h-full grayscale-[0.4] contrast-[1.1]"
                                                         >
-                                                            {deliveryInfo.lat && (
-                                                                <Marker position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng! }} />
-                                                            )}
+                                                            <AdvancedMarker position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng! }}>
+                                                                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white border-[3px] border-white shadow-2xl ring-4 ring-blue-400/20">
+                                                                    <User className="w-5 h-5" />
+                                                                </div>
+                                                            </AdvancedMarker>
                                                         </Map>
-                                                        <div className="absolute inset-0 bg-gradient-to-t from-white/20 to-transparent pointer-events-none" />
+                                                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/30 to-transparent pointer-events-none" />
+                                                        <div className="absolute bottom-3 left-3 bg-white/80 backdrop-blur-md rounded-lg px-3 py-1.5 shadow-sm">
+                                                            <p className="text-[9px] font-black text-brand-dark uppercase tracking-widest">✓ Precision Verified</p>
+                                                        </div>
                                                     </div>
                                                 )}
 
@@ -320,14 +474,10 @@ const Checkout = () => {
                                         <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Clinic Branch</label>
                                         <div className="grid grid-cols-1 gap-2">
                                             {clinics.flatMap(c => {
-                                                // Create unique list of branches to avoid duplicates
-                                                // The backend 'branches' list includes everything.
                                                 return (c.branches || []).map((b: any) => {
                                                     const isSelected = deliveryInfo.clinic_id === c.id && deliveryInfo.branch_id === b.id;
-                                                    const street = b.address_line1 || "";
-                                                    
                                                     return (
-                                                        <button 
+                                                        <button
                                                             key={`${c.id}-${b.id}`}
                                                             type="button"
                                                             onClick={() => {
@@ -338,16 +488,17 @@ const Checkout = () => {
                                                                     address: `${b.address_line1}, ${b.address_line2}`,
                                                                     phone: b.phone || c.phone || prev.phone
                                                                 }));
+                                                                setSelectedBranch(b);
+                                                                setSelectedClinic(c);
+                                                                setShowBranchStreetView(false);
+                                                                setBranchActiveMarker(null);
+                                                                branchSvRef.current = null;
                                                             }}
-                                                            className={`w-full text-left p-4 rounded-xl border-2 transition-all flex flex-col gap-1 ${
-                                                                isSelected 
-                                                                    ? 'border-brand bg-brand/5 shadow-md shadow-brand/10' 
-                                                                    : 'border-accent-brown/10 bg-accent-peach/5 hover:border-brand/30 hover:bg-white'
-                                                            }`}
+                                                            className={`w-full text-left p-4 rounded-xl border-2 transition-all flex flex-col gap-1 ${isSelected ? 'border-brand bg-brand/5 shadow-md shadow-brand/10' : 'border-accent-brown/10 bg-accent-peach/5 hover:border-brand/30 hover:bg-white'}`}
                                                         >
                                                             <div className="flex items-center justify-between gap-3">
                                                                 <span className="text-xs font-black text-accent-brown">
-                                                                    {c.name} — <span className="text-brand">{street}</span>
+                                                                    {c.name} — <span className="text-brand">{b.address_line1 || ''}</span>
                                                                 </span>
                                                                 {b.is_main ? (
                                                                     <span className="text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">MAIN</span>
@@ -367,6 +518,300 @@ const Checkout = () => {
                                             })}
                                         </div>
                                     </div>
+
+                                    {/* Branch Map Panel — appears when a branch is selected */}
+                                    <AnimatePresence>
+                                        {selectedBranch && selectedBranch.lat && selectedBranch.lng && (
+                                            <motion.div
+                                                key={`${selectedBranch.id}-map`}
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                className="overflow-hidden rounded-2xl border-2 border-accent-brown/5 shadow-lg"
+                                            >
+                                                <div className="relative" style={{ height: showBranchStreetView ? 480 : 300 }}>
+                                                    <AnimatePresence mode="wait">
+                                                        {!showBranchStreetView ? (
+                                                            <motion.div key="map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
+                                                                <Map
+                                                                    mapId="4c730709b30c1be1"
+                                                                    defaultCenter={
+                                                                        deliveryInfo.lat && deliveryInfo.lng
+                                                                            ? {
+                                                                                lat: (Number(selectedBranch.lat) + deliveryInfo.lat) / 2,
+                                                                                lng: (Number(selectedBranch.lng) + deliveryInfo.lng) / 2
+                                                                              }
+                                                                            : { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }
+                                                                    }
+                                                                    defaultZoom={deliveryInfo.lat && deliveryInfo.lng ? 13 : 15}
+                                                                    gestureHandling="greedy"
+                                                                    disableDefaultUI={false}
+                                                                    mapTypeControl={false}
+                                                                    streetViewControl={false}
+                                                                    fullscreenControl={false}
+                                                                    className="w-full h-full"
+                                                                >
+                                                                    {/* Clinic Pin */}
+                                                                    <AdvancedMarker
+                                                                        position={{ lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}
+                                                                        onClick={() => setBranchActiveMarker(branchActiveMarker === 'branch' ? null : 'branch')}
+                                                                    >
+                                                                        <div className="w-10 h-10 bg-brand-dark rounded-xl flex items-center justify-center text-white border-2 border-white shadow-xl ring-4 ring-brand/20 cursor-pointer hover:scale-110 transition-transform">
+                                                                            <Store className="w-5 h-5" />
+                                                                        </div>
+                                                                    </AdvancedMarker>
+
+                                                                    {/* User delivery pin (if lat/lng saved) */}
+                                                                    {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                        <AdvancedMarker
+                                                                            position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}
+                                                                            onClick={() => setBranchActiveMarker(branchActiveMarker === 'user' ? null : 'user')}
+                                                                        >
+                                                                            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-lg ring-4 ring-blue-400/20 cursor-pointer hover:scale-110 transition-transform">
+                                                                                <User className="w-4 h-4" />
+                                                                            </div>
+                                                                        </AdvancedMarker>
+                                                                    )}
+
+                                                                    {/* Directions route */}
+                                                                    {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                        <DirectionsLine
+                                                                            userLat={deliveryInfo.lat}
+                                                                            userLng={deliveryInfo.lng}
+                                                                            clinicLat={Number(selectedBranch.lat)}
+                                                                            clinicLng={Number(selectedBranch.lng)}
+                                                                        />
+                                                                    )}
+
+                                                                    {/* Clinic InfoWindow */}
+                                                                    {branchActiveMarker === 'branch' && (
+                                                                        <InfoWindow
+                                                                            position={{ lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}
+                                                                            onCloseClick={() => setBranchActiveMarker(null)}
+                                                                            headerDisabled={true}
+                                                                        >
+                                                                            <div className="p-3 w-[250px] font-sans flex flex-col gap-2 relative">
+                                                                                <button onClick={() => setBranchActiveMarker(null)} className="absolute top-1 right-1 p-1 rounded-full hover:bg-gray-100 text-gray-400"><X className="w-3 h-3" /></button>
+                                                                                <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
+                                                                                    <div className="w-8 h-8 bg-brand/10 rounded-lg flex items-center justify-center"><Store className="w-4 h-4 text-brand" /></div>
+                                                                                    <div>
+                                                                                        <p className="text-xs font-black text-brand-dark leading-tight">{selectedClinic?.name}</p>
+                                                                                        <p className="text-[9px] font-bold text-accent-brown/50 uppercase tracking-widest">Clinic Branch</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <button onClick={() => {
+                                                                                    const pos = { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) };
+                                                                                    setSvStartPos(pos);
+                                                                                    branchSvRef.current = null;
+                                                                                    setShowBranchStreetView(true);
+                                                                                    setBranchActiveMarker(null);
+                                                                                }} className="w-full bg-brand/10 text-brand-dark text-[10px] font-black uppercase tracking-widest py-3 rounded-xl hover:bg-brand hover:text-white transition-all flex items-center justify-center gap-2">
+                                                                                    <Eye className="w-4 h-4" /> Street View
+                                                                                </button>
+                                                                                {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                                    <div className="w-full bg-brand-dark/5 border border-brand-dark/10 px-3 py-2 rounded-xl flex items-center justify-between">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <Truck className="w-3.5 h-3.5 text-brand-dark/50" />
+                                                                                            <span className="text-[9px] font-black uppercase tracking-widest text-brand-dark/50">Distance</span>
+                                                                                        </div>
+                                                                                        <span className="text-xs font-black text-brand-dark">{calcDist(deliveryInfo.lat, deliveryInfo.lng, Number(selectedBranch.lat), Number(selectedBranch.lng))}</span>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </InfoWindow>
+                                                                    )}
+
+                                                                    {/* User InfoWindow */}
+                                                                    {branchActiveMarker === 'user' && deliveryInfo.lat && deliveryInfo.lng && (
+                                                                        <InfoWindow
+                                                                            position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}
+                                                                            onCloseClick={() => setBranchActiveMarker(null)}
+                                                                            headerDisabled={true}
+                                                                        >
+                                                                            <div className="p-3 w-[250px] font-sans flex flex-col gap-2 relative">
+                                                                                <button onClick={() => setBranchActiveMarker(null)} className="absolute top-1 right-1 p-1 rounded-full hover:bg-gray-100 text-gray-400"><X className="w-3 h-3" /></button>
+                                                                                <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
+                                                                                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center"><User className="w-4 h-4 text-blue-600" /></div>
+                                                                                    <div>
+                                                                                        <p className="text-xs font-black text-brand-dark">{deliveryInfo.contactName || 'Your Location'}</p>
+                                                                                        <p className="text-[9px] font-bold text-accent-brown/50 uppercase tracking-widest">Delivery Address</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <button onClick={() => {
+                                                                                    if (deliveryInfo.lat && deliveryInfo.lng) {
+                                                                                        setSvStartPos({ lat: deliveryInfo.lat, lng: deliveryInfo.lng });
+                                                                                    }
+                                                                                    branchSvRef.current = null;
+                                                                                    setShowBranchStreetView(true);
+                                                                                    setBranchActiveMarker(null);
+                                                                                }} className="w-full bg-blue-100 text-blue-800 text-[10px] font-black uppercase tracking-widest py-3 rounded-xl hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-2">
+                                                                                    <Eye className="w-4 h-4" /> Street View
+                                                                                </button>
+                                                                                <div className="w-full bg-brand-dark/5 border border-brand-dark/10 px-3 py-2 rounded-xl flex items-center justify-between">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <Truck className="w-3.5 h-3.5 text-brand-dark/50" />
+                                                                                        <span className="text-[9px] font-black uppercase tracking-widest text-brand-dark/50">Distance</span>
+                                                                                    </div>
+                                                                                    <span className="text-xs font-black text-brand-dark">{calcDist(deliveryInfo.lat, deliveryInfo.lng, Number(selectedBranch.lat), Number(selectedBranch.lng))}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </InfoWindow>
+                                                                    )}
+                                                                </Map>
+                                                            </motion.div>
+                                                        ) : (
+                                                            <motion.div key="sv" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex flex-col bg-black rounded-2xl overflow-hidden">
+                                                                {/* Professional Header Bar */}
+                                                                <div className="absolute top-0 left-0 right-0 z-[30] bg-gradient-to-b from-black/80 to-transparent px-5 pt-4 pb-8 pointer-events-none flex items-start justify-between">
+                                                                    <div className="flex items-center gap-3 pointer-events-none">
+                                                                        <div className="w-9 h-9 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 flex items-center justify-center">
+                                                                            <Eye className="w-4 h-4 text-white" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-[9px] font-black uppercase tracking-widest text-white/50">Immersive Street View</p>
+                                                                            <p className="text-xs font-black text-white leading-tight">
+                                                                                {svStartPos && deliveryInfo.lat && svStartPos.lat === deliveryInfo.lat
+                                                                                    ? (deliveryInfo.contactName || 'Your Location')
+                                                                                    : (selectedClinic?.name || 'Clinic Branch')}
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={() => { setShowBranchStreetView(false); branchSvRef.current = null; }}
+                                                                        className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 flex items-center justify-center text-white hover:bg-red-500/80 hover:border-red-500 transition-all pointer-events-auto shadow-lg"
+                                                                    >
+                                                                        <X className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+
+                                                                {/* Street View — top 62% */}
+                                                                <div className="flex-[0.62] relative">
+                                                                    <div
+                                                                        ref={(el) => {
+                                                                            if (el && !branchSvRef.current) {
+                                                                                const pos = svStartPos || { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) };
+                                                                                const pano = new google.maps.StreetViewPanorama(el, {
+                                                                                    position: pos,
+                                                                                    pov: { heading: 0, pitch: 0 },
+                                                                                    zoom: 1,
+                                                                                    addressControl: false,
+                                                                                    fullscreenControl: false,
+                                                                                    zoomControl: true,
+                                                                                    linksControl: true,
+                                                                                    panControl: false,
+                                                                                    enableCloseButton: false,
+                                                                                    motionTracking: false,
+                                                                                });
+                                                                                pano.addListener('position_changed', () => {
+                                                                                    const p = pano.getPosition();
+                                                                                    if (p) setPanoPosition({ lat: p.lat(), lng: p.lng() });
+                                                                                });
+                                                                                pano.addListener('pov_changed', () => {
+                                                                                    const pov = pano.getPov();
+                                                                                    setPanoPov({ heading: pov.heading, pitch: pov.pitch });
+                                                                                });
+                                                                                branchSvRef.current = pano;
+                                                                                setPanoPosition(pos);
+                                                                            }
+                                                                        }}
+                                                                        className="w-full h-full"
+                                                                    />
+                                                                    {/* Bottom fade into mini-map */}
+                                                                    <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black to-transparent pointer-events-none" />
+                                                                </div>
+
+                                                                {/* Mini-map — bottom 38% with route */}
+                                                                <div className="flex-[0.38] relative overflow-hidden">
+                                                                    <Map
+                                                                        id="sv-minimap"
+                                                                        mapId="46537618861d8583"
+                                                                        defaultCenter={svStartPos || { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}
+                                                                        defaultZoom={15}
+                                                                        disableDefaultUI={true}
+                                                                        gestureHandling="greedy"
+                                                                        className="w-full h-full"
+                                                                    >
+                                                                        <PanoMapSyncer position={panoPosition} />
+                                                                        {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                            <DirectionsLine
+                                                                                userLat={deliveryInfo.lat}
+                                                                                userLng={deliveryInfo.lng}
+                                                                                clinicLat={Number(selectedBranch.lat)}
+                                                                                clinicLng={Number(selectedBranch.lng)}
+                                                                            />
+                                                                        )}
+                                                                        {/* Current Street View position + heading arrow */}
+                                                                        {panoPosition && (
+                                                                            <AdvancedMarker position={panoPosition}>
+                                                                                <div className="w-10 h-10 flex items-center justify-center" style={{ transform: `rotate(${panoPov.heading}deg)`, transition: 'transform 0.3s ease' }}>
+                                                                                    <div className="w-5 h-5 bg-blue-500 rounded-full border-[3px] border-white shadow-2xl relative">
+                                                                                        <div className="absolute -top-5 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[10px] border-b-blue-500" />
+                                                                                    </div>
+                                                                                </div>
+                                                                            </AdvancedMarker>
+                                                                        )}
+                                                                        {/* Clinic pin */}
+                                                                        <AdvancedMarker position={{ lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}>
+                                                                            <div className="w-8 h-8 bg-brand-dark rounded-xl flex items-center justify-center text-white border-2 border-white shadow-xl">
+                                                                                <Store className="w-4 h-4" />
+                                                                            </div>
+                                                                        </AdvancedMarker>
+                                                                        {/* User delivery pin */}
+                                                                        {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                            <AdvancedMarker position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}>
+                                                                                <div className="w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-lg">
+                                                                                    <User className="w-3.5 h-3.5" />
+                                                                                </div>
+                                                                            </AdvancedMarker>
+                                                                        )}
+                                                                    </Map>
+
+                                                                    {/* HUD overlay */}
+                                                                    <div className="absolute top-3 left-3 z-10 pointer-events-none flex flex-col gap-2">
+                                                                        <div className="bg-black/60 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10 shadow-lg flex items-center gap-2">
+                                                                            <div className="w-6 h-6 rounded-lg bg-blue-500/30 flex items-center justify-center">
+                                                                                <MapPin className="w-3 h-3 text-blue-400" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <p className="text-[7px] font-black uppercase tracking-widest text-white/40">Heading</p>
+                                                                                <p className="text-[10px] font-black text-white">{Math.round(panoPov.heading)}°</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                            <div className="bg-black/60 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10 shadow-lg flex items-center gap-2">
+                                                                                <div className="w-6 h-6 rounded-lg bg-brand/30 flex items-center justify-center">
+                                                                                    <Truck className="w-3 h-3 text-brand" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <p className="text-[7px] font-black uppercase tracking-widest text-white/40">Distance</p>
+                                                                                    <p className="text-[10px] font-black text-white">{calcDist(deliveryInfo.lat, deliveryInfo.lng, Number(selectedBranch.lat), Number(selectedBranch.lng))}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Legend */}
+                                                                    <div className="absolute bottom-3 right-3 z-10 pointer-events-none flex flex-col gap-1.5">
+                                                                        <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10">
+                                                                            <div className="w-3 h-3 rounded bg-brand-dark flex items-center justify-center"><Store className="w-2 h-2 text-white" /></div>
+                                                                            <span className="text-[8px] font-black text-white/70 uppercase tracking-widest">{selectedClinic?.name || 'Clinic'}</span>
+                                                                        </div>
+                                                                        {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                            <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10">
+                                                                                <div className="w-3 h-3 rounded-full bg-blue-500 flex items-center justify-center"><User className="w-2 h-2 text-white" /></div>
+                                                                                <span className="text-[8px] font-black text-white/70 uppercase tracking-widest">Your Location</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+
                                     <div className="p-4 bg-accent-peach/30 rounded-xl border border-brand/10">
                                         <p className="text-sm font-bold text-accent-brown mb-1">Pick up tomorrow after 10:00 AM</p>
                                         <p className="text-xs text-accent-brown/60">Please bring a valid ID and your order confirmation email when collecting your items.</p>
@@ -374,11 +819,83 @@ const Checkout = () => {
                                 </div>
                             </>
                         )}
-
-
                     </div>
 
-                    {/* Payment Section */}
+                    {/* Vouchers Card — only shown if customer has rewards */}
+                    {myVouchers.length > 0 && (
+                        <div className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-10 shadow-sm border border-accent-brown/5">
+                            <div className="flex items-center justify-between mb-8">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 bg-brand/10 rounded-xl flex items-center justify-center text-brand">
+                                        <Gift className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-black text-accent-brown">Apply Rewards</h3>
+                                        <p className="text-sm font-medium text-accent-brown/50">You have {myVouchers.length} available voucher{myVouchers.length > 1 ? 's' : ''}!</p>
+                                    </div>
+                                </div>
+                                <div className="bg-brand/10 px-4 py-2 rounded-full">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-dark">{myVouchers.length} Available</span>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {myVouchers.map((mv: any) => (
+                                    <motion.button
+                                        key={mv.id}
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => handleApplyVoucher(mv.code)}
+                                        disabled={applyingVoucher || appliedVoucher?.id === mv.id}
+                                        className={`p-5 rounded-2xl border-2 transition-all text-left flex items-start gap-4 relative overflow-hidden group ${appliedVoucher?.id === mv.id ? 'border-brand bg-brand/5 shadow-md' : 'border-accent-brown/5 bg-white hover:border-brand/30 shadow-sm'}`}
+                                    >
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${appliedVoucher?.id === mv.id ? 'bg-brand text-white' : 'bg-accent-peach/20 text-brand'}`}>
+                                            {mv.type === 'Discount' ? <Tag className="w-5 h-5" /> : <Award className="w-5 h-5" />}
+                                        </div>
+                                        <div className="min-w-0 pr-6">
+                                            <p className={`font-black text-sm mb-1 truncate ${appliedVoucher?.id === mv.id ? 'text-brand-dark' : 'text-accent-brown'}`}>
+                                                {mv.title}
+                                            </p>
+                                            <code className={`text-[9px] font-black tracking-widest uppercase opacity-60 ${appliedVoucher?.id === mv.id ? 'text-brand-dark' : 'text-brand'}`}>
+                                                {mv.code}
+                                            </code>
+                                        </div>
+                                        {appliedVoucher?.id === mv.id && (
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                                                <CheckCircle className="w-5 h-5 text-brand" />
+                                            </div>
+                                        )}
+                                    </motion.button>
+                                ))}
+                            </div>
+
+                            {appliedVoucher && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="mt-6 p-5 bg-green-50 rounded-2xl flex items-center justify-between border border-green-100 shadow-sm"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                                            <Sparkles className="w-5 h-5 text-green-500" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] font-black text-green-600 uppercase tracking-widest leading-none mb-1">Applied!</p>
+                                            <p className="text-sm font-bold text-accent-brown">"{appliedVoucher.title}" — saves ₱{appliedVoucher.discount.toFixed(2)}</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setAppliedVoucher(null)}
+                                        className="w-10 h-10 flex items-center justify-center text-accent-brown/30 hover:text-red-500 transition-colors"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </motion.div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Payment Method Card */}
                     <div className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-10 shadow-sm border border-accent-brown/5">
                         <div className="flex items-center gap-4 mb-6">
                             <div className="w-12 h-12 bg-accent-peach/30 rounded-xl flex items-center justify-center text-brand-dark shrink-0">
@@ -391,27 +908,54 @@ const Checkout = () => {
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
+                            {/* GCash via PayMongo */}
                             <button
                                 onClick={() => setSelectedPayment('gcash')}
-                                className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all ${selectedPayment === 'gcash' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'
-                                    }`}
-                            >
-                                <Banknote className="w-8 h-8 shrink-0" />
-                                <span className="text-[10px] font-black uppercase tracking-widest text-center">GCash</span>
-                            </button>
-                            <button
-                                onClick={() => setSelectedPayment('cash')}
-                                className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all ${selectedPayment === 'cash' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'
-                                    }`}
+                                className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer ${selectedPayment === 'gcash' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
                             >
                                 <Wallet className="w-8 h-8 shrink-0" />
-                                <span className="text-[10px] font-black uppercase tracking-widest text-center leading-tight">
-                                    {fulfillmentMethod === 'delivery' ? <>Cash on<br />Delivery</> : <>Cash on<br />Pickup</>}
+                                <div className="text-center">
+                                    <span className="text-[10px] font-black uppercase tracking-widest block">GCash</span>
+                                    <span className="text-[7px] font-bold uppercase tracking-widest opacity-50 block">via PayMongo</span>
+                                </div>
+                            </button>
+
+                            {/* Maya via PayMongo */}
+                            <button
+                                onClick={() => setSelectedPayment('maya')}
+                                className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer ${selectedPayment === 'maya' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
+                            >
+                                <CreditCard className="w-8 h-8 shrink-0" />
+                                <div className="text-center">
+                                    <span className="text-[10px] font-black uppercase tracking-widest block">Maya</span>
+                                    <span className="text-[7px] font-bold uppercase tracking-widest opacity-50 block">via PayMongo</span>
+                                </div>
+                            </button>
+
+                            {/* Cash */}
+                            <button
+                                onClick={() => setSelectedPayment('cash')}
+                                className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer col-span-2 ${selectedPayment === 'cash' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
+                            >
+                                <Banknote className="w-8 h-8 shrink-0" />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-center">
+                                    {fulfillmentMethod === 'delivery' ? 'Cash on Delivery' : 'Cash on Pickup'}
                                 </span>
                             </button>
                         </div>
 
-
+                        {(selectedPayment === 'gcash' || selectedPayment === 'maya') && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100 flex items-start gap-3"
+                            >
+                                <ShieldCheck className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                                <p className="text-xs font-bold text-blue-700 leading-relaxed">
+                                    You'll be redirected to a secure PayMongo payment page to complete your {selectedPayment === 'gcash' ? 'GCash' : 'Maya'} payment. Your order will be created instantly.
+                                </p>
+                            </motion.div>
+                        )}
                     </div>
                 </div>
 
@@ -447,24 +991,38 @@ const Checkout = () => {
                                 <span>Shipping Fees</span>
                                 <span>{shippingFee > 0 ? `₱${shippingFee.toFixed(2)}` : 'FREE'}</span>
                             </div>
-                            <div className="flex justify-between text-white/60">
-                                <span>Discount</span>
-                                <span className="text-brand">-₱0.00</span>
-                            </div>
+                            {appliedVoucher && (
+                                <div className="flex justify-between text-brand font-bold">
+                                    <span>Discount ({appliedVoucher.title})</span>
+                                    <span>-₱{discount.toFixed(2)}</span>
+                                </div>
+                            )}
+                            {!appliedVoucher && (
+                                <div className="flex justify-between text-white/60">
+                                    <span>Discount</span>
+                                    <span className="text-brand">-₱0.00</span>
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex justify-between items-center py-6 border-t border-white/10 mb-6 sm:mb-8">
                             <span className="text-sm font-black uppercase tracking-widest">Total</span>
-                            <span className="text-2xl sm:text-3xl font-black tracking-tighter">₱{(totalAmount + shippingFee).toFixed(2)}</span>
+                            <span className="text-2xl sm:text-3xl font-black tracking-tighter">₱{grandTotal.toFixed(2)}</span>
                         </div>
 
-                        <button
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.97 }}
                             onClick={handlePlaceOrder}
-                            disabled={isPlacingOrder}
-                            className="bg-brand text-white w-full py-4 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-white hover:text-brand-dark hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={isPlacingOrder || items.length === 0}
+                            className="bg-brand text-white w-full py-4 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-white hover:text-brand-dark hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
-                            {isPlacingOrder ? 'Processing...' : 'Place Order Now'}
-                        </button>
+                            {isPlacingOrder ? (
+                                <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
+                            ) : (
+                                selectedPayment === 'cash' ? 'Place Order Now' : 'Proceed to Payment'
+                            )}
+                        </motion.button>
 
                         <div className="mt-6 flex items-center justify-center gap-2 text-white/40 text-[9px] font-black uppercase tracking-widest">
                             <ShieldCheck className="w-4 h-4" />
@@ -473,6 +1031,8 @@ const Checkout = () => {
                     </div>
                 </div>
             </div>
+
+            {/* === MODALS === */}
 
             {/* Address Selection Modal */}
             <AnimatePresence>
@@ -489,7 +1049,6 @@ const Checkout = () => {
                             exit={{ scale: 0.9, opacity: 0, y: 20 }}
                             className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 sm:p-10 shadow-2xl border border-accent-brown/5 relative overflow-hidden"
                         >
-                            {/* Decorative background elements */}
                             <div className="absolute top-0 right-0 w-32 h-32 bg-brand/5 rounded-full -mr-16 -mt-16 blur-3xl" />
                             <div className="absolute bottom-0 left-0 w-32 h-32 bg-accent-peach/10 rounded-full -ml-16 -mb-16 blur-3xl" />
 
@@ -503,7 +1062,7 @@ const Checkout = () => {
                                         onClick={() => setShowAddrModal(false)}
                                         className="w-10 h-10 rounded-full bg-accent-peach/20 flex items-center justify-center text-accent-brown/40 hover:text-accent-brown transition-colors"
                                     >
-                                        ✕
+                                        <X className="w-5 h-5" />
                                     </button>
                                 </div>
 
@@ -552,7 +1111,23 @@ const Checkout = () => {
                 )}
             </AnimatePresence>
 
-            {/* Success Overlay */}
+            {/* Map Picker Modal */}
+            <MapPickerModal
+                isOpen={showPickerModal}
+                onClose={() => setShowPickerModal(false)}
+                onSelection={(address, lat, lng) => {
+                    setDeliveryInfo(prev => ({
+                        ...prev,
+                        address,
+                        lat,
+                        lng,
+                    }));
+                    setShowPickerModal(false);
+                }}
+                initialLocation={deliveryInfo.lat ? { lat: deliveryInfo.lat, lng: deliveryInfo.lng! } : undefined}
+            />
+
+            {/* Success Overlay (Cash orders) */}
             <AnimatePresence>
                 {showSuccess && (
                     <motion.div

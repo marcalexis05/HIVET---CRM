@@ -4417,7 +4417,17 @@ def send_clinic_order_receipt(db: Session, order_id: int):
         return
     
     # Fetch real data from BusinessProfile
-    clinic = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
+    clinic = None
+    if order.clinic_id:
+        clinic = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
+    else:
+        # If no clinic_id (delivery), deduce it from the first item
+        first_item = db.query(OrderItem).filter(OrderItem.order_id == order.id).first()
+        if first_item:
+            product = db.query(Product).filter(Product.id == first_item.product_id).first()
+            if product:
+                clinic = db.query(BusinessProfile).filter(BusinessProfile.id == product.business_id).first()
+
     clinic_name = clinic.clinic_name if clinic and clinic.clinic_name else "Hi-Vet Clinic"
     clinic_email = clinic.email if clinic else EMAIL_SENDER
     clinic_phone = clinic.clinic_phone if clinic else "N/A"

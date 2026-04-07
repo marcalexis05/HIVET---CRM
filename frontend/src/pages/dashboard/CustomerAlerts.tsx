@@ -4,7 +4,7 @@ import { Gift, Info, CheckCircle2, Bell } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useNavigate } from 'react-router-dom';
 
-const UserAlerts = () => {
+const CustomerAlerts = () => {
     const [notifications, setNotifications] = useState<any[]>([]);
     const [filter, setFilter] = useState<'all' | 'unread'>('all');
     const navigate = useNavigate();
@@ -215,4 +215,4 @@ const UserAlerts = () => {
     );
 };
 
-export default UserAlerts;
+export default CustomerAlerts;

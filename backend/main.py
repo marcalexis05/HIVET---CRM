@@ -1,4 +1,8 @@
 import os
+import ssl
+import base64
+import io
+from PIL import Image
 import uuid
 import httpx
 import uvicorn
@@ -7,6 +11,8 @@ import shutil
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
+from email.utils import formatdate, make_msgid
 
 from datetime import datetime, timedelta
 from typing import Optional, List
@@ -70,7 +76,7 @@ class Customer(Base):
     picture     = Column(String, nullable=True)
     gender      = Column(String, nullable=True)
     birthday    = Column(String, nullable=True)
-    role        = Column(String, default="user") # user, rider
+    role        = Column(String, default="customer") # customer, rider
     loyalty_points = Column(Integer, default=0)
     referral_code  = Column(String, unique=True, nullable=True)
     created_at  = Column(DateTime, default=datetime.utcnow)
@@ -204,6 +210,8 @@ class Product(Base):
     sku          = Column(String, nullable=True)
     image        = Column(String, nullable=True)
     tag          = Column(String, nullable=True)
+    variants_json = Column(Text, nullable=True)
+    sizes_json   = Column(Text, nullable=True)
     stars        = Column(Integer, default=5)
     loyalty_points = Column(Integer, default=0)
     created_at   = Column(DateTime, default=datetime.utcnow)
@@ -283,6 +291,8 @@ class Order(Base):
     picked_up_at        = Column(DateTime, nullable=True)
     delivered_at        = Column(DateTime, nullable=True)
     cancellation_reason = Column(String, nullable=True)
+    voucher_code        = Column(String, nullable=True)
+    discount_amount     = Column(Integer, default=0)
     created_at          = Column(DateTime, default=datetime.utcnow)
 
 class OrderItem(Base):
@@ -314,6 +324,7 @@ class LoyaltyVoucher(Base):
     title       = Column(String, nullable=False)
     cost        = Column(Integer, nullable=False)
     type        = Column(String, nullable=False) # Service, Discount, Credit
+    value       = Column(Float, default=0.0)      # % for Discount, ₱ for Credit
     is_active   = Column(Boolean, default=True)
     created_at  = Column(DateTime, default=datetime.utcnow)
 
@@ -573,12 +584,12 @@ async def lifespan(app: FastAPI):
     # Startup logic
     db = SessionLocal()
     try:
-        if db.query(LoyaltyVoucher).count() == 0:
+        if not db.query(LoyaltyVoucher).first():
             vouchers = [
-                LoyaltyVoucher(title="Free Grooming Add-on", cost=500, type="Service"),
-                LoyaltyVoucher(title="15% Off Premium Foods", cost=800, type="Discount"),
-                LoyaltyVoucher(title="Complimentary Vet Consult", cost=2000, type="Service"),
-                LoyaltyVoucher(title="₱10 Store Credit", cost=1000, type="Credit"),
+                LoyaltyVoucher(title="15% Off Premium Foods", cost=800, type="Discount", value=15.0),
+                LoyaltyVoucher(title="₱10 Store Credit", cost=1000, type="Credit", value=10.0),
+                LoyaltyVoucher(title="50% Off Accessories", cost=1500, type="Discount", value=50.0),
+                LoyaltyVoucher(title="₱50 Store Credit", cost=3000, type="Credit", value=50.0),
             ]
             db.add_all(vouchers)
             db.commit()
@@ -723,6 +734,8 @@ class ProductSchema(BaseModel):
     sku: Optional[str] = None
     image: Optional[str] = None
     tag: Optional[str] = None
+    variants_json: Optional[str] = None
+    sizes_json: Optional[str] = None
     stars: int
     loyalty_points: Optional[int] = 0
     created_at: datetime
@@ -743,6 +756,8 @@ class ProductCreate(BaseModel):
     sku: Optional[str] = None
     image: Optional[str] = None
     tag: Optional[str] = "New"
+    variants_json: Optional[str] = None
+    sizes_json: Optional[str] = None
     loyalty_points: Optional[int] = 0
 
 class ProductUpdate(BaseModel):
@@ -755,6 +770,8 @@ class ProductUpdate(BaseModel):
     sku: Optional[str] = None
     image: Optional[str] = None
     tag: Optional[str] = None
+    variants_json: Optional[str] = None
+    sizes_json: Optional[str] = None
     loyalty_points: Optional[int] = None
 
 class OrderItemCreate(BaseModel):
@@ -776,6 +793,7 @@ class OrderCreate(BaseModel):
     deliveryDetails: Optional[dict] = None
     delivery_lat: Optional[float] = None
     delivery_lng: Optional[float] = None
+    voucher_code: Optional[str] = None
 
 class PayMongoSessionResponse(BaseModel):
     checkout_url: str
@@ -902,8 +920,11 @@ class BranchSchema(BaseModel):
 
 # Business Dashboard Models
 class BusinessDashboardStats(BaseModel):
-    total_orders: int
-    monthly_revenue: int
+    product_orders: int
+    service_appointments: int
+    product_revenue: int
+    service_revenue: int
+    total_revenue: int # Combined for trend
     active_products: int
     low_stock_count: int
     revenue_change: str
@@ -918,8 +939,12 @@ class BusinessDashboardOrder(BaseModel):
     date: str
 
 class RevenueTrendItem(BaseModel):
-    month: str
+    name: str # e.g. "2024-03"
     value: int
+
+class RevenueTrendData(BaseModel):
+    trend: str # e.g. "+5% vs last mo"
+    chartData: List[RevenueTrendItem]
 
 class TopProductAnalytics(BaseModel):
     name: str
@@ -930,11 +955,12 @@ class TopProductAnalytics(BaseModel):
 
 class BusinessAnalyticsData(BaseModel):
     kpis: List[dict]
-    revenue_trend: List[RevenueTrendItem]
+    revenue_trend: RevenueTrendData
     top_products: List[TopProductAnalytics]
     loyalty_redemptions: List[dict]
     retention_rate: int = 0
     retention_change: str = ""
+    distribution_data: List[dict] = []
 
 def add_notification(db: Session, customer_id: int, n_type: str, title: str, desc: str, link: str = None):
     new_notif = Notification(
@@ -1052,6 +1078,15 @@ async def update_business_order_status(order_id: int, body: BusinessOrderStatusU
 
     previous_status = order.status
     order.status = body.status
+    
+    # Restore stock if cancelled (only if it was already completed/deducted)
+    if body.status == "Cancelled" and (previous_status == "Completed" or previous_status == "Delivered"):
+        restore_stock(db, order_id)
+    
+    # Deduct stock when status first changes to 'Completed'
+    if (body.status == "Completed" or body.status == "Delivered") and previous_status not in ["Completed", "Delivered"]:
+        reduce_stock(db, order_id)
+
     # Award loyalty points ONLY when status changes to 'Completed' for the first time
     if body.status == "Completed" and previous_status != "Completed":
         # Find business profile to get loyalty rates
@@ -1248,41 +1283,135 @@ def send_otp(body: SendOtpRequest, db: Session = Depends(get_db)):
     expires = datetime.utcnow() + timedelta(minutes=10)
     OTP_STORE[body.email] = {"otp": otp_code, "expires": expires}
     
-    # HTML Email Template
+    # Load mascot image bytes for CID inline embedding
+    mascot_img_bytes = None
+    mascot_path = r"C:\Users\Gene\.gemini\antigravity\brain\35c9e455-75fa-454a-a22c-5d092fedd953\hivet_mascot_email_header_1775572118329.png"
+    if os.path.exists(mascot_path):
+        try:
+            with Image.open(mascot_path) as img:
+                img.thumbnail((300, 300))
+                if img.mode != 'RGB':
+                    bg = Image.new("RGB", img.size, (255, 255, 255))
+                    if img.mode == 'RGBA':
+                        bg.paste(img, mask=img.split()[3])
+                    else:
+                        bg.paste(img)
+                    img = bg
+                buffered = io.BytesIO()
+                img.save(buffered, format="JPEG", quality=85, optimize=True)
+                mascot_img_bytes = buffered.getvalue()
+                print(f"Mascot loaded: {len(mascot_img_bytes)} bytes")
+        except Exception as e:
+            print(f"CRITICAL ERROR loading mascot: {e}")
+
+    # Professional HTML Email Template (Outfit Typography, High-End Palette)
     html_content = f"""
-    <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #FAFAFA; color: #333333; border-radius: 8px;">
-        <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="color: #4A3E3D; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; margin: 0;">Hi-Vet CRM</h1>
-        </div>
-        <div style="background-color: #FFFFFF; border: 1px solid #EAEAEA; border-radius: 12px; padding: 40px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
-            <h2 style="font-size: 20px; font-weight: 700; color: #4A3E3D; margin-top: 0; margin-bottom: 15px;">Verify Your Email Address</h2>
-            <p style="font-size: 15px; line-height: 1.6; color: #666666; margin-bottom: 30px; margin-top: 0;">
-                Thank you for registering with Hi-Vet CRM. To complete your signup and secure your account, please enter the following 6-digit verification code.
-            </p>
-            <div style="background-color: #FFF5F0; border: 2px dashed #E85D04; border-radius: 8px; padding: 20px; margin-bottom: 30px; display: inline-block;">
-                <span style="font-size: 32px; font-weight: 900; letter-spacing: 5px; color: #E85D04;">{otp_code}</span>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+            body {{ margin: 0; padding: 0; background-color: #FFF9F5; }}
+            .container {{ max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 48px; min-width: 320px; overflow: hidden; box-shadow: 0 30px 60px rgba(0, 0, 0, 0.04); border: 1px solid #FFEDE0; }}
+            .hero-section {{ padding: 30px 40px; text-align: center; background: #ffffff; }}
+            .mascot {{ width: 240px; height: auto; border-radius: 32px; filter: drop-shadow(0 15px 30px rgba(232, 93, 4, 0.15)); }}
+            .content {{ padding: 0 60px 60px 60px; text-align: center; font-family: 'Outfit', sans-serif; }}
+            .brand-name {{ color: #E85D04; font-weight: 900; font-size: 20px; letter-spacing: -0.5px; margin-top: 15px; display: block; text-transform: uppercase; }}
+            h1 {{ color: #2D2422; font-size: 32px; font-weight: 900; margin: 20px 0; letter-spacing: -1px; }}
+            p {{ color: #6B5E5C; font-size: 16px; line-height: 1.6; margin: 0 0 32px 0; font-weight: 500; }}
+            .otp-container {{ background-color: #FFF5F0; border-radius: 40px; padding: 10px; border: 2px solid #FFD8C2; display: inline-block; }}
+            .otp-box {{ background-color: #ffffff; border-radius: 32px; padding: 25px 40px; border: 1px solid #FFD8C2; box-shadow: 0 10px 20px rgba(232, 93, 4, 0.05); }}
+            .otp-code {{ font-size: 52px; font-weight: 900; letter-spacing: 12px; color: #E85D04; font-family: 'Outfit', monospace; margin-left: 12px; }}
+            .footer {{ background-color: #FDFBFA; padding: 40px; text-align: center; border-top: 1px solid #FFEDE0; }}
+            .footer-text {{ color: #A69491; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }}
+            .footer-sub {{ color: #C4B5B2; font-size: 10px; line-height: 1.6; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="hero-section">
+                <img src="cid:mascot" alt="Hi-Vet Mascot" class="mascot">
+                <span class="brand-name">HI-VET</span>
             </div>
-            <p style="font-size: 13px; color: #999999; margin-bottom: 0;">
-                This code will expire in 10 minutes. If you did not request this verification, please ignore this email.
-            </p>
+            <div class="content">
+                <h1>Verify your email</h1>
+                <p>Hello! You're just one step away from premium pet care management. Use the code below to complete your registration.</p>
+                <div class="otp-container">
+                    <div class="otp-box">
+                        <span class="otp-code">{otp_code}</span>
+                    </div>
+                </div>
+                <p style="font-size: 13px; color: #A69491; margin: 40px 0 0 0;">This code expires in 10 minutes.</p>
+            </div>
+            <div class="footer">
+                <p class="footer-text">Making the world better for furry friends</p>
+                <p class="footer-sub">
+                    &copy; 2026 Hi-Vet. All rights reserved.<br>
+                    Premium Veterinary Care Solutions.
+                </p>
+            </div>
         </div>
-    </div>
+    </body>
+    </html>
     """
     
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Verify Your Account - Hi-Vet CRM"
-    msg["From"] = f"Hi-Vet CRM <{EMAIL_SENDER}>"
-    msg["To"] = body.email
-    msg.attach(MIMEText(html_content, "html"))
+    # Plain Text version (Very important for spam filters)
+    text_content = f"""
+    Hi-Vet: Your Verification Code
+
+    Breathe easy. You're just one step away from premium pet care management.
+    Enter the code below to verify your account:
+
+    {otp_code}
+
+    This code expires in 10 minutes. If you didn't request this, you can safely ignore this email.
+
+    © 2026 Hi-Vet. All rights reserved.
+    """
     
+    # CORRECT MIME STRUCTURE for CID inline images (no attachment pill):
+    # multipart/related
+    #   └─ multipart/alternative
+    #        ├─ text/plain
+    #        └─ text/html  (references cid:mascot)
+    #   └─ image/jpeg (Content-ID: <mascot>, inline)
+    msg = MIMEMultipart("related")
+    msg["Subject"] = f"{otp_code} is your Hi-Vet verification code"
+    msg["From"] = f'"Hi-Vet Assistant" <{EMAIL_SENDER}>'
+    msg["To"] = body.email
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="gmail.com")
+    msg["X-Auto-Response-Suppress"] = "All"
+    msg["Auto-Submitted"] = "auto-generated"
+    msg["X-Priority"] = "1 (Highest)"
+    msg["Importance"] = "High"
+
+    # Attach text + html alternatives
+    msg_alternative = MIMEMultipart("alternative")
+    msg_alternative.attach(MIMEText(text_content, "plain"))
+    msg_alternative.attach(MIMEText(html_content, "html"))
+    msg.attach(msg_alternative)
+
+    # Attach mascot image inline (CID) - must be sibling of alternative, not parent
+    if mascot_img_bytes:
+        try:
+            img_mime = MIMEImage(mascot_img_bytes, _subtype="jpeg")
+            img_mime.add_header("Content-ID", "<mascot>")
+            img_mime.add_header("Content-Disposition", "inline")  # NO filename
+            msg.attach(img_mime)
+        except Exception as e:
+            print(f"Error attaching mascot: {e}")
+
     if not EMAIL_SENDER or not EMAIL_APP_PWD:
         raise HTTPException(status_code=500, detail="Email service not configured. Please set EMAIL_SENDER and EMAIL_APP_PWD in the .env file.")
 
     try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        server.login(EMAIL_SENDER, EMAIL_APP_PWD)
-        server.sendmail(EMAIL_SENDER, body.email, msg.as_string())
-        server.quit()
+        # Use port 465 for SSL or 587 for TLS
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+            server.login(EMAIL_SENDER, EMAIL_APP_PWD)
+            server.send_message(msg)
     except Exception as e:
         print("SMTP Error:", e)
         raise HTTPException(status_code=500, detail=f"Failed to send verification email: {str(e)}")
@@ -1597,7 +1726,17 @@ async def upload_product_image(
 @app.get("/api/catalog", response_model=List[ProductSchema])
 async def get_public_catalog(db: Session = Depends(get_db)):
     """Fetch all products across all clinics for the user marketplace."""
-    return db.query(Product).order_by(Product.created_at.desc()).all()
+    results = db.query(Product, BusinessProfile.clinic_name)\
+        .join(BusinessProfile, Product.business_id == BusinessProfile.id)\
+        .order_by(Product.created_at.desc()).all()
+    
+    catalog = []
+    for p, clinic_name in results:
+        # Convert SQLAlchemy object to dict and inject clinic_name
+        p_dict = {column.name: getattr(p, column.name) for column in p.__table__.columns}
+        p_dict["clinic_name"] = clinic_name
+        catalog.append(p_dict)
+    return catalog
 
 @app.get("/api/catalog/{product_id}", response_model=ProductSchema)
 async def get_product_detail(product_id: int, db: Session = Depends(get_db)):
@@ -1652,6 +1791,8 @@ async def create_product(
         sku=body.sku,
         image=body.image or "/images/product_placeholder.png",
         tag=body.tag or "New",
+        variants_json=body.variants_json,
+        sizes_json=body.sizes_json,
         stars=5,
         loyalty_points=body.loyalty_points or 0
     )
@@ -1686,6 +1827,8 @@ async def update_product(
     if body.image is not None: product.image = body.image
     if body.tag is not None: product.tag = body.tag
     if body.loyalty_points is not None: product.loyalty_points = body.loyalty_points
+    if body.variants_json is not None: product.variants_json = body.variants_json
+    if body.sizes_json is not None: product.sizes_json = body.sizes_json
     
     db.commit()
     db.refresh(product)
@@ -1859,7 +2002,7 @@ async def create_reservation(
         db, customer_id, "System", 
         "Reservation Booked!", 
         f"Your reservation for {new_res.service} on {new_res.date} at {new_res.time} has been requested.",
-        "/dashboard/user/reservations"
+        "/dashboard/customer/reservations"
     )
 
     return {"reservation": _reservation_to_dict(new_res, customer_name=customer_name)}
@@ -1889,7 +2032,7 @@ async def cancel_reservation(
         db, res.customer_id, "System", 
         "Reservation Cancelled", 
         f"Your reservation for {res.service} on {res.date} has been cancelled.",
-        "/dashboard/user/reservations"
+        "/dashboard/customer/reservations"
     )
 
     return {"reservation": _reservation_to_dict(res)}
@@ -2006,7 +2149,7 @@ async def update_reservation_status(
             db, res.customer_id, "System", 
             f"Reservation {res.status}", 
             status_msg,
-            "/dashboard/user/reservations"
+            "/dashboard/customer/reservations"
         )
 
     return {"reservation": _reservation_to_dict(res)}
@@ -2427,31 +2570,44 @@ async def get_business_dashboard_stats(
     
     biz_id = int(current_user["sub"])
     
-    # Orders count for this business (Orders containing at least one item from this biz, excluding cancelled and pending)
-    orders_count = db.query(Order).join(OrderItem, OrderItem.order_id == Order.id).join(Product, Product.id == OrderItem.product_id).filter(Product.business_id == biz_id, Order.status.notin_(["Cancelled", "Pending"])).distinct().count()
+    # Product Orders count (Successful)
+    product_orders_count = db.query(Order).join(OrderItem, OrderItem.order_id == Order.id).join(Product, Product.id == OrderItem.product_id).filter(Product.business_id == biz_id, Order.status.notin_(["Cancelled", "Pending"])).distinct().count()
     
-    # revenue calculation
+    # Service Appointments count (Successful)
+    service_appointments_count = db.query(Reservation).filter(Reservation.business_id == biz_id, Reservation.status.in_(["Completed", "Confirmed"])).count()
+    
+    # Revenue calculation
     now = datetime.utcnow()
     month_start = datetime(now.year, now.month, 1)
     last_month_start = (month_start - timedelta(days=1)).replace(day=1)
     
-    # Current month revenue
-    revenue_query = db.query(OrderItem).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= month_start, Order.status.notin_(["Cancelled", "Pending"]))
-    monthly_rev = sum(item.price * item.quantity for item in revenue_query.all())
+    # Product revenue (Current vs Previous)
+    prod_rev_query = db.query(OrderItem).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= month_start, Order.status.notin_(["Cancelled", "Pending"]))
+    monthly_prod_rev = sum(item.price * item.quantity for item in prod_rev_query.all())
     
-    # Previous month revenue
-    prev_revenue_query = db.query(OrderItem).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= last_month_start, Order.created_at < month_start, Order.status.notin_(["Cancelled", "Pending"]))
-    prev_monthly_rev = sum(item.price * item.quantity for item in prev_revenue_query.all())
+    prev_prod_rev_query = db.query(OrderItem).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= last_month_start, Order.created_at < month_start, Order.status.notin_(["Cancelled", "Pending"]))
+    prev_monthly_prod_rev = sum(item.price * item.quantity for item in prev_prod_rev_query.all())
+
+    # Service revenue (Current vs Previous)
+    service_rev_query = db.query(Reservation).filter(Reservation.business_id == biz_id, Reservation.created_at >= month_start, Reservation.status.in_(["Completed", "Confirmed"]))
+    monthly_service_rev = sum(res.total_amount for res in service_rev_query.all())
     
-    # Calculate % change
-    if prev_monthly_rev > 0:
-        rev_change_pct = ((monthly_rev - prev_monthly_rev) / prev_monthly_rev) * 100
+    prev_service_rev_query = db.query(Reservation).filter(Reservation.business_id == biz_id, Reservation.created_at >= last_month_start, Reservation.created_at < month_start, Reservation.status.in_(["Completed", "Confirmed"]))
+    prev_monthly_service_rev = sum(res.total_amount for res in prev_service_rev_query.all())
+
+    # Totals
+    total_curr_rev = monthly_prod_rev + monthly_service_rev
+    total_prev_rev = prev_monthly_prod_rev + prev_monthly_service_rev
+    
+    # Calculate revenue % change
+    if total_prev_rev > 0:
+        rev_change_pct = ((total_curr_rev - total_prev_rev) / total_prev_rev) * 100
         rev_change_str = f"{'+' if rev_change_pct >= 0 else ''}{rev_change_pct:.0f}% vs last mo"
     else:
-        rev_change_str = "+100% vs last mo" if monthly_rev > 0 else "0% vs last mo"
+        rev_change_str = "+100% vs last mo" if total_curr_rev > 0 else "0% vs last mo"
 
     # Orders change
-    curr_orders = db.query(Order).join(OrderItem, OrderItem.order_id == Order.id).join(Product, Product.id == OrderItem.product_id).filter(Product.business_id == biz_id, Order.created_at >= month_start, Order.status.notin_(["Cancelled", "Pending"])).distinct().count()
+    curr_orders = product_orders_count # Focus on product orders for the 'orders' specific change
     prev_orders = db.query(Order).join(OrderItem, OrderItem.order_id == Order.id).join(Product, Product.id == OrderItem.product_id).filter(Product.business_id == biz_id, Order.created_at >= last_month_start, Order.created_at < month_start, Order.status.notin_(["Cancelled", "Pending"])).distinct().count()
     
     if prev_orders > 0:
@@ -2464,8 +2620,11 @@ async def get_business_dashboard_stats(
     low_stock = db.query(Product).filter(Product.business_id == biz_id, Product.stock <= 10).count()
     
     return {
-        "total_orders": orders_count,
-        "monthly_revenue": int(monthly_rev),
+        "product_orders": product_orders_count,
+        "service_appointments": service_appointments_count,
+        "product_revenue": int(monthly_prod_rev),
+        "service_revenue": int(monthly_service_rev),
+        "total_revenue": int(total_curr_rev),
         "active_products": active_prods,
         "low_stock_count": low_stock,
         "revenue_change": rev_change_str,
@@ -2504,6 +2663,7 @@ async def get_business_recent_orders(
 @app.get("/api/business/dashboard/analytics", response_model=BusinessAnalyticsData)
 async def get_business_analytics(
     period: str = Query("6m", pattern="^(7d|30d|6m|1y)$"),
+    data_type: str = Query("all", pattern="^(all|products|services)$"),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -2519,16 +2679,49 @@ async def get_business_analytics(
     now = datetime.utcnow()
     month_start = datetime(now.year, now.month, 1)
     
-    # Accurate Units Sold (Total items across all successful orders for this business)
-    units_sold_query = db.query(func.sum(OrderItem.quantity)).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.status.notin_(["Cancelled", "Pending"]))
-    total_units = units_sold_query.scalar() or 0
+    # Apply period filter cutoff for accurate analytics syncing
+    if period == '7d':
+        cutoff_date = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == '30d':
+        cutoff_date = (now - timedelta(days=29)).replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == '6m':
+        cutoff_date = month_start - relativedelta(months=5)
+    else: # 1y
+        cutoff_date = month_start - relativedelta(months=11)
+        
+    dyn_prod_data = db.query(OrderItem, Order).join(Order, Order.id == OrderItem.order_id).join(Product, Product.id == OrderItem.product_id).filter(Product.business_id == biz_id, Order.created_at >= cutoff_date, Order.status.notin_(["Cancelled", "Pending"])).all()
+    dyn_prod_rev = sum(item[0].price * item[0].quantity for item in dyn_prod_data)
+    dyn_prod_orders = len(set(item[1].id for item in dyn_prod_data))
+
+    dyn_serv_data = db.query(Reservation).filter(Reservation.business_id == biz_id, Reservation.created_at >= cutoff_date, Reservation.status.in_(["Completed", "Confirmed"])).all()
+    dyn_serv_rev = sum(res.total_amount for res in dyn_serv_data if res.status == "Completed")
+    dyn_serv_appts = len(dyn_serv_data)
+    completed_sessions = len([res for res in dyn_serv_data if res.status == "Completed"])
+    avg_session_val = dyn_serv_rev / completed_sessions if completed_sessions > 0 else 0
     
-    kpis = [
-        {"label": "Total Revenue", "value": f"₱{stats['monthly_revenue']/1000:,.1f}k", "change": stats["revenue_change"], "up": "+" in stats["revenue_change"], "icon": "TrendingUp", "color": "bg-green-50 text-green-600"},
-        {"label": "Units Sold", "value": f"{total_units:,}", "change": stats["orders_change"], "up": "+" in stats["orders_change"], "icon": "ShoppingBag", "color": "bg-orange-50 text-orange-600"},
-        {"label": "Active Products", "value": f"{stats['active_products']}", "change": "Live", "up": True, "icon": "Package", "color": "bg-blue-50 text-blue-600"},
-        {"label": "Low Stock", "value": f"{stats['low_stock_count']}", "change": "Action Required" if stats['low_stock_count'] > 0 else "Optimal", "up": stats['low_stock_count'] == 0, "icon": "Award", "color": "bg-purple-50 text-purple-600"}
-    ]
+    dyn_total_rev = dyn_prod_rev + dyn_serv_rev
+
+    if data_type == 'products':
+        kpis = [
+            {"label": "Product Revenue", "value": f"₱{int(dyn_prod_rev):,}", "change": "Period Sales", "up": True, "icon": "TrendingUp", "color": "bg-green-50 text-green-600"},
+            {"label": "Total Orders", "value": f"{dyn_prod_orders}", "change": f"in {period}", "up": True, "icon": "ShoppingBag", "color": "bg-blue-50 text-blue-600"},
+            {"label": "Active Products", "value": f"{stats['active_products']}", "change": "Live", "up": True, "icon": "Package", "color": "bg-orange-50 text-orange-600"},
+            {"label": "Inventory Status", "value": f"{stats['active_products']}", "change": f"{stats['low_stock_count']} low stock", "up": stats['low_stock_count'] == 0, "icon": "Package", "color": "bg-orange-50 text-orange-600"}
+        ]
+    elif data_type == 'services':
+        kpis = [
+            {"label": "Service Revenue", "value": f"₱{int(dyn_serv_rev):,}", "change": "Period Income", "up": True, "icon": "TrendingUp", "color": "bg-green-50 text-green-600"},
+            {"label": "Total Appointments", "value": f"{dyn_serv_appts}", "change": f"in {period}", "up": True, "icon": "Users", "color": "bg-blue-50 text-blue-600"},
+            {"label": "Avg Appointment", "value": f"₱{int(avg_session_val):,}", "change": "Per completion", "up": True, "icon": "Award", "color": "bg-purple-50 text-purple-600"},
+            {"label": "Inventory Status", "value": f"{stats['active_products']}", "change": f"{stats['low_stock_count']} low stock", "up": stats['low_stock_count'] == 0, "icon": "Package", "color": "bg-orange-50 text-orange-600"}
+        ]
+    else: # all
+        kpis = [
+            {"label": "Total Revenue", "value": f"₱{int(dyn_total_rev):,}", "change": "Period Total", "up": True, "icon": "TrendingUp", "color": "bg-green-50 text-green-600"},
+            {"label": "Product Sales", "value": f"₱{int(dyn_prod_rev):,}", "change": f"{dyn_prod_orders} orders", "up": True, "icon": "ShoppingBag", "color": "bg-blue-50 text-blue-600"},
+            {"label": "Clinic Services", "value": f"₱{int(dyn_serv_rev):,}", "change": f"{dyn_serv_appts} appts", "up": True, "icon": "Award", "color": "bg-purple-50 text-purple-600"},
+            {"label": "Inventory Status", "value": f"{stats['active_products']}", "change": f"{stats['low_stock_count']} low stock", "up": stats['low_stock_count'] == 0, "icon": "Package", "color": "bg-orange-50 text-orange-600"}
+        ]
     
     # Revenue Trend based on period
     revenue_trend_data = []
@@ -2537,54 +2730,84 @@ async def get_business_analytics(
         for i in range(6, -1, -1):
             day = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
             next_day = day + timedelta(days=1)
-            val = db.query(func.sum(OrderItem.price * OrderItem.quantity)).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= day, Order.created_at < next_day, Order.status.notin_(["Cancelled", "Pending"])).scalar() or 0
-            revenue_trend_data.append({"name": day.strftime("%a"), "value": int(val)})
+            # Combined Product + Service Revenue
+            prod_val = 0
+            if data_type in ['all', 'products']:
+                prod_val = db.query(func.sum(OrderItem.price * OrderItem.quantity)).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= day, Order.created_at < next_day, Order.status.notin_(["Cancelled", "Pending"])).scalar() or 0
+            
+            serv_val = 0
+            if data_type in ['all', 'services']:
+                serv_val = db.query(func.sum(Reservation.total_amount)).filter(Reservation.business_id == biz_id, Reservation.created_at >= day, Reservation.created_at < next_day, Reservation.status == "Completed").scalar() or 0
+            
+            revenue_trend_data.append({"name": day.strftime("%a"), "value": int(prod_val + serv_val)})
             
     elif period == '30d':
         for i in range(29, -1, -5): # Show every 5th day for 30d
             day = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
             next_interval = day + timedelta(days=5)
-            val = db.query(func.sum(OrderItem.price * OrderItem.quantity)).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= day, Order.created_at < next_interval, Order.status.notin_(["Cancelled", "Pending"])).scalar() or 0
-            revenue_trend_data.append({"name": day.strftime("%b %d"), "value": int(val)})
+            # Combined Product + Service Revenue
+            prod_val = 0
+            if data_type in ['all', 'products']:
+                prod_val = db.query(func.sum(OrderItem.price * OrderItem.quantity)).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= day, Order.created_at < next_interval, Order.status.notin_(["Cancelled", "Pending"])).scalar() or 0
+            
+            serv_val = 0
+            if data_type in ['all', 'services']:
+                serv_val = db.query(func.sum(Reservation.total_amount)).filter(Reservation.business_id == biz_id, Reservation.created_at >= day, Reservation.created_at < next_interval, Reservation.status == "Completed").scalar() or 0
+            
+            revenue_trend_data.append({"name": day.strftime("%b %d"), "value": int(prod_val + serv_val)})
             
     elif period == '6m':
         for i in range(5, -1, -1):
             m_start = (month_start - relativedelta(months=i))
             m_end = (m_start + relativedelta(months=1))
-            val = db.query(func.sum(OrderItem.price * OrderItem.quantity)).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= m_start, Order.created_at < m_end, Order.status.notin_(["Cancelled", "Pending"])).scalar() or 0
-            revenue_trend_data.append({"name": m_start.strftime("%Y-%m"), "value": int(val)})
+            # Combined Product + Service Revenue
+            prod_val = 0
+            if data_type in ['all', 'products']:
+                prod_val = db.query(func.sum(OrderItem.price * OrderItem.quantity)).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= m_start, Order.created_at < m_end, Order.status.notin_(["Cancelled", "Pending"])).scalar() or 0
+                
+            serv_val = 0
+            if data_type in ['all', 'services']:
+                serv_val = db.query(func.sum(Reservation.total_amount)).filter(Reservation.business_id == biz_id, Reservation.created_at >= m_start, Reservation.created_at < m_end, Reservation.status == "Completed").scalar() or 0
+                
+            revenue_trend_data.append({"name": m_start.strftime("%Y-%m"), "value": int(prod_val + serv_val)})
             
     else: # 1y
         for i in range(11, -1, -1):
             m_start = (month_start - relativedelta(months=i))
             m_end = (m_start + relativedelta(months=1))
-            val = db.query(func.sum(OrderItem.price * OrderItem.quantity)).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= m_start, Order.created_at < m_end, Order.status.notin_(["Cancelled", "Pending"])).scalar() or 0
-            revenue_trend_data.append({"name": m_start.strftime("%Y-%m"), "value": int(val)})
+            # Combined Product + Service Revenue
+            prod_val = 0
+            if data_type in ['all', 'products']:
+                prod_val = db.query(func.sum(OrderItem.price * OrderItem.quantity)).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= m_start, Order.created_at < m_end, Order.status.notin_(["Cancelled", "Pending"])).scalar() or 0
+                
+            serv_val = 0
+            if data_type in ['all', 'services']:
+                serv_val = db.query(func.sum(Reservation.total_amount)).filter(Reservation.business_id == biz_id, Reservation.created_at >= m_start, Reservation.created_at < m_end, Reservation.status == "Completed").scalar() or 0
+                
+            revenue_trend_data.append({"name": m_start.strftime("%Y-%m"), "value": int(prod_val + serv_val)})
 
-    return {
-        "kpis": kpis,
-        "revenue_trend": {
-            "trend": stats["revenue_change"],
-            "chartData": revenue_trend_data
-        },
-        "top_products": top_products,
-        "loyalty_redemptions": loyalty_redemptions,
-        "retention_rate": int((repeat_customers / total_biz_customers * 100)) if total_biz_customers > 0 else 0,
-        "retention_change": "+2%" # Placeholder for trend
-    }
-    
-    # Top Products by Revenue/Volume (Excluding Cancelled and Pending)
-    top_items = db.query(
-        Product.name,
-        func.sum(OrderItem.quantity).label("total_sold"),
-        func.sum(OrderItem.price * OrderItem.quantity).label("total_revenue")
-    ).join(OrderItem, OrderItem.product_id == Product.id)\
-     .join(Order, Order.id == OrderItem.order_id)\
-     .filter(Product.business_id == biz_id, Order.status.notin_(["Cancelled", "Pending"]))\
-     .group_by(Product.id)\
-     .order_by(text("total_revenue DESC"))\
-     .limit(5).all()
-     
+    # Top Products by Revenue/Volume based on Period Cutoff
+    if data_type == 'services':
+        top_items = db.query(
+            Reservation.service.label("name"),
+            func.count(Reservation.id).label("total_sold"),
+            func.sum(Reservation.total_amount).label("total_revenue")
+        ).filter(Reservation.business_id == biz_id, Reservation.created_at >= cutoff_date, Reservation.status == "Completed")\
+         .group_by(Reservation.service)\
+         .order_by(text("total_revenue DESC"))\
+         .limit(5).all()
+    else:
+        top_items = db.query(
+            Product.name,
+            func.sum(OrderItem.quantity).label("total_sold"),
+            func.sum(OrderItem.price * OrderItem.quantity).label("total_revenue")
+        ).join(OrderItem, OrderItem.product_id == Product.id)\
+         .join(Order, Order.id == OrderItem.order_id)\
+         .filter(Product.business_id == biz_id, Order.created_at >= cutoff_date, Order.status.notin_(["Cancelled", "Pending"]))\
+         .group_by(Product.id)\
+         .order_by(text("total_revenue DESC"))\
+         .limit(5).all()
+         
     top_products = []
     max_rev = max([item.total_revenue for item in top_items]) if top_items else 1
     for item in top_items:
@@ -2629,18 +2852,27 @@ async def get_business_analytics(
     retention_rate = int((repeat_customers / total_biz_customers * 100)) if total_biz_customers > 0 else 0
     retention_change = "↑ 2pts vs last month" if retention_rate > 0 else "0% change"
 
+    # Distribution Logic (Products vs Services comparison)
+    products_count = db.query(OrderItem).join(Order, Order.id == OrderItem.order_id).join(Product, Product.id == OrderItem.product_id).filter(Product.business_id == biz_id, Order.created_at >= cutoff_date, Order.status.notin_(["Cancelled", "Pending"])).count()
+    services_count = db.query(Reservation).filter(Reservation.business_id == biz_id, Reservation.created_at >= cutoff_date, Reservation.status.in_(["Completed", "Confirmed"])).count()
+
+    distribution_data = [
+        {"name": "Products Ordered", "value": products_count, "color": "#FB8500"},
+        {"name": "Services Rendered", "value": services_count, "color": "#219EBC"}
+    ]
+
     return {
         "kpis": kpis,
-        "revenue_trend": revenue_trend,
+        "revenue_trend": {
+            "trend": stats["revenue_change"],
+            "chartData": revenue_trend_data
+        },
         "top_products": top_products,
         "loyalty_redemptions": loyalty_redemptions,
         "retention_rate": retention_rate,
-        "retention_change": retention_change
+        "retention_change": retention_change,
+        "distribution_data": distribution_data
     }
-        
-    db.delete(product)
-    db.commit()
-    return {"message": "Product deleted successfully"}
 
 # ─── Admin Compliance Endpoints ───────────────────────────────────────────────
 @app.get("/api/admin/compliance")
@@ -3007,41 +3239,126 @@ def forgot_password_send_otp(body: SendOtpRequest, db: Session = Depends(get_db)
     expires = datetime.utcnow() + timedelta(minutes=10)
     OTP_STORE[body.email] = {"otp": otp_code, "expires": expires}
     
-    # HTML Email Template
+    # Load mascot image bytes for CID inline embedding
+    mascot_img_bytes = None
+    mascot_path = r"C:\Users\Gene\.gemini\antigravity\brain\35c9e455-75fa-454a-a22c-5d092fedd953\hivet_mascot_email_header_1775572118329.png"
+    if os.path.exists(mascot_path):
+        try:
+            with Image.open(mascot_path) as img:
+                img.thumbnail((300, 300))
+                if img.mode != 'RGB':
+                    bg = Image.new("RGB", img.size, (255, 255, 255))
+                    if img.mode == 'RGBA':
+                        bg.paste(img, mask=img.split()[3])
+                    else:
+                        bg.paste(img)
+                    img = bg
+                buffered = io.BytesIO()
+                img.save(buffered, format="JPEG", quality=85, optimize=True)
+                mascot_img_bytes = buffered.getvalue()
+        except Exception as e:
+            print(f"ERROR: Could not load mascot for reset email: {e}")
+
+    # Professional HTML Email Template (Outfit Typography, High-End Palette)
     html_content = f"""
-    <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #FAFAFA; color: #333333; border-radius: 8px;">
-        <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="color: #4A3E3D; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; margin: 0;">Hi-Vet CRM</h1>
-        </div>
-        <div style="background-color: #FFFFFF; border: 1px solid #EAEAEA; border-radius: 12px; padding: 40px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
-            <h2 style="font-size: 20px; font-weight: 700; color: #4A3E3D; margin-top: 0; margin-bottom: 15px;">Secure Password Reset</h2>
-            <p style="font-size: 15px; line-height: 1.6; color: #666666; margin-bottom: 30px; margin-top: 0;">
-                A formal request to reset the password associated with your Hi-Vet CRM professional account has been initiated. To authorize this change and restore your secure access, please utilize the 6-digit verification code provided below.
-            </p>
-            <div style="background-color: #FFF5F0; border: 2px dashed #E85D04; border-radius: 8px; padding: 20px; margin-bottom: 30px; display: inline-block;">
-                <span style="font-size: 32px; font-weight: 900; letter-spacing: 5px; color: #E85D04;">{otp_code}</span>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+            body {{ margin: 0; padding: 0; background-color: #FFF9F5; }}
+            .container {{ max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 48px; min-width: 320px; overflow: hidden; box-shadow: 0 30px 60px rgba(0, 0, 0, 0.04); border: 1px solid #FFEDE0; }}
+            .hero-section {{ padding: 30px 40px; text-align: center; background: #ffffff; }}
+            .mascot {{ width: 240px; height: auto; border-radius: 32px; filter: drop-shadow(0 15px 30px rgba(232, 93, 4, 0.15)); }}
+            .content {{ padding: 0 60px 60px 60px; text-align: center; font-family: 'Outfit', sans-serif; }}
+            .brand-name {{ color: #E85D04; font-weight: 900; font-size: 20px; letter-spacing: -0.5px; margin-top: 15px; display: block; text-transform: uppercase; }}
+            h1 {{ color: #2D2422; font-size: 32px; font-weight: 900; margin: 20px 0; letter-spacing: -1px; }}
+            p {{ color: #6B5E5C; font-size: 16px; line-height: 1.6; margin: 0 0 32px 0; font-weight: 500; }}
+            .otp-container {{ background-color: #FFF5F0; border-radius: 40px; padding: 10px; border: 2px solid #FFD8C2; display: inline-block; }}
+            .otp-box {{ background-color: #ffffff; border-radius: 32px; padding: 25px 40px; border: 1px solid #FFD8C2; box-shadow: 0 10px 20px rgba(232, 93, 4, 0.05); }}
+            .otp-code {{ font-size: 52px; font-weight: 900; letter-spacing: 12px; color: #E85D04; font-family: 'Outfit', monospace; margin-left: 12px; }}
+            .footer {{ background-color: #FDFBFA; padding: 40px; text-align: center; border-top: 1px solid #FFEDE0; }}
+            .footer-text {{ color: #A69491; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }}
+            .footer-sub {{ color: #C4B5B2; font-size: 10px; line-height: 1.6; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="hero-section">
+                <img src="cid:mascot" alt="Hi-Vet Mascot" class="mascot">
+                <span class="brand-name">HI-VET</span>
             </div>
-            <p style="font-size: 13px; color: #999999; margin-bottom: 0;">
-                This code will expire in 10 minutes. If you did not request a password reset, please ignore this email or contact support if you have concerns.
-            </p>
+            <div class="content">
+                <h1>Reset password</h1>
+                <p>We received a humble request to access your Hi-Vet account. Please use the verification code below to securely update your password.</p>
+                <div class="otp-container">
+                    <div class="otp-box">
+                        <span class="otp-code">{otp_code}</span>
+                    </div>
+                </div>
+                <p style="font-size: 13px; color: #A69491; margin: 40px 0 0 0;">This code will expire in 10 minutes. If you didn't request this, you can safely ignore this email.</p>
+            </div>
+            <div class="footer">
+                <p class="footer-text">Helping you care for your furry family</p>
+                <p class="footer-sub">
+                    &copy; 2026 Hi-Vet. All rights reserved.<br>
+                    Professional Veterinary Care Solutions.
+                </p>
+            </div>
         </div>
-    </div>
+    </body>
+    </html>
     """
     
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Password Reset - Hi-Vet CRM"
-    msg["From"] = f"Hi-Vet CRM <{EMAIL_SENDER}>"
-    msg["To"] = body.email
-    msg.attach(MIMEText(html_content, "html"))
+    text_content = f"""
+    Hi-Vet: Password Reset Request
     
+    We received a request to access your Hi-Vet account. 
+    Please use the code below to securely reset your password:
+    
+    {otp_code}
+    
+    This code expires in 10 minutes. 
+    
+    © 2026 Hi-Vet. All rights reserved.
+    """
+    
+    # MIME structure with CID inline image
+    msg = MIMEMultipart("related")
+    msg["Subject"] = f"{otp_code} is your Hi-Vet password reset code"
+    msg["From"] = f'"Hi-Vet Assistant" <{EMAIL_SENDER}>'
+    msg["To"] = body.email
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="gmail.com")
+    msg["X-Auto-Response-Suppress"] = "All"
+    msg["Auto-Submitted"] = "auto-generated"
+    
+    msg_alternative = MIMEMultipart("alternative")
+    msg.attach(msg_alternative)
+    msg_alternative.attach(MIMEText(text_content, "plain"))
+    msg_alternative.attach(MIMEText(html_content, "html"))
+    
+    if mascot_img_bytes:
+        try:
+            img_mime = MIMEImage(mascot_img_bytes, _subtype="jpeg")
+            img_mime.add_header("Content-ID", "<mascot>")
+            img_mime.add_header("Content-Disposition", "inline")
+            msg.attach(img_mime)
+        except Exception as e:
+            print(f"Error attaching mascot to reset email: {e}")
+
+    if not EMAIL_SENDER or not EMAIL_APP_PWD:
+        raise HTTPException(status_code=500, detail="Email service not configured.")
+
     try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        server.login(EMAIL_SENDER, EMAIL_APP_PWD)
-        server.sendmail(EMAIL_SENDER, body.email, msg.as_string())
-        server.quit()
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+            server.login(EMAIL_SENDER, EMAIL_APP_PWD)
+            server.send_message(msg)
     except Exception as e:
-        print("SMTP Error:", e)
-        raise HTTPException(status_code=500, detail="Failed to send password reset email.")
+        print("SMTP Error (Reset Email):", e)
+        raise HTTPException(status_code=500, detail="Failed to send reset email.")
         
     return {"message": "Verification code sent"}
 
@@ -3321,13 +3638,86 @@ async def get_customer_dashboard_stats(request: Request, db: Session = Depends(g
     recent_order = None
     if recent_order_obj:
         items = db.query(OrderItem).filter(OrderItem.order_id == recent_order_obj.id).all()
+
+        # ── Step A: Resolve the clinic (BusinessProfile) ──────────────────────
+        # Priority 1: Tally which business owns the most products in this order
+        # (handles mixed-clinic carts correctly)
+        clinic = None
+        if items:
+            from collections import Counter
+            product_ids = [item.product_id for item in items]
+            products_in_order = db.query(Product).filter(Product.id.in_(product_ids)).all()
+            biz_counts = Counter(p.business_id for p in products_in_order if p.business_id)
+            if biz_counts:
+                dominant_biz_id = biz_counts.most_common(1)[0][0]
+                clinic = db.query(BusinessProfile).filter(BusinessProfile.id == dominant_biz_id).first()
+
+        # Priority 2: Explicit clinic_id on the order (if product lookup failed)
+        if not clinic and recent_order_obj.clinic_id:
+            clinic = db.query(BusinessProfile).filter(
+                BusinessProfile.id == recent_order_obj.clinic_id
+            ).first()
+
+        clinic_name = (clinic.clinic_name or "Partner Clinic") if clinic else "Partner Clinic"
+
+
+        # ── Step B: Resolve the branch (BusinessBranch) ───────────────────────
+        # Priority 1: Exact branch_id on the order
+        branch = None
+        if recent_order_obj.branch_id:
+            branch = db.query(BusinessBranch).filter(
+                BusinessBranch.id == recent_order_obj.branch_id
+            ).first()
+
+        # Priority 2: If branch not found, use main or first branch of the resolved clinic
+        if not branch and clinic:
+            branch = (
+                db.query(BusinessBranch)
+                .filter(BusinessBranch.business_id == clinic.id, BusinessBranch.is_main == True)
+                .first()
+                or
+                db.query(BusinessBranch)
+                .filter(BusinessBranch.business_id == clinic.id)
+                .order_by(BusinessBranch.id.asc())
+                .first()
+            )
+
+        # ── Step C: Build the location string ────────────────────────────────
+        if branch:
+            # Address — prefer granular fields, fall back to address_line fields
+            addr_parts = list(filter(None, [
+                branch.barangay or branch.address_line1,
+                branch.city     or None,
+            ]))
+            branch_addr = ", ".join(addr_parts)
+
+            # Label: "Main Branch" if is_main flag is set, else use actual branch name
+            branch_label = "Main Branch" if branch.is_main else (branch.name or "Branch")
+
+            location_display = (
+                f"{clinic_name} · {branch_label}, {branch_addr}"
+                if branch_addr else
+                f"{clinic_name} · {branch_label}"
+            )
+        else:
+            # No branch found — show clinic's own address fields
+            clinic_addr_parts = list(filter(None, [
+                clinic.clinic_barangay if clinic else None,
+                clinic.clinic_city     if clinic else None,
+            ]))
+            clinic_addr = ", ".join(clinic_addr_parts)
+            location_display = f"{clinic_name}, {clinic_addr}" if clinic_addr else clinic_name
+
+
+
         recent_order = {
             "id": f"RV-{recent_order_obj.id:04d}",
             "status": recent_order_obj.status,
-            "item_summary": f"{items[0].product_name} ({len(items)} Items)" if items else "Empty Order",
-            "location": "Main Clinic", # Mocked for now as we don't have location on Order yet
+            "item_summary": f"{items[0].product_name} ({len(items)} Items)" if items else "Order Items",
+            "location": location_display,
             "created_at": str(recent_order_obj.created_at)
         }
+
 
     # 3. Alerts (Unread Notifications)
     unread_notifs = db.query(Notification).filter(
@@ -3573,6 +3963,92 @@ async def set_default_address(addr_id: int, request: Request, db: Session = Depe
 # Routes â€“ Orders
 # ---------------------------------------------------------------------------
 
+def restore_stock(db: Session, order_id: int):
+    """Helper to return items to stock when a completed order is cancelled."""
+    import json
+    order_items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+    for item in order_items:
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        if not product:
+            continue
+        
+        qty = item.quantity
+        restored = False
+        
+        # 1. Restore Variants
+        if item.variant and product.variants_json:
+            try:
+                variants = json.loads(product.variants_json)
+                for v in variants:
+                    if v.get('name') == item.variant:
+                        v['stock'] = v.get('stock', 0) + qty
+                        product.variants_json = json.dumps(variants)
+                        restored = True
+                        break
+            except Exception as e:
+                print(f"Restore stock error (variants): {e}")
+        
+        # 2. Restore Sizes
+        if not restored and item.size and product.sizes_json:
+            try:
+                sizes = json.loads(product.sizes_json)
+                for s in sizes:
+                    if s.get('name') == item.size:
+                        s['stock'] = s.get('stock', 0) + qty
+                        product.sizes_json = json.dumps(sizes)
+                        restored = True
+                        break
+            except Exception as e:
+                print(f"Restore stock error (sizes): {e}")
+        
+        # 3. Fallback to main stock
+        if not restored:
+            product.stock = product.stock + qty
+    db.commit()
+
+def reduce_stock(db: Session, order_id: int):
+    """Helper to decrement stock when an order is completed."""
+    import json
+    order_items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+    for item in order_items:
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        if not product:
+            continue
+        
+        needed = item.quantity
+        reduced = False
+        
+        # 1. Variants
+        if item.variant and product.variants_json:
+            try:
+                variants = json.loads(product.variants_json)
+                for v in variants:
+                    if v.get('name') == item.variant:
+                        v['stock'] = max(0, v.get('stock', 0) - needed)
+                        product.variants_json = json.dumps(variants)
+                        reduced = True
+                        break
+            except Exception as e:
+                print(f"Reduce stock error (variants): {e}")
+        
+        # 2. Sizes
+        if not reduced and item.size and product.sizes_json:
+            try:
+                sizes = json.loads(product.sizes_json)
+                for s in sizes:
+                    if s.get('name') == item.size:
+                        s['stock'] = max(0, s.get('stock', 0) - needed)
+                        product.sizes_json = json.dumps(sizes)
+                        reduced = True
+                        break
+            except Exception as e:
+                print(f"Reduce stock error (sizes): {e}")
+        
+        # 3. Main Stock
+        if not reduced:
+            product.stock = max(0, product.stock - needed)
+    db.commit()
+
 @app.post("/api/orders", status_code=201)
 async def create_order(body: OrderCreate, request: Request, db: Session = Depends(get_db)):
     auth_header = request.headers.get("Authorization", "")
@@ -3584,10 +4060,87 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
     except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
 
+    # Handle Voucher (Phase 1: Validation)
+    discount_val = 0
+    voucher_obj = None
+    if body.voucher_code:
+        v_res = db.query(UserVoucher, LoyaltyVoucher).join(
+            LoyaltyVoucher, UserVoucher.voucher_id == LoyaltyVoucher.id
+        ).filter(
+            UserVoucher.code == body.voucher_code.upper(),
+            UserVoucher.customer_id == customer_id,
+            UserVoucher.is_used == False
+        ).first()
+        
+        if v_res:
+            uv, lv = v_res
+            voucher_obj = uv
+            if lv.type == "Discount":
+                if "Food" in lv.title: # 15% Off Premium Foods
+                    food_total = 0
+                    for item in body.items:
+                        p = db.query(Product).filter(Product.id == item.id).first()
+                        # Apply ONLY to Food items
+                        if p and p.type == "Food":
+                            food_total += item.price * item.quantity
+                    discount_val = int(food_total * (lv.value / 100))
+                else:
+                    discount_val = int(body.totalAmount * (lv.value / 100))
+            elif lv.type == "Credit":
+                discount_val = int(lv.value)
+
+    # --- NEW: Stock Validation (DO NOT DECREMENT YET) ---
+    import json
+    for item in body.items:
+        product = db.query(Product).filter(Product.id == item.id).first()
+        if not product:
+            raise HTTPException(404, detail=f"Product {item.name} not found.")
+        
+        needed = item.quantity
+        stock_ok = False
+        
+        # 1. Check Variants
+        if item.variant and product.variants_json:
+            try:
+                variants = json.loads(product.variants_json)
+                for v in variants:
+                    if v.get('name') == item.variant:
+                        if v.get('stock', 0) < needed:
+                            raise HTTPException(400, detail=f"Insufficient stock for {product.name} ({item.variant}). Only {v.get('stock')} left.")
+                        stock_ok = True
+                        break
+            except Exception as e:
+                print(f"Stock check error (variants): {e}")
+        
+        # 2. Check Sizes
+        if not stock_ok and item.size and product.sizes_json:
+            try:
+                sizes = json.loads(product.sizes_json)
+                for s in sizes:
+                    if s.get('name') == item.size:
+                        if s.get('stock', 0) < needed:
+                            raise HTTPException(400, detail=f"Insufficient stock for {product.name} ({item.size}). Only {s.get('stock')} left.")
+                        stock_ok = True
+                        break
+            except Exception as e:
+                print(f"Stock check error (sizes): {e}")
+        
+        # 3. Fallback to main stock
+        if not stock_ok:
+            if product.stock < needed:
+                raise HTTPException(400, detail=f"Insufficient stock for {product.name}. Only {product.stock} left.")
+
+    # Consume voucher (Phase 2)
+    if voucher_obj:
+        voucher_obj.is_used = True
+        voucher_obj.redeemed_at = datetime.utcnow()
+
     new_order = Order(
         customer_id=customer_id,
         status="Pending",
-        total_amount=int(body.totalAmount),
+        total_amount=int(body.totalAmount) - discount_val,
+        discount_amount=discount_val,
+        voucher_code=body.voucher_code.upper() if body.voucher_code else None,
         fulfillment_method=body.fulfillmentMethod,
         payment_method=body.paymentMethod,
         delivery_address=body.deliveryDetails.get("address") if body.deliveryDetails else None,
@@ -3624,11 +4177,10 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
         db, customer_id, "System", 
         "Order Placed!", 
         f"Your order #HV-{new_order.id:04d} has been successfully placed.",
-        "/dashboard/user/orders"
+        "/dashboard/customer/orders"
     )
     
     return {"order_id": new_order.id}
-
 @app.post("/api/payments/paymongo/checkout")
 async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Session = Depends(get_db)):
     """Create a PayMongo Checkout Session and persist order as 'Payment Pending'."""
@@ -3641,11 +4193,87 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
     except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
 
+    # Handle Voucher (Phase 1: Validation)
+    discount_val = 0
+    voucher_obj = None
+    if body.voucher_code:
+        v_res = db.query(UserVoucher, LoyaltyVoucher).join(
+            LoyaltyVoucher, UserVoucher.voucher_id == LoyaltyVoucher.id
+        ).filter(
+            UserVoucher.code == body.voucher_code.upper(),
+            UserVoucher.customer_id == customer_id,
+            UserVoucher.is_used == False
+        ).first()
+        
+        if v_res:
+            uv, lv = v_res
+            voucher_obj = uv
+            if lv.type == "Discount":
+                if "Food" in lv.title: # 15% Off Premium Foods
+                    food_total = 0
+                    for item in body.items:
+                        p = db.query(Product).filter(Product.id == item.id).first()
+                        if p and p.type == "Food":
+                            food_total += item.price * item.quantity
+                    discount_val = int(food_total * (lv.value / 100))
+                else:
+                    discount_val = int(body.totalAmount * (lv.value / 100))
+            elif lv.type == "Credit":
+                discount_val = int(lv.value)
+
+    # --- NEW: Stock Validation (DO NOT DECREMENT YET) ---
+    import json
+    for item in body.items:
+        product = db.query(Product).filter(Product.id == item.id).first()
+        if not product:
+            raise HTTPException(404, detail=f"Product {item.name} not found.")
+        
+        needed = item.quantity
+        stock_ok = False
+        
+        # 1. Check Variants
+        if item.variant and product.variants_json:
+            try:
+                variants = json.loads(product.variants_json)
+                for v in variants:
+                    if v.get('name') == item.variant:
+                        if v.get('stock', 0) < needed:
+                            raise HTTPException(400, detail=f"Insufficient stock for {product.name} ({item.variant}). Only {v.get('stock')} left.")
+                        stock_ok = True
+                        break
+            except Exception as e:
+                print(f"Stock check error (variants): {e}")
+        
+        # 2. Check Sizes
+        if not stock_ok and item.size and product.sizes_json:
+            try:
+                sizes = json.loads(product.sizes_json)
+                for s in sizes:
+                    if s.get('name') == item.size:
+                        if s.get('stock', 0) < needed:
+                            raise HTTPException(400, detail=f"Insufficient stock for {product.name} ({item.size}). Only {s.get('stock')} left.")
+                        stock_ok = True
+                        break
+            except Exception as e:
+                print(f"Stock check error (sizes): {e}")
+        
+        # 3. Fallback to main stock
+        if not stock_ok:
+            if product.stock < needed:
+                raise HTTPException(400, detail=f"Insufficient stock for {product.name}. Only {product.stock} left.")
+
+    # Consume voucher (Phase 2)
+    if voucher_obj:
+        voucher_obj.is_used = True
+        voucher_obj.redeemed_at = datetime.utcnow()
+
     # 1. Create the Order in "Payment Pending" status
     new_order = Order(
         customer_id=customer_id,
         status="Payment Pending",
-        total_amount=int(body.totalAmount),
+        total_amount=int(body.totalAmount) - discount_val,
+        discount_amount=discount_val,
+        voucher_code=body.voucher_code.upper() if body.voucher_code else None,
         fulfillment_method=body.fulfillmentMethod,
         payment_method=body.paymentMethod,
         delivery_address=body.deliveryDetails.get("address") if body.deliveryDetails else None,
@@ -3733,8 +4361,8 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
                 "line_items": line_items,
                 "billing": billing_info,
                 "payment_method_types": enabled_methods,
-                "success_url": f"{FRONTEND_URL}/dashboard/user/checkout/success?order_id={new_order.id}",
-                "cancel_url": f"{FRONTEND_URL}/dashboard/user/checkout",
+                "success_url": f"{FRONTEND_URL}/dashboard/customer/checkout/success?order_id={new_order.id}",
+                "cancel_url": f"{FRONTEND_URL}/dashboard/customer/checkout",
                 "description": f"Payment for Order #HV-{new_order.id:04d} at {clinic_name}",
                 "send_email_receipt": False, # Disable static PayMongo receipts
                 "show_description": True,
@@ -3892,7 +4520,7 @@ async def confirm_paymongo_payment(order_id: int, request: Request, db: Session 
             db, customer_id, "System", 
             "Payment Received!", 
             f"Your payment for order #HV-{order.id:04d} was successful. Check your email for the receipt.",
-            "/dashboard/user/orders"
+            "/dashboard/customer/orders"
         )
     
     return {"message": "Payment confirmed", "status": order.status}
@@ -3985,9 +4613,9 @@ async def cancel_order(order_id: int, body: CancelOrderRequest, request: Request
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
-    if order.status != "Pending":
-        raise HTTPException(status_code=400, detail="Only pending orders can be cancelled")
-
+    if order.status != "Cancelled":
+        restore_stock(db, order.id)
+        
     order.status = "Cancelled"
     order.cancellation_reason = body.reason
     db.commit()
@@ -3996,7 +4624,7 @@ async def cancel_order(order_id: int, body: CancelOrderRequest, request: Request
         db, customer_id, "System", 
         "Order Cancelled", 
         f"Your order #HV-{order.id:04d} was successfully cancelled.",
-        "/dashboard/user/orders"
+        "/dashboard/customer/orders"
     )
     
     return {"message": "Order cancelled successfully"}
@@ -4246,8 +4874,14 @@ async def redeem_voucher(body: RedeemRequest, db: Session = Depends(get_db), cur
         }
     }
 
+class ItemBasics(BaseModel):
+    id: int
+    quantity: int
+    price: float
+
 class VoucherCodeRequest(BaseModel):
     code: str
+    items: Optional[List[ItemBasics]] = []
 
 @app.post("/api/loyalty/validate-voucher")
 async def validate_voucher(body: VoucherCodeRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
@@ -4268,16 +4902,29 @@ async def validate_voucher(body: VoucherCodeRequest, db: Session = Depends(get_d
     
     user_v, loyalty_v = result
     
-    # Calculate discount value (for simplicity, we assume fixed values or percentages)
-    # If loyalty_v.type == 'Discount', we might want to return the percentage
-    # If loyalty_v.type == 'Credit', we return the peso amount
+    # Calculate actual discount based on items
+    discount_val = 0
+    if loyalty_v.type == "Discount":
+        if "Food" in loyalty_v.title and body.items:
+            food_total = 0
+            for item in body.items:
+                p = db.query(Product).filter(Product.id == item.id).first()
+                if p and p.type == "Food":
+                    food_total += item.price * item.quantity
+            discount_val = int(food_total * (loyalty_v.value / 100))
+        else:
+            total_amt = sum(i.price * i.quantity for i in body.items) if body.items else 0
+            discount_val = int(total_amt * (loyalty_v.value / 100))
+    elif loyalty_v.type == "Credit":
+        discount_val = int(loyalty_v.value)
     
-    # For now, let's just return the info
     return {
         "id": user_v.id,
         "title": loyalty_v.title,
         "type": loyalty_v.type,
-        "discount_value": 0 # This would be calculated based on business logic
+        "value": loyalty_v.value,
+        "code": user_v.code,
+        "calculated_discount": discount_val
     }
 
 
@@ -4409,6 +5056,8 @@ async def update_order_delivery_status(order_id: int, body: OrderStatusUpdate, r
         order.picked_up_at = datetime.utcnow()
     elif body.status == "Delivered":
         if order.status != "Completed":
+            # --- DEDUCT STOCK ---
+            reduce_stock(db, order_id)
             order.status = "Completed"
             order.delivered_at = datetime.utcnow()
             
@@ -4632,8 +5281,8 @@ async def get_dashboard_stats(request: Request, db: Session = Depends(get_db)):
     rider_trend = riders_query.filter(RiderProfile.created_at >= thirty_days_ago).count()
     
     # General End Users (total participation)
-    user_count = db.query(Customer).filter(Customer.role == "user").count()
-    user_trend = db.query(Customer).filter(Customer.role == "user", Customer.created_at >= thirty_days_ago).count()
+    user_count = db.query(Customer).filter(Customer.role == "customer").count()
+    user_trend = db.query(Customer).filter(Customer.role == "customer", Customer.created_at >= thirty_days_ago).count()
     
     total_end_users = partner_count + rider_count + user_count
     total_trend = partner_trend + rider_trend + user_trend
@@ -4658,7 +5307,7 @@ async def get_dashboard_stats(request: Request, db: Session = Depends(get_db)):
         "details": {
             "partners": [format_detail(p) for p in partners_query.order_by(BusinessProfile.created_at.desc()).limit(50).all()],
             "riders": [format_detail(r) for r in riders_query.order_by(RiderProfile.created_at.desc()).limit(50).all()],
-            "end_users": [format_detail(u) for u in db.query(Customer).filter(Customer.role == "user").order_by(Customer.created_at.desc()).limit(50).all()]
+            "end_users": [format_detail(u) for u in db.query(Customer).filter(Customer.role == "customer").order_by(Customer.created_at.desc()).limit(50).all()]
         }
     }
 

@@ -6,7 +6,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import {
     Wallet, Banknote, ShieldCheck, MapPin, Store, Truck, Loader2,
     ArrowRight, Tag, CheckCircle, X, Gift, Award, Sparkles, CreditCard,
-    Eye, User
+    Eye, User, Info
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Map, AdvancedMarker, InfoWindow, useMap } from '@vis.gl/react-google-maps';
@@ -64,6 +64,8 @@ const Checkout = () => {
     const [fulfillmentMethod, setFulfillmentMethod] = useState<'delivery' | 'pickup'>('delivery');
     const [isPlacingOrder, setIsPlacingOrder] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [showMixedModal, setShowMixedModal] = useState(false);
+    const [hasAcknowledgedMixed, setHasAcknowledgedMixed] = useState(false);
 
     // Address state
     const [loadingData, setLoadingData] = useState(true);
@@ -93,12 +95,13 @@ const Checkout = () => {
 
     const [clinics, setClinics] = useState<any[]>([]);
     const shippingFee = fulfillmentMethod === 'delivery' ? 150 : 0;
+    const isMixedCart = Array.from(new Set(items.map(item => item.business_id).filter(id => id != null))).length > 1;
 
     // Branch map state
     const [selectedBranch, setSelectedBranch] = useState<any>(null);
     const [selectedClinic, setSelectedClinic] = useState<any>(null);
     const [showBranchStreetView, setShowBranchStreetView] = useState(false);
-    const [branchActiveMarker, setBranchActiveMarker] = useState<'branch' | 'user' | null>(null);
+    const [branchActiveMarker, setBranchActiveMarker] = useState<'branch' | 'customer' | null>(null);
     const [svStartPos, setSvStartPos] = useState<{ lat: number; lng: number } | null>(null);
     const [panoPov, setPanoPov] = useState({ heading: 0, pitch: 0 });
     const [panoPosition, setPanoPosition] = useState<{ lat: number; lng: number } | null>(null);
@@ -106,7 +109,7 @@ const Checkout = () => {
 
     // Voucher state
     const [applyingVoucher, setApplyingVoucher] = useState(false);
-    const [appliedVoucher, setAppliedVoucher] = useState<{ id: number; title: string; discount: number } | null>(null);
+    const [appliedVoucher, setAppliedVoucher] = useState<{ id: number; title: string; discount: number; code: string } | null>(null);
     const [myVouchers, setMyVouchers] = useState<any[]>([]);
 
     // Fetch vouchers
@@ -120,7 +123,7 @@ const Checkout = () => {
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    setMyVouchers(data.my_vouchers || []);
+                    setMyVouchers((data.my_vouchers || []).filter((v: any) => v.type !== 'Service'));
                 }
             } catch (err) {
                 console.error('Failed to fetch vouchers:', err);
@@ -130,6 +133,7 @@ const Checkout = () => {
     }, []);
 
     const handleApplyVoucher = async (code: string) => {
+        if (!code) return;
         setApplyingVoucher(true);
         try {
             const token = localStorage.getItem('hivet_token');
@@ -139,17 +143,21 @@ const Checkout = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ code }),
+                body: JSON.stringify({ code: code.trim(), items }),
             });
             if (!res.ok) {
                 const data = await res.json();
                 throw new Error(data.detail || 'Invalid voucher code');
             }
             const data = await res.json();
+            
+            let discountVal = data.calculated_discount || 0;
+
             setAppliedVoucher({
                 id: data.id,
                 title: data.title,
-                discount: data.discount_value
+                discount: discountVal,
+                code: data.code
             });
         } catch (err: any) {
             alert(err.message);
@@ -239,9 +247,15 @@ const Checkout = () => {
             alert('Please add a delivery address before placing your order.');
             return;
         }
-        if (fulfillmentMethod === 'pickup' && !deliveryInfo.clinic_id) {
-            alert('Please select a clinic branch for pickup.');
-            return;
+        if (fulfillmentMethod === 'pickup') {
+            if (isMixedCart && !hasAcknowledgedMixed) {
+                setShowMixedModal(true);
+                return;
+            }
+            if (!deliveryInfo.clinic_id) {
+                alert('Please select a clinic branch for pickup.');
+                return;
+            }
         }
 
         setIsPlacingOrder(true);
@@ -257,7 +271,7 @@ const Checkout = () => {
                 branch_id: deliveryInfo.branch_id,
                 delivery_lat: deliveryInfo.lat,
                 delivery_lng: deliveryInfo.lng,
-                voucher_id: appliedVoucher?.id || null,
+                voucher_code: appliedVoucher?.code || null,
             };
 
             if (selectedPayment === 'gcash' || selectedPayment === 'maya') {
@@ -294,7 +308,7 @@ const Checkout = () => {
                     clearCart();
                     setShowSuccess(true);
                     setTimeout(() => {
-                        navigate('/dashboard/user/orders');
+                        navigate('/dashboard/customer/orders');
                     }, 3000);
                 } else {
                     console.error('Failed to place order');
@@ -326,8 +340,18 @@ const Checkout = () => {
                                 onClick={() => setFulfillmentMethod('delivery')}
                                 className={`flex-1 p-4 rounded-xl border-2 flex items-center justify-center gap-3 transition-all cursor-pointer ${fulfillmentMethod === 'delivery' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
                             >
-                                <Truck className="w-5 h-5 shrink-0" />
-                                <span className="text-xs font-black uppercase tracking-widest text-left leading-tight">Home<br />Delivery</span>
+                                <div className="flex-1 text-left relative">
+                                    <div className="flex items-center gap-2">
+                                        <Truck className="w-5 h-5 text-brand" />
+                                        <span className={`text-[11px] font-black uppercase tracking-widest ${fulfillmentMethod === 'delivery' ? 'text-brand' : 'text-accent-brown'}`}>
+                                            Home Delivery
+                                        </span>
+                                        {isMixedCart && (
+                                            <span className="bg-emerald-500 text-white text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Recommended</span>
+                                        )}
+                                    </div>
+                                    <p className="text-[10px] font-medium text-accent-brown/40">Safe and direct to your door</p>
+                                </div>
                             </button>
                             <button
                                 onClick={() => setFulfillmentMethod('pickup')}
@@ -469,12 +493,38 @@ const Checkout = () => {
                                     </div>
                                 </div>
 
+                                {/* Mixed Clinic Warning Banner */}
+                                {isMixedCart && (
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-4"
+                                    >
+                                        <div className="p-2 bg-amber-100 rounded-xl text-amber-600">
+                                            <Info className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <h4 className="text-[11px] font-black text-amber-800 uppercase tracking-wider mb-1">Logistics Optimization Note</h4>
+                                            <p className="text-[10px] font-medium text-amber-700/70 leading-relaxed">
+                                                Your cart contains items from different partner clinics. If you proceed with pickup, you may need to visit multiple locations.
+                                                <button 
+                                                    onClick={() => setFulfillmentMethod('delivery')}
+                                                    className="ml-2 text-amber-900 underline font-black"
+                                                >
+                                                    Switch to Home Delivery?
+                                                </button>
+                                            </p>
+                                        </div>
+                                    </motion.div>
+                                )}
+
                                 <div className="space-y-4">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Clinic Branch</label>
                                         <div className="grid grid-cols-1 gap-2">
-                                            {clinics.flatMap(c => {
-                                                return (c.branches || []).map((b: any) => {
+                                            {clinics
+                                                .filter(c => items.some(item => item.business_id === c.id))
+                                                .flatMap(c => (c.branches || []).map((b: any) => {
                                                     const isSelected = deliveryInfo.clinic_id === c.id && deliveryInfo.branch_id === b.id;
                                                     return (
                                                         <button
@@ -514,10 +564,10 @@ const Checkout = () => {
                                                             )}
                                                         </button>
                                                     );
-                                                });
-                                            })}
+                                                }))}
                                         </div>
                                     </div>
+                                </div>
 
                                     {/* Branch Map Panel — appears when a branch is selected */}
                                     <AnimatePresence>
@@ -565,7 +615,7 @@ const Checkout = () => {
                                                                     {deliveryInfo.lat && deliveryInfo.lng && (
                                                                         <AdvancedMarker
                                                                             position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}
-                                                                            onClick={() => setBranchActiveMarker(branchActiveMarker === 'user' ? null : 'user')}
+                                                                            onClick={() => setBranchActiveMarker(branchActiveMarker === 'customer' ? null : 'customer')}
                                                                         >
                                                                             <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-lg ring-4 ring-blue-400/20 cursor-pointer hover:scale-110 transition-transform">
                                                                                 <User className="w-4 h-4" />
@@ -622,7 +672,7 @@ const Checkout = () => {
                                                                     )}
 
                                                                     {/* User InfoWindow */}
-                                                                    {branchActiveMarker === 'user' && deliveryInfo.lat && deliveryInfo.lng && (
+                                                                    {branchActiveMarker === 'customer' && deliveryInfo.lat && deliveryInfo.lng && (
                                                                         <InfoWindow
                                                                             position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}
                                                                             onCloseClick={() => setBranchActiveMarker(null)}
@@ -811,13 +861,98 @@ const Checkout = () => {
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
-
                                     <div className="p-4 bg-accent-peach/30 rounded-xl border border-brand/10">
                                         <p className="text-sm font-bold text-accent-brown mb-1">Pick up tomorrow after 10:00 AM</p>
                                         <p className="text-xs text-accent-brown/60">Please bring a valid ID and your order confirmation email when collecting your items.</p>
                                     </div>
+                                </>
+                            )}
+                        </div>
+
+                    {/* Vouchers & Rewards Section */}
+                    <div className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-10 shadow-sm border border-accent-brown/5">
+                         <div className="flex items-center gap-4 mb-6">
+                            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 shrink-0">
+                                <Tag className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-black text-accent-brown">Vouchers & Rewards</h3>
+                                <p className="text-sm font-medium text-accent-brown/50">Apply your loyalty rewards for discounts</p>
+                            </div>
+                        </div>
+
+                        {appliedVoucher ? (
+                            <div className="p-4 bg-brand/10 border-2 border-brand/20 rounded-2xl flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-brand rounded-xl flex items-center justify-center text-white shadow-lg">
+                                        <Gift className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-black uppercase tracking-widest text-brand-dark mb-0.5">Applied Reward</p>
+                                        <p className="font-black text-accent-brown text-sm">{appliedVoucher.title}</p>
+                                    </div>
                                 </div>
-                            </>
+                                <div className="flex items-center gap-4">
+                                    <span className="font-black text-brand">-₱{appliedVoucher.discount.toLocaleString()}</span>
+                                    <button 
+                                        onClick={() => setAppliedVoucher(null)}
+                                        className="p-1.5 hover:bg-white rounded-lg transition-colors text-accent-brown/40 hover:text-red-500"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                <div className="flex gap-3">
+                                    <div className="relative flex-1">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Enter voucher code"
+                                            id="voucher-input"
+                                            className="w-full bg-accent-peach/10 border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-3.5 outline-none text-accent-brown font-black text-xs uppercase tracking-widest transition-all"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    handleApplyVoucher((e.target as HTMLInputElement).value);
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <button 
+                                        onClick={() => {
+                                            const input = document.getElementById('voucher-input') as HTMLInputElement;
+                                            handleApplyVoucher(input.value);
+                                        }}
+                                        disabled={applyingVoucher}
+                                        className="px-6 py-3.5 bg-brand-dark text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-brand-dark/10 flex items-center gap-2"
+                                    >
+                                        {applyingVoucher ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
+                                    </button>
+                                </div>
+
+                                {myVouchers.length > 0 && (
+                                    <div className="space-y-3 pt-4 border-t border-accent-brown/5">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Your Available Rewards</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {myVouchers.map((v) => (
+                                                <button
+                                                    key={v.id}
+                                                    onClick={() => handleApplyVoucher(v.code)}
+                                                    className="px-4 py-2 bg-white border-2 border-accent-brown/5 hover:border-brand hover:bg-brand/5 rounded-xl transition-all group flex items-center gap-3 text-left"
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-accent-peach/30 flex items-center justify-center text-brand transition-colors group-hover:bg-brand group-hover:text-white">
+                                                        <Gift className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[10px] font-black text-accent-brown leading-tight mb-0.5">{v.title}</p>
+                                                        <p className="text-[8px] font-bold text-accent-brown/40 uppercase tracking-widest">{v.code}</p>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </div>
 
@@ -1099,7 +1234,7 @@ const Checkout = () => {
                                         Cancel
                                     </button>
                                     <Link
-                                        to="/dashboard/user/account"
+                                        to="/dashboard/customer/account"
                                         className="flex-1 py-4 px-6 bg-brand-dark text-white rounded-xl font-black text-[10px] uppercase tracking-widest text-center shadow-lg shadow-brand/20 hover:bg-black hover:shadow-xl transition-all"
                                     >
                                         Add New Address
@@ -1124,8 +1259,60 @@ const Checkout = () => {
                     }));
                     setShowPickerModal(false);
                 }}
-                initialLocation={deliveryInfo.lat ? { lat: deliveryInfo.lat, lng: deliveryInfo.lng! } : undefined}
+                initialLocation={deliveryInfo.lat && deliveryInfo.lng ? { lat: Number(deliveryInfo.lat), lng: Number(deliveryInfo.lng) } : undefined}
             />
+
+            {/* Mixed Clinic Validation Modal */}
+            <AnimatePresence>
+                {showMixedModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            className="bg-white w-full max-w-md rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden text-center"
+                        >
+                            <div className="relative">
+                                <div className="w-20 h-20 bg-amber-50 rounded-3xl flex items-center justify-center mx-auto mb-6 text-amber-500 shadow-inner">
+                                    <Sparkles className="w-10 h-10" />
+                                </div>
+                                <h3 className="text-2xl font-black text-accent-brown leading-tight tracking-tighter mb-4">
+                                    Efficiency Recommendation
+                                </h3>
+                                <p className="text-sm font-medium text-accent-brown/60 leading-relaxed mb-8">
+                                    Your cart contains items from different clinics. While you can proceed, a single branch can only fulfill items from its own clinic. We suggest Home Delivery for your convenience.
+                                </p>
+
+                                <div className="space-y-3">
+                                    <button
+                                        onClick={() => {
+                                            setFulfillmentMethod('delivery');
+                                            setShowMixedModal(false);
+                                        }}
+                                        className="w-full py-4 bg-brand text-white font-black uppercase tracking-widest text-[10px] rounded-2xl hover:bg-brand-dark transition-all shadow-lg shadow-brand/20 flex items-center justify-center gap-2"
+                                    >
+                                        <Truck className="w-4 h-4" /> Switch to Home Delivery
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setHasAcknowledgedMixed(true);
+                                            setShowMixedModal(false);
+                                        }}
+                                        className="w-full py-4 bg-accent-peach/10 text-accent-brown/40 font-black uppercase tracking-widest text-[10px] rounded-2xl hover:bg-accent-peach/20 transition-all"
+                                    >
+                                        I Understand, Continue
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Success Overlay (Cash orders) */}
             <AnimatePresence>

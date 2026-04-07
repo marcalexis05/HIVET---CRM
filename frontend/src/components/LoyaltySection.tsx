@@ -57,7 +57,7 @@ export function LoyaltySection({
                         to="/register"
                         className="shrink-0 inline-flex items-center gap-2 btn-primary !px-10 !py-4 !text-xs"
                     >
-                        Join the Program <ArrowRight className="w-4 h-4" />
+                        Join to Hi-Vet <ArrowRight className="w-4 h-4" />
                     </Link>
                 </motion.div>
 

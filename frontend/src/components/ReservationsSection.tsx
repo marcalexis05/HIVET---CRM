@@ -48,7 +48,7 @@ export function ReservationsSection() {
                             </h3>
                             <Link
                                 to="/login"
-                                className="inline-flex items-center justify-center gap-2 bg-brand text-brand-dark px-6 xs:px-8 py-3.5 xs:py-4 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-white transition-colors w-full sm:w-auto"
+                                className="inline-flex items-center justify-center gap-2 bg-brand text-white px-6 xs:px-8 py-3.5 xs:py-4 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-brand-dark transition-colors w-full sm:w-auto shadow-lg shadow-brand/20"
                             >
                                 Shop Now <ArrowRight className="w-4 h-4" />
                             </Link>

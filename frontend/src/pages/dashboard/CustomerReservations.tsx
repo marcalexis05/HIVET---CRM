@@ -92,7 +92,7 @@ const defaultForm = {
 
 const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
-const UserReservations = () => {
+const CustomerReservations = () => {
     const [reservations, setReservations] = useState<Reservation[]>([]);
     const [clinics, setClinics] = useState<Clinic[]>([]);
     const [loading, setLoading] = useState(true);
@@ -852,4 +852,4 @@ const UserReservations = () => {
     );
 };
 
-export default UserReservations;
+export default CustomerReservations;

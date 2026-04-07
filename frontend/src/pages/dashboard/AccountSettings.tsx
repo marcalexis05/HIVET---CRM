@@ -5,7 +5,7 @@ import {
     AlertTriangle, CheckCircle, MapPin, Plus, Edit2, Trash,
     Store, ShieldCheck 
 } from 'lucide-react';
-import { Map, AdvancedMarker, APIProvider } from '@vis.gl/react-google-maps';
+import { Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -266,7 +266,7 @@ const AccountSettings = () => {
     useEffect(() => {
         const fetchProfile = async () => {
             if (!user?.token) return;
-            if (user.role !== 'user' && user.role !== 'business' && user.role !== 'rider') return;
+            if (user.role !== 'customer' && user.role !== 'business' && user.role !== 'rider') return;
             
             try {
                 const res = await fetch('http://localhost:8000/api/auth/me', {
@@ -554,7 +554,7 @@ const AccountSettings = () => {
                         </div>
                     )}
                     <div className="z-10">
-                        <h2 className="text-2xl font-black tracking-tight">{user?.name ?? 'User'}</h2>
+                        <h2 className="text-2xl font-black tracking-tight">{user?.name ?? 'customer'}</h2>
                         <p className="text-white/50 font-medium text-sm">{user?.email}</p>
                     </div>
                     <div className="absolute top-0 right-0 w-64 h-64 bg-brand/10 rounded-full blur-[60px]" />
@@ -617,114 +617,7 @@ const AccountSettings = () => {
                                                     className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
                                             </div>
 
-                                            {/* Clinic Location Section */}
-                                            <div className="mt-6 p-8 bg-accent-peach/5 rounded-[2.5rem] border border-accent-peach/10 space-y-6">
-                                                <div className="flex items-center justify-between">
-                                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/40 flex items-center gap-2">
-                                                        <MapPin className="w-3 h-3" /> Main Clinic Location
-                                                    </label>
-                                                    <span className="text-[9px] font-bold text-brand-dark/40 uppercase tracking-widest italic flex items-center gap-1">
-                                                        <div className="w-1 h-1 rounded-full bg-brand-dark animate-pulse" />
-                                                        Mark Landmark on Map
-                                                    </span>
-                                                </div>
-                                                
-                                                <div className="space-y-3">
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Address Search & Manual Landmark</label>
-                                                    <AddressAutocomplete 
-                                                        onAddressSelect={(full, components, geometry, granular) => {
-                                                            handleClinicAddressComponents(full, components, geometry, granular);
-                                                        }}
-                                                        defaultValue={[clinicHouseNumber, clinicBlockNumber, clinicStreet, clinicSubdivision].filter(Boolean).join(' ')}
-                                                        initialLocation={clinicLat && clinicLng ? { lat: clinicLat, lng: clinicLng } : undefined}
-                                                        initialGranular={{
-                                                            houseNumber: clinicHouseNumber,
-                                                            blockNumber: clinicBlockNumber,
-                                                            street: clinicStreet,
-                                                            subdivision: clinicSubdivision,
-                                                            sitio: clinicSitio,
-                                                            barangay: clinicBarangay,
-                                                            city: clinicCity,
-                                                            district: clinicDistrict,
-                                                            province: clinicProvince,
-                                                            zip: clinicZip,
-                                                            region: clinicRegion
-                                                        }}
-                                                        placeholder="Search or pick on map..."
-                                                        className="!py-4 !rounded-2xl shadow-xl border-2 border-white focus:border-brand/30 bg-white"
-                                                    />
-                                                    <p className="text-[9px] font-bold text-accent-brown/20 uppercase tracking-widest pl-1">Click the pin icon to open the detailed landscape map editor.</p>
-                                                    <div className="flex flex-col sm:flex-row items-center gap-4 pt-2">
-                                                        <button 
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setPickerMode('main');
-                                                                setShowMapPicker(true);
-                                                            }}
-                                                            className="w-full sm:w-auto bg-brand text-brand-dark px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-brand-dark hover:text-white transition-all shadow-xl shadow-brand/10"
-                                                        >
-                                                            Pin Location on Map
-                                                        </button>
-                                                        {clinicLat && clinicLng && (
-                                                            <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-lg border border-green-100">
-                                                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                                                                <span className="text-[9px] font-black text-green-600 uppercase tracking-widest">Pin Active</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
 
-                                                {/* Map & Reality Port Preview */}
-                                                {(clinicLat !== null && clinicLng !== null) && (
-                                                    <div className="h-72 relative group/map rounded-[2.5rem] overflow-hidden border-2 border-brand/10 shadow-2xl">
-                                                        <div className="absolute inset-0">
-                                                            <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
-                                                                <Map
-                                                                    defaultCenter={{ lat: clinicLat, lng: clinicLng }}
-                                                                    defaultZoom={15}
-                                                                    gestureHandling={'greedy'}
-                                                                    disableDefaultUI={true}
-                                                                >
-                                                                    <AdvancedMarker position={{ lat: clinicLat, lng: clinicLng }}>
-                                                                        <div className="w-10 h-10 bg-brand-dark rounded-xl flex items-center justify-center text-white shadow-2xl border-2 border-white ring-4 ring-brand/20">
-                                                                            <Store className="w-5 h-5 text-white" />
-                                                                        </div>
-                                                                    </AdvancedMarker>
-                                                                </Map>
-                                                            </APIProvider>
-                                                        </div>
-                                                        <div className="absolute bottom-4 right-4 z-20 flex gap-2">
-                                                            <button 
-                                                                type="button"
-                                                                onClick={() => window.open(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${clinicLat},${clinicLng}`, '_blank')}
-                                                                className="bg-brand-dark/90 backdrop-blur-md text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-2xl border border-white/20 hover:bg-black transition-all flex items-center gap-2"
-                                                            >
-                                                                <Eye className="w-4 h-4" /> Reality Port
-                                                            </button>
-                                                        </div>
-                                                        
-                                                        {/* Precision Seal Overlay */}
-                                                        <div className="absolute top-4 left-4 z-20 pointer-events-none">
-                                                            <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-xl shadow-lg border border-brand/20 flex flex-col items-center gap-0.5">
-                                                                <div className="flex items-center gap-2">
-                                                                    <ShieldCheck className="w-3.5 h-3.5 text-brand" />
-                                                                    <span className="text-[10px] font-black text-brand-dark uppercase tracking-widest">Hi-Vet Precision</span>
-                                                                </div>
-                                                                <span className="text-[7px] font-bold text-accent-brown/30 uppercase">Geographic Identity Verified</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Hidden display of current address for confirmation */}
-                                                <div className="p-5 bg-white rounded-2xl border border-accent-peach/10 shadow-sm">
-                                                    <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30 mb-2">Current Precise Address</p>
-                                                    <p className="text-xs font-bold text-accent-brown leading-relaxed capitalize">
-                                                        {[clinicHouseNumber, clinicBlockNumber, clinicStreet, clinicSubdivision, clinicSitio, clinicBarangay, clinicCity, clinicProvince, clinicZip].filter(Boolean).join(' ')}
-                                                    </p>
-                                                    {!clinicCity && <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mt-2">Address not yet set</p>}
-                                                </div>
-                                            </div>
 
                                             {/* Loyalty Settings */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-accent-brown/5">
@@ -741,12 +634,12 @@ const AccountSettings = () => {
                                             {/* First & Last Name */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 <div>
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">First Name</label>
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">First Name <span className="text-brand-dark">*</span></label>
                                                     <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Juan"
                                                         className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
                                                 </div>
                                                 <div>
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Last Name</label>
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Last Name <span className="text-brand-dark">*</span></label>
                                                     <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Dela Cruz"
                                                         className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
                                                 </div>
@@ -755,14 +648,15 @@ const AccountSettings = () => {
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 {user?.role !== 'rider' && (
                                                     <div>
-                                                        <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Middle Name <span className="normal-case font-normal opacity-60">(optional)</span></label>
+                                                        <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Middle Name <span className="text-accent-brown/30 text-[9px] normal-case tracking-normal font-bold italic">Optional</span></label>
                                                         <input type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} placeholder="Santos"
                                                             className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
                                                     </div>
                                                 )}
                                                 <div>
                                                     <CustomDropdown
-                                                        label="Suffix (optional)"
+                                                        label="Suffix"
+                                                        isOptional={true}
                                                         value={suffix}
                                                         onChange={setSuffix}
                                                         options={[
@@ -1354,7 +1248,8 @@ const AccountSettings = () => {
                                     onClick={() => setConfirmModal(null)}
                                     className="flex-1 py-4 bg-accent-peach/10 text-accent-brown font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-accent-peach/20 transition-all"
                                 >
-                                    Cancel
+
+                                    Cancel
                                 </button>
                                 <button
                                     onClick={confirmModal.onConfirm}

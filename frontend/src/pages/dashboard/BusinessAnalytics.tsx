@@ -21,21 +21,23 @@ const BusinessAnalytics = () => {
     const [retentionRate, setRetentionRate] = useState(0);
     const [retentionChange, setRetentionChange] = useState('');
 
+    const [revenueType, setRevenueType] = useState('all');
+
     useEffect(() => {
         if (user?.token) {
             fetchAnalytics();
         }
-    }, [user?.token]);
+    }, [user?.token, revenueType]);
 
     const fetchAnalytics = async () => {
         setLoading(true);
         try {
-            const resp = await fetch('http://localhost:8000/api/business/dashboard/analytics', {
+            const resp = await fetch(`http://localhost:8000/api/business/dashboard/analytics?data_type=${revenueType}`, {
                 headers: { 'Authorization': `Bearer ${user?.token}` }
             });
             const data = await resp.json();
             setKpiList(data.kpis);
-            setRevenueTrend(data.revenue_trend);
+            setRevenueTrend(data.revenue_trend?.chartData || []);
             setTopProducts(data.top_products);
             setLoyaltyRedemptions(data.loyalty_redemptions);
             setRetentionRate(data.retention_rate);
@@ -81,14 +83,35 @@ const BusinessAnalytics = () => {
                     {/* Revenue Trend - tall chart */}
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
                         className="lg:col-span-2 bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white">
-                        <div className="flex items-center justify-between mb-8">
+                        <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-8 gap-4">
                             <div>
                                 <h3 className="text-xl font-black text-accent-brown tracking-tight">Revenue Trend</h3>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mt-1">Last 6 months · in thousands ₱</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mt-1">Last 6 months</p>
                             </div>
-                            <span className="bg-green-50 text-green-700 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full flex items-center gap-1">
-                                <TrendingUp className="w-3 h-3" /> +21%
-                            </span>
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-1 bg-accent-brown/5 p-1 rounded-2xl">
+                                    {[
+                                        { id: 'all', label: 'All' },
+                                        { id: 'products', label: 'Products' },
+                                        { id: 'services', label: 'Services' },
+                                    ].map((type) => (
+                                        <button
+                                            key={type.id}
+                                            onClick={() => setRevenueType(type.id)}
+                                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                                revenueType === type.id 
+                                                ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' 
+                                                : 'text-accent-brown/40 hover:text-accent-brown'
+                                            }`}
+                                        >
+                                            {type.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <span className="bg-green-50 text-green-700 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full flex items-center gap-1">
+                                    <TrendingUp className="w-3 h-3" /> +21%
+                                </span>
+                            </div>
                         </div>
                         <div className="flex items-end gap-4 h-56">
                             {loading ? (
@@ -96,11 +119,11 @@ const BusinessAnalytics = () => {
                                     <Loader2 className="w-6 h-6 animate-spin" />
                                 </div>
                             ) : revenueTrend.map((d, i) => (
-                                <div key={d.month} className="flex-1 flex flex-col items-center gap-2">
-                                    <span className="text-[9px] font-black text-accent-brown/40">₱{(d.value/1000).toFixed(0)}k</span>
+                                <div key={d.name} className="flex-1 flex flex-col items-center gap-2">
+                                    <span className="text-[9px] font-black text-accent-brown/40">₱{d.value.toLocaleString()}</span>
                                     <motion.div initial={{ height: 0 }} animate={{ height: `${(d.value / maxRev) * 100}%` }} transition={{ duration: 0.7, delay: 0.4 + i * 0.07 }}
                                         className={`w-full rounded-2xl ${i === revenueTrend.length - 1 ? 'bg-gradient-to-t from-brand-dark to-brand' : 'bg-accent-peach/70'}`} />
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40">{d.month}</span>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40">{d.name}</span>
                                 </div>
                             ))}
                         </div>
@@ -141,12 +164,14 @@ const BusinessAnalytics = () => {
                 {/* Top Products table */}
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
                     className="bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white">
-                    <h3 className="text-xl font-black text-accent-brown tracking-tight mb-6">Top Products by Revenue</h3>
+                    <h3 className="text-xl font-black text-accent-brown tracking-tight mb-6">
+                        {revenueType === 'services' ? 'Top Clinic Services' : 'Top Products'} by Revenue
+                    </h3>
                     <div className="overflow-x-auto">
                         <table className="w-full min-w-[500px]">
                             <thead>
                                 <tr className="border-b border-accent-brown/5">
-                                    {['Product', 'Units Sold', 'Revenue', 'Change', 'Share'].map(h => (
+                                    {[revenueType === 'services' ? 'Service' : 'Product', revenueType === 'services' ? 'Sessions' : 'Units Sold', 'Revenue', 'Change', 'Share'].map(h => (
                                         <th key={h} className="text-left text-[9px] font-black uppercase tracking-widest text-accent-brown/30 pb-4">{h}</th>
                                     ))}
                                 </tr>

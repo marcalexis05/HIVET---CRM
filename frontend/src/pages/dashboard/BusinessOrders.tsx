@@ -4,6 +4,7 @@ import { Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import { Search, Eye, CheckCircle, XCircle, Clock, Loader2, ChevronDown, ChevronUp, MapPin, Truck, Store, X, Navigation } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
+import { CustomDropdown } from '../../components/CustomDropdown';
 
 // ALL_ORDERS moved to state
 
@@ -190,10 +191,9 @@ const BusinessOrders = () => {
                                                                             <Eye className="w-3.5 h-3.5" /> View Full Order
                                                                         </button>
                                                                     </div>
-                                                                    <div className="flex items-center gap-2 mt-2">
-                                                                        <select 
+                                                                        <CustomDropdown
                                                                             value={o.status}
-                                                                            onChange={async (e) => {
+                                                                            onChange={async (val) => {
                                                                                 try {
                                                                                     const realId = o.id.split('-')[1];
                                                                                     const res = await fetch(`http://localhost:8000/api/business/orders/${realId}/status`, {
@@ -202,18 +202,20 @@ const BusinessOrders = () => {
                                                                                             'Content-Type': 'application/json',
                                                                                             'Authorization': `Bearer ${user?.token}`
                                                                                         },
-                                                                                        body: JSON.stringify({ status: e.target.value })
+                                                                                        body: JSON.stringify({ status: val })
                                                                                     });
                                                                                     if (res.ok) fetchOrders();
                                                                                 } catch (err) {
                                                                                     console.error('Failed to update status', err);
                                                                                 }
                                                                             }}
-                                                                            className="w-full text-[10px] font-black uppercase tracking-widest bg-white text-accent-brown border border-accent-brown/20 px-3 py-2 rounded-xl focus:outline-none focus:border-brand-dark"
-                                                                        >
-                                                                            {STATUS_FILTERS.slice(1).map(s => <option key={s} value={s}>{s}</option>)}
-                                                                        </select>
-                                                                    </div>
+                                                                            options={STATUS_FILTERS.slice(1).map(s => ({
+                                                                                label: s,
+                                                                                value: s,
+                                                                                icon: STATUS_ICONS[s]
+                                                                            }))}
+                                                                            className="!py-2 !rounded-xl"
+                                                                        />
                                                                 </div>
                                                             </div>
                                                             {o.fulfillment_method === 'delivery' ? (

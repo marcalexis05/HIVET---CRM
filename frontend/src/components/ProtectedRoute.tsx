@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
     children: ReactNode;
-    allowedRoles?: ('super_admin' | 'system_admin' | 'user' | 'business' | 'rider')[];
+    allowedRoles?: ('super_admin' | 'system_admin' | 'customer' | 'business' | 'rider')[];
 }
 
 function getTokenPayload(): { role?: string } | null {
@@ -38,7 +38,8 @@ export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) 
         );
     }
 
-    const effectiveRole = user?.role ?? (getTokenPayload()?.role as string | undefined);
+    let effectiveRole = user?.role ?? (getTokenPayload()?.role as string | undefined);
+    if (effectiveRole === 'user') effectiveRole = 'customer';
 
     if (!effectiveRole) {
         return <Navigate to="/login" state={{ from: location }} replace />;
@@ -46,7 +47,12 @@ export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) 
 
     if (allowedRoles && !allowedRoles.includes(effectiveRole as any)) {
         // Fallback for unauthorized role access
-        const fallbackPath = ['super_admin', 'system_admin'].includes(effectiveRole) ? 'admin' : effectiveRole;
+        let fallbackPath = effectiveRole;
+        if (['super_admin', 'system_admin'].includes(effectiveRole)) {
+            fallbackPath = 'admin';
+        } else if (effectiveRole === 'user') {
+            fallbackPath = 'customer';
+        }
         return <Navigate to={`/dashboard/${fallbackPath}`} replace />;
     }
 

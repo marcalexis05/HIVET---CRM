@@ -8,7 +8,6 @@ import { LogOut, LayoutDashboard, ShoppingBag, Users, Settings, Bell, Calendar, 
 import { Logo } from './Logo';
 
 const MotionLink = motion(Link);
-const MotionNavLink = motion(NavLink);
 
 interface DashboardLayoutProps {
     children: ReactNode;
@@ -108,13 +107,13 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
     ];
 
     const userLinks = [
-        { name: 'My Hub', path: '/dashboard/user', icon: LayoutDashboard },
-        { name: 'Product Catalog', path: '/dashboard/user/catalog', icon: ShoppingBag },
-        { name: 'My Orders', path: '/dashboard/user/orders', icon: ShoppingBag },
-        { name: 'Reservations', path: '/dashboard/user/reservations', icon: Calendar },
-        { name: 'Loyalty Rewards', path: '/dashboard/user/loyalty', icon: Award },
-        { name: 'Alert Center', path: '/dashboard/user/alerts', icon: Bell },
-        { name: 'Account', path: '/dashboard/user/account', icon: UserCircle },
+        { name: 'My Hub', path: '/dashboard/customer', icon: LayoutDashboard },
+        { name: 'Product Catalog', path: '/dashboard/customer/catalog', icon: ShoppingBag },
+        { name: 'My Orders', path: '/dashboard/customer/orders', icon: ShoppingBag },
+        { name: 'Reservations', path: '/dashboard/customer/reservations', icon: Calendar },
+        { name: 'Loyalty Rewards', path: '/dashboard/customer/loyalty', icon: Award },
+        { name: 'Alert Center', path: '/dashboard/customer/alerts', icon: Bell },
+        { name: 'Account', path: '/dashboard/customer/account', icon: UserCircle },
     ];
 
     const superAdminLinks = [
@@ -147,6 +146,7 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                   userLinks;
 
     const basePath = ['super_admin', 'system_admin'].includes(user?.role || '') ? 'admin' : user?.role;
+    const hasStockError = items.some(item => item.stock !== undefined && item.quantity > item.stock);
 
     return (
         <div className="min-h-screen bg-accent-peach/20 flex flex-col">
@@ -179,10 +179,8 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                     {/* Desktop Navigation Links */}
                     <div className="hidden lg:flex items-center justify-center flex-1 gap-1">
                         {links.map((link) => (
-                            <MotionNavLink
+                            <NavLink
                                 key={link.name}
-                                whileHover={{ scale: 1.05, y: -2 }}
-                                whileTap={{ scale: 0.95 }}
                                 to={link.path}
                                 end={link.path === `/dashboard/${basePath}`}
                                 className={({ isActive }) => {
@@ -190,19 +188,19 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                                     const actuallyActive = hasSearch ? (location.pathname + location.search === link.path) : isActive;
                                     return `flex items-center gap-2 px-3 xl:px-4 py-2.5 rounded-full font-black text-[9px] xl:text-[10px] uppercase tracking-widest transition-all cursor-pointer ${actuallyActive
                                         ? 'bg-brand text-white shadow-lg shadow-brand/20'
-                                        : 'text-accent-brown/50 hover:bg-accent-peach/50 hover:text-accent-brown'
+                                        : 'text-accent-brown/50 hover:bg-brand/10 hover:text-brand'
                                     }`
                                 }}
                             >
                                 <link.icon className="w-3.5 h-3.5" />
                                 <span className="hidden xl:inline">{link.name}</span>
-                            </MotionNavLink>
+                            </NavLink>
                         ))}
                     </div>
 
                     {/* Right Actions */}
                     <div className="flex items-center gap-2 sm:gap-6 shrink-0">
-                        {user?.role === 'user' && (
+                        {user?.role === 'customer' && (
                             <motion.button
                                 whileHover={{ scale: 1.1 }}
                                 whileTap={{ scale: 0.9 }}
@@ -500,11 +498,19 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                                             <div className="w-20 h-20 shrink-0 bg-accent-peach/10 rounded-xl p-2 flex items-center justify-center">
                                                 <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
                                             </div>
-                                            <div className="flex-1 flex flex-col">
-                                                <h4 className="font-black text-xs text-accent-brown line-clamp-2 leading-tight mb-1">{item.name}</h4>
+                                    <div className="flex-1 flex flex-col">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <h4 className="font-black text-xs text-accent-brown line-clamp-2 leading-tight mb-1">{item.name}</h4>
+                                                    {item.quantity > item.stock && (
+                                                        <span className="text-[7px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-tighter shrink-0 mb-auto mt-0.5">Stock Issue</span>
+                                                    )}
+                                                </div>
                                                 <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 mb-auto">
                                                     {item.variant} • {item.size}
                                                 </p>
+                                                {item.quantity > item.stock && (
+                                                    <p className="text-[8px] font-bold text-red-500 uppercase tracking-widest mt-1">Exceeds available stock: {item.stock}</p>
+                                                )}
                                                 <div className="flex items-center justify-between mt-2">
                                                     <span className="font-black text-accent-brown">₱{item.price}</span>
                                                     <div className="flex items-center gap-2 bg-accent-peach/20 rounded-lg p-1">
@@ -537,14 +543,15 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                                         <span className="text-2xl font-black text-accent-brown tracking-tighter">₱{totalAmount.toFixed(2)}</span>
                                     </div>
                                     <button
+                                        disabled={hasStockError}
                                         onClick={() => {
                                             setIsCartOpen(false);
-                                            navigate('/dashboard/user/checkout');
+                                            navigate('/dashboard/customer/checkout');
                                         }}
-                                        className="w-full bg-brand-dark hover:bg-black text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2 shadow-lg shadow-brand-dark/20"
+                                        className={`w-full py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2 shadow-lg ${hasStockError ? 'bg-accent-brown/20 text-accent-brown/40 cursor-not-allowed shadow-none' : 'bg-brand-dark hover:bg-black text-white shadow-brand-dark/20'}`}
                                     >
                                         <CreditCard className="w-4 h-4" />
-                                        Checkout Now
+                                        {hasStockError ? 'Resolve Stock Issues' : 'Checkout Now'}
                                     </button>
                                     <button
                                         onClick={() => setIsCartOpen(false)}

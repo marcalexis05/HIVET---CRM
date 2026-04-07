@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Hero } from './components/Hero';
 import { Features } from './components/Features';
@@ -22,15 +22,15 @@ import AdminDashboard from './pages/dashboard/AdminDashboard';
 import AdminBusinesses from './pages/dashboard/AdminBusinesses';
 import AdminCompliance from './pages/dashboard/AdminCompliance';
 import AdminRiders from './pages/dashboard/AdminRiders';
-import AdminUsers from './pages/dashboard/AdminUsers';
+import AdminCustomers from './pages/dashboard/AdminCustomers';
 import AdminAlerts from './pages/dashboard/AdminAlerts';
-import UserDashboard from './pages/dashboard/UserDashboard';
-import UserCatalog from './pages/dashboard/UserCatalog';
+import CustomerDashboard from './pages/dashboard/CustomerDashboard';
+import CustomerCatalog from './pages/dashboard/CustomerCatalog';
 import ProductDetail from './pages/dashboard/ProductDetail';
-import UserReservations from './pages/dashboard/UserReservations';
-import UserLoyalty from './pages/dashboard/UserLoyalty';
-import UserAlerts from './pages/dashboard/UserAlerts';
-import UserOrders from './pages/dashboard/UserOrdersList';
+import CustomerReservations from './pages/dashboard/CustomerReservations';
+import CustomerLoyalty from './pages/dashboard/CustomerLoyalty';
+import CustomerAlerts from './pages/dashboard/CustomerAlerts';
+import CustomerOrders from './pages/dashboard/CustomerOrdersList';
 import Checkout from './pages/dashboard/Checkout';
 import PaymentSuccess from './pages/dashboard/PaymentSuccess';
 import BusinessDashboard from './pages/dashboard/BusinessDashboard';
@@ -61,12 +61,20 @@ function Navigation() {
   const isBusinessLanding = location.pathname === '/for-clinics';
   const isRiderLanding = location.pathname === '/for-riders';
 
+  const handleHomeClick = (e: React.MouseEvent) => {
+    if (location.pathname === '/') {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    setIsMenuOpen(false);
+  };
+
   return (
     <nav className={`fixed top-0 sm:top-8 left-0 w-full z-50 transition-all ${isMenuOpen ? 'bg-white' : ''}`}>
       <div className="container mx-auto px-4 xs:px-6 sm:px-8 h-16 sm:h-20 flex items-center justify-between relative">
         {/* Left: Branding */}
         <div className="flex-1 flex justify-start z-[60]">
-          <Link to="/" className="flex items-center gap-2 xs:gap-3 group" onClick={() => setIsMenuOpen(false)}>
+          <Link to="/" className="flex items-center gap-2 xs:gap-3 group" onClick={handleHomeClick}>
             <div className="w-10 h-10 xs:w-14 xs:h-14 flex items-center justify-center -ml-1 xs:-ml-3 group-hover:scale-110 transition-transform">
               <Logo className="w-full h-full drop-shadow-sm" />
             </div>
@@ -90,7 +98,7 @@ function Navigation() {
             </>
           ) : (
             <>
-              <Link to="/" className="hover:text-brand-dark transition-colors">Home</Link>
+              <Link to="/" className="hover:text-brand-dark transition-colors" onClick={handleHomeClick}>Home</Link>
               <Link to="/catalog" className="hover:text-brand-dark transition-colors">Catalog</Link>
               <a href="/#orders" className="hover:text-brand-dark transition-colors">Orders</a>
               <a href="/#loyalty" className="hover:text-brand-dark transition-colors">Loyalty</a>
@@ -105,7 +113,6 @@ function Navigation() {
             <>
               <button className="relative p-2 text-accent-brown/60 hover:text-brand-dark transition-all">
                 <ShoppingCart className="w-5 h-5 xs:w-6 xs:h-6" />
-                <span className="absolute top-0 right-0 xs:-top-1 xs:-right-1 bg-brand-dark text-white text-[9px] xs:text-[10px] w-3.5 h-3.5 xs:w-4 xs:h-4 rounded-full flex items-center justify-center font-bold">2</span>
               </button>
 
               <div className="h-8 w-[1px] bg-accent-brown/10 mx-2 hidden lg:block"></div>
@@ -179,7 +186,7 @@ function Navigation() {
                     <Link
                       key={item.href}
                       to={item.href}
-                      onClick={() => setIsMenuOpen(false)}
+                      onClick={(e) => item.href === '/' ? handleHomeClick(e) : setIsMenuOpen(false)}
                       className="block text-2xl font-black text-accent-brown uppercase tracking-widest hover:text-brand transition-colors"
                     >
                       {item.name}
@@ -273,239 +280,243 @@ function Landing() {
 
 function App() {
   return (
-      <AuthProvider>
-        <CartProvider>
-          <Router>
-            <ScrollToTop />
-            <div className="min-h-screen bg-accent-peach font-brand selection:bg-brand/30 selection:text-accent-brown overflow-x-hidden">
-              <Navigation />
+    <AuthProvider>
+      <CartProvider>
+        <Router>
+          <ScrollToTop />
+          <div className="min-h-screen bg-accent-peach font-brand selection:bg-brand/30 selection:text-accent-brown overflow-x-hidden">
+            <Navigation />
 
-              <main>
-                <Routes>
-                  <Route path="/" element={<Landing />} />
-                  <Route path="/catalog" element={<Catalog />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/login/business" element={<BusinessLogin />} />
-                  <Route path="/login/rider" element={<RiderLogin />} />
-                  <Route path="/register" element={<Register />} />
-                  <Route path="/register/business" element={<BusinessRegister />} />
-                  <Route path="/register/rider" element={<RiderRegister />} />
-                  <Route path="/forgot-password" element={<ForgotPassword />} />
-                  <Route path="/auth/callback" element={<GoogleCallback />} />
-                  <Route path="/for-clinics" element={<BusinessLanding />} />
-                  <Route path="/for-riders" element={<RiderLanding />} />
+            <main>
+              <Routes>
+                <Route path="/" element={<Landing />} />
+                <Route path="/catalog" element={<Catalog />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/login/business" element={<BusinessLogin />} />
+                <Route path="/login/rider" element={<RiderLogin />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/register/business" element={<BusinessRegister />} />
+                <Route path="/register/rider" element={<RiderRegister />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/auth/callback" element={<GoogleCallback />} />
+                <Route path="/for-clinics" element={<BusinessLanding />} />
+                <Route path="/for-riders" element={<RiderLanding />} />
 
-                  {/* Protected Dashboard Routes */}
-                  {/* Super Admin Routes */}
-                  <Route
-                    path="/dashboard/admin/businesses"
-                    element={
-                      <ProtectedRoute allowedRoles={['super_admin']}>
-                        <AdminBusinesses />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/admin/riders"
-                    element={
-                      <ProtectedRoute allowedRoles={['super_admin']}>
-                        <AdminRiders />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/admin/users"
-                    element={
-                      <ProtectedRoute allowedRoles={['super_admin']}>
-                        <AdminUsers />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/admin"
-                    element={
-                      <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
-                        <AdminDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/admin/alerts"
-                    element={
-                      <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
-                        <AdminAlerts />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/user/catalog"
-                    element={
-                      <ProtectedRoute allowedRoles={['user']}>
-                        <UserCatalog />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/user/catalog/:id"
-                    element={
-                      <ProtectedRoute allowedRoles={['user']}>
-                        <ProductDetail />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/user/reservations"
-                    element={
-                      <ProtectedRoute allowedRoles={['user']}>
-                        <UserReservations />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/user/loyalty"
-                    element={
-                      <ProtectedRoute allowedRoles={['user']}>
-                        <UserLoyalty />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/user/alerts"
-                    element={
-                      <ProtectedRoute allowedRoles={['user']}>
-                        <UserAlerts />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/user/orders"
-                    element={
-                      <ProtectedRoute allowedRoles={['user']}>
-                        <UserOrders />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/user/checkout"
-                    element={
-                      <ProtectedRoute allowedRoles={['user']}>
-                        <Checkout />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/user/checkout/success"
-                    element={
-                      <ProtectedRoute allowedRoles={['user']}>
-                        <PaymentSuccess />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/user/*"
-                    element={
-                      <ProtectedRoute allowedRoles={['user']}>
-                        <UserDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  {/* Business Routes */}
-                  <Route
-                    path="/dashboard/business"
-                    element={
-                      <ProtectedRoute allowedRoles={['business']}>
-                        <BusinessDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/business/orders"
-                    element={
-                      <ProtectedRoute allowedRoles={['business']}>
-                        <BusinessOrders />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/business/catalog"
-                    element={
-                      <ProtectedRoute allowedRoles={['business']}>
-                        <BusinessCatalog />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/business/reservations"
-                    element={
-                      <ProtectedRoute allowedRoles={['business']}>
-                        <BusinessReservations />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/business/analytics"
-                    element={
-                      <ProtectedRoute allowedRoles={['business']}>
-                        <BusinessAnalytics />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/business/account"
-                    element={
-                      <ProtectedRoute allowedRoles={['business']}>
-                        <AccountSettings />
-                      </ProtectedRoute>
-                    }
-                  />
-                  {/* Rider Routes */}
-                  <Route
-                    path="/dashboard/rider"
-                    element={
-                      <ProtectedRoute allowedRoles={['rider']}>
-                        <RiderDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/rider/account"
-                    element={
-                      <ProtectedRoute allowedRoles={['rider']}>
-                        <AccountSettings />
-                      </ProtectedRoute>
-                    }
-                  />
-                  {/* Account Settings â€“ shared across all roles */}
-                  <Route
-                    path="/dashboard/admin/compliance"
-                    element={
-                      <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
-                        <AdminCompliance />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/admin/account"
-                    element={
-                      <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
-                        <AccountSettings />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/user/account"
-                    element={
-                      <ProtectedRoute allowedRoles={['user']}>
-                        <AccountSettings />
-                      </ProtectedRoute>
-                    }
-                  />
-                </Routes>
-              </main>
-            </div>
-          </Router>
-        </CartProvider>
-      </AuthProvider>
+                {/* Protected Dashboard Routes */}
+                {/* Super Admin Routes */}
+                <Route
+                  path="/dashboard/admin/businesses"
+                  element={
+                    <ProtectedRoute allowedRoles={['super_admin']}>
+                      <AdminBusinesses />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/admin/riders"
+                  element={
+                    <ProtectedRoute allowedRoles={['super_admin']}>
+                      <AdminRiders />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/admin/users"
+                  element={
+                    <ProtectedRoute allowedRoles={['super_admin']}>
+                      <AdminCustomers />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/admin"
+                  element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/admin/alerts"
+                  element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
+                      <AdminAlerts />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/user/*"
+                  element={<Navigate to="/dashboard/customer" replace />}
+                />
+                <Route
+                  path="/dashboard/customer/catalog"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer']}>
+                      <CustomerCatalog />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/customer/catalog/:id"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer']}>
+                      <ProductDetail />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/customer/reservations"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer']}>
+                      <CustomerReservations />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/customer/loyalty"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer']}>
+                      <CustomerLoyalty />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/customer/alerts"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer']}>
+                      <CustomerAlerts />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/customer/orders"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer']}>
+                      <CustomerOrders />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/customer/checkout"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer']}>
+                      <Checkout />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/customer/checkout/success"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer']}>
+                      <PaymentSuccess />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/customer/*"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer']}>
+                      <CustomerDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Business Routes */}
+                <Route
+                  path="/dashboard/business"
+                  element={
+                    <ProtectedRoute allowedRoles={['business']}>
+                      <BusinessDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/business/orders"
+                  element={
+                    <ProtectedRoute allowedRoles={['business']}>
+                      <BusinessOrders />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/business/catalog"
+                  element={
+                    <ProtectedRoute allowedRoles={['business']}>
+                      <BusinessCatalog />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/business/reservations"
+                  element={
+                    <ProtectedRoute allowedRoles={['business']}>
+                      <BusinessReservations />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/business/analytics"
+                  element={
+                    <ProtectedRoute allowedRoles={['business']}>
+                      <BusinessAnalytics />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/business/account"
+                  element={
+                    <ProtectedRoute allowedRoles={['business']}>
+                      <AccountSettings />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Rider Routes */}
+                <Route
+                  path="/dashboard/rider"
+                  element={
+                    <ProtectedRoute allowedRoles={['rider']}>
+                      <RiderDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/rider/account"
+                  element={
+                    <ProtectedRoute allowedRoles={['rider']}>
+                      <AccountSettings />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Account Settings â€“ shared across all roles */}
+                <Route
+                  path="/dashboard/admin/compliance"
+                  element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
+                      <AdminCompliance />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/admin/account"
+                  element={
+                    <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
+                      <AccountSettings />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/customer/account"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer']}>
+                      <AccountSettings />
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+            </main>
+          </div>
+        </Router>
+      </CartProvider>
+    </AuthProvider>
   );
 }
 

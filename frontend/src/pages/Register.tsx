@@ -1,15 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     User, Phone,
     Mail,
     Lock, ArrowRight, ArrowLeft,
     ShieldCheck, MailCheck,
-    Home, Eye, EyeOff
+    Home, Eye, EyeOff, X
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { PasswordStrength } from '../components/PasswordStrength';
+import { CustomDropdown } from '../components/CustomDropdown';
 import { useAuth } from '../context/AuthContext';
 
 const Register = () => {
@@ -29,6 +30,16 @@ const Register = () => {
     const [email, setEmail] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [countdown, setCountdown] = useState(0);
+    const [agreedToTerms, setAgreedToTerms] = useState(false);
+    const [activeLegalSection, setActiveLegalSection] = useState<'TOS' | 'Privacy' | null>(null);
+
+    useEffect(() => {
+        if (countdown > 0) {
+            const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [countdown]);
 
     const navigate = useNavigate();
     const { loginWithToken } = useAuth();
@@ -87,6 +98,7 @@ const Register = () => {
             const data = await res.json();
             if (res.ok) {
                 setStep(3);
+                setCountdown(60);
             } else {
                 setError(data.detail || 'Failed to send verification email');
             }
@@ -97,10 +109,36 @@ const Register = () => {
         }
     };
 
-    const nextStep = () => {
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (step === 3) {
+            handleRegister();
+        } else {
+            nextStep();
+        }
+    };
+
+    const nextStep = async () => {
+        setError('');
         if (step === 1) {
+            if (!firstName || !lastName || !phone) {
+                setError('Please fill in all required fields');
+                return;
+            }
+            if (phone.length !== 10 || !phone.startsWith('9')) {
+                setError('Please enter a valid 10-digit PH mobile number starting with 9.');
+                return;
+            }
             setStep(2);
         } else if (step === 2) {
+            if (!email || !password || !confirmPassword) {
+                setError('Please fill in all fields');
+                return;
+            }
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                setError('Please enter a valid email address');
+                return;
+            }
             if (password !== confirmPassword) {
                 setError('Passwords do not match');
                 return;
@@ -109,7 +147,11 @@ const Register = () => {
                 setError('Password must be at least 8 characters');
                 return;
             }
-            handleSendOtp();
+            if (!agreedToTerms) {
+                setError('Please humbly acknowledge our Terms and Privacy Policy to proceed');
+                return;
+            }
+            await handleSendOtp();
         }
     };
     const prevStep = () => setStep(s => Math.max(1, s - 1));
@@ -132,13 +174,13 @@ const Register = () => {
                     middle_name: middleName,
                     suffix,
                     phone,
-                    role: 'user'
+                    role: 'customer'
                 })
             });
             const data = await res.json();
             if (res.ok && data.token) {
                 loginWithToken(data.token);
-                navigate('/dashboard/user');
+                navigate('/dashboard/customer');
             } else {
                 setError(data.detail || 'Registration failed');
             }
@@ -192,14 +234,14 @@ const Register = () => {
                             {/* First Name & Last Name */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="group space-y-2">
-                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">First Name</label>
+                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">First Name <span className="text-brand-dark">*</span></label>
                                     <div className="relative">
                                         <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
                                         <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Juan" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-4 pl-11 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm" />
                                     </div>
                                 </div>
                                 <div className="group space-y-2">
-                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Last Name</label>
+                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Last Name <span className="text-brand-dark">*</span></label>
                                     <div className="relative">
                                         <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Dela Cruz" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-4 pl-5 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm" />
                                     </div>
@@ -208,37 +250,60 @@ const Register = () => {
                             {/* Middle Name & Suffix */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="group space-y-2">
-                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Middle Name</label>
+                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Middle Name <span className="text-accent-brown/30 text-[9px] normal-case tracking-normal font-bold italic">Optional</span></label>
                                     <div className="relative">
                                         <input type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} placeholder="Santos" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-4 pl-5 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm" />
                                     </div>
                                 </div>
-                                <div className="group space-y-2">
-                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Suffix <span className="normal-case font-medium opacity-60">(optional)</span></label>
-                                    <select value={suffix} onChange={e => setSuffix(e.target.value)} className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-4 pl-5 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm appearance-none cursor-pointer">
-                                        <option value="">None</option>
-                                        <option value="Jr.">Jr.</option>
-                                        <option value="Sr.">Sr.</option>
-                                        <option value="II">II</option>
-                                        <option value="III">III</option>
-                                        <option value="IV">IV</option>
-                                    </select>
-                                </div>
+                                <CustomDropdown
+                                    label="Suffix"
+                                    isOptional={true}
+                                    value={suffix}
+                                    onChange={setSuffix}
+                                    options={[
+                                        { label: 'None', value: '' },
+                                        { label: 'Jr.', value: 'Jr.' },
+                                        { label: 'Sr.', value: 'Sr.' },
+                                        { label: 'II', value: 'II' },
+                                        { label: 'III', value: 'III' },
+                                        { label: 'IV', value: 'IV' }
+                                    ]}
+                                    placeholder="None"
+                                />
                             </div>
                             {/* Phone with +63 prefix */}
                             <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Phone Number</label>
+                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Phone Number <span className="text-brand-dark">*</span></label>
                                 <div className="relative flex items-center bg-accent-peach/20 border-2 border-transparent focus-within:border-brand/30 focus-within:bg-white rounded-[2rem] transition-all overflow-hidden">
                                     <div className="flex items-center gap-2 pl-5 pr-3 shrink-0 text-accent-brown font-black text-sm border-r border-accent-brown/10">
                                         <Phone className="w-4 h-4 text-accent-brown/30" />
                                         <span>+63</span>
                                     </div>
-                                    <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="9XX XXX XXXX" className="flex-1 bg-transparent py-4 pl-4 pr-6 text-accent-brown font-semibold outline-none text-sm" />
+                                    <input 
+                                        type="tel" 
+                                        value={phone} 
+                                        maxLength={10}
+                                        onChange={e => {
+                                            let val = e.target.value.replace(/\D/g, '');
+                                            if (val.startsWith('0')) val = val.substring(1);
+                                            if (val.length > 0 && !val.startsWith('9')) val = '';
+                                            setPhone(val.slice(0, 10));
+                                        }} 
+                                        placeholder="9XX XXX XXXX" 
+                                        className="flex-1 bg-transparent py-4 pl-4 pr-6 text-accent-brown font-semibold outline-none text-sm" 
+                                    />
                                 </div>
                             </div>
                         </div>
 
-                        <button onClick={nextStep} className="btn-primary w-full group flex items-center justify-center gap-3 h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6">
+                        {error && (
+                            <div className="bg-red-50 text-red-500 text-[10px] font-black uppercase tracking-widest p-4 rounded-2xl text-center border border-red-100 flex items-center justify-center gap-2">
+                                <ShieldCheck className="w-4 h-4" />
+                                {error}
+                            </div>
+                        )}
+
+                        <button type="submit" className="btn-primary w-full group flex items-center justify-center gap-3 h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6">
                             Proceed to Basics
                             <ArrowRight className="w-4 h-4 xs:w-5 xs:h-5 group-hover:translate-x-1 transition-transform" />
                         </button>
@@ -260,14 +325,14 @@ const Register = () => {
 
                         <div className="space-y-4">
                             <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Email Address</label>
+                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Email Address <span className="text-brand-dark">*</span></label>
                                 <div className="relative">
                                     <Mail className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
                                     <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="john@hi-vet.com" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-5 pl-16 pr-8 text-accent-brown font-semibold outline-none transition-all" />
                                 </div>
                             </div>
                             <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Password</label>
+                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Password <span className="text-brand-dark">*</span></label>
                                 <div className="relative">
                                     <Lock className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
                                     <input
@@ -292,7 +357,7 @@ const Register = () => {
                                 )}
                             </div>
                             <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Confirm Security</label>
+                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Confirm Password <span className="text-brand-dark">*</span></label>
                                 <div className="relative">
                                     <ShieldCheck className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
                                     <input
@@ -314,15 +379,65 @@ const Register = () => {
                                     <p className="text-red-500 text-xs font-bold pl-4">Passwords do not match</p>
                                 )}
                             </div>
+
+                            {/* Terms and Conditions Checkbox */}
+                            <div className="pt-2 px-4">
+                                <label className="flex items-start gap-3 cursor-pointer group/terms">
+                                    <div className="relative flex items-center justify-center mt-1">
+                                        <input
+                                            type="checkbox"
+                                            checked={agreedToTerms}
+                                            onChange={(e) => setAgreedToTerms(e.target.checked)}
+                                            className="peer sr-only"
+                                        />
+                                        <div className="w-5 h-5 border-2 border-accent-brown/20 rounded-md bg-accent-peach/10 peer-checked:bg-brand-dark peer-checked:border-brand-dark transition-all" />
+                                        <ShieldCheck className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
+                                    </div>
+                                    <span className="text-[11px] font-medium text-accent-brown/60 leading-relaxed group-hover/terms:text-accent-brown transition-colors">
+                                        In proceeding, you humbly acknowledge and agree to our {' '}
+                                        <button 
+                                            type="button" 
+                                            onClick={(e) => { e.stopPropagation(); setActiveLegalSection('TOS'); }}
+                                            className="text-brand-dark font-black underline underline-offset-2 hover:text-brand transition-colors"
+                                        >
+                                            Terms of Service
+                                        </button>
+                                        {' '} and {' '}
+                                        <button 
+                                            type="button" 
+                                            onClick={(e) => { e.stopPropagation(); setActiveLegalSection('Privacy'); }}
+                                            className="text-brand-dark font-black underline underline-offset-2 hover:text-brand transition-colors"
+                                        >
+                                            Privacy Policy
+                                        </button>. It is our honor to serve you.
+                                    </span>
+                                </label>
+                            </div>
                         </div>
 
+                        {error && (
+                            <div className="bg-red-50 text-red-500 text-[10px] font-black uppercase tracking-widest p-4 rounded-2xl text-center border border-red-100 flex items-center justify-center gap-2">
+                                <ShieldCheck className="w-4 h-4" />
+                                {error}
+                            </div>
+                        )}
+
                         <div className="flex gap-4">
-                            <button onClick={prevStep} className="flex-1 px-8 py-5 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
+                            <button type="button" onClick={prevStep} className="flex-1 px-8 py-5 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
                                 <ArrowLeft className="w-4 h-4" /> Back
                             </button>
-                            <button onClick={nextStep} className="btn-primary flex-[2] group flex items-center justify-center gap-2 xs:gap-3 h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6">
-                                Verify Now
-                                <ArrowRight className="w-4 h-4 xs:w-5 xs:h-5 group-hover:translate-x-1 transition-transform" />
+                            <button type="submit" disabled={loading} className="btn-primary flex-[2] group flex items-center justify-center gap-2 xs:gap-3 h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6 disabled:opacity-50">
+                                {loading ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        <span>Sending...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        Verify Now
+                                        <ArrowRight className="w-4 h-4 xs:w-5 xs:h-5 group-hover:translate-x-1 transition-transform" />
+                                    </>
+                                )}
                             </button>
                         </div>
                     </motion.div>
@@ -374,14 +489,21 @@ const Register = () => {
                         <div className="space-y-6">
                             <p className="text-xs font-bold text-accent-brown/40 ml-4">
                                 No code yet? {' '}
-                                <button onClick={handleSendOtp} disabled={loading} className="text-brand-dark hover:underline underline-offset-4 disabled:opacity-50">Resend Protocol</button>
+                                <button
+                                    type="button"
+                                    onClick={handleSendOtp}
+                                    disabled={loading || countdown > 0}
+                                    className="text-brand-dark font-black hover:underline underline-offset-4 disabled:opacity-50"
+                                >
+                                    {countdown > 0 ? `Resend Code (${countdown}s)` : 'Resend Code'}
+                                </button>
                             </p>
 
                             <div className="flex gap-4">
-                                <button onClick={prevStep} disabled={loading} className="flex-1 px-8 py-5 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] disabled:opacity-50">
+                                <button type="button" onClick={prevStep} disabled={loading} className="flex-1 px-8 py-5 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] disabled:opacity-50">
                                     Review
                                 </button>
-                                <button onClick={handleRegister} disabled={loading} className="btn-primary flex-[2] bg-brand-dark h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6 disabled:opacity-50">
+                                <button type="submit" disabled={loading} className="btn-primary flex-[2] bg-brand-dark h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6 disabled:opacity-50">
                                     {loading ? 'Creating...' : 'Complete Sign Up'}
                                 </button>
                             </div>
@@ -455,9 +577,11 @@ const Register = () => {
                         </Link>
                     </div>
 
-                    <AnimatePresence mode="wait">
-                        {renderStep()}
-                    </AnimatePresence>
+                    <form onSubmit={handleSubmit}>
+                        <AnimatePresence mode="wait">
+                            {renderStep()}
+                        </AnimatePresence>
+                    </form>
 
                     <div className="mt-12 text-center">
                         <Link to="/" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-accent-brown/30 hover:text-accent-brown transition-colors group">
@@ -467,6 +591,66 @@ const Register = () => {
                     </div>
                 </div>
             </motion.div>
+
+            {/* Legal Overlay Modal */}
+            <AnimatePresence>
+                {activeLegalSection && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setActiveLegalSection(null)}
+                            className="absolute inset-0 bg-accent-brown/80 backdrop-blur-md"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="relative w-full max-w-lg bg-white rounded-[2.5rem] p-8 xs:p-12 shadow-2xl overflow-hidden"
+                        >
+                            <button 
+                                onClick={() => setActiveLegalSection(null)}
+                                className="absolute top-8 right-8 w-10 h-10 bg-accent-peach/20 rounded-full flex items-center justify-center text-accent-brown hover:bg-brand hover:text-white transition-all transform hover:rotate-90"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+
+                            <div className="space-y-6 text-left">
+                                <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center">
+                                    <ShieldCheck className="w-8 h-8 text-brand" />
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    <h3 className="text-2xl xs:text-3xl font-black text-accent-brown tracking-tighter">
+                                        {activeLegalSection === 'TOS' ? 'Terms of Service' : activeLegalSection === 'Privacy' ? 'Privacy Policy' : 'Security'}
+                                    </h3>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand">Legal & Transparency</p>
+                                </div>
+
+                                <p className="text-sm xs:text-base text-accent-brown/60 leading-relaxed font-medium">
+                                    {activeLegalSection === 'TOS' ? (
+                                        'By utilizing the Hi-Vet platform, you agree to our professional standards of care. We maintain a transparent relationship with all customers, partners, and riders to ensure a fair and efficient healthcare ecosystem.'
+                                    ) : activeLegalSection === 'Privacy' ? (
+                                        'We humbly respect your privacy. Hi-Vet never sells customer data. We only collect essential information required to facilitate life-saving care and improve our dedicated services for our customers.'
+                                    ) : (
+                                        'Your data is secured using industry-leading AES-256 encryption. We implement rigorous security audits and proactive threat monitoring to protect your personal and medical information around the clock.'
+                                    )}
+                                </p>
+
+                                <div className="pt-6">
+                                    <button 
+                                        onClick={() => setActiveLegalSection(null)}
+                                        className="w-full btn-primary py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-brand/20"
+                                    >
+                                        I Understand
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

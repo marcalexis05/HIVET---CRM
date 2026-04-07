@@ -69,64 +69,74 @@ const Catalog = () => {
                 <div className="mb-12">
                     <h1 className="text-6xl md:text-8xl font-black text-accent-brown tracking-tighter leading-none mb-6">
                         Our <br />
-                        <span className="text-brand-dark italic">Collections</span>
+                        <span className="text-brand italic">Collections</span>
                     </h1>
                     <p className="text-xl text-accent-brown/60 font-medium max-w-xl leading-relaxed">
                         Discover {products.length} premium solutions crafted for perfection. Every item in our curated database is verified for quality and safety.
                     </p>
                 </div>
 
-                {/* Search and Filters Card (Dashboard Style) */}
-                <div className="bg-white rounded-3xl sm:rounded-[2rem] p-5 sm:p-6 shadow-xl shadow-accent-brown/5 border border-white flex flex-col lg:flex-row gap-6 justify-between items-center mb-12">
-                    {/* Search Bar */}
-                    <div className="relative group w-full lg:w-[32rem]">
-                        <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                        <input
-                            type="text"
-                            placeholder="Search products, tags, or features..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-14 pr-8 py-4 bg-accent-peach/20 rounded-2xl border-2 border-transparent focus:border-brand/20 outline-none transition-all font-medium text-accent-brown placeholder:text-accent-brown/20"
-                        />
-                    </div>
-
-                    {/* Dual Filters */}
-                    <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
-                        {/* Pet Filter */}
-                        <div className="flex bg-accent-peach/20 p-1.5 rounded-2xl border border-accent-brown/5 w-full sm:w-fit overflow-x-auto no-scrollbar">
-                            {['All', 'Cats', 'Dogs'].map((cat) => (
-                                <button
-                                    key={cat}
-                                    onClick={() => setPetFilter(cat as any)}
-                                    className={`px-6 sm:px-8 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 whitespace-nowrap flex-1 sm:flex-none justify-center ${petFilter === cat
-                                        ? 'bg-brand text-white shadow-md'
-                                        : 'text-accent-brown/40 hover:text-accent-brown hover:bg-white/50'
-                                        }`}
-                                >
-                                    {cat === 'Cats' && <span className="text-xs">🐱</span>}
-                                    {cat === 'Dogs' && <span className="text-xs">🐶</span>}
-                                    {cat}
-                                </button>
-                            ))}
+                {/* Search and Filters Card (Pill Style) */}
+                <div className="flex flex-col xl:flex-row gap-6 items-center mb-12">
+                    {/* Integrated Search & Filter Bar */}
+                    <div className="w-full bg-white/70 backdrop-blur-xl border border-white rounded-[4rem] p-2 sm:p-3 shadow-2xl shadow-accent-brown/5 flex flex-col lg:flex-row gap-4 items-center">
+                        
+                        {/* Search Bar Section */}
+                        <div className="relative group w-full lg:w-[40%] xl:w-[35%]">
+                            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
+                            <input
+                                type="text"
+                                placeholder="Search products, tags, or features..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-14 pr-8 py-4 bg-accent-peach/10 rounded-full border border-transparent focus:bg-white outline-none transition-all font-medium text-accent-brown placeholder:text-accent-brown/20 text-sm"
+                            />
                         </div>
 
-                        {/* Type Filter */}
-                        <div className="grid grid-cols-2 lg:flex bg-accent-peach/20 p-1.5 rounded-2xl border border-accent-brown/5 w-full lg:w-auto gap-1">
-                            {['All', 'Food', 'Accessories', 'Vitamins'].map((type) => (
-                                <button
-                                    key={type}
-                                    onClick={() => {
-                                        setTypeFilter(type as any);
-                                        setSearchParams(type === 'All' ? {} : { type });
-                                    }}
-                                    className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap flex-1 lg:flex-none justify-center ${typeFilter === type
-                                        ? 'bg-accent-brown text-white shadow-md'
-                                        : 'text-accent-brown/40 hover:text-accent-brown hover:bg-white/50'
+                        {/* Divider for Desktop */}
+                        <div className="hidden lg:block w-[1px] h-10 bg-accent-brown/10 mx-2"></div>
+
+                        {/* Dual Filters Section */}
+                        <div className="flex flex-col md:flex-row gap-6 w-full lg:w-auto items-center px-4 overflow-x-auto no-scrollbar py-2 lg:py-0">
+                            {/* Pet Filter */}
+                            <div className="flex items-center gap-6">
+                                {['All', 'Cats', 'Dogs'].map((cat) => (
+                                    <button
+                                        key={cat}
+                                        onClick={() => setPetFilter(cat as any)}
+                                        className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap ${
+                                            petFilter === cat
+                                            ? 'bg-brand text-white shadow-lg shadow-brand/20'
+                                            : 'text-accent-brown/40 hover:text-accent-brown'
                                         }`}
-                                >
-                                    {type}
-                                </button>
-                            ))}
+                                    >
+                                        {cat}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Divider for Filter Groups */}
+                            <div className="hidden md:block w-[1px] h-6 bg-accent-brown/10"></div>
+
+                            {/* Type Filter */}
+                            <div className="flex items-center gap-6">
+                                {['All', 'Food', 'Accessories', 'Vitamins'].map((type) => (
+                                    <button
+                                        key={type}
+                                        onClick={() => {
+                                            setTypeFilter(type as any);
+                                            setSearchParams(type === 'All' ? {} : { type });
+                                        }}
+                                        className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap ${
+                                            typeFilter === type
+                                            ? 'bg-brand-dark text-white shadow-lg shadow-brand-dark/20'
+                                            : 'text-accent-brown/40 hover:text-accent-brown'
+                                        }`}
+                                    >
+                                        {type}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -217,6 +227,7 @@ const Catalog = () => {
                                                     triggerFlyAnimation(e, p.image);
                                                     addToCart({
                                                         id: p.id,
+                                                        business_id: 1,
                                                         name: p.name,
                                                         price: p.price,
                                                         image: p.image,
@@ -235,6 +246,7 @@ const Catalog = () => {
                                                     triggerFlyAnimation(e, p.image);
                                                     addToCart({
                                                         id: p.id,
+                                                        business_id: 1,
                                                         name: p.name,
                                                         price: p.price,
                                                         image: p.image,

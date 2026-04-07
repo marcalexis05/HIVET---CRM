@@ -53,7 +53,7 @@ const TIER_GRADIENT: Record<string, string> = {
     Platinum: 'from-cyan-400 to-indigo-400',
 };
 
-const UserLoyalty = () => {
+const CustomerLoyalty = () => {
     const [loyalty, setLoyalty] = useState<LoyaltyData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -450,4 +450,4 @@ const UserLoyalty = () => {
     );
 };
 
-export default UserLoyalty;
+export default CustomerLoyalty;

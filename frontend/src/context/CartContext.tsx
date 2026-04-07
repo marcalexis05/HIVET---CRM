@@ -11,6 +11,7 @@ export interface CartItem {
     quantity: number;
     variant?: string;
     size?: string;
+    stock: number;
 }
 
 export interface FlyingItem {
@@ -53,7 +54,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
             if (existingItemIndex > -1) {
                 const updatedItems = [...currentItems];
-                updatedItems[existingItemIndex].quantity += newItem.quantity;
+                const item = updatedItems[existingItemIndex];
+                // Update stock if dynamic
+                if (newItem.stock !== undefined) item.stock = newItem.stock;
+                
+                // Enforce stock limit
+                const maxStock = (newItem.stock !== undefined) ? newItem.stock : (item.stock !== undefined ? item.stock : 9999);
+                item.quantity = Math.min(item.quantity + newItem.quantity, maxStock);
                 return updatedItems;
             }
 
@@ -76,7 +83,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         setItems(currentItems =>
             currentItems.map(item =>
                 (item.id === itemId && item.variant === variant && item.size === size)
-                    ? { ...item, quantity }
+                    ? { ...item, quantity: Math.min(quantity, item.stock || 9999) }
                     : item
             )
         );

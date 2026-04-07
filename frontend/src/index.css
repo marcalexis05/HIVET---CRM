@@ -30,6 +30,16 @@ html {
   scroll-padding-top: 100px;
 }
 
+/* Hi-Vet Global Scrollbar Hiding */
+::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
 body {
   @apply font-brand bg-accent-peach text-accent-brown selection:bg-brand/30 overflow-x-hidden;
 }
@@ -110,6 +120,7 @@ body.map-modal-active {
    transition-colors alone only watches color — this adds transform + shadow. */
 button,
 a[role="button"] {
+    cursor: pointer;
     transition-property: background-color, color, transform, box-shadow, opacity, border-color, filter !important;
     transition-duration: 150ms !important;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;

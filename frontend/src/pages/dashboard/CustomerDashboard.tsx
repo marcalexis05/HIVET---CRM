@@ -30,7 +30,7 @@ interface DashboardStats {
     unread_count: number;
 }
 
-const UserDashboard = () => {
+const CustomerDashboard = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -95,7 +95,7 @@ const UserDashboard = () => {
                             <motion.button
                                 whileHover={{ scale: 1.05, y: -2 }}
                                 whileTap={{ scale: 0.95 }}
-                                onClick={() => navigate('/dashboard/user/catalog')}
+                                onClick={() => navigate('/dashboard/customer/catalog')}
                                 className="w-full xs:w-auto px-5 sm:px-8 py-3.5 sm:py-4 bg-brand hover:bg-white text-white hover:text-brand-dark rounded-xl sm:rounded-2xl font-black text-[8px] sm:text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-brand/20 flex items-center justify-center gap-2 cursor-pointer"
                             >
                                 <ShoppingBag className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -104,11 +104,11 @@ const UserDashboard = () => {
                             <motion.button
                                 whileHover={{ scale: 1.05, y: -2 }}
                                 whileTap={{ scale: 0.95 }}
-                                onClick={() => navigate('/dashboard/user/account')}
+                                onClick={() => navigate('/dashboard/customer/loyalty')}
                                 className="w-full xs:w-auto px-5 sm:px-8 py-3.5 sm:py-4 bg-white/10 hover:bg-white/20 text-white rounded-xl sm:rounded-2xl font-black text-[8px] sm:text-[10px] uppercase tracking-widest transition-all backdrop-blur-md flex items-center justify-center gap-2 cursor-pointer"
                             >
                                 <Award className="w-3 h-3 sm:w-4 sm:h-4" />
-                                View Profile
+                                View Loyalty 
                             </motion.button>
                         </div>
                     </div>
@@ -128,7 +128,7 @@ const UserDashboard = () => {
                             whileTap={{ scale: 0.98 }}
                             transition={{ delay: 0.2, type: "spring", stiffness: 400, damping: 25 }}
                             className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col justify-between group cursor-pointer transition-all"
-                            onClick={() => navigate('/dashboard/user/loyalty')}
+                            onClick={() => navigate('/dashboard/customer/loyalty')}
                         >
                             <div className="flex items-start justify-between mb-8">
                                 <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center text-orange-600">
@@ -162,7 +162,7 @@ const UserDashboard = () => {
                             whileTap={{ scale: 0.98 }}
                             transition={{ delay: 0.3, type: "spring", stiffness: 400, damping: 25 }}
                             className="bg-white rounded-3xl sm:rounded-[2rem] p-5 xs:p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col justify-between group cursor-pointer transition-all"
-                            onClick={() => navigate('/dashboard/user/orders')}
+                            onClick={() => navigate('/dashboard/customer/orders')}
                         >
                             {stats?.recent_order ? (
                                 <>
@@ -197,7 +197,7 @@ const UserDashboard = () => {
                                     <motion.button
                                         whileHover={{ scale: 1.1 }}
                                         whileTap={{ scale: 0.9 }}
-                                        onClick={(e) => { e.stopPropagation(); navigate('/dashboard/user/catalog'); }}
+                                        onClick={(e) => { e.stopPropagation(); navigate('/dashboard/customer/catalog'); }}
                                         className="mt-4 text-xs font-black text-brand-dark hover:text-brand transition-colors cursor-pointer"
                                     >
                                         START SHOPPING
@@ -229,8 +229,8 @@ const UserDashboard = () => {
                         <div className="space-y-4">
                             {stats?.alerts && stats.alerts.length > 0 ? (
                                 stats.alerts.map((alert) => (
-                                    <motion.div 
-                                        key={alert.id} 
+                                    <motion.div
+                                        key={alert.id}
                                         whileHover={{ scale: 1.03, x: 4 }}
                                         whileTap={{ scale: 0.98 }}
                                         className="bg-white p-4 rounded-2xl shadow-sm cursor-pointer hover:shadow-md transition-all relative overflow-hidden group"
@@ -259,4 +259,4 @@ const UserDashboard = () => {
     );
 };
 
-export default UserDashboard;
+export default CustomerDashboard;

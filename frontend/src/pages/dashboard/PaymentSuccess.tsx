@@ -40,7 +40,7 @@ const PaymentSuccess = () => {
     // Secure Countdown Logic
     useEffect(() => {
         if (seconds <= 0) {
-            navigate('/dashboard/user/orders');
+            navigate('/dashboard/customer/orders');
             return;
         }
 
@@ -77,7 +77,7 @@ const PaymentSuccess = () => {
                 
                 <div className="space-y-3">
                     <button 
-                        onClick={() => navigate('/dashboard/user/orders')}
+                        onClick={() => navigate('/dashboard/customer/orders')}
                         className="w-full bg-brand-dark text-white py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-black transition-all shadow-lg shadow-brand/20 text-[10px] cursor-pointer"
                     >
                         View My Orders
@@ -85,7 +85,7 @@ const PaymentSuccess = () => {
                     </button>
                     
                     <button 
-                        onClick={() => navigate('/dashboard/user/catalog')}
+                        onClick={() => navigate('/dashboard/customer/catalog')}
                         className="w-full bg-brand/10 text-brand-dark py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-brand/20 transition-all text-[10px] cursor-pointer"
                     >
                         <ShoppingBag className="w-4 h-4" />
@@ -93,7 +93,7 @@ const PaymentSuccess = () => {
                     </button>
 
                     <button 
-                        onClick={() => navigate('/dashboard/user')}
+                        onClick={() => navigate('/dashboard/customer')}
                         className="w-full py-4 text-accent-brown/40 hover:text-accent-brown font-black uppercase tracking-widest text-[9px] transition-colors cursor-pointer"
                     >
                         Back to Customer Hub

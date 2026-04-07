@@ -139,6 +139,13 @@ const ForgotPassword = () => {
 
     const prevStep = () => setStep(s => Math.max(1, s - 1));
 
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (step === 1) handleSendOtp();
+        else if (step === 2) handleVerifyOtp();
+        else if (step === 3) handleResetPassword();
+    };
+
     const renderStep = () => {
         switch (step) {
             case 1:
@@ -171,9 +178,17 @@ const ForgotPassword = () => {
                             </div>
                         </div>
 
-                        <button onClick={handleSendOtp} disabled={loading} className="btn-primary w-full group flex items-center justify-center gap-3 h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6 disabled:opacity-50">
-                            {loading ? 'Sending...' : 'Send Recovery Code'}
-                            <ArrowRight className="w-4 h-4 xs:w-5 xs:h-5 group-hover:translate-x-1 transition-transform" />
+                        <button type="submit" disabled={loading} className="btn-primary w-full group flex items-center justify-center gap-3 h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6 disabled:opacity-50">
+                            {loading ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span>Sending...</span>
+                                </>
+                            ) : (
+                                <>
+                                    Send Recovery Code <ArrowRight className="w-4 h-4 xs:w-5 xs:h-5 group-hover:translate-x-1 transition-transform" />
+                                </>
+                            )}
                         </button>
                     </motion.div>
                 );
@@ -225,20 +240,28 @@ const ForgotPassword = () => {
                             <p className="text-xs font-bold text-accent-brown/40 ml-4">
                                 No code yet? {' '}
                                 <button
+                                    type="button"
                                     onClick={handleSendOtp}
                                     disabled={loading || countdown > 0}
                                     className="text-brand-dark hover:underline underline-offset-4 disabled:opacity-50"
                                 >
-                                    {countdown > 0 ? `Resend Protocol (${countdown}s)` : 'Resend Protocol'}
+                                    {countdown > 0 ? `Resend Code (${countdown}s)` : 'Resend Code'}
                                 </button>
                             </p>
 
                             <div className="flex gap-4">
-                                <button onClick={prevStep} disabled={loading} className="flex-1 h-12 xs:h-14 md:h-16 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 disabled:opacity-50">
+                                <button type="button" onClick={prevStep} disabled={loading} className="flex-1 h-12 xs:h-14 md:h-16 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 disabled:opacity-50">
                                     <ArrowLeft className="w-4 h-4" /> Back
                                 </button>
-                                <button onClick={handleVerifyOtp} disabled={loading} className="btn-primary flex-[2] bg-brand-dark h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6 disabled:opacity-50">
-                                    Verify Code
+                                <button type="submit" disabled={loading} className="btn-primary flex-[2] bg-brand-dark h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6 disabled:opacity-50">
+                                    {loading ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            <span>Verifying...</span>
+                                        </>
+                                    ) : (
+                                        'Verify Code'
+                                    )}
                                 </button>
                             </div>
                         </div>
@@ -316,11 +339,18 @@ const ForgotPassword = () => {
                         </div>
 
                         <div className="flex gap-4">
-                            <button onClick={prevStep} disabled={loading} className="flex-1 h-12 xs:h-14 md:h-16 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 disabled:opacity-50">
+                            <button type="button" onClick={prevStep} disabled={loading} className="flex-1 h-12 xs:h-14 md:h-16 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 disabled:opacity-50">
                                 <ArrowLeft className="w-4 h-4" /> Back
                             </button>
-                            <button onClick={handleResetPassword} disabled={loading} className="btn-primary flex-[2] bg-brand-dark h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6 disabled:opacity-50">
-                                {loading ? 'Resetting...' : 'Update Password'}
+                            <button type="submit" disabled={loading} className="btn-primary flex-[2] bg-brand-dark h-12 xs:h-14 md:h-16 text-[10px] xs:text-xs md:text-sm whitespace-nowrap px-4 xs:px-6 disabled:opacity-50">
+                                {loading ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        <span>Updating...</span>
+                                    </>
+                                ) : (
+                                    'Update Password'
+                                )}
                             </button>
                         </div>
                     </motion.div>
@@ -354,7 +384,7 @@ const ForgotPassword = () => {
                                 <span className="text-brand-dark">professional</span> access.
                             </h1>
                             <p className="text-accent-brown/60 font-medium leading-relaxed">
-                                Let's get you back into your Hi-Vet CRM account securely.
+                                Let's get you back into your Hi-Vet account securely.
                             </p>
                         </div>
                     </div>
@@ -373,9 +403,11 @@ const ForgotPassword = () => {
 
                 {/* Right Side: Flow */}
                 <div className="p-6 xs:p-10 md:p-20 flex flex-col justify-center relative bg-white">
-                    <AnimatePresence mode="wait">
-                        {renderStep()}
-                    </AnimatePresence>
+                    <form onSubmit={handleSubmit}>
+                        <AnimatePresence mode="wait">
+                            {renderStep()}
+                        </AnimatePresence>
+                    </form>
 
                     <div className="mt-12 text-center pt-8 border-t border-accent-brown/5">
                         <p className="text-sm font-semibold text-accent-brown/50">

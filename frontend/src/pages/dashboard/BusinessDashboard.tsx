@@ -1,10 +1,22 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, ShoppingBag, Package, Award, ArrowRight, ChevronRight, Loader2, Filter, ArrowUp, ArrowDown } from 'lucide-react';
+import { 
+    Package, ShoppingBag, Users, 
+    ArrowRight, TrendingUp, Award,
+    Filter, ArrowUp, ArrowDown, LayoutGrid, Loader2,
+    ChevronRight
+} from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Link } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
+
+interface ChartDataPoint { name: string; value: number; color?: string; }
+interface KPI { label: string; value: string; trend: string; icon: string; color: string; change?: string; sub?: string; }
+interface RevenueData { trend: string; chartData: ChartDataPoint[]; }
+interface TopProduct { name: string; sold: number; revenue: number; pct: number; }
+
+const ICON_MAP: Record<string, React.ElementType> = { TrendingUp, Users, ShoppingBag, Award, LayoutGrid, Package };
 
 const STATUS = {
     Completed: 'bg-green-100 text-green-700',
@@ -16,44 +28,40 @@ const STATUS = {
 const BusinessDashboard = () => {
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState<any[]>([]);
-    const [recentOrders, setRecentOrders] = useState<any[]>([]);
-    const [revenueData, setRevenueData] = useState<any>({ trend: '+21%', chartData: [] });
+    const [stats, setStats] = useState<KPI[]>([]);
+
+    const [revenueData, setRevenueData] = useState<RevenueData>({ trend: '+21%', chartData: [] });
     const [revenuePeriod, setRevenuePeriod] = useState('6m');
-    const [topProducts, setTopProducts] = useState<any[]>([]);
+    const [revenueType, setRevenueType] = useState('all');
+    const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
+    const [distributionData, setDistributionData] = useState<ChartDataPoint[]>([]);
+    const [recentOrders, setRecentOrders] = useState<Record<string, unknown>[]>([]);
 
     useEffect(() => {
         if (user?.token) {
             fetchDashboardData();
         }
-    }, [user?.token, revenuePeriod]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.token, revenuePeriod, revenueType]);
 
     const fetchDashboardData = async () => {
         setLoading(true);
         try {
             const headers = { 'Authorization': `Bearer ${user?.token}` };
             
-            // Fetch stats
-            const statsResp = await fetch('http://localhost:8000/api/business/dashboard/stats', { headers });
-            const statsData = await statsResp.json();
-            
-            const formattedStats = [
-                { label: 'Total Orders', value: statsData.total_orders, sub: statsData.orders_change, icon: ShoppingBag, color: 'bg-blue-50 text-blue-600' },
-                { label: 'Monthly Revenue', value: `₱${(statsData.monthly_revenue/1000).toFixed(0)}k`, sub: statsData.revenue_change, icon: TrendingUp, color: 'bg-green-50 text-green-600' },
-                { label: 'Active Products', value: statsData.active_products, sub: 'Live', icon: Package, color: 'bg-orange-50 text-orange-600' },
-                { label: 'Low Stock', value: statsData.low_stock_count, sub: 'Needs attention', icon: Award, color: 'bg-purple-50 text-purple-600' },
-            ];
-            setStats(formattedStats);
-
             // Fetch recent orders
             const ordersResp = await fetch('http://localhost:8000/api/business/dashboard/recent-orders', { headers });
-            setRecentOrders(await ordersResp.json());
+            if (ordersResp.ok) {
+                setRecentOrders(await ordersResp.json());
+            }
 
             // Fetch analytics/trend
-            const analyticsResp = await fetch(`http://localhost:8000/api/business/dashboard/analytics?period=${revenuePeriod}`, { headers });
+            const analyticsResp = await fetch(`http://localhost:8000/api/business/dashboard/analytics?period=${revenuePeriod}&data_type=${revenueType}`, { headers });
             const analyticsData = await analyticsResp.json();
+            setStats(analyticsData.kpis || []);
             setRevenueData(analyticsData.revenue_trend || { trend: '+0%', chartData: [] });
             setTopProducts(analyticsData.top_products || []);
+            setDistributionData(analyticsData.distribution_data || []);
 
         } catch (err) {
             console.error('Error fetching dashboard data:', err);
@@ -100,24 +108,27 @@ const BusinessDashboard = () => {
                         [1,2,3,4].map(i => (
                             <div key={i} className="bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/5 border border-white h-32 animate-pulse" />
                         ))
-                    ) : stats.map((s, i) => (
-                        <motion.div
-                            key={s.label}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.1 + i * 0.08 }}
-                            className="bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/5 border border-white flex flex-col gap-4"
-                        >
-                            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${s.color}`}>
-                                <s.icon className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <p className="text-3xl font-black text-accent-brown tracking-tighter leading-none mb-1">{s.value}</p>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">{s.label}</p>
-                                <p className="text-[10px] font-bold text-green-600 mt-1">{s.sub}</p>
-                            </div>
-                        </motion.div>
-                    ))}
+                    ) : stats.map((s, i) => {
+                        const Icon = ICON_MAP[s.icon] || TrendingUp;
+                        return (
+                            <motion.div
+                                key={s.label}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.1 + i * 0.08 }}
+                                className="bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/5 border border-white flex flex-col gap-4"
+                            >
+                                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${s.color}`}>
+                                    <Icon className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <p className="text-3xl font-black text-accent-brown tracking-tighter leading-none mb-1">{s.value}</p>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">{s.label}</p>
+                                    <p className="text-[10px] font-bold text-green-600 mt-1">{s.change}</p>
+                                </div>
+                            </motion.div>
+                        );
+                    })}
                 </div>
 
                 <div className="grid lg:grid-cols-5 gap-8">
@@ -127,38 +138,59 @@ const BusinessDashboard = () => {
                         transition={{ delay: 0.3 }}
                         className="lg:col-span-3 bg-white rounded-[2.5rem] p-8 shadow-xl shadow-accent-brown/5 border border-white"
                     >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
+                        <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-8 gap-4">
                             <div>
                                 <h3 className="text-xl font-black text-accent-brown tracking-tight">Revenue Trend</h3>
                                 <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mt-1">Personal Sales Performance</p>
                             </div>
                             
-                            <div className="flex items-center gap-2 bg-accent-brown/5 p-1 rounded-2xl self-start">
-                                {[
-                                    { id: '7d', label: '7D' },
-                                    { id: '30d', label: '30D' },
-                                    { id: '6m', label: '6M' },
-                                    { id: '1y', label: '1Y' },
-                                ].map((p) => (
-                                    <button
-                                        key={p.id}
-                                        onClick={() => setRevenuePeriod(p.id)}
-                                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                                            revenuePeriod === p.id 
-                                            ? 'bg-brand text-white shadow-lg shadow-brand/20' 
-                                            : 'text-accent-brown/40 hover:text-accent-brown'
-                                        }`}
-                                    >
-                                        {p.label}
-                                    </button>
-                                ))}
+                            <div className="flex flex-wrap items-center gap-4">
+                                <div className="flex items-center gap-1 bg-accent-brown/5 p-1 rounded-2xl">
+                                    {[
+                                        { id: 'all', label: 'All' },
+                                        { id: 'products', label: 'Products' },
+                                        { id: 'services', label: 'Services' },
+                                    ].map((type) => (
+                                        <button
+                                            key={type.id}
+                                            onClick={() => setRevenueType(type.id)}
+                                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                                revenueType === type.id 
+                                                ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' 
+                                                : 'text-accent-brown/40 hover:text-accent-brown'
+                                            }`}
+                                        >
+                                            {type.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="flex items-center gap-1 bg-accent-brown/5 p-1 rounded-2xl">
+                                    {[
+                                        { id: '7d', label: '7D' },
+                                        { id: '30d', label: '30D' },
+                                        { id: '6m', label: '6M' },
+                                        { id: '1y', label: '1Y' },
+                                    ].map((p) => (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => setRevenuePeriod(p.id)}
+                                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                                revenuePeriod === p.id 
+                                                ? 'bg-brand text-white shadow-lg shadow-brand/20' 
+                                                : 'text-accent-brown/40 hover:text-accent-brown'
+                                            }`}
+                                        >
+                                            {p.label}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 
                         <div className="flex items-center gap-6 mb-8">
                             <div className="flex items-baseline gap-2">
                                 <span className="text-4xl font-black text-accent-brown tracking-tighter">
-                                    ₱{(revenueData.chartData?.reduce((acc: number, d: any) => acc + d.value, 0) || 0).toLocaleString()}
+                                    ₱{(revenueData.chartData?.reduce((acc: number, d: ChartDataPoint) => acc + d.value, 0) || 0).toLocaleString()}
                                 </span>
                                 <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30">Total Period Revenue</span>
                             </div>
@@ -244,7 +276,9 @@ const BusinessDashboard = () => {
                         transition={{ delay: 0.35 }}
                         className="lg:col-span-2 bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white"
                     >
-                        <h3 className="text-xl font-black text-accent-brown tracking-tight mb-6">Top Products</h3>
+                        <h3 className="text-xl font-black text-accent-brown tracking-tight mb-6">
+                            {revenueType === 'services' ? 'Top Clinic Services' : 'Top Products'}
+                        </h3>
                         <div className="space-y-5">
                             {topProducts.map((p) => (
                                 <div key={p.name}>
@@ -260,7 +294,9 @@ const BusinessDashboard = () => {
                                             className="h-full bg-brand-dark rounded-full"
                                         />
                                     </div>
-                                    <p className="text-[9px] font-bold text-accent-brown/40 mt-1">{p.sold} units sold</p>
+                                    <p className="text-[9px] font-bold text-accent-brown/40 mt-1">
+                                        {p.sold} {revenueType === 'services' ? 'sessions' : 'units sold'}
+                                    </p>
                                 </div>
                             ))}
                         </div>
@@ -290,7 +326,7 @@ const BusinessDashboard = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {recentOrders.map((o) => (
+                                {recentOrders.map((o: any) => (
                                     <tr key={o.id} className="border-b border-accent-brown/5 hover:bg-accent-peach/10 transition-colors">
                                         <td className="py-4 px-2 text-[10px] font-black text-accent-brown/50">{o.id}</td>
                                         <td className="py-4 px-2 font-bold text-accent-brown text-sm">{o.customer}</td>

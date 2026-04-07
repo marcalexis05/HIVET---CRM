@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DashboardLayout from '../../components/DashboardLayout';
-import { ShoppingBag, Package, Truck, CheckCircle, XCircle, AlertCircle, ChevronRight, MapPin, Eye, Store, User, Phone, ShieldCheck, X, MessageSquare, ShieldAlert, Clock, CreditCard } from 'lucide-react';
+import { ShoppingBag, Package, Truck, CheckCircle, XCircle, AlertCircle, ChevronRight, MapPin, Eye, Store, User, Phone, ShieldCheck, X, MessageSquare, ShieldAlert, Clock, CreditCard, Tag } from 'lucide-react';
 import { Map, AdvancedMarker, InfoWindow, useMap, APIProvider } from '@vis.gl/react-google-maps';
 
 interface OrderItem {
@@ -33,6 +33,8 @@ interface Order {
     contact_phone?: string;
     created_at: string;
     items: OrderItem[];
+    voucher_code?: string;
+    discount_amount?: number;
 }
 
 
@@ -75,7 +77,7 @@ const DirectionsLine = ({ userLat, userLng, clinicLat, clinicLng }: { userLat: n
     return null;
 };
 
-const UserOrders = () => {
+const CustomerOrders = () => {
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('All');
@@ -373,7 +375,15 @@ const UserOrders = () => {
                                 <div className="p-4 xs:p-6 sm:p-8 bg-accent-peach/10 flex flex-col sm:flex-row items-center justify-between border-t border-accent-brown/5 gap-6 sm:gap-4">
                                     <div className="w-full sm:w-auto text-center sm:text-left">
                                         <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.2em] text-accent-brown/30 mb-1">Total Amount</p>
-                                        <p className="text-xl xs:text-2xl font-black text-accent-brown tracking-tighter leading-none">₱{order.total_amount.toFixed(2)}</p>
+                                        <div className="flex flex-col sm:items-start items-center">
+                                            <p className="text-xl xs:text-2xl font-black text-accent-brown tracking-tighter leading-none">₱{order.total_amount.toFixed(2)}</p>
+                                            {order.discount_amount && order.discount_amount > 0 && (
+                                                <div className="flex items-center gap-1.5 mt-1.5">
+                                                    <Tag className="w-2.5 h-2.5 text-brand" />
+                                                    <p className="text-[9px] font-black text-brand uppercase tracking-widest">Saved ₱{order.discount_amount.toFixed(2)}</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="flex flex-col xs:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
                                         {order.status === 'Pending' && (
@@ -1086,4 +1096,4 @@ const UserOrders = () => {
     );
 };
 
-export default UserOrders;
+export default CustomerOrders;

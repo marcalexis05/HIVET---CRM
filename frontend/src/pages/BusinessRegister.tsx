@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Phone, Mail, Lock, ArrowRight, ArrowLeft,
@@ -8,6 +8,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { PasswordStrength } from '../components/PasswordStrength';
+import { CustomDropdown } from '../components/CustomDropdown';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { useAuth } from '../context/AuthContext';
 
@@ -117,6 +118,14 @@ const BusinessRegister = () => {
 
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [countdown, setCountdown] = useState(0);
+
+    useEffect(() => {
+        if (countdown > 0) {
+            const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [countdown]);
 
     const navigate = useNavigate();
     const { loginWithToken } = useAuth();
@@ -148,12 +157,16 @@ const BusinessRegister = () => {
         setError('');
         if (step === 1) {
             if (!clinicName) return setError('Clinic Name is required.');
-            if (!phone) return setError('Phone/Contact Number is required.');
+            if (phone.length !== 10 || !phone.startsWith('9')) {
+                return setError('Please enter a valid 10-digit PH mobile number starting with 9.');
+            }
             setStep(2);
         } else if (step === 2) {
             if (!ownerFirstName || !ownerLastName) return setError('Owner full name is required.');
             if (!ownerHomeAddress) return setError('Owner home address is required.');
-            if (!ownerPhone) return setError('Owner personal contact is required.');
+            if (ownerPhone.length !== 10 || !ownerPhone.startsWith('9')) {
+                return setError('Please enter a valid 10-digit personal contact number starting with 9.');
+            }
             setStep(3);
         } else if (step === 3) {
             if (!clinicCity || !clinicProvince) return setError('City and province are required. Please select a location from the map or search bar.');
@@ -169,6 +182,15 @@ const BusinessRegister = () => {
             await handleSendOtp();
         }
     };
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (step === 6) {
+            handleRegister();
+        } else {
+            nextStep();
+        }
+    };
+
     const prevStep = () => setStep(s => Math.max(1, s - 1));
 
     // ─── OTP Send ───────────────────────────────────────────────────────────────
@@ -183,6 +205,7 @@ const BusinessRegister = () => {
             const data = await res.json();
             if (res.ok) {
                 setStep(6);
+                setCountdown(60);
             } else {
                 setError(data.detail || 'Failed to send verification email.');
             }
@@ -359,7 +382,7 @@ const BusinessRegister = () => {
                                 <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Clinic Name <span className="text-brand-dark">*</span></label>
                                 <div className="relative">
                                     <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                    <input type="text" value={clinicName} onChange={e => setClinicName(e.target.value)} placeholder="Happy Paws Veterinary Clinic" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-4 pl-11 pr-4 text-accent-brown font-semibold outline-none transition-all text-sm" />
+                                    <input type="text" value={clinicName} onChange={e => setClinicName(e.target.value)} placeholder="Hi-Vet Veterinary Clinic" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-4 pl-11 pr-4 text-accent-brown font-semibold outline-none transition-all text-sm" />
                                 </div>
                             </div>
                             {/* Phone */}
@@ -370,12 +393,24 @@ const BusinessRegister = () => {
                                         <Phone className="w-4 h-4 text-accent-brown/30" />
                                         <span>+63</span>
                                     </div>
-                                    <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="9XX XXX XXXX" className="flex-1 bg-transparent py-4 pl-4 pr-6 text-accent-brown font-semibold outline-none text-sm" />
+                                    <input 
+                                        type="tel" 
+                                        value={phone} 
+                                        maxLength={10}
+                                        onChange={e => {
+                                            let val = e.target.value.replace(/\D/g, '');
+                                            if (val.startsWith('0')) val = val.substring(1);
+                                            if (val.length > 0 && !val.startsWith('9')) val = '';
+                                            setPhone(val.slice(0, 10));
+                                        }} 
+                                        placeholder="9XX XXX XXXX" 
+                                        className="flex-1 bg-transparent py-4 pl-4 pr-6 text-accent-brown font-semibold outline-none text-sm" 
+                                    />
                                 </div>
                             </div>
                         </div>
-                        <button onClick={nextStep} className="btn-primary w-full group flex items-center justify-center gap-3 h-14 text-xs">
-                            Continue to Owner Profile <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                        <button type="button" onClick={nextStep} className="btn-primary w-full group flex items-center justify-center gap-3 h-14 text-xs">
+                            Continue to Address Validation <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                         </button>
                     </motion.div>
                 );
@@ -412,10 +447,21 @@ const BusinessRegister = () => {
                                     <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Middle Name <span className="text-accent-brown/30 text-[9px] normal-case tracking-normal font-bold italic">Optional</span></label>
                                     <input type="text" value={ownerMiddleName} onChange={e => setOwnerMiddleName(e.target.value)} placeholder="Reyes" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[1.5rem] py-3 px-4 text-accent-brown font-semibold outline-none transition-all text-sm" />
                                 </div>
-                                <div className="group space-y-2">
-                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Suffix <span className="text-accent-brown/30 text-[9px] normal-case tracking-normal font-bold italic">Optional</span></label>
-                                    <input type="text" value={ownerSuffix} onChange={e => setOwnerSuffix(e.target.value)} placeholder="Jr., Sr., III" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[1.5rem] py-3 px-4 text-accent-brown font-semibold outline-none transition-all text-sm" />
-                                </div>
+                                <CustomDropdown
+                                    label="Suffix"
+                                    isOptional={true}
+                                    value={ownerSuffix}
+                                    onChange={setOwnerSuffix}
+                                    options={[
+                                        { label: 'None', value: '' },
+                                        { label: 'Jr.', value: 'Jr.' },
+                                        { label: 'Sr.', value: 'Sr.' },
+                                        { label: 'II', value: 'II' },
+                                        { label: 'III', value: 'III' },
+                                        { label: 'IV', value: 'IV' }
+                                    ]}
+                                    placeholder="None"
+                                />
                             </div>
                             {/* Home Address */}
                             <div className="group space-y-2">
@@ -483,13 +529,25 @@ const BusinessRegister = () => {
                                     <div className="flex items-center gap-2 pl-5 pr-3 shrink-0 text-accent-brown font-black text-sm border-r border-accent-brown/10">
                                         <Phone className="w-4 h-4 text-accent-brown/30" /><span>+63</span>
                                     </div>
-                                    <input type="tel" value={ownerPhone} onChange={e => setOwnerPhone(e.target.value)} placeholder="9XX XXX XXXX" className="flex-1 bg-transparent py-4 pl-4 pr-6 text-accent-brown font-semibold outline-none text-sm" />
+                                    <input 
+                                        type="tel" 
+                                        value={ownerPhone} 
+                                        maxLength={10}
+                                        onChange={e => {
+                                            let val = e.target.value.replace(/\D/g, '');
+                                            if (val.startsWith('0')) val = val.substring(1);
+                                            if (val.length > 0 && !val.startsWith('9')) val = '';
+                                            setOwnerPhone(val.slice(0, 10));
+                                        }} 
+                                        placeholder="9XX XXX XXXX" 
+                                        className="flex-1 bg-transparent py-4 pl-4 pr-6 text-accent-brown font-semibold outline-none text-sm" 
+                                    />
                                 </div>
                             </div>
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={prevStep} className="flex-1 py-4 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>
-                            <button onClick={nextStep} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs">Continue <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></button>
+                            <button type="button" onClick={prevStep} className="flex-1 py-4 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>
+                            <button type="button" onClick={nextStep} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs">Continue <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></button>
                         </div>
                     </motion.div>
                 );
@@ -552,8 +610,8 @@ const BusinessRegister = () => {
                             </div>
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={prevStep} className="flex-1 py-4 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>
-                            <button onClick={nextStep} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs">Continue <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></button>
+                            <button type="button" onClick={prevStep} className="flex-1 py-4 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>
+                            <button type="button" onClick={nextStep} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs">Continue <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></button>
                         </div>
                     </motion.div>
                 );
@@ -605,8 +663,8 @@ const BusinessRegister = () => {
                         </div>
 
                         <div className="flex gap-3">
-                            <button onClick={prevStep} className="flex-1 py-4 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>
-                            <button onClick={nextStep} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs">Continue <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></button>
+                            <button type="button" onClick={prevStep} className="flex-1 py-4 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>
+                            <button type="button" onClick={nextStep} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs">Continue <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></button>
                         </div>
                     </motion.div>
                 );
@@ -652,9 +710,18 @@ const BusinessRegister = () => {
                             </div>
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={prevStep} className="flex-1 py-4 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>
-                            <button onClick={nextStep} disabled={loading} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs disabled:opacity-50">
-                                {loading ? 'Sending Code...' : 'Verify Email'} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                            <button type="button" onClick={prevStep} className="flex-1 py-4 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>
+                            <button type="submit" disabled={loading} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs disabled:opacity-50">
+                                {loading ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        <span>Sending Code...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        Verify Email <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                    </>
+                                )}
                             </button>
                         </div>
                     </motion.div>
@@ -690,7 +757,14 @@ const BusinessRegister = () => {
                         <div className="space-y-5">
                             <p className="text-xs font-bold text-accent-brown/40 ml-1">
                                 No code yet?{' '}
-                                <button onClick={handleSendOtp} disabled={loading} className="text-brand-dark hover:underline underline-offset-4 disabled:opacity-50">Resend Code</button>
+                                <button
+                                    type="button"
+                                    onClick={handleSendOtp}
+                                    disabled={loading || countdown > 0}
+                                    className="text-brand-dark hover:underline underline-offset-4 disabled:opacity-50"
+                                >
+                                    {countdown > 0 ? `Resend Code (${countdown}s)` : 'Resend Code'}
+                                </button>
                             </p>
                             <div className="flex gap-3">
                                 <button onClick={prevStep} disabled={loading} className="flex-1 py-4 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] disabled:opacity-50">Review</button>
@@ -828,9 +902,11 @@ const BusinessRegister = () => {
                         </Link>
                     </div>
 
-                    <AnimatePresence mode="wait">
-                        {renderStep()}
-                    </AnimatePresence>
+                    <form onSubmit={handleSubmit}>
+                        <AnimatePresence mode="wait">
+                            {renderStep()}
+                        </AnimatePresence>
+                    </form>
 
                     <div className="mt-10 text-center">
                         <Link to="/for-clinics" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-accent-brown/30 hover:text-accent-brown transition-colors group">

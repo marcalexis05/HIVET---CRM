@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, Edit2, Trash2, Package, X, Check, Loader2, AlertCircle, Award, Upload } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
+import { CustomDropdown } from '../../components/CustomDropdown';
 
 interface Product {
     id: number;
@@ -14,13 +15,29 @@ interface Product {
     sku: string;
     image?: string;
     description?: string;
+    tag?: string;
     loyalty_points: number;
+    variants_json?: string;
+    sizes_json?: string;
 }
 
 const PET_CATS = ['All', 'Cats', 'Dogs'];
 const TYPE_CATS = ['All', 'Food', 'Accessories', 'Vitamins'];
 
-const EMPTY_FORM = { name: '', category: 'Dogs', type: 'Food', price: '', stock: '', sku: '', description: '', loyalty_points: '', image: '/images/product_placeholder.png' };
+const EMPTY_FORM = { 
+    name: '', 
+    category: 'Dogs', 
+    type: 'Food', 
+    price: '', 
+    stock: '', 
+    sku: '', 
+    description: '', 
+    tag: '', 
+    loyalty_points: '', 
+    image: '/images/product_placeholder.png', 
+    variants: [] as {name: string, price: string, image?: string, sizes: {name: string, price: string, stock: string}[]}[], 
+    sizes: [] as {name: string, price: string, stock: string}[] 
+};
 
 const BusinessCatalog = () => {
     const [products, setProducts] = useState<Product[]>([]);
@@ -87,8 +104,11 @@ const BusinessCatalog = () => {
             stock: String(p.stock), 
             sku: p.sku,
             description: p.description || '',
+            tag: p.tag || '',
             loyalty_points: String(p.loyalty_points || 0),
-            image: p.image || '/images/product_placeholder.png'
+            image: p.image || '/images/product_placeholder.png',
+            variants: p.variants_json ? JSON.parse(p.variants_json).map((v: any) => ({ ...v, sizes: v.sizes || [] })) : [],
+            sizes: p.sizes_json ? JSON.parse(p.sizes_json) : []
         });
         setEditId(p.id);
         setShowModal(true);
@@ -109,7 +129,7 @@ const BusinessCatalog = () => {
         }
     };
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, target?: { type: 'variant' | 'size', index: number }) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -126,7 +146,13 @@ const BusinessCatalog = () => {
 
             if (resp.ok) {
                 const data = await resp.json();
-                setForm(f => ({ ...f, image: data.url }));
+                if (target && target.type === 'variant') {
+                    const list = [...form.variants];
+                    list[target.index].image = data.url;
+                    setForm(f => ({ ...f, variants: list }));
+                } else if (!target) {
+                    setForm(f => ({ ...f, image: data.url }));
+                }
                 showToast('Image uploaded successfully');
             } else {
                 showToast('Failed to upload image');
@@ -162,7 +188,10 @@ const BusinessCatalog = () => {
                     sku: form.sku,
                     image: form.image,
                     description: form.description,
-                    loyalty_points: parseInt(form.loyalty_points) || 0
+                    tag: form.tag,
+                    loyalty_points: parseInt(form.loyalty_points) || 0,
+                    variants_json: JSON.stringify(form.variants),
+                    sizes_json: JSON.stringify(form.sizes)
                 })
             });
 
@@ -345,6 +374,54 @@ const BusinessCatalog = () => {
                                                 <input type="number" min="0" value={form.loyalty_points} onChange={e => setForm(f => ({ ...f, loyalty_points: e.target.value }))} placeholder="0"
                                                     className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-xl py-3 px-4 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm" />
                                             </div>
+
+                                            {/* Variant Visuals on Left Side */}
+                                            {form.variants.length > 0 && (
+                                                <div className="space-y-6 pt-6 border-t border-accent-brown/10">
+                                                    <div>
+                                                        <div className="flex items-center gap-3 mb-4">
+                                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-brand shadow-sm">
+                                                                <Edit2 className="w-5 h-5" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown">Variant Identity</p>
+                                                                <p className="text-[8px] font-bold text-accent-brown/40 uppercase">Unique visuals for each option</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-6">
+                                                            {form.variants.map((v, i) => (
+                                                                <div key={`vimg-${i}`} className="space-y-2">
+                                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block ml-1">{v.name || `Variant ${i+1}`} Rendering</label>
+                                                                    <div className="relative aspect-[4/3] rounded-[2rem] bg-accent-peach/10 border-4 border-dashed border-accent-peach/30 overflow-hidden group flex items-center justify-center p-8 transition-all hover:border-brand/40">
+                                                                        {v.image ? (
+                                                                            <>
+                                                                                <img src={v.image} alt="Preview" className="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500" />
+                                                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                                                                                    <label className="cursor-pointer bg-white text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
+                                                                                        {uploading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Change Photo'}
+                                                                                        <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e, { type: 'variant', index: i })} disabled={uploading} />
+                                                                                    </label>
+                                                                                </div>
+                                                                            </>
+                                                                        ) : (
+                                                                            <label className="flex flex-col items-center gap-4 cursor-pointer">
+                                                                                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-accent-brown/20 shadow-sm border border-accent-brown/5">
+                                                                                    <Upload className="w-6 h-6" />
+                                                                                </div>
+                                                                                <div className="text-center">
+                                                                                    <p className="text-[10px] font-black text-accent-brown uppercase tracking-widest mb-1">Set {v.name || 'Variant'} Image</p>
+                                                                                    <p className="text-[8px] font-bold text-accent-brown/30 uppercase">High fidelity product shot</p>
+                                                                                </div>
+                                                                                <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e, { type: 'variant', index: i })} disabled={uploading} />
+                                                                            </label>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Right Side: Form Fields */}
@@ -355,26 +432,31 @@ const BusinessCatalog = () => {
                                                     <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Premium Kibble"
                                                         className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 rounded-xl py-3.5 px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
                                                 </div>
-                                                <div>
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 block mb-1.5 ml-1">SKU Identification</label>
-                                                    <input value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} placeholder="e.g. PT-FOOD-001"
-                                                        className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 rounded-xl py-3.5 px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                                <div className="grid grid-cols-2 gap-4 col-span-2">
+                                                    <div>
+                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 block mb-1.5 ml-1">SKU Identification</label>
+                                                        <input value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} placeholder="e.g. PT-FOOD-001"
+                                                            className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 rounded-xl py-3.5 px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 block mb-1.5 ml-1">Promotional Tag</label>
+                                                        <input value={form.tag} onChange={e => setForm(f => ({ ...f, tag: e.target.value }))} placeholder="e.g. NEW, GOURMET, BESTSELLER"
+                                                            className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 rounded-xl py-3.5 px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                                    </div>
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <div>
-                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 block mb-1.5 ml-1">Category</label>
-                                                        <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                                                            className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 rounded-xl py-3.5 px-4 text-sm font-bold text-accent-brown outline-none transition-all appearance-none cursor-pointer">
-                                                            {PET_CATS.filter(c => c !== 'All').map(c => <option key={c}>{c}</option>)}
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 block mb-1.5 ml-1">Type</label>
-                                                        <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                                                            className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 rounded-xl py-3.5 px-4 text-sm font-bold text-accent-brown outline-none transition-all appearance-none cursor-pointer">
-                                                            {TYPE_CATS.filter(c => c !== 'All').map(c => <option key={c}>{c}</option>)}
-                                                        </select>
-                                                    </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <CustomDropdown
+                                                        label="Category"
+                                                        value={form.category}
+                                                        onChange={val => setForm(f => ({ ...f, category: String(val) }))}
+                                                        options={PET_CATS.filter(c => c !== 'All')}
+                                                    />
+                                                    <CustomDropdown
+                                                        label="Type"
+                                                        value={form.type}
+                                                        onChange={val => setForm(f => ({ ...f, type: String(val) }))}
+                                                        options={TYPE_CATS.filter(c => c !== 'All')}
+                                                    />
                                                 </div>
                                             </div>
 
@@ -394,6 +476,130 @@ const BusinessCatalog = () => {
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 block mb-1.5 ml-1">Current Stock</label>
                                                     <input type="number" min="0" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} placeholder="0"
                                                         className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 rounded-xl py-4 px-5 text-sm font-black text-accent-brown outline-none transition-all" />
+                                                </div>
+                                            </div>
+
+                                            <div className="pt-6 border-t border-accent-brown/10 space-y-8">
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-4 px-1 text-left">
+                                                        <div>
+                                                            <h4 className="text-[10px] font-black uppercase tracking-widest text-accent-brown">Product Variants</h4>
+                                                            <p className="text-[8px] font-bold text-accent-brown/40 uppercase">Create unique options with their own sizes & stock</p>
+                                                        </div>
+                                                        <button type="button" onClick={() => setForm(f => ({ ...f, variants: [...f.variants, { name: '', price: '', sizes: [] }] }))}
+                                                            className="flex items-center gap-1 bg-brand/10 text-brand px-3 py-1.5 rounded-lg text-[9px] font-black uppercase hover:bg-brand hover:text-white transition-all shadow-sm">
+                                                            <Plus className="w-3 h-3" /> Add Variant
+                                                        </button>
+                                                    </div>
+                                                    <div className="space-y-4">
+                                                        {form.variants.map((v, i) => (
+                                                            <div key={`v-${i}`} className="bg-accent-peach/5 p-4 rounded-3xl border border-accent-peach/20 space-y-4 text-left">
+                                                                <div className="flex gap-3 items-center">
+                                                                    <input value={v.name} onChange={e => { const nv = [...form.variants]; nv[i].name = e.target.value; setForm(f => ({ ...f, variants: nv })); }} placeholder="Variant Name"
+                                                                        className="flex-1 bg-white border border-transparent focus:border-brand/30 rounded-xl py-3 px-4 text-sm font-bold text-accent-brown outline-none shadow-sm" />
+                                                                    <div className="relative w-32">
+                                                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-black text-accent-brown/40">₱</span>
+                                                                        <input type="number" value={v.price} onChange={e => { const nv = [...form.variants]; nv[i].price = e.target.value; setForm(f => ({ ...f, variants: nv })); }} placeholder="Price"
+                                                                            className="w-full bg-white border border-transparent focus:border-brand/30 rounded-xl py-3 pl-8 pr-4 text-sm font-bold text-brand-dark outline-none shadow-sm" />
+                                                                    </div>
+                                                                    <button type="button" onClick={() => { const nv = [...form.variants]; nv.splice(i, 1); setForm(f => ({ ...f, variants: nv })); }}
+                                                                        className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-red-400 hover:bg-red-500 hover:text-white transition-all shadow-sm shrink-0">
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+                                                                
+                                                                {/* Sizes for this specific variant */}
+                                                                <div className="pl-4 border-l-2 border-brand/10 space-y-3">
+                                                                    <div className="flex items-center justify-between mb-2">
+                                                                        <p className="text-[8px] font-black text-accent-brown/50 uppercase tracking-widest">Variant-Specific Sizes</p>
+                                                                        <button type="button" onClick={() => { 
+                                                                            const nv = [...form.variants]; 
+                                                                            nv[i] = { ...nv[i], sizes: [...(nv[i].sizes || []), {name: '', price: '', stock: ''}] };
+                                                                            setForm(f => ({ ...f, variants: nv }));
+                                                                        }}
+                                                                            className="text-[8px] font-black uppercase text-brand hover:underline">Add Size</button>
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        {v.sizes?.map((vs, si) => (
+                                                                            <div key={`v-${i}-s-${si}`} className="grid grid-cols-12 gap-2 items-center">
+                                                                                <div className="col-span-4">
+                                                                                    <input value={vs.name} onChange={e => { 
+                                                                                        const nv = [...form.variants]; 
+                                                                                        nv[i].sizes[si].name = e.target.value; 
+                                                                                        setForm(f => ({ ...f, variants: nv })); 
+                                                                                    }} placeholder="Size Name"
+                                                                                        className="w-full bg-white border border-accent-peach/20 rounded-lg py-2 px-3 text-xs font-bold text-accent-brown outline-none" />
+                                                                                </div>
+                                                                                <div className="col-span-3">
+                                                                                    <input type="number" value={vs.price} onChange={e => { 
+                                                                                        const nv = [...form.variants]; 
+                                                                                        nv[i].sizes[si].price = e.target.value; 
+                                                                                        setForm(f => ({ ...f, variants: nv })); 
+                                                                                    }} placeholder="Price"
+                                                                                        className="w-full bg-white border border-accent-peach/20 rounded-lg py-2 px-3 text-xs font-bold text-brand-dark outline-none" />
+                                                                                </div>
+                                                                                <div className="col-span-3">
+                                                                                    <input type="number" value={vs.stock} onChange={e => { 
+                                                                                        const nv = [...form.variants]; 
+                                                                                        nv[i].sizes[si].stock = e.target.value; 
+                                                                                        setForm(f => ({ ...f, variants: nv })); 
+                                                                                    }} placeholder="Stock"
+                                                                                        className="w-full bg-white border border-accent-peach/20 rounded-lg py-2 px-3 text-xs font-bold text-accent-brown outline-none" />
+                                                                                </div>
+                                                                                <div className="col-span-2 flex justify-end">
+                                                                                    <button type="button" onClick={() => { 
+                                                                                        const nv = [...form.variants]; 
+                                                                                        nv[i].sizes.splice(si, 1); 
+                                                                                        setForm(f => ({ ...f, variants: nv })); 
+                                                                                    }}
+                                                                                        className="text-red-400 hover:text-red-600 transition-colors"><Trash2 className="w-3 h-3" /></button>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                        {form.variants.length === 0 && <p className="text-[10px] font-bold text-accent-brown/30 text-center py-4 bg-accent-peach/5 rounded-2xl border border-dashed border-accent-brown/10">No variant options configured.</p>}
+                                                    </div>
+                                                </div>
+
+                                                {/* Original Product Sizes */}
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-4 px-1 text-left">
+                                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-accent-brown">Original Product Sizes</h4>
+                                                        <button type="button" onClick={() => setForm(f => ({ ...f, sizes: [...(f.sizes || []), { name: '', price: '', stock: '' }] }))}
+                                                            className="flex items-center gap-1 bg-brand/10 text-brand px-3 py-1.5 rounded-lg text-[9px] font-black uppercase hover:bg-brand hover:text-white transition-all shadow-sm">
+                                                            <Plus className="w-3 h-3" /> Add Size
+                                                        </button>
+                                                    </div>
+                                                    <div className="space-y-3">
+                                                        {form.sizes.map((s, i) => (
+                                                            <div key={`s-${i}`} className="grid grid-cols-12 gap-3 items-center bg-accent-peach/5 p-3 rounded-2xl border border-accent-peach/20 text-left">
+                                                                <div className="col-span-4">
+                                                                    <input value={s.name} onChange={e => { const ns = [...form.sizes]; ns[i].name = e.target.value; setForm(f => ({ ...f, sizes: ns })); }} placeholder="Size Name"
+                                                                        className="w-full bg-white border border-transparent focus:border-brand/30 rounded-xl py-3 px-4 text-xs font-bold text-accent-brown outline-none shadow-sm" />
+                                                                </div>
+                                                                <div className="col-span-3">
+                                                                    <div className="relative">
+                                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-accent-brown/40">₱</span>
+                                                                        <input type="number" value={s.price} onChange={e => { const ns = [...form.sizes]; ns[i].price = e.target.value; setForm(f => ({ ...f, sizes: ns })); }} placeholder="Price"
+                                                                            className="w-full bg-white border border-transparent focus:border-brand/30 rounded-lg py-2.5 pl-6 pr-2 text-xs font-bold text-brand-dark outline-none shadow-sm" />
+                                                                    </div>
+                                                                </div>
+                                                                <div className="col-span-3">
+                                                                    <input type="number" value={s.stock} onChange={e => { const ns = [...form.sizes]; ns[i].stock = e.target.value; setForm(f => ({ ...f, sizes: ns })); }} placeholder="Stock"
+                                                                        className="w-full bg-white border border-transparent focus:border-brand/30 rounded-lg py-2.5 px-3 text-xs font-bold text-accent-brown outline-none shadow-sm" />
+                                                                </div>
+                                                                <div className="col-span-2 flex justify-end">
+                                                                    <button type="button" onClick={() => { const ns = [...form.sizes]; ns.splice(i, 1); setForm(f => ({ ...f, sizes: ns })); }}
+                                                                        className="w-9 h-9 bg-white rounded-xl flex items-center justify-center text-red-400 hover:bg-red-500 hover:text-white transition-all shadow-sm shrink-0">
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

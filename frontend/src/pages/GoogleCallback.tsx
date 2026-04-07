@@ -22,7 +22,7 @@ const GoogleCallback = () => {
         // Then update React state
         loginWithToken(token);
         // Navigate — ProtectedRoute will read localStorage as fallback
-        navigate('/dashboard/user', { replace: true });
+        navigate('/dashboard/customer', { replace: true });
     }, []); // run once on mount only
 
     return (

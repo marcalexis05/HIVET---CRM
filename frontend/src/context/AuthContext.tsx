@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 
-type Role = 'super_admin' | 'system_admin' | 'user' | 'business' | 'rider' | null;
+type Role = 'super_admin' | 'system_admin' | 'customer' | 'business' | 'rider' | null;
 
 interface AuthUser {
     email: string;
@@ -47,9 +47,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (stored) {
             const payload = parseJwt(stored);
             if (payload && typeof payload.exp === 'number' && payload.exp * 1000 > Date.now()) {
+                let role = payload.role as Role;
+                if ((payload.role as string) === 'user') role = 'customer';
                 setUser({
                     email: payload.email as string,
-                    role: payload.role as Role,
+                    role: role,
                     name: payload.name as string,
                     first_name: payload.first_name as string | undefined,
                     middle_name: payload.middle_name as string | undefined,
@@ -76,9 +78,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const payload = parseJwt(token);
         if (!payload) return;
         localStorage.setItem('hivet_token', token);
+        let role = (payload.role as Role) ?? 'customer';
+        if ((payload.role as string) === 'user') role = 'customer';
         setUser({
             email: payload.email as string,
-            role: (payload.role as Role) ?? 'user',
+            role: role,
             name: payload.name as string,
             first_name: payload.first_name as string | undefined,
             middle_name: payload.middle_name as string | undefined,

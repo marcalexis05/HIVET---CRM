@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     ArrowRight, ArrowLeft, ShieldCheck, MailCheck, Bike, Eye, EyeOff, User,
@@ -7,6 +7,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { PasswordStrength } from '../components/PasswordStrength';
+import { CustomDropdown } from '../components/CustomDropdown';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { useAuth } from '../context/AuthContext';
 
@@ -188,6 +189,14 @@ const RiderRegister = () => {
 
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [countdown, setCountdown] = useState(0);
+
+    useEffect(() => {
+        if (countdown > 0) {
+            const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [countdown]);
 
     const navigate = useNavigate();
     const { loginWithToken } = useAuth();
@@ -245,6 +254,7 @@ const RiderRegister = () => {
             const data = await res.json();
             if (res.ok) {
                 setStep(4);
+                setCountdown(60);
             } else {
                 setError(data.detail || 'Failed to send verification email');
             }
@@ -255,11 +265,23 @@ const RiderRegister = () => {
         }
     };
 
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (step === 4) {
+            handleRegister();
+        } else {
+            nextStep();
+        }
+    };
+
     const nextStep = () => {
         setError('');
         if (step === 1) {
             if (!firstName || !lastName || !phone || !homeCity) {
                 return setError('Full Name, Phone, and a verified Home Address are required');
+            }
+            if (phone.length !== 10 || !phone.startsWith('9')) {
+                return setError('Please enter a valid 10-digit PH mobile number starting with 9.');
             }
             setStep(2);
         } else if (step === 2) {
@@ -376,13 +398,21 @@ const RiderRegister = () => {
                                         <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Dela Cruz" className="w-full bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 pl-11 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm" />
                                     </div>
                                 </div>
-                                <div className="group space-y-2">
-                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Suffix (Jr/Sr)</label>
-                                    <div className="relative">
-                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                        <input type="text" value={suffix} onChange={e => setSuffix(e.target.value)} placeholder="Jr" className="w-full bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 pl-11 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm" />
-                                    </div>
-                                </div>
+                                <CustomDropdown
+                                    label="Suffix"
+                                    isOptional={true}
+                                    value={suffix}
+                                    onChange={setSuffix}
+                                    options={[
+                                        { label: 'None', value: '' },
+                                        { label: 'Jr.', value: 'Jr.' },
+                                        { label: 'Sr.', value: 'Sr.' },
+                                        { label: 'II', value: 'II' },
+                                        { label: 'III', value: 'III' },
+                                        { label: 'IV', value: 'IV' }
+                                    ]}
+                                    placeholder="None"
+                                />
                             </div>
                             
                             <div className="group space-y-2">
@@ -392,7 +422,19 @@ const RiderRegister = () => {
                                         <PhoneIcon className="w-4 h-4 text-accent-brown/30" />
                                         <span>+63</span>
                                     </div>
-                                    <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="9XX XXX XXXX" className="flex-1 bg-transparent py-4 pl-4 pr-6 text-accent-brown font-semibold outline-none text-sm" />
+                                    <input 
+                                        type="tel" 
+                                        value={phone} 
+                                        maxLength={10}
+                                        onChange={e => {
+                                            let val = e.target.value.replace(/\D/g, '');
+                                            if (val.startsWith('0')) val = val.substring(1);
+                                            if (val.length > 0 && !val.startsWith('9')) val = '';
+                                            setPhone(val.slice(0, 10));
+                                        }} 
+                                        placeholder="9XX XXX XXXX" 
+                                        className="flex-1 bg-transparent py-4 pl-4 pr-6 text-accent-brown font-semibold outline-none text-sm" 
+                                    />
                                 </div>
                             </div>
 
@@ -465,10 +507,9 @@ const RiderRegister = () => {
                             </div>
                         </div>
 
-                        <button onClick={nextStep} className="btn-primary w-full group flex items-center justify-center gap-3 h-14 md:h-16 text-xs md:text-sm whitespace-nowrap px-6">
-                            Next: Vehicle Details
-                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                        </button>
+                            <button type="submit" className="btn-primary w-full group flex items-center justify-center gap-3 h-14 text-xs">
+                                Continue Validation <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                            </button>
                     </motion.div>
                 );
             case 2:
@@ -484,14 +525,16 @@ const RiderRegister = () => {
                         {error && <div className="bg-red-50 text-red-500 p-3 rounded-xl text-sm font-bold border border-red-100">{error}</div>}
 
                         <div className="space-y-4">
-                            <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Vehicle Type</label>
-                                <select value={vehicleType} onChange={e => setVehicleType(e.target.value)} className="w-full bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 px-6 text-accent-brown font-semibold outline-none transition-all text-sm appearance-none">
-                                    <option value="Motorcycle">Motorcycle</option>
-                                    <option value="Car">Car</option>
-                                    <option value="Bicycle">Bicycle</option>
-                                </select>
-                            </div>
+                            <CustomDropdown
+                                label="Vehicle Type"
+                                value={vehicleType}
+                                onChange={setVehicleType}
+                                options={[
+                                    { label: 'Motorcycle', value: 'Motorcycle', icon: <Bike className="w-4 h-4" /> },
+                                    { label: 'Car', value: 'Car', icon: <User className="w-4 h-4" /> },
+                                    { label: 'Bicycle', value: 'Bicycle', icon: <Bike className="w-4 h-4" /> }
+                                ]}
+                            />
 
                             {vehicleType === 'Bicycle' ? (
                                 <div className="flex items-start gap-4 p-5 bg-green-50 border-2 border-green-100 rounded-2xl">
@@ -528,10 +571,9 @@ const RiderRegister = () => {
                             <button onClick={prevStep} className="flex-1 px-6 rounded-full font-black text-accent-brown/40 hover:text-accent-brown transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
                                 <ArrowLeft className="w-4 h-4" /> Back
                             </button>
-                            <button onClick={nextStep} className="btn-primary flex-[2] group flex items-center justify-center gap-3 h-14 md:h-16 text-xs md:text-sm whitespace-nowrap px-6">
-                                Next: Clearances
-                                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                            </button>
+                                <button type="submit" disabled={loading} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs">
+                                    {loading ? 'Sending...' : 'Verify Email'} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                </button>
                         </div>
                     </motion.div>
                 );
@@ -591,10 +633,18 @@ const RiderRegister = () => {
                             <button onClick={prevStep} className="flex-1 px-6 rounded-full font-black text-accent-brown/40 hover:text-accent-brown transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
                                 <ArrowLeft className="w-4 h-4" /> Back
                             </button>
-                            <button onClick={nextStep} className="btn-primary flex-[2] group flex items-center justify-center gap-3 h-14 md:h-16 text-xs md:text-sm whitespace-nowrap px-6">
-                                Verify & Apply
-                                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                            </button>
+                                <button type="submit" disabled={loading} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs disabled:opacity-50">
+                                    {loading ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            <span>Sending Code...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            Verify Email <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                        </>
+                                    )}
+                                </button>
                         </div>
                     </motion.div>
                 );
@@ -620,10 +670,22 @@ const RiderRegister = () => {
                         </div>
 
                         <div className="space-y-6">
-                            <button onClick={handleRegister} disabled={loading} className="btn-primary w-full h-14 md:h-16 text-xs md:text-sm whitespace-nowrap px-6">
+                            <p className="text-xs font-bold text-accent-brown/40 ml-4">
+                                No code yet? {' '}
+                                <button
+                                    type="button"
+                                    onClick={handleSendOtp}
+                                    disabled={loading || countdown > 0}
+                                    className="text-brand-dark font-black hover:underline underline-offset-4 disabled:opacity-50"
+                                >
+                                    {countdown > 0 ? `Resend Code (${countdown}s)` : 'Resend Code'}
+                                </button>
+                            </p>
+
+                            <button type="submit" disabled={loading} className="btn-primary w-full h-14 md:h-16 text-xs md:text-sm whitespace-nowrap px-6">
                                 {loading ? 'Processing Application...' : 'Finish Application'}
                             </button>
-                            <button onClick={prevStep} className="w-full text-[10px] font-black uppercase tracking-widest text-accent-brown/30 hover:text-accent-brown transition-colors">Go Back</button>
+                            <button type="button" onClick={prevStep} className="w-full text-[10px] font-black uppercase tracking-widest text-accent-brown/30 hover:text-accent-brown transition-colors">Go Back</button>
                         </div>
                     </motion.div>
                 );
@@ -690,7 +752,9 @@ const RiderRegister = () => {
                         <Link to="/login/rider" className="text-[10px] font-black text-brand-dark hover:text-brand transition-colors uppercase tracking-[0.2em] border-b-2 border-brand/20 pb-0.5">Rider Login</Link>
                     </div>
 
-                    <AnimatePresence mode="wait">{renderStep()}</AnimatePresence>
+                    <form onSubmit={handleSubmit}>
+                        <AnimatePresence mode="wait">{renderStep()}</AnimatePresence>
+                    </form>
 
                     <div className="mt-12 text-center">
                         <Link to="/for-riders" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-accent-brown/30 hover:text-accent-brown transition-colors group">

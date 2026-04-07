@@ -4,7 +4,7 @@ import { Search, Filter, Mail, Shield, User, Store, MoreVertical, Bike, Loader2 
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 
-const AdminUsers = () => {
+const AdminCustomers = () => {
     const { user, isLoading: authLoading } = useAuth();
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -269,4 +269,4 @@ const AdminUsers = () => {
     );
 };
 
-export default AdminUsers;
+export default AdminCustomers;

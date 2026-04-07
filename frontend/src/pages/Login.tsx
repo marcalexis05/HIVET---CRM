@@ -44,7 +44,7 @@ const Login = () => {
                 else if (role === 'system_admin') navigate('/dashboard/admin/compliance');
                 else if (role === 'business') navigate('/dashboard/business');
                 else if (role === 'rider') navigate('/dashboard/rider');
-                else navigate('/dashboard/user');
+                else navigate('/dashboard/customer');
             } else {
                 setError('Invalid email or password.');
             }

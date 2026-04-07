@@ -1,15 +1,17 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
 
 export interface CartItem {
     id: number;
+    business_id: number;
     name: string;
     price: string;
     image: string;
     quantity: number;
     variant?: string;
     size?: string;
+    stock: number;
 }
 
 export interface FlyingItem {
@@ -44,7 +46,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         localStorage.setItem('hivet_cart', JSON.stringify(items));
     }, [items]);
 
-    const addToCart = (newItem: CartItem) => {
+    const addToCart = useCallback((newItem: CartItem) => {
         setItems(currentItems => {
             const existingItemIndex = currentItems.findIndex(
                 item => item.id === newItem.id && item.variant === newItem.variant && item.size === newItem.size
@@ -52,21 +54,27 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
             if (existingItemIndex > -1) {
                 const updatedItems = [...currentItems];
-                updatedItems[existingItemIndex].quantity += newItem.quantity;
+                const item = updatedItems[existingItemIndex];
+                // Update stock if dynamic
+                if (newItem.stock !== undefined) item.stock = newItem.stock;
+                
+                // Enforce stock limit
+                const maxStock = (newItem.stock !== undefined) ? newItem.stock : (item.stock !== undefined ? item.stock : 9999);
+                item.quantity = Math.min(item.quantity + newItem.quantity, maxStock);
                 return updatedItems;
             }
 
             return [...currentItems, newItem];
         });
-    };
+    }, []);
 
-    const removeFromCart = (itemId: number, variant?: string, size?: string) => {
+    const removeFromCart = useCallback((itemId: number, variant?: string, size?: string) => {
         setItems(currentItems => currentItems.filter(
             item => !(item.id === itemId && item.variant === variant && item.size === size)
         ));
-    };
+    }, []);
 
-    const updateQuantity = (itemId: number, quantity: number, variant?: string, size?: string) => {
+    const updateQuantity = useCallback((itemId: number, quantity: number, variant?: string, size?: string) => {
         if (quantity < 1) {
             removeFromCart(itemId, variant, size);
             return;
@@ -75,15 +83,15 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         setItems(currentItems =>
             currentItems.map(item =>
                 (item.id === itemId && item.variant === variant && item.size === size)
-                    ? { ...item, quantity }
+                    ? { ...item, quantity: Math.min(quantity, item.stock || 9999) }
                     : item
             )
         );
-    };
+    }, [removeFromCart]);
 
-    const clearCart = () => {
+    const clearCart = useCallback(() => {
         setItems([]);
-    };
+    }, []);
 
     const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
     const totalAmount = items.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Tag, Star, Search, ArrowLeft, Heart, Filter as FilterIcon } from 'lucide-react';
+import { ShoppingCart, Tag, Star, Search, ArrowLeft, Heart, Filter as FilterIcon, ArrowUp } from 'lucide-react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { products } from '../data/products';
 import { useCart } from '../context/CartContext';
@@ -14,6 +14,7 @@ const Catalog = () => {
     const [petFilter, setPetFilter] = useState<'All' | 'Cats' | 'Dogs'>('All');
     const [typeFilter, setTypeFilter] = useState<'All' | 'Food' | 'Accessories' | 'Vitamins'>('All');
     const [searchQuery, setSearchQuery] = useState('');
+    const [showScrollTop, setShowScrollTop] = useState(false);
 
     // Handle initial URL params
     useEffect(() => {
@@ -21,6 +22,13 @@ const Catalog = () => {
         if (typeParam && ['Food', 'Accessories', 'Vitamins'].includes(typeParam)) {
             setTypeFilter(typeParam as any);
         }
+
+        const handleScroll = () => {
+            setShowScrollTop(window.scrollY > 400);
+        };
+
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
     }, [searchParams]);
 
     const filteredProducts = useMemo(() => {
@@ -42,59 +50,76 @@ const Catalog = () => {
     };
 
     return (
-        <div className="min-h-screen bg-accent-peach/30 pt-16 md:pt-20 pb-24">
-            <div className="container mx-auto px-8 relative z-10">
-                {/* Header Section */}
-                <div className="flex flex-col xl:flex-row items-start xl:items-end justify-between mb-16 gap-12">
-                    <div className="space-y-6">
-                        <Link to="/" className="inline-flex items-center gap-2 text-accent-brown/40 hover:text-brand-dark transition-colors font-black uppercase tracking-widest text-xs">
-                            <ArrowLeft className="w-4 h-4" />
-                            Return Home
-                        </Link>
-                        <h1 className="text-6xl md:text-8xl font-black text-accent-brown tracking-tighter leading-none">
-                            Our <br />
-                            <span className="text-brand-dark italic">Collections</span>
-                        </h1>
-                        <p className="text-xl text-accent-brown/60 font-medium max-w-xl leading-relaxed">
-                            Discover {products.length} premium solutions crafted for perfection. Every item in our curated database is verified for quality and safety.
-                        </p>
-                    </div>
+        <div className="min-h-screen bg-accent-peach/30 pb-24 relative">
+            {/* Persistent Navigation Bar (Ghost Style) */}
+            <div className="fixed top-0 left-0 w-full z-[100] pointer-events-none">
+                <div className="container mx-auto px-6 xs:px-8 py-6 sm:py-8">
+                    <Link to="/" className="inline-flex items-center gap-2 text-accent-brown/40 hover:text-brand-dark transition-colors font-black uppercase tracking-widest text-[9px] xs:text-xs pointer-events-auto">
+                        <ArrowLeft className="w-3.5 h-3.5 xs:w-4 xs:h-4" />
+                        Return Home
+                    </Link>
+                </div>
+            </div>
 
-                    <div className="flex flex-col gap-6 w-full xl:w-auto">
-                        {/* Search Bar */}
-                        <div className="relative group">
-                            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
+            {/* Spacer to prevent content jump */}
+            <div className="h-14 xs:h-16"></div>
+
+            <div className="container mx-auto px-8 relative z-10 pt-8 sm:pt-12">
+                {/* Header Section */}
+                <div className="mb-12">
+                    <h1 className="text-6xl md:text-8xl font-black text-accent-brown tracking-tighter leading-none mb-6">
+                        Our <br />
+                        <span className="text-brand italic">Collections</span>
+                    </h1>
+                    <p className="text-xl text-accent-brown/60 font-medium max-w-xl leading-relaxed">
+                        Discover {products.length} premium solutions crafted for perfection. Every item in our curated database is verified for quality and safety.
+                    </p>
+                </div>
+
+                {/* Search and Filters Card (Pill Style) */}
+                <div className="flex flex-col xl:flex-row gap-6 items-center mb-12">
+                    {/* Integrated Search & Filter Bar */}
+                    <div className="w-full bg-white/70 backdrop-blur-xl border border-white rounded-[4rem] p-2 sm:p-3 shadow-2xl shadow-accent-brown/5 flex flex-col lg:flex-row gap-4 items-center">
+                        
+                        {/* Search Bar Section */}
+                        <div className="relative group w-full lg:w-[40%] xl:w-[35%]">
+                            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
                             <input
                                 type="text"
                                 placeholder="Search products, tags, or features..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full xl:w-[32rem] pl-14 pr-8 py-5 bg-white rounded-[2rem] border-2 border-transparent focus:border-brand/20 outline-none shadow-2xl shadow-accent-brown/5 transition-all font-medium text-accent-brown placeholder:text-accent-brown/20"
+                                className="w-full pl-14 pr-8 py-4 bg-accent-peach/10 rounded-full border border-transparent focus:bg-white outline-none transition-all font-medium text-accent-brown placeholder:text-accent-brown/20 text-sm"
                             />
                         </div>
 
-                        {/* Dual Filters */}
-                        <div className="flex flex-col md:flex-row gap-4">
+                        {/* Divider for Desktop */}
+                        <div className="hidden lg:block w-[1px] h-10 bg-accent-brown/10 mx-2"></div>
+
+                        {/* Dual Filters Section */}
+                        <div className="flex flex-col md:flex-row gap-6 w-full lg:w-auto items-center px-4 overflow-x-auto no-scrollbar py-2 lg:py-0">
                             {/* Pet Filter */}
-                            <div className="flex bg-white p-1.5 rounded-full border border-white shadow-xl shadow-accent-brown/5 shrink-0">
+                            <div className="flex items-center gap-6">
                                 {['All', 'Cats', 'Dogs'].map((cat) => (
                                     <button
                                         key={cat}
                                         onClick={() => setPetFilter(cat as any)}
-                                        className={`px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-500 flex items-center gap-2 ${petFilter === cat
-                                            ? 'bg-brand-dark text-white shadow-lg shadow-brand/20'
-                                            : 'text-accent-brown/40 hover:text-accent-brown hover:bg-accent-peach/20'
-                                            }`}
+                                        className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap ${
+                                            petFilter === cat
+                                            ? 'bg-brand text-white shadow-lg shadow-brand/20'
+                                            : 'text-accent-brown/40 hover:text-accent-brown'
+                                        }`}
                                     >
-                                        {cat === 'Cats' && <span>🐱</span>}
-                                        {cat === 'Dogs' && <span>🐶</span>}
                                         {cat}
                                     </button>
                                 ))}
                             </div>
 
+                            {/* Divider for Filter Groups */}
+                            <div className="hidden md:block w-[1px] h-6 bg-accent-brown/10"></div>
+
                             {/* Type Filter */}
-                            <div className="flex bg-white/50 backdrop-blur-sm p-1.5 rounded-full border border-white shadow-xl shadow-accent-brown/5 overflow-x-auto no-scrollbar">
+                            <div className="flex items-center gap-6">
                                 {['All', 'Food', 'Accessories', 'Vitamins'].map((type) => (
                                     <button
                                         key={type}
@@ -102,10 +127,11 @@ const Catalog = () => {
                                             setTypeFilter(type as any);
                                             setSearchParams(type === 'All' ? {} : { type });
                                         }}
-                                        className={`px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-500 whitespace-nowrap ${typeFilter === type
-                                            ? 'bg-accent-brown text-white shadow-lg'
-                                            : 'text-accent-brown/40 hover:text-accent-brown hover:bg-white/50'
-                                            }`}
+                                        className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-300 whitespace-nowrap ${
+                                            typeFilter === type
+                                            ? 'bg-brand-dark text-white shadow-lg shadow-brand-dark/20'
+                                            : 'text-accent-brown/40 hover:text-accent-brown'
+                                        }`}
                                     >
                                         {type}
                                     </button>
@@ -201,6 +227,7 @@ const Catalog = () => {
                                                     triggerFlyAnimation(e, p.image);
                                                     addToCart({
                                                         id: p.id,
+                                                        business_id: 1,
                                                         name: p.name,
                                                         price: p.price,
                                                         image: p.image,
@@ -210,7 +237,7 @@ const Catalog = () => {
                                                     });
                                                     setTimeout(() => navigate('/login'), 400);
                                                 }}
-                                                className="bg-brand text-brand-dark px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-dark hover:text-white transition-all shadow-lg shadow-brand/20 whitespace-nowrap block"
+                                                className="bg-brand text-white px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-dark hover:text-white transition-all shadow-lg shadow-brand/20 whitespace-nowrap block"
                                             >
                                                 Buy Now
                                             </button>
@@ -219,6 +246,7 @@ const Catalog = () => {
                                                     triggerFlyAnimation(e, p.image);
                                                     addToCart({
                                                         id: p.id,
+                                                        business_id: 1,
                                                         name: p.name,
                                                         price: p.price,
                                                         image: p.image,
@@ -265,6 +293,21 @@ const Catalog = () => {
             {/* Background Decorative Blobs */}
             <div className="fixed top-[-20%] right-[-20%] w-[80%] h-[80%] bg-brand/5 rounded-full blur-[150px] pointer-events-none -z-10" />
             <div className="fixed bottom-[-20%] left-[-20%] w-[80%] h-[80%] bg-brand-dark/5 rounded-full blur-[150px] pointer-events-none -z-10" />
+
+            {/* Mobile Scroll to Top Button */}
+            <AnimatePresence>
+                {showScrollTop && (
+                    <motion.button
+                        initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.5, y: 20 }}
+                        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                        className="fixed bottom-8 right-6 md:bottom-12 md:right-10 z-[60] w-12 h-12 md:w-16 md:h-16 bg-brand-dark text-white rounded-full shadow-2xl shadow-brand/40 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+                    >
+                        <ArrowUp className="w-5 h-5 md:w-6 md:h-6" />
+                    </motion.button>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

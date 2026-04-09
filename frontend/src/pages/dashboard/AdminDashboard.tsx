@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import { Store, Users, Bike, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { X, Mail, Calendar, Hash } from 'lucide-react';
+import { X, Mail, Calendar, Hash, TrendingUp, PieChart as PieIcon, Activity } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
 
 interface OnboardingUser {
     id: string;
@@ -21,11 +22,14 @@ const AdminDashboard = () => {
         partners_trend: '+0',
         riders: 0, 
         riders_trend: '+0',
+        customers: 0,
+        customers_trend: '+0',
         end_users: 0,
         end_users_trend: '+0',
         details: {
             partners: [] as any[],
             riders: [] as any[],
+            customers: [] as any[],
             end_users: [] as any[]
         }
     });
@@ -36,6 +40,11 @@ const AdminDashboard = () => {
         riders: OnboardingUser[];
         customers: OnboardingUser[];
     }>({ partners: [], riders: [], customers: [] });
+    const [analytics, setAnalytics] = useState<{
+        growth: any[];
+        distribution: any[];
+        velocity: any[];
+    }>({ growth: [], distribution: [], velocity: [] });
     const [loading, setLoading] = useState(true);
 
 
@@ -46,20 +55,25 @@ const AdminDashboard = () => {
             if (!token) return;
 
             try {
-                const [statsRes, onboardingRes] = await Promise.all([
+                const [statsRes, onboardingRes, analyticsRes] = await Promise.all([
                     fetch('http://localhost:8000/api/admin/dashboard-stats', {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
                     fetch('http://localhost:8000/api/admin/recent-onboarding', {
                         headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch('http://localhost:8000/api/admin/analytics', {
+                        headers: { 'Authorization': `Bearer ${token}` }
                     })
                 ]);
 
-                if (statsRes.ok && onboardingRes.ok) {
+                if (statsRes.ok && onboardingRes.ok && analyticsRes.ok) {
                     const statsData = await statsRes.json();
                     const onboardingData = await onboardingRes.json();
+                    const analyticsData = await analyticsRes.json();
                     setStats(statsData);
                     setOnboarding(onboardingData);
+                    setAnalytics(analyticsData);
                 }
             } catch (err) {
                 console.error('Dashboard fetch error:', err);
@@ -88,9 +102,17 @@ const AdminDashboard = () => {
             color: 'bg-brand/10'
         },
         { 
-            title: 'Total End Users', 
-            value: stats.end_users.toLocaleString(), 
+            title: 'Active Customers', 
+            value: stats.customers.toLocaleString(), 
             icon: Users, 
+            trend: stats.customers_trend,
+            data: stats.details.customers,
+            color: 'bg-blue-50/50'
+        },
+        { 
+            title: 'Overall Population', 
+            value: stats.end_users.toLocaleString(), 
+            icon: Activity, 
             trend: stats.end_users_trend,
             data: stats.details.end_users,
             color: 'bg-white'
@@ -101,7 +123,7 @@ const AdminDashboard = () => {
         if (!isOpen || !stat) return null;
 
         return (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-accent-brown/20 backdrop-blur-sm">
+            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-accent-brown/20 backdrop-blur-sm pt-20">
                 <motion.div 
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -179,7 +201,7 @@ const AdminDashboard = () => {
         <DashboardLayout title="Platform Overview">
             <div className="space-y-8">
                 {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {statCards.map((stat, index) => (
                         <motion.div
                             key={index}
@@ -206,129 +228,162 @@ const AdminDashboard = () => {
                     ))}
                 </div>
 
-                {/* Main Content Area */}
-                <div className="grid grid-cols-1 gap-8">
-                    {/* Onboarding Activities */}
-                    <div className="space-y-8">
-                        {/* Recent Partner Onboarding */}
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.4 }}
-                            className="bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white"
-                        >
-                            <div className="flex items-center justify-between mb-8">
-                                <h2 className="text-xl font-black text-accent-brown">Recent Partner Onboarding</h2>
-                                <button onClick={() => navigate('/dashboard/admin/businesses')} className="text-[10px] font-black uppercase tracking-widest text-brand-dark hover:text-brand transition-colors">View All Directory</button>
+                {/* Main Content Area - Analytics Charts */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    {/* Platform Growth Chart */}
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.4 }}
+                        className="lg:col-span-8 bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white"
+                    >
+                        <div className="flex items-center justify-between mb-8">
+                            <div>
+                                <h2 className="text-xl font-black text-accent-brown flex items-center gap-2">
+                                    <TrendingUp className="w-5 h-5 text-brand" /> Platform Growth
+                                </h2>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 mt-1">6-Month Cumulative Projection</p>
                             </div>
+                        </div>
 
-                            <div className="space-y-4">
-                                {onboarding.partners.length > 0 ? onboarding.partners.map((biz, i) => (
-                                    <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl hover:bg-accent-peach/10 transition-colors cursor-pointer group gap-4">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-accent-peach/30 flex items-center justify-center text-brand-dark font-black text-xs shrink-0">
-                                                {biz.name.charAt(0)}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="font-bold text-accent-brown group-hover:text-brand-dark transition-colors truncate">{biz.name}</p>
-                                                <p className="text-xs font-medium text-accent-brown/50 truncate">{biz.id}</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-left sm:text-right flex sm:flex-col items-center sm:items-end gap-3 sm:gap-0">
-                                             <p className={`text-[10px] sm:text-xs font-black uppercase tracking-widest px-2 py-0.5 sm:p-0 rounded-md sm:rounded-none ${
-                                                 biz.status === 'Active' ? 'text-green-600 bg-green-50 sm:bg-transparent' : 
-                                                 biz.status === 'Pending' ? 'text-orange-500 bg-orange-50 sm:bg-transparent' :
-                                                 'text-red-500 bg-red-50 sm:bg-transparent'
-                                             }`}>{biz.status}</p>
-                                            <p className="text-[10px] text-accent-brown/40 font-medium">{biz.time}</p>
-                                        </div>
+                        <div className="h-[300px] w-full mt-4">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={analytics.growth}>
+                                    <defs>
+                                        <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#FB8500" stopOpacity={0.1}/>
+                                            <stop offset="95%" stopColor="#FB8500" stopOpacity={0}/>
+                                        </linearGradient>
+                                        <linearGradient id="colorPartners" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#219EBC" stopOpacity={0.1}/>
+                                            <stop offset="95%" stopColor="#219EBC" stopOpacity={0}/>
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAE0D5" opacity={0.5} />
+                                    <XAxis 
+                                        dataKey="name" 
+                                        axisLine={false} 
+                                        tickLine={false} 
+                                        tick={{ fill: '#8D6E63', fontSize: 10, fontWeight: 800 }} 
+                                        dy={10} 
+                                    />
+                                    <YAxis hide />
+                                    <Tooltip 
+                                        content={({ active, payload, label }) => {
+                                            if (active && payload && payload.length) {
+                                                return (
+                                                    <div className="bg-white p-4 rounded-2xl shadow-2xl border border-accent-brown/5">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mb-2">{label}</p>
+                                                        {payload.map((entry: any, index: number) => (
+                                                            <div key={index} className="flex items-center justify-between gap-4 mb-1">
+                                                                <span className="text-[10px] font-black uppercase text-accent-brown/60">{entry.name}:</span>
+                                                                <span className="text-sm font-black text-accent-brown">{entry.value}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        }}
+                                    />
+                                    <Area type="monotone" dataKey="Customers" stroke="#FB8500" strokeWidth={3} fillOpacity={1} fill="url(#colorUsers)" />
+                                    <Area type="monotone" dataKey="Partners" stroke="#219EBC" strokeWidth={3} fillOpacity={1} fill="url(#colorPartners)" />
+                                    <Area type="monotone" dataKey="Riders" stroke="#8D6E63" strokeWidth={3} fillOpacity={0} />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </motion.div>
+
+                    {/* User Segmentation (Pie Chart) */}
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.5 }}
+                        className="lg:col-span-4 bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col"
+                    >
+                        <h2 className="text-xl font-black text-accent-brown mb-2 flex items-center gap-2">
+                             <PieIcon className="w-5 h-5 text-brand" /> User Split
+                        </h2>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 mb-8">Current Role Distribution</p>
+                        
+                        <div className="flex-1 min-h-[220px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={analytics.distribution}
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        paddingAngle={8}
+                                        dataKey="value"
+                                        animationDuration={1500}
+                                    >
+                                        {analytics.distribution.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+
+                        <div className="space-y-3 mt-4">
+                            {analytics.distribution.map((item, i) => (
+                                <div key={i} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                                        <span className="text-[10px] font-black uppercase text-accent-brown/60">{item.name}</span>
                                     </div>
-                                )) : (
-                                    <p className="text-center py-8 text-xs font-bold text-accent-brown/30 uppercase tracking-widest">No recent partners</p>
-                                )}
-                            </div>
-                        </motion.div>
-
-                        {/* Recent Rider Onboarding */}
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.5 }}
-                            className="bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white"
-                        >
-                            <div className="flex items-center justify-between mb-8">
-                                <h2 className="text-xl font-black text-accent-brown">Recent Rider Onboarding</h2>
-                                <button onClick={() => navigate('/dashboard/admin/riders')} className="text-[10px] font-black uppercase tracking-widest text-brand-dark hover:text-brand transition-colors">View All Fleet</button>
-                            </div>
-
-                            <div className="space-y-4">
-                                {onboarding.riders.length > 0 ? onboarding.riders.map((rider, i) => (
-                                    <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl hover:bg-accent-peach/10 transition-colors cursor-pointer group gap-4">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-brand-light/30 flex items-center justify-center text-brand-dark font-black text-xs shrink-0">
-                                                {rider.name.charAt(0)}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="font-bold text-accent-brown group-hover:text-brand-dark transition-colors truncate">{rider.name}</p>
-                                                <p className="text-xs font-medium text-accent-brown/50 truncate">{rider.id}</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-left sm:text-right flex sm:flex-col items-center sm:items-end gap-3 sm:gap-0">
-                                             <p className={`text-[10px] sm:text-xs font-black uppercase tracking-widest px-2 py-0.5 sm:p-0 rounded-md sm:rounded-none ${
-                                                 rider.status === 'Active' ? 'text-green-600 bg-green-50 sm:bg-transparent' : 
-                                                 rider.status === 'Pending' ? 'text-orange-500 bg-orange-50 sm:bg-transparent' :
-                                                 'text-red-500 bg-red-50 sm:bg-transparent'
-                                             }`}>{rider.status}</p>
-                                            <p className="text-[10px] text-accent-brown/40 font-medium">{rider.time}</p>
-                                        </div>
-                                    </div>
-                                )) : (
-                                    <p className="text-center py-8 text-xs font-bold text-accent-brown/30 uppercase tracking-widest">No recent riders</p>
-                                )}
-                            </div>
-                        </motion.div>
-
-                        {/* Recent Customer Onboarding (Super Admin Only) */}
-                        {user?.role === 'super_admin' && (
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: 0.6 }}
-                                className="bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white mt-8"
-                            >
-                                <div className="flex items-center justify-between mb-8">
-                                    <h2 className="text-xl font-black text-accent-brown">Recent Customer Onboarding</h2>
-                                    <button onClick={() => navigate('/dashboard/admin/users')} className="text-[10px] font-black uppercase tracking-widest text-brand-dark hover:text-brand transition-colors">View All Users</button>
+                                    <span className="text-xs font-black text-accent-brown">{item.value}</span>
                                 </div>
+                            ))}
+                        </div>
+                    </motion.div>
 
-                                <div className="space-y-4">
-                                    {onboarding.customers && onboarding.customers.length > 0 ? onboarding.customers.map((customer, i) => (
-                                        <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl hover:bg-accent-peach/10 transition-colors cursor-pointer group gap-4">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-black text-xs shrink-0">
-                                                    {customer.name.charAt(0)}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="font-bold text-accent-brown group-hover:text-brand-dark transition-colors truncate">{customer.name}</p>
-                                                    <p className="text-xs font-medium text-accent-brown/50 truncate">{customer.id}</p>
-                                                </div>
-                                            </div>
-                                            <div className="text-left sm:text-right flex sm:flex-col items-center sm:items-end gap-3 sm:gap-0">
-                                                 <p className={`text-[10px] sm:text-xs font-black uppercase tracking-widest px-2 py-0.5 sm:p-0 rounded-md sm:rounded-none ${
-                                                     customer.status === 'Active' ? 'text-green-600 bg-green-50 sm:bg-transparent' : 
-                                                     customer.status === 'Pending' ? 'text-orange-500 bg-orange-50 sm:bg-transparent' :
-                                                     'text-red-500 bg-red-50 sm:bg-transparent'
-                                                 }`}>{customer.status}</p>
-                                                <p className="text-[10px] text-accent-brown/40 font-medium">{customer.time}</p>
-                                            </div>
-                                        </div>
-                                    )) : (
-                                        <p className="text-center py-8 text-xs font-bold text-accent-brown/30 uppercase tracking-widest">No recent customers</p>
-                                    )}
-                                </div>
-                            </motion.div>
-                        )}
-                    </div>
+                    {/* Daily Onboarding Velocity (Bar Chart) */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.6 }}
+                        className="lg:col-span-12 bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white"
+                    >
+                        <div className="flex items-end justify-between mb-8">
+                            <div>
+                                <h2 className="text-xl font-black text-accent-brown flex items-center gap-2">
+                                    <Activity className="w-5 h-5 text-brand" /> Onboarding Velocity
+                                </h2>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 mt-1">Daily Registrations (Last 14 Days)</p>
+                            </div>
+                        </div>
+
+                        <div className="h-[200px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={analytics.velocity}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAE0D5" opacity={0.3} />
+                                    <XAxis 
+                                        dataKey="date" 
+                                        axisLine={false} 
+                                        tickLine={false} 
+                                        tick={{ fill: '#8D6E63', fontSize: 9, fontWeight: 700 }} 
+                                    />
+                                    <YAxis hide />
+                                    <Tooltip 
+                                        cursor={{ fill: '#FB8500', opacity: 0.05 }}
+                                        content={({ active, payload }) => {
+                                            if (active && payload && payload.length) {
+                                                return (
+                                                    <div className="bg-brand-dark px-4 py-2 rounded-xl shadow-lg">
+                                                        <p className="text-[10px] font-black text-white uppercase tracking-widest">{payload[0].value} New Sign-ups</p>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        }}
+                                    />
+                                    <Bar dataKey="new" fill="#FB8500" radius={[6, 6, 0, 0]} barSize={24} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </motion.div>
                 </div>
             </div>
 

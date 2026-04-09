@@ -33,6 +33,7 @@ import CustomerAlerts from './pages/dashboard/CustomerAlerts';
 import CustomerOrders from './pages/dashboard/CustomerOrdersList';
 import Checkout from './pages/dashboard/Checkout';
 import PaymentSuccess from './pages/dashboard/PaymentSuccess';
+import ReservationPaymentSuccess from './pages/dashboard/ReservationPaymentSuccess';
 import BusinessDashboard from './pages/dashboard/BusinessDashboard';
 import BusinessOrders from './pages/dashboard/BusinessOrders';
 import BusinessCatalog from './pages/dashboard/BusinessCatalog';
@@ -369,6 +370,14 @@ function App() {
                   element={
                     <ProtectedRoute allowedRoles={['customer']}>
                       <CustomerReservations />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard/customer/reservations/payment-success"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer']}>
+                      <ReservationPaymentSuccess />
                     </ProtectedRoute>
                   }
                 />

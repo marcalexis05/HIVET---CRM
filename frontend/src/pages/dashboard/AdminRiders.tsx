@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Filter, CheckCircle2, XCircle, MoreVertical, Bike, AlertCircle, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Search, Filter, CheckCircle2, XCircle, MoreVertical, Bike, AlertCircle, ShieldCheck, RefreshCw, Mail, Check, Trash2, Loader2 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
+import ModernModal from '../../components/ModernModal';
+import { useAuth } from '../../context/AuthContext';
 
 interface RiderRecord {
     id: number;
@@ -14,18 +16,32 @@ interface RiderRecord {
 }
 
 const AdminRiders = () => {
+    const { user, isLoading: authLoading } = useAuth();
     const [riders, setRiders] = useState<RiderRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [activeTab, setActiveTab] = useState('All Fleet');
+    const [actionMenu, setActionMenu] = useState<{ id: number | null, x: number, y: number }>({ id: null, x: 0, y: 0 });
+    const [processingId, setProcessingId] = useState<number | null>(null);
+    const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'info' | 'success' | 'error' | 'confirm' | 'danger'; onConfirm?: () => void }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
 
     useEffect(() => {
-        fetchRiders();
-    }, []);
+        if (!authLoading) {
+            fetchRiders();
+        }
+    }, [authLoading, user?.token]);
 
     const fetchRiders = async () => {
         try {
-            const token = localStorage.getItem('token');
+            const token = user?.token || localStorage.getItem('hivet_token');
+            if (!token) return;
+
+            setLoading(true);
             const res = await fetch('http://localhost:8000/api/admin/riders', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -35,6 +51,38 @@ const AdminRiders = () => {
             console.error('Failed to fetch riders:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleAction = async (action: 'delete' | 'verify', rider: RiderRecord) => {
+        setProcessingId(rider.id);
+        setActionMenu({ id: null, x: 0, y: 0 });
+        
+        try {
+            const token = user?.token || localStorage.getItem('hivet_token');
+            const url = action === 'delete' 
+                ? `http://localhost:8000/api/admin/users/RD-${String(rider.id).padStart(4, '0')}`
+                : `http://localhost:8000/api/admin/users/RD-${String(rider.id).padStart(4, '0')}/suspend`;
+            
+            const res = await fetch(url, {
+                method: action === 'delete' ? 'DELETE' : 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (res.ok) {
+                fetchRiders();
+            } else {
+                setModal({
+                    isOpen: true,
+                    title: 'Action Failed',
+                    message: `Failed to ${action} rider. Please try again.`,
+                    type: 'error'
+                });
+            }
+        } catch (err) {
+            console.error(`Error performing ${action}:`, err);
+        } finally {
+            setProcessingId(null);
         }
     };
 
@@ -173,8 +221,19 @@ const AdminRiders = () => {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <button className="w-8 h-8 rounded-lg flex items-center justify-center text-accent-brown/40 hover:bg-white hover:text-brand-dark hover:shadow-sm transition-all ml-auto">
-                                                <MoreVertical className="w-4 h-4" />
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                    setActionMenu({ 
+                                                        id: rider.id === actionMenu.id ? null : rider.id, 
+                                                        x: rect.left - 160, 
+                                                        y: rect.top + window.scrollY 
+                                                    });
+                                                }}
+                                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ml-auto ${actionMenu.id === rider.id ? 'bg-brand text-white' : 'text-accent-brown/40 hover:bg-white hover:text-brand-dark hover:shadow-sm'}`}
+                                            >
+                                                {processingId === rider.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
                                             </button>
                                         </td>
                                     </motion.tr>
@@ -205,7 +264,18 @@ const AdminRiders = () => {
                                             </div>
                                         </div>
                                     </div>
-                                    <button className="w-8 h-8 rounded-lg flex items-center justify-center text-accent-brown/40">
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            setActionMenu({ 
+                                                id: rider.id === actionMenu.id ? null : rider.id, 
+                                                x: rect.left - 160, 
+                                                y: rect.top + window.scrollY 
+                                            });
+                                        }}
+                                        className="w-8 h-8 rounded-lg flex items-center justify-center text-accent-brown/40"
+                                    >
                                         <MoreVertical className="w-4 h-4" />
                                     </button>
                                 </div>
@@ -243,6 +313,84 @@ const AdminRiders = () => {
                     </div>
                 </div>
             </div>
+            {/* Floating Action Menu */}
+            {actionMenu.id && (
+                <div 
+                    className="fixed inset-0 z-[300]" 
+                    onClick={() => setActionMenu({ id: null, x: 0, y: 0 })}
+                >
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="absolute bg-white rounded-2xl shadow-2xl border border-accent-brown/5 py-2 w-48 z-[301]"
+                        style={{ left: actionMenu.x, top: actionMenu.y }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <button 
+                            onClick={() => {
+                                const rider = riders.find(r => r.id === actionMenu.id);
+                                if (rider) {
+                                    navigator.clipboard.writeText(rider.email);
+                                    setActionMenu({ id: null, x: 0, y: 0 });
+                                }
+                            }}
+                            className="w-full px-4 py-2.5 text-left flex items-center gap-3 hover:bg-accent-peach/20 transition-colors group"
+                        >
+                            <Mail className="w-4 h-4 text-accent-brown/40 group-hover:text-brand" />
+                            <span className="text-xs font-bold text-accent-brown/70 group-hover:text-accent-brown">Copy Email</span>
+                        </button>
+
+                        <button 
+                            onClick={() => {
+                                const rider = riders.find(r => r.id === actionMenu.id);
+                                if (rider) {
+                                    setModal({
+                                        isOpen: true,
+                                        title: 'Verify Rider Fleet?',
+                                        message: `Do you want to toggle the verification status for ${rider.name}?`,
+                                        type: 'confirm',
+                                        onConfirm: () => handleAction('verify', rider)
+                                    });
+                                }
+                            }}
+                            className="w-full px-4 py-2.5 text-left flex items-center gap-3 hover:bg-accent-peach/20 transition-colors group"
+                        >
+                            <Check className="w-4 h-4 text-accent-brown/40 group-hover:text-green-600" />
+                            <span className="text-xs font-bold text-accent-brown/70 group-hover:text-accent-brown">Verify Rider</span>
+                        </button>
+
+                        <div className="h-px bg-accent-brown/5 my-1" />
+
+                        <button 
+                            onClick={() => {
+                                const rider = riders.find(r => r.id === actionMenu.id);
+                                if (rider) {
+                                    setModal({
+                                        isOpen: true,
+                                        title: 'Delete Rider Account?',
+                                        message: `You are about to permanently remove ${rider.name}. This action cannot be undone.`,
+                                        type: 'danger',
+                                        onConfirm: () => handleAction('delete', rider)
+                                    });
+                                }
+                            }}
+                            className="w-full px-4 py-2.5 text-left flex items-center gap-3 hover:bg-red-50 transition-colors group"
+                        >
+                            <Trash2 className="w-4 h-4 text-red-300 group-hover:text-red-500" />
+                            <span className="text-xs font-bold text-red-400 group-hover:text-red-600">Delete Account</span>
+                        </button>
+                    </motion.div>
+                </div>
+            )}
+            {/* Global Modal */}
+            <ModernModal
+                isOpen={modal.isOpen}
+                onClose={() => setModal(m => ({ ...m, isOpen: false }))}
+                onConfirm={modal.onConfirm}
+                title={modal.title}
+                message={modal.message}
+                type={modal.type}
+            />
         </DashboardLayout>
     );
 };

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 type Role = 'super_admin' | 'system_admin' | 'customer' | 'business' | 'rider' | null;
 
 interface AuthUser {
+    id?: number;
     email: string;
     role: Role;
     name: string;
@@ -50,6 +51,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 let role = payload.role as Role;
                 if ((payload.role as string) === 'user') role = 'customer';
                 setUser({
+                    id: payload.id as number | undefined,
                     email: payload.email as string,
                     role: role,
                     name: payload.name as string,
@@ -81,6 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         let role = (payload.role as Role) ?? 'customer';
         if ((payload.role as string) === 'user') role = 'customer';
         setUser({
+            id: payload.id as number | undefined,
             email: payload.email as string,
             role: role,
             name: payload.name as string,

@@ -4,27 +4,135 @@ import {
     Calendar, Clock, MapPin, User, Scissors, CheckCircle,
     AlertCircle, Loader2, Plus, Edit2, Trash2, X,
     ClipboardList, Settings, Tag, Timer, ToggleLeft, ToggleRight, Check,
-    ChevronLeft, ChevronRight, Award
+    ChevronLeft, ChevronRight, Award, Package
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { CustomDropdown } from '../../components/CustomDropdown';
+import BranchSelector from '../../components/BranchSelector';
 
 const API = 'http://localhost:8000';
 
-const PREDEFINED_SERVICES = [
-    "Veterinary Consultation",
-    "Vaccination",
-    "Deworming",
-    "Flea & Tick Treatment",
-    "Pet Grooming",
-    "Nail Trimming",
-    "Dental Cleaning",
-    "Spay / Neuter",
-    "Microchipping",
-    "Pet Boarding",
-    "Pet Daycare",
-    "Surgery"
-];
+const SERVICE_CATEGORIES: Record<string, string[]> = {
+    "Consultation": [
+        "General Veterinary Consultation",
+        "Emergency Consultation",
+        "Specialist Consultation",
+        "Teleconsultation",
+        "Follow-up Consultation",
+        "Second Opinion Consultation",
+    ],
+    "Vaccination": [
+        "Vaccination - Core (Dogs)",
+        "Vaccination - Core (Cats)",
+        "Vaccination - Rabies",
+        "Vaccination - Bordetella",
+        "Vaccination - Leptospirosis",
+        "Vaccination - Distemper",
+        "Vaccination - Parvovirus",
+        "Vaccination - Feline Leukemia",
+        "Vaccination - Adenovirus",
+        "Vaccination - Parainfluenza",
+    ],
+    "Preventive Care": [
+        "Deworming",
+        "Flea & Tick Treatment",
+        "Heartworm Prevention",
+        "Flea & Tick Prevention (Topical)",
+        "Flea & Tick Prevention (Oral)",
+        "Microchipping",
+        "Parasite Prevention",
+    ],
+    "Wellness Exam": [
+        "Annual Wellness Exam",
+        "Senior Wellness Exam",
+        "Puppy Wellness Package",
+        "Kitten Wellness Package",
+        "Pre-Surgical Health Exam",
+        "Travel Health Certificate Exam",
+    ],
+    "Grooming": [
+        "Full Grooming (Bath + Haircut)",
+        "Bath & Blow Dry",
+        "Nail Trimming",
+        "Ear Cleaning",
+        "Anal Gland Expression",
+        "Teeth Brushing",
+        "Haircut & Styling",
+        "De-shedding Treatment",
+        "Flea Bath",
+        "Paw Treatment",
+        "Eye Cleaning",
+    ],
+    "Dental Care": [
+        "Dental Cleaning (Scaling & Polishing)",
+        "Dental Extraction",
+        "Dental X-Ray",
+        "Oral Exam & Consultation",
+        "Periodontal Treatment",
+        "Teeth Brushing Session",
+    ],
+    "Diagnostics & Imaging": [
+        "Blood Chemistry Panel",
+        "Complete Blood Count (CBC)",
+        "Urinalysis",
+        "Fecal Exam",
+        "Skin Scraping & Cytology",
+        "X-Ray (Radiography)",
+        "Ultrasound",
+        "Echocardiogram (ECG/EKG)",
+        "Allergy Testing",
+        "Thyroid Panel",
+        "FELV / FIV Test",
+        "Parvovirus Test",
+        "Distemper Test",
+        "Heartworm Test",
+        "Histopathology / Biopsy",
+    ],
+    "Surgery": [
+        "Spay (Female Sterilization)",
+        "Neuter (Male Sterilization)",
+        "Tumor / Mass Removal",
+        "Wound Repair & Suturing",
+        "Orthopedic Surgery",
+        "Eye Surgery",
+        "Ear Surgery",
+        "C-Section (Cesarian Section)",
+        "Foreign Body Removal",
+        "Bladder Stone Removal",
+        "Hernia Repair",
+        "Amputation",
+    ],
+    "Hospitalization": [
+        "Pet Boarding",
+        "Pet Daycare",
+        "Hospitalization (Day Rate)",
+        "ICU Care",
+        "Post-Surgery Recovery Care",
+        "IV Fluid Therapy",
+        "Oxygen Therapy",
+        "Kidney Dialysis Support",
+    ],
+    "Therapy & Rehabilitation": [
+        "Physical Therapy",
+        "Hydrotherapy",
+        "Laser Therapy",
+        "Acupuncture",
+        "Pain Management",
+        "Post-Surgery Rehabilitation",
+    ],
+    "Other Services": [
+        "Euthanasia & Aftercare",
+        "Cremation Coordination",
+        "Pet Travel Health Certificate",
+        "Nutritional Counseling",
+        "Behavioral Consultation",
+        "Pregnancy Monitoring",
+        "Whelping Assistance",
+        "Microchip Registration",
+    ],
+};
+
+
 
 interface Reservation {
     id: string;
@@ -32,6 +140,7 @@ interface Reservation {
     customer_id: number;
     customer_name: string;
     business_id: number;
+    branch_id: number | null;
     pet_name: string;
     service: string;
     date: string;
@@ -73,31 +182,47 @@ interface Service {
     duration_minutes: number;
     is_active: boolean;
     loyalty_points: number;
+    is_package: boolean;
+    package_items_json: string | null;
     created_at: string;
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
-    'Pending':         { bg: 'bg-yellow-50',  text: 'text-yellow-700', dot: 'bg-yellow-400' },
-    'Confirmed':       { bg: 'bg-blue-50',    text: 'text-blue-700',   dot: 'bg-blue-400' },
-    'Ready for Pickup': { bg: 'bg-green-50',  text: 'text-green-700',  dot: 'bg-green-500' },
-    'Completed':       { bg: 'bg-gray-50',    text: 'text-gray-500',   dot: 'bg-gray-300' },
-    'Cancelled':       { bg: 'bg-red-50',     text: 'text-red-600',    dot: 'bg-red-400' },
+    'Pending': { bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-400' },
+    'Confirmed': { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-400' },
+    'Ready for Pickup': { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
+    'Completed': { bg: 'bg-gray-50', text: 'text-gray-500', dot: 'bg-gray-300' },
+    'Cancelled': { bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-400' },
 };
 
 const NEXT_STATUSES: Record<string, { label: string; value: string; color: string }[]> = {
-    'Pending':   [{ label: 'Confirm', value: 'Confirmed', color: 'bg-blue-500 hover:bg-blue-600 text-white' }, { label: 'Cancel', value: 'Cancelled', color: 'bg-red-500 hover:bg-red-600 text-white' }],
+    'Pending': [{ label: 'Confirm', value: 'Confirmed', color: 'bg-blue-500 hover:bg-blue-600 text-white' }, { label: 'Cancel', value: 'Cancelled', color: 'bg-red-500 hover:bg-red-600 text-white' }],
     'Confirmed': [{ label: 'Mark Ready', value: 'Ready for Pickup', color: 'bg-green-500 hover:bg-green-600 text-white' }, { label: 'Cancel', value: 'Cancelled', color: 'bg-red-500 hover:bg-red-600 text-white' }],
     'Ready for Pickup': [{ label: 'Complete', value: 'Completed', color: 'bg-accent-brown hover:bg-black text-white' }],
     'Completed': [],
     'Cancelled': [],
 };
 
-const TIME_OPTIONS = ['07:00 AM','07:30 AM','08:00 AM','08:30 AM','09:00 AM','09:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM','12:00 PM','12:30 PM','01:00 PM','01:30 PM','02:00 PM','02:30 PM','03:00 PM','03:30 PM','04:00 PM','04:30 PM','05:00 PM','05:30 PM','06:00 PM','06:30 PM','07:00 PM','07:30 PM','08:00 PM','09:00 PM'];
+const TIME_OPTIONS = ['07:00 AM', '07:30 AM', '08:00 AM', '08:30 AM', '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM', '01:00 PM', '01:30 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM', '04:00 PM', '04:30 PM', '05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM', '07:00 PM', '07:30 PM', '08:00 PM', '09:00 PM'];
 
-const EMPTY_SERVICE = { name: '', description: '', price: '', duration_minutes: '60', is_active: true, loyalty_points: '50' };
+const EMPTY_SERVICE = {
+    name: '',
+    description: '',
+    price: '',
+    duration_minutes: '60',
+    is_active: true,
+    loyalty_points: '50',
+    is_package: false,
+    package_items_json: null as string | null
+};
 
 export default function BusinessReservations() {
     const [tab, setTab] = useState<'reservations' | 'hours' | 'special' | 'services'>('reservations');
+    const [branchId, setBranchId] = useState<number | null>(() => {
+        const saved = localStorage.getItem('hivet_selected_branch');
+        if (saved === 'all') return null;
+        return saved ? parseInt(saved) : null;
+    });
     const [reservations, setReservations] = useState<Reservation[]>([]);
     const [hours, setHours] = useState<OperatingHour[]>([]);
     const [services, setServices] = useState<Service[]>([]);
@@ -112,6 +237,10 @@ export default function BusinessReservations() {
     const [serviceForm, setServiceForm] = useState(EMPTY_SERVICE);
     const [savingService, setSavingService] = useState(false);
     const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [showSelectionModal, setShowSelectionModal] = useState(false);
+    const [showServicePickerModal, setShowServicePickerModal] = useState(false);
+    const [serviceCategory, setServiceCategory] = useState<string>('');
+    const [selectionCategory, setSelectionCategory] = useState<string>('');
 
     // Special Date Hours
     const [specialHours, setSpecialHours] = useState<SpecialDateHour[]>([]);
@@ -138,8 +267,9 @@ export default function BusinessReservations() {
     const fetchAll = async () => {
         setLoading(true);
         try {
+            const query = branchId ? `?branch_id=${branchId}` : '';
             const [resRes, hoursRes, servicesRes, specialRes] = await Promise.all([
-                fetch(`${API}/api/reservations`, { headers: authHeaders }),
+                fetch(`${API}/api/reservations${query}`, { headers: authHeaders }),
                 fetch(`${API}/api/business/operating-hours`, { headers: authHeaders }),
                 fetch(`${API}/api/business/services`, { headers: authHeaders }),
                 fetch(`${API}/api/business/special-hours`, { headers: authHeaders }),
@@ -169,7 +299,7 @@ export default function BusinessReservations() {
                     next[existing] = saved;
                     return next;
                 }
-                return [...prev, saved].sort((a,b) => a.specific_date.localeCompare(b.specific_date));
+                return [...prev, saved].sort((a, b) => a.specific_date.localeCompare(b.specific_date));
             });
             showToast(`Hours saved for ${selectedSpecialDate}`);
         } catch { showToast('Failed to save special hours.', 'error'); }
@@ -185,7 +315,7 @@ export default function BusinessReservations() {
         } catch { showToast('Failed to delete override.', 'error'); }
     };
 
-    useEffect(() => { fetchAll(); }, []);
+    useEffect(() => { fetchAll(); }, [branchId]);
 
     const updateStatus = async (dbId: number, status: string) => {
         setUpdatingId(dbId);
@@ -212,34 +342,95 @@ export default function BusinessReservations() {
     };
 
     const openServiceModal = (service?: Service) => {
-        if (service) { 
-            setEditingService(service); 
-            setServiceForm({ 
-                name: service.name, 
-                description: service.description || '', 
-                price: String(service.price), 
-                duration_minutes: String(service.duration_minutes), 
+        if (service) {
+            setEditingService(service);
+            setServiceForm({
+                name: service.name,
+                description: service.description || '',
+                price: String(service.price),
+                duration_minutes: String(service.duration_minutes),
                 is_active: service.is_active,
-                loyalty_points: String(service.loyalty_points || 0)
-            }); 
+                loyalty_points: String(service.loyalty_points || 0),
+                is_package: service.is_package || false,
+                package_items_json: service.package_items_json || null
+            });
+            // Pre-select category when editing
+            const detectedCategory = Object.keys(SERVICE_CATEGORIES).find(cat =>
+                SERVICE_CATEGORIES[cat].includes(service.name)
+            ) || '';
+            setServiceCategory(detectedCategory);
         }
-        else { 
-            setEditingService(null); 
-            setServiceForm(EMPTY_SERVICE); 
+        else {
+            setEditingService(null);
+            setServiceForm(EMPTY_SERVICE);
+            setServiceCategory('');
         }
         setShowServiceModal(true);
+        setShowSelectionModal(false);
+        setShowServicePickerModal(false);
+    };
+
+    const togglePackageItem = (name: string) => {
+        const current = serviceForm.package_items_json ? JSON.parse(serviceForm.package_items_json) : [];
+        let next;
+        if (current.includes(name)) {
+            next = current.filter((n: string) => n !== name);
+        } else {
+            next = [...current, name];
+        }
+
+        // Auto-calculate totals by matching names against existing services
+        const selectedServices = next.map((n: string) => services.find(s => s.name === n)).filter(Boolean);
+        const totalPrice = selectedServices.reduce((sum: number, s: any) => sum + s.price, 0);
+        const totalDuration = selectedServices.reduce((sum: number, s: any) => sum + s.duration_minutes, 0);
+        const totalPoints = selectedServices.reduce((sum: number, s: any) => sum + s.loyalty_points, 0);
+
+        setServiceForm(f => ({
+            ...f,
+            package_items_json: JSON.stringify(next),
+            price: next.length > 0 ? String(totalPrice) : f.price,
+            duration_minutes: next.length > 0 ? String(totalDuration) : f.duration_minutes,
+            loyalty_points: next.length > 0 ? String(totalPoints) : f.loyalty_points
+        }));
+    };
+
+    const toggleCategoryItems = (itemNames: string[]) => {
+        const currentNames = serviceForm.package_items_json ? JSON.parse(serviceForm.package_items_json) : [];
+        const allSelected = itemNames.length > 0 && itemNames.every(n => currentNames.includes(n));
+
+        let next;
+        if (allSelected) {
+            next = currentNames.filter((n: string) => !itemNames.includes(n));
+        } else {
+            next = Array.from(new Set([...currentNames, ...itemNames]));
+        }
+
+        const selectedServices = next.map((n: string) => services.find(s => s.name === n)).filter(Boolean);
+        const totalPrice = selectedServices.reduce((sum: number, s: any) => sum + s.price, 0);
+        const totalDuration = selectedServices.reduce((sum: number, s: any) => sum + s.duration_minutes, 0);
+        const totalPoints = selectedServices.reduce((sum: number, s: any) => sum + s.loyalty_points, 0);
+
+        setServiceForm(f => ({
+            ...f,
+            package_items_json: JSON.stringify(next),
+            price: next.length > 0 ? String(totalPrice) : f.price,
+            duration_minutes: next.length > 0 ? String(totalDuration) : f.duration_minutes,
+            loyalty_points: next.length > 0 ? String(totalPoints) : f.loyalty_points
+        }));
     };
 
     const handleSaveService = async () => {
         if (!serviceForm.name.trim() || !serviceForm.price) { showToast('Name and price are required.', 'error'); return; }
         setSavingService(true);
-        const payload = { 
-            name: serviceForm.name.trim(), 
-            description: serviceForm.description || null, 
-            price: parseFloat(serviceForm.price) || 0, 
-            duration_minutes: parseInt(serviceForm.duration_minutes) || 60, 
+        const payload = {
+            name: serviceForm.name.trim(),
+            description: serviceForm.description || null,
+            price: parseFloat(serviceForm.price) || 0,
+            duration_minutes: parseInt(serviceForm.duration_minutes) || 60,
             is_active: serviceForm.is_active,
-            loyalty_points: parseInt(serviceForm.loyalty_points) || 0
+            loyalty_points: parseInt(serviceForm.loyalty_points) || 0,
+            is_package: serviceForm.is_package,
+            package_items_json: serviceForm.package_items_json
         };
         try {
             let res;
@@ -277,6 +468,14 @@ export default function BusinessReservations() {
     return (
         <DashboardLayout title="Reservations">
             <div className="space-y-8">
+
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 className="text-3xl font-black text-accent-brown tracking-tighter">Clinic Bookings</h2>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 mt-1">Manage appointments across locations</p>
+                    </div>
+                    {token && <BranchSelector token={token} onBranchChange={setBranchId} currentBranchId={branchId} />}
+                </div>
 
                 {/* Toast */}
                 <AnimatePresence>
@@ -387,13 +586,13 @@ export default function BusinessReservations() {
                                                             let hour = parseInt(hourStr);
                                                             if (ampm === 'PM' && hour !== 12) hour += 12;
                                                             if (ampm === 'AM' && hour === 12) hour = 0;
-                                                            
+
                                                             const appointmentEnd = new Date(r.date);
                                                             appointmentEnd.setHours(hour, parseInt(minStr) + duration, 0, 0);
                                                             const now = new Date();
                                                             if (now < appointmentEnd) isActionDisabled = true;
                                                         }
-                                                        
+
                                                         return (
                                                             <button key={action.value}
                                                                 onClick={() => updateStatus(r.db_id, action.value)}
@@ -549,7 +748,7 @@ export default function BusinessReservations() {
                                                 {Array.from({ length: new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay() }).map((_, i) => (
                                                     <div key={`empty-${i}`} className="aspect-square" />
                                                 ))}
-                                                
+
                                                 {/* Days of the month */}
                                                 {Array.from({ length: new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate() }).map((_, i) => {
                                                     const d = i + 1;
@@ -575,13 +774,12 @@ export default function BusinessReservations() {
                                                                 });
                                                             }
                                                         }}
-                                                        className={`relative aspect-square flex flex-col items-center justify-center rounded-2xl text-xs font-black transition-all group ${
-                                                            isSelected 
-                                                            ? 'bg-brand text-white shadow-xl shadow-brand/20 scale-110 z-10' 
-                                                            : isToday 
-                                                            ? 'bg-brand-dark/5 text-brand-dark' 
-                                                            : 'text-accent-brown/60 hover:bg-white hover:shadow-md'
-                                                        }`}>
+                                                            className={`relative aspect-square flex flex-col items-center justify-center rounded-2xl text-xs font-black transition-all group ${isSelected
+                                                                ? 'bg-brand text-white shadow-xl shadow-brand/20 scale-110 z-10'
+                                                                : isToday
+                                                                    ? 'bg-brand-dark/5 text-brand-dark'
+                                                                    : 'text-accent-brown/60 hover:bg-white hover:shadow-md'
+                                                                }`}>
                                                             {d}
                                                             {hasOverride && !isSelected && (
                                                                 <div className={`absolute bottom-2 w-1 h-1 rounded-full ${hasOverride.is_open ? 'bg-brand' : 'bg-red-400'}`} />
@@ -626,7 +824,7 @@ export default function BusinessReservations() {
                                                         const id = specialHours.find(sh => sh.specific_date === selectedSpecialDate)?.id;
                                                         if (id) handleDeleteSpecial(id);
                                                     }}
-                                                    className="p-3 rounded-2xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm">
+                                                        className="p-3 rounded-2xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm">
                                                         <Trash2 className="w-5 h-5" />
                                                     </button>
                                                 )}
@@ -688,11 +886,10 @@ export default function BusinessReservations() {
                                                             setSpecialForm({ ...sh });
                                                             setViewDate(new Date(sh.specific_date));
                                                         }}
-                                                        className={`px-4 py-2 rounded-full border text-[10px] font-black uppercase tracking-tighter transition-all ${
-                                                            selectedSpecialDate === sh.specific_date 
-                                                            ? 'bg-brand text-white border-brand' 
-                                                            : 'bg-white text-accent-brown/60 border-accent-brown/10 hover:border-brand/40'
-                                                        }`}>
+                                                            className={`px-4 py-2 rounded-full border text-[10px] font-black uppercase tracking-tighter transition-all ${selectedSpecialDate === sh.specific_date
+                                                                ? 'bg-brand text-white border-brand'
+                                                                : 'bg-white text-accent-brown/60 border-accent-brown/10 hover:border-brand/40'
+                                                                }`}>
                                                             {new Date(sh.specific_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                                             {!sh.is_open && <span className="ml-1.5 opacity-40">Closed</span>}
                                                         </button>
@@ -748,8 +945,15 @@ export default function BusinessReservations() {
                                             {deletingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                                         </button>
                                     </div>
-                                    <div className="w-10 h-10 bg-brand/10 rounded-xl flex items-center justify-center mb-4">
-                                        <Scissors className="w-5 h-5 text-brand-dark" />
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="w-10 h-10 bg-brand/10 rounded-xl flex items-center justify-center">
+                                            <Scissors className="w-5 h-5 text-brand-dark" />
+                                        </div>
+                                        {s.is_package && (
+                                            <span className="bg-[#ea580c] text-white text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-lg shadow-[#ea580c]/20">
+                                                Package
+                                            </span>
+                                        )}
                                     </div>
                                     <h4 className="font-black text-accent-brown text-base mb-1 leading-tight pr-20">{s.name}</h4>
                                     {s.description && <p className="text-xs text-accent-brown/50 mb-3 line-clamp-2">{s.description}</p>}
@@ -781,80 +985,356 @@ export default function BusinessReservations() {
                             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowServiceModal(false)} className="fixed inset-0 bg-accent-brown/20 backdrop-blur-sm z-50" />
                             <motion.div initial={{ scale: 0.95, opacity: 0, y: 40 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 40 }}
                                 className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                                <div className="bg-white rounded-[2rem] w-full max-w-3xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                                    <div className="flex items-center justify-between p-6 border-b border-accent-brown/5 bg-accent-peach/5">
+                                <div className="bg-white rounded-[2rem] w-full max-w-6xl shadow-2xl overflow-hidden relative" onClick={e => e.stopPropagation()}>
+                                    <div className="flex items-center justify-between p-6 border-b border-accent-brown/5 bg-accent-peach/5 shrink-0">
                                         <div>
-                                            <h2 className="text-xl font-black text-accent-brown tracking-tight">{editingService ? 'Edit Service' : 'New Service'}</h2>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mt-0.5">{editingService ? 'Update service details' : 'Add to your service menu'}</p>
+                                            <h2 className="text-xl font-black text-accent-brown tracking-tight">{editingService ? 'Edit Service Details' : 'Design New Service'}</h2>
+                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/30 mt-1">{editingService ? 'Refine your offering and package components' : 'Create a new standard or package service'}</p>
                                         </div>
-                                        <button onClick={() => setShowServiceModal(false)} className="w-10 h-10 bg-white hover:bg-red-50 text-accent-brown/40 hover:text-red-500 rounded-xl flex items-center justify-center transition-colors shadow-sm">
+                                        <button onClick={() => setShowServiceModal(false)} className="w-10 h-10 bg-white hover:bg-red-50 text-accent-brown/20 hover:text-red-500 rounded-2xl flex items-center justify-center transition-all shadow-sm border border-accent-brown/5">
                                             <X className="w-5 h-5" />
                                         </button>
                                     </div>
+
                                     <div className="p-6">
-                                        <div className="grid md:grid-cols-2 gap-8">
-                                            {/* Left Column: Details */}
-                                            <div className="space-y-4">
-                                                <div>
-                                                    <CustomDropdown
-                                                        label="Service Name *"
-                                                        value={serviceForm.name}
-                                                        options={PREDEFINED_SERVICES.map(s => ({ label: s, value: s }))}
-                                                        onChange={(val) => setServiceForm(f => ({ ...f, name: val.toString() }))}
-                                                    />
+                                        <div className={`grid grid-cols-1 ${serviceForm.is_package ? 'lg:grid-cols-3' : 'md:grid-cols-2'} gap-8`}>
+                                            {/* Column 1: Basic Info */}
+                                            <div className="space-y-5">
+                                                <div className="flex items-center gap-4 p-1 bg-accent-peach/5 rounded-2xl border border-accent-brown/5">
+                                                    <button type="button" onClick={() => setServiceForm(f => ({ ...f, is_package: false, package_items_json: null }))}
+                                                        className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!serviceForm.is_package ? 'bg-white shadow-sm text-accent-brown' : 'text-accent-brown/40 hover:text-accent-brown'}`}>
+                                                        Service
+                                                    </button>
+                                                    <button type="button" onClick={() => setServiceForm(f => ({ ...f, is_package: true, package_items_json: JSON.stringify([]) }))}
+                                                        className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${serviceForm.is_package ? 'bg-[#ea580c] shadow-lg text-white' : 'text-accent-brown/40 hover:text-accent-brown'}`}>
+                                                        Package
+                                                    </button>
                                                 </div>
+
+                                                {!serviceForm.is_package ? (
+                                                    <div>
+                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Service Name *</label>
+                                                        <button type="button" onClick={() => setShowServicePickerModal(true)}
+                                                            className="w-full flex items-center justify-between px-4 py-3 bg-accent-peach/10 border-2 border-transparent hover:border-brand/30 rounded-xl text-sm text-left transition-all group">
+                                                            <div className="flex-1 min-w-0">
+                                                                {serviceForm.name ? (
+                                                                    <div>
+                                                                        <p className="text-[9px] font-black uppercase tracking-widest text-[#ea580c] mb-0.5">{serviceCategory}</p>
+                                                                        <p className="text-sm font-bold text-accent-brown truncate">{serviceForm.name}</p>
+                                                                    </div>
+                                                                ) : (
+                                                                    <p className="text-sm font-medium text-accent-brown/30">Click to browse &amp; select a service...</p>
+                                                                )}
+                                                            </div>
+                                                            <ChevronRight className="w-4 h-4 text-accent-brown/30 group-hover:text-brand transition-colors shrink-0 ml-2" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div>
+                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Package Name *</label>
+                                                        <input type="text" value={serviceForm.name} placeholder="Enter package name..."
+                                                            onChange={e => setServiceForm(f => ({ ...f, name: e.target.value }))}
+                                                            className="w-full px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-sm font-bold text-accent-brown outline-none transition-all placeholder:text-accent-brown/30" />
+                                                    </div>
+                                                )}
+
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Description</label>
                                                     <textarea value={serviceForm.description} onChange={e => setServiceForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief description..."
-                                                        className="w-full px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-sm font-medium text-accent-brown outline-none resize-none h-[116px] placeholder:text-accent-brown/30" />
+                                                        className={`w-full px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-sm font-medium text-accent-brown outline-none resize-none placeholder:text-accent-brown/30 ${serviceForm.is_package ? 'h-[250px]' : 'h-[116px]'}`} />
                                                 </div>
                                             </div>
 
-                                            {/* Right Column: Pricing & Setup */}
-                                            <div className="space-y-4">
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Price (₱) *</label>
-                                                        <input type="number" min="0" step="0.01" value={serviceForm.price} onChange={e => setServiceForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00"
-                                                            className="w-full px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-sm font-bold text-accent-brown outline-none" />
+                                            {/* Column 2: Package Items (Only for Packages) */}
+                                            {serviceForm.is_package && (
+                                                <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+                                                    <div className="flex flex-col h-full bg-accent-peach/5 rounded-2xl border border-accent-brown/5 overflow-hidden">
+                                                        <div className="p-4 border-b border-accent-brown/5 flex items-center justify-between">
+                                                            <div>
+                                                                <label className="text-[10px] font-black uppercase tracking-widest text-[#ea580c]">Included Services</label>
+                                                                <p className="text-[9px] font-bold text-accent-brown/40 uppercase tracking-widest mt-0.5">{JSON.parse(serviceForm.package_items_json || '[]').length} item(s) selected</p>
+                                                            </div>
+                                                            <button type="button" onClick={() => setShowSelectionModal(true)}
+                                                                className="flex items-center gap-1.5 px-4 py-2 bg-[#ea580c] rounded-xl text-[9px] font-black uppercase tracking-widest text-white hover:bg-[#c2410c] transition-all shadow-lg shadow-[#ea580c]/10">
+                                                                <Plus className="w-3 h-3" /> Manage Selection
+                                                            </button>
+                                                        </div>
+                                                        <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar max-h-[385px]">
+                                                            {(() => {
+                                                                const selectedNames = JSON.parse(serviceForm.package_items_json || '[]');
+                                                                
+                                                                if (selectedNames.length === 0) {
+                                                                    return (
+                                                                        <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                                                                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm">
+                                                                                <Package className="w-6 h-6 text-accent-brown/20" />
+                                                                            </div>
+                                                                            <p className="text-[10px] font-bold text-accent-brown/30 italic">No services added to this package yet.</p>
+                                                                            <button type="button" onClick={() => setShowSelectionModal(true)}
+                                                                                className="mt-4 text-[9px] font-black uppercase tracking-widest text-[#ea580c] hover:underline">
+                                                                                Click to add services
+                                                                            </button>
+                                                                        </div>
+                                                                    );
+                                                                }
+
+                                                                return selectedNames.map((name: string) => {
+                                                                    const match = services.find(s => s.name === name);
+                                                                    return (
+                                                                        <div key={name} className="w-full flex items-center justify-between p-3 rounded-xl bg-white border border-accent-brown/5 shadow-sm group">
+                                                                            <div className="text-left flex-1 min-w-0">
+                                                                                <p className="text-xs font-bold text-accent-brown truncate">{name}</p>
+                                                                                <p className="text-[9px] font-black text-accent-brown/40 uppercase tracking-widest">
+                                                                                    {match ? `₱${match.price} · ${match.duration_minutes}m` : 'Not offered yet'}
+                                                                                </p>
+                                                                            </div>
+                                                                            <button type="button" onClick={() => togglePackageItem(name)}
+                                                                                className="w-6 h-6 flex items-center justify-center rounded-lg bg-red-50 text-red-400 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white shrink-0 ml-2">
+                                                                                <X className="w-3 h-3" />
+                                                                            </button>
+                                                                        </div>
+                                                                    );
+                                                                });
+                                                            })()}
+                                                        </div>
                                                     </div>
+                                                </motion.div>
+                                            )}
+
+                                            {/* Column 3: Pricing & Setup */}
+                                            <div className="space-y-6">
+                                                <div className="p-5 bg-white border border-accent-brown/5 shadow-sm rounded-2xl space-y-4">
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Price (₱) *</label>
+                                                            <input type="number" min="0" step="0.01" value={serviceForm.price} onChange={e => setServiceForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00"
+                                                                className="w-full px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-sm font-bold text-accent-brown outline-none" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Duration (min)</label>
+                                                            <input type="number" min="15" step="15" value={serviceForm.duration_minutes} onChange={e => setServiceForm(f => ({ ...f, duration_minutes: e.target.value }))}
+                                                                className="w-full px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-sm font-bold text-accent-brown outline-none" />
+                                                        </div>
+                                                    </div>
+
                                                     <div>
-                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Duration (min)</label>
-                                                        <input type="number" min="15" step="15" value={serviceForm.duration_minutes} onChange={e => setServiceForm(f => ({ ...f, duration_minutes: e.target.value }))}
-                                                            className="w-full px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-sm font-bold text-accent-brown outline-none" />
+                                                        <label className="text-[10px] font-black uppercase tracking-widest text-[#ea580c] mb-1.5 block flex items-center gap-2">
+                                                            <Award className="w-3 h-3" />
+                                                            Loyalty Points Awarded
+                                                        </label>
+                                                        <input type="number" min="0" value={serviceForm.loyalty_points} onChange={e => setServiceForm(f => ({ ...f, loyalty_points: e.target.value }))} placeholder="50"
+                                                            className="w-full px-4 py-3 bg-[#ea580c]/5 border-2 border-[#ea580c]/20 focus:border-[#ea580c] rounded-xl text-sm font-bold text-accent-brown outline-none transition-all" />
                                                     </div>
                                                 </div>
 
-                                                <div>
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-[#ea580c] mb-1.5 block flex items-center gap-2">
-                                                        <Award className="w-3 h-3" />
-                                                        Loyalty Points Awarded
-                                                    </label>
-                                                    <input type="number" min="0" value={serviceForm.loyalty_points} onChange={e => setServiceForm(f => ({ ...f, loyalty_points: e.target.value }))} placeholder="50"
-                                                        className="w-full px-4 py-3 bg-[#ea580c]/5 border-2 border-[#ea580c]/20 focus:border-[#ea580c] rounded-xl text-sm font-bold text-accent-brown outline-none transition-all" />
-                                                    <p className="text-[8px] font-bold text-accent-brown/30 mt-2 pl-1">Points customers earn when this service is completed.</p>
-                                                </div>
-                                                
-                                                <div className="flex items-center justify-between p-4 bg-accent-peach/10 rounded-xl mt-4">
+                                                <div className="flex items-center justify-between p-5 bg-accent-peach/10 rounded-2xl">
                                                     <div>
                                                         <p className="font-black text-sm text-accent-brown">Active Status</p>
                                                         <p className="text-[10px] font-bold uppercase tracking-widest text-accent-brown/50 mt-0.5">{serviceForm.is_active ? 'Visible to customers' : 'Hidden from customers'}</p>
                                                     </div>
                                                     <button onClick={() => setServiceForm(f => ({ ...f, is_active: !f.is_active }))} className="shrink-0 transition-transform active:scale-90">
-                                                        {serviceForm.is_active ? <ToggleRight className="w-8 h-8 text-brand-dark" /> : <ToggleLeft className="w-8 h-8 text-accent-brown/30" />}
+                                                        {serviceForm.is_active ? <ToggleRight className="w-10 h-10 text-brand-dark" /> : <ToggleLeft className="w-10 h-10 text-accent-brown/30" />}
                                                     </button>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="p-6 border-t border-accent-brown/5 flex gap-3 bg-gray-50/50">
-                                        <button onClick={() => setShowServiceModal(false)} className="flex-1 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest text-accent-brown/50 bg-accent-peach/20 hover:bg-accent-peach/40 transition-colors">Cancel</button>
+
+                                    <div className="p-6 border-t border-accent-brown/5 flex gap-4 bg-gray-50/50 shrink-0">
+                                        <button onClick={() => setShowServiceModal(false)} className="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] text-accent-brown/40 hover:text-accent-brown hover:bg-white transition-all">Cancel</button>
                                         <button onClick={handleSaveService} disabled={savingService || !serviceForm.name || !serviceForm.price}
-                                            className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest bg-[#ea580c] flex-shrink-0 text-white hover:bg-[#c2410c] hover:text-white transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed min-w-[200px]">
+                                            className="flex-[1.5] flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] bg-[#ea580c] text-white hover:bg-[#c2410c] transition-all shadow-xl shadow-[#ea580c]/20 disabled:opacity-50 disabled:cursor-not-allowed">
                                             {savingService ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                                            {editingService ? 'Update Service' : 'Add Service'}
+                                            {editingService ? 'Update Service' : 'Confirm Service'}
                                         </button>
                                     </div>
+
+                                    {/* Selection Modal (two-panel with checkboxes) */}
+                                    <AnimatePresence>
+                                        {showSelectionModal && (
+                                            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSelectionModal(false)} className="absolute inset-0 bg-accent-brown/40 backdrop-blur-sm" />
+                                                <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                                                    className="relative bg-white rounded-[2rem] w-full max-w-2xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col" style={{ height: '75vh' }}>
+                                                    {/* Header */}
+                                                    <div className="p-5 border-b border-accent-brown/5 bg-accent-peach/5 flex items-center justify-between shrink-0">
+                                                        <div>
+                                                            <h3 className="text-lg font-black text-accent-brown tracking-tight">Select Services</h3>
+                                                            <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest mt-0.5">
+                                                                {JSON.parse(serviceForm.package_items_json || '[]').length} service(s) selected · Browse by category
+                                                            </p>
+                                                        </div>
+                                                        <button onClick={() => setShowSelectionModal(false)} className="p-2 hover:bg-white rounded-full transition-colors">
+                                                            <X className="w-5 h-5 text-accent-brown/40" />
+                                                        </button>
+                                                    </div>
+                                                    {/* Body: Two-panel */}
+                                                    {(() => {
+                                                        const cats = Object.keys(SERVICE_CATEGORIES);
+                                                        const activeCat = selectionCategory || cats[0] || '';
+                                                        const selectedNames = JSON.parse(serviceForm.package_items_json || '[]') as string[];
+
+                                                        return (
+                                                            <div className="flex flex-1 overflow-hidden">
+                                                                {/* Left: Categories Sidebar */}
+                                                                <div className="w-64 shrink-0 border-r border-accent-brown/5 overflow-y-auto p-4 space-y-1 bg-accent-peach/5 custom-scrollbar">
+                                                                    <p className="text-[8px] font-black uppercase tracking-[0.2em] text-accent-brown/30 mb-4 px-2">Service Categories</p>
+                                                                    {cats.map(cat => {
+                                                                        const catItems = SERVICE_CATEGORIES[cat];
+                                                                        const isAllSelected = catItems.length > 0 && catItems.every(name => selectedNames.includes(name));
+                                                                        const isSomeSelected = !isAllSelected && catItems.some(name => selectedNames.includes(name));
+
+                                                                        return (
+                                                                            <div key={cat} className="group flex items-center gap-1.5 p-1 rounded-2xl hover:bg-white transition-all">
+                                                                                <button type="button" onClick={() => toggleCategoryItems(catItems)}
+                                                                                    title={isAllSelected ? "Deselect Category" : "Select Category"}
+                                                                                    className={`w-9 h-9 shrink-0 flex items-center justify-center rounded-xl border-2 transition-all ${
+                                                                                        isAllSelected
+                                                                                            ? 'bg-[#ea580c] border-[#ea580c] text-white shadow-lg shadow-[#ea580c]/20'
+                                                                                            : isSomeSelected
+                                                                                                ? 'bg-white border-[#ea580c]/50 text-[#ea580c]'
+                                                                                                : 'bg-white border-accent-brown/5 text-accent-brown/20 group-hover:border-accent-brown/10'
+                                                                                    }`}>
+                                                                                    {isAllSelected ? (
+                                                                                        <Check className="w-4 h-4" strokeWidth={4} />
+                                                                                    ) : isSomeSelected ? (
+                                                                                        <div className="w-2 h-0.5 rounded-full bg-[#ea580c]" />
+                                                                                    ) : (
+                                                                                        <Plus className="w-3 h-3 group-hover:text-accent-brown/40" />
+                                                                                    )}
+                                                                                </button>
+                                                                                <button type="button" onClick={() => setSelectionCategory(cat)}
+                                                                                    className={`flex-1 text-left px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                                                                        activeCat === cat
+                                                                                            ? 'bg-[#ea580c] text-white shadow-md'
+                                                                                            : 'text-accent-brown/50 hover:text-accent-brown'
+                                                                                    }`}>
+                                                                                    {cat}
+                                                                                </button>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                                {/* Right: Items Grid */}
+                                                                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                                                                    {activeCat && SERVICE_CATEGORIES[activeCat] && (
+                                                                        <motion.div key={activeCat} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-2">
+                                                                            <p className="text-[9px] font-black uppercase tracking-widest text-[#ea580c] mb-3 px-1">{activeCat}</p>
+                                                                            {SERVICE_CATEGORIES[activeCat].map((name: string) => {
+                                                                                const isSelected = selectedNames.includes(name);
+                                                                                const match = services.find(s => s.name === name);
+                                                                                return (
+                                                                                    <button key={name} type="button" onClick={() => togglePackageItem(name)}
+                                                                                        className={`w-full flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left shadow-sm group ${
+                                                                                            isSelected
+                                                                                                ? 'border-[#ea580c] bg-[#ea580c] text-white'
+                                                                                                : 'border-transparent bg-white hover:bg-accent-peach/5 hover:border-accent-brown/10 text-accent-brown'
+                                                                                        }`}>
+                                                                                        <div className="flex-1 min-w-0">
+                                                                                            <p className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-accent-brown'}`}>{name}</p>
+                                                                                            {match && (
+                                                                                                <div className="flex items-center gap-2 mt-0.5">
+                                                                                                    <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${isSelected ? 'bg-white/20 text-white' : 'bg-green-100 text-green-700'}`}>
+                                                                                                        Offered
+                                                                                                    </span>
+                                                                                                    <span className={`text-[8px] font-bold ${isSelected ? 'text-white/60' : 'text-accent-brown/40'}`}>
+                                                                                                        ₱{match.price} · {match.duration_minutes}m
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        {isSelected && <Check className="w-4 h-4 text-white shrink-0" strokeWidth={4} />}
+                                                                                    </button>
+                                                                                );
+                                                                            })}
+                                                                        </motion.div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                    {/* Footer */}
+                                                    <div className="p-6 border-t border-accent-brown/5 bg-gray-50/50 shrink-0">
+                                                        <button onClick={() => setShowSelectionModal(false)}
+                                                            className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] bg-[#ea580c] text-white hover:bg-[#c2410c] transition-all shadow-xl shadow-[#ea580c]/20 active:scale-95">
+                                                            Confirm Selection
+                                                        </button>
+                                                    </div>
+                                                </motion.div>
+                                            </div>
+                                        )}
+                                    </AnimatePresence>
+
+                                    {/* ── SERVICE PICKER MODAL ── */}
+                                    <AnimatePresence>
+                                        {showServicePickerModal && (
+                                            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+                                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowServicePickerModal(false)} className="absolute inset-0 bg-accent-brown/50 backdrop-blur-sm" />
+                                                <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                                                    className="relative bg-white rounded-[2rem] w-full max-w-2xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col" style={{ height: '75vh' }}>
+                                                    {/* Header */}
+                                                    <div className="p-5 border-b border-accent-brown/5 bg-accent-peach/5 flex items-center justify-between shrink-0">
+                                                        <div>
+                                                            <h3 className="text-lg font-black text-accent-brown tracking-tight">Browse Services</h3>
+                                                            <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest mt-0.5">Select a category, then choose a service type</p>
+                                                        </div>
+                                                        <button onClick={() => setShowServicePickerModal(false)} className="p-2 hover:bg-white rounded-full transition-colors">
+                                                            <X className="w-5 h-5 text-accent-brown/40" />
+                                                        </button>
+                                                    </div>
+                                                    {/* Body: Two-panel */}
+                                                    <div className="flex flex-1 overflow-hidden">
+                                                        {/* Left: Categories */}
+                                                        <div className="w-56 shrink-0 border-r border-accent-brown/5 overflow-y-auto p-3 space-y-1 bg-accent-peach/5 custom-scrollbar">
+                                                            {Object.keys(SERVICE_CATEGORIES).map(cat => (
+                                                                <button key={cat} type="button" onClick={() => setServiceCategory(cat)}
+                                                                    className={`w-full text-left px-3 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                                                                        serviceCategory === cat
+                                                                            ? 'bg-[#ea580c] text-white shadow-md'
+                                                                            : 'text-accent-brown/60 hover:bg-white hover:text-accent-brown hover:shadow-sm'
+                                                                    }`}>
+                                                                    {cat}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        {/* Right: Services */}
+                                                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                                                            {serviceCategory ? (
+                                                                <motion.div key={serviceCategory} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-2">
+                                                                    <p className="text-[9px] font-black uppercase tracking-widest text-[#ea580c] mb-3 px-1">{serviceCategory}</p>
+                                                                    {SERVICE_CATEGORIES[serviceCategory].map(service => {
+                                                                        const isSelected = serviceForm.name === service;
+                                                                        return (
+                                                                            <button key={service} type="button"
+                                                                                onClick={() => {
+                                                                                    setServiceForm(f => ({ ...f, name: service }));
+                                                                                    setShowServicePickerModal(false);
+                                                                                }}
+                                                                                className={`w-full flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left shadow-sm group ${
+                                                                                    isSelected
+                                                                                        ? 'border-[#ea580c] bg-[#ea580c] text-white'
+                                                                                        : 'border-transparent bg-white hover:bg-accent-peach/5 hover:border-accent-brown/10 text-accent-brown'
+                                                                                }`}>
+                                                                                <p className={`text-sm font-bold flex-1 ${isSelected ? 'text-white' : 'text-accent-brown'}`}>{service}</p>
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </motion.div>
+                                                            ) : (
+                                                                <div className="flex flex-col items-center justify-center h-full text-center">
+                                                                    <div className="w-16 h-16 bg-accent-peach/10 rounded-full flex items-center justify-center mb-3">
+                                                                        <Package className="w-8 h-8 text-accent-brown/20" />
+                                                                    </div>
+                                                                    <p className="text-sm font-bold text-accent-brown/30">Pick a category on the left</p>
+                                                                    <p className="text-[10px] text-accent-brown/20 mt-1">to see available service types</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </motion.div>
+                                            </div>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
                             </motion.div>
                         </>

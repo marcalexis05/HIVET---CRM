@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     User, Lock, Bell, Trash2, Check, Loader2, Eye, EyeOff, 
     AlertTriangle, CheckCircle, MapPin, Plus, Edit2, Trash,
-    Store, ShieldCheck 
+    Store, ShieldCheck, X, ChevronRight, QrCode, Smartphone,
+    Tag, Sparkles, Award, Wallet, CreditCard, Banknote
 } from 'lucide-react';
 import { Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import DashboardLayout from '../../components/DashboardLayout';
@@ -14,6 +15,7 @@ import { CustomDatePicker } from '../../components/CustomDatePicker';
 import { CustomDropdown } from '../../components/CustomDropdown';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPickerModal from '../../components/MapPickerModal';
+import ModernModal from '../../components/ModernModal';
 
 type Section = 'profile' | 'addresses' | 'password' | 'notifications' | 'danger';
 
@@ -31,8 +33,6 @@ const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void 
         <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300 ${checked ? 'translate-x-6' : ''}`} />
     </button>
 );
-
-
 
 const AccountSettings = () => {
     const { user, logout, loginWithToken } = useAuth();
@@ -130,7 +130,12 @@ const AccountSettings = () => {
         delivery_notes: ''
     });
     const [showAllBranches, setShowAllBranches] = useState(false);
-    const [confirmModal, setConfirmModal] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
+    const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'info' | 'success' | 'error' | 'confirm' | 'danger'; onConfirm?: () => void }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
     const [isGoogleUser, setIsGoogleUser] = useState(false);
     const [hasPassword, setHasPassword] = useState(true);
 
@@ -139,17 +144,17 @@ const AccountSettings = () => {
             setAddrForm(prev => ({
                 ...prev,
                 address_line1: _full,
-                house_number: granular.houseNumber,
-                block_number: granular.blockNumber,
-                street: granular.street,
-                subdivision: granular.subdivision,
-                sitio: granular.sitio,
-                barangay: granular.barangay,
-                city: granular.city,
-                district: granular.district,
-                province: granular.province,
-                zip_code: granular.zip,
-                region: granular.region,
+                house_number: granular.houseNumber || '',
+                block_number: granular.blockNumber || '',
+                street: granular.street || '',
+                subdivision: granular.subdivision || '',
+                sitio: granular.sitio || '',
+                barangay: granular.barangay || '',
+                city: granular.city || '',
+                district: granular.district || '',
+                province: granular.province || '',
+                zip_code: granular.zip || '',
+                region: granular.region || '',
                 lat: geometry?.lat ?? prev.lat,
                 lng: geometry?.lng ?? prev.lng
             }));
@@ -200,17 +205,17 @@ const AccountSettings = () => {
 
     const handleClinicAddressComponents = (_full: string, components: any[], geometry?: { lat: number, lng: number }, granular?: any) => {
         if (granular) {
-            setClinicHouseNumber(granular.houseNumber);
-            setClinicBlockNumber(granular.blockNumber);
-            setClinicStreet(granular.street);
-            setClinicSubdivision(granular.subdivision);
-            setClinicSitio(granular.sitio);
-            setClinicBarangay(granular.barangay);
-            setClinicCity(granular.city);
-            setClinicDistrict(granular.district);
-            setClinicProvince(granular.province);
-            setClinicZip(granular.zip);
-            setClinicRegion(granular.region);
+            setClinicHouseNumber(granular.houseNumber || '');
+            setClinicBlockNumber(granular.blockNumber || '');
+            setClinicStreet(granular.street || '');
+            setClinicSubdivision(granular.subdivision || '');
+            setClinicSitio(granular.sitio || '');
+            setClinicBarangay(granular.barangay || '');
+            setClinicCity(granular.city || '');
+            setClinicDistrict(granular.district || '');
+            setClinicProvince(granular.province || '');
+            setClinicZip(granular.zip || '');
+            setClinicRegion(granular.region || '');
             if (geometry) {
                 setClinicLat(geometry.lat);
                 setClinicLng(geometry.lng);
@@ -259,10 +264,9 @@ const AccountSettings = () => {
     };
 
     const showConfirm = (title: string, message: string, onConfirm: () => void) => {
-        setConfirmModal({ open: true, title, message, onConfirm });
+        setModal({ isOpen: true, title, message, type: 'confirm', onConfirm });
     };
 
-    // Fetch fresh data from DB on mount
     useEffect(() => {
         const fetchProfile = async () => {
             if (!user?.token) return;
@@ -331,7 +335,6 @@ const AccountSettings = () => {
             });
             if (res.ok) {
                 const data = await res.json();
-                // Normalize data structure
                 if (isBusiness) {
                     const normalized = data.map((b: any) => ({
                         id: b.id,
@@ -390,7 +393,6 @@ const AccountSettings = () => {
         if (section === 'addresses') fetchAddresses();
     }, [section, user?.token]);
 
-    // Password
     const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
     const [showPw, setShowPw] = useState(false);
     const [showMapPicker, setShowMapPicker] = useState(false);
@@ -398,10 +400,7 @@ const AccountSettings = () => {
     const [savingPw, setSavingPw] = useState(false);
     const [pwError, setPwError] = useState('');
 
-    // Notifications
     const [notifs, setNotifs] = useState({ orderUpdates: true, loyaltyAlerts: true, newsletter: false, gmailNotifications: false });
-
-    // Toast & Modals
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [showGooglePwModal, setShowGooglePwModal] = useState(false);
 
@@ -410,7 +409,76 @@ const AccountSettings = () => {
         setTimeout(() => setToast(null), 3000);
     };
 
-    // Delete confirm
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [newEmail, setNewEmail] = useState('');
+    const [emailOtp, setEmailOtp] = useState('');
+    const [otpSent, setOtpSent] = useState(false);
+    const [sendingOtp, setSendingOtp] = useState(false);
+    const [verifyingEmail, setVerifyingEmail] = useState(false);
+
+    const handleRequestEmailChange = async () => {
+        if (!newEmail || !newEmail.includes('@')) {
+            showToast('Please enter a valid email address.', 'error');
+            return;
+        }
+        setSendingOtp(true);
+        try {
+            const res = await fetch('http://localhost:8000/api/auth/request-email-change', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user?.token}`
+                },
+                body: JSON.stringify({ new_email: newEmail })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setOtpSent(true);
+                showToast('Verification code sent to your new email.');
+            } else {
+                showToast(data.detail || 'Failed to send verification code.', 'error');
+            }
+        } catch (err) {
+            showToast('Error requesting email change.', 'error');
+        } finally {
+            setSendingOtp(false);
+        }
+    };
+
+    const handleVerifyEmailChange = async () => {
+        if (emailOtp.length !== 6) {
+            showToast('Please enter the 6-digit verification code.', 'error');
+            return;
+        }
+        setVerifyingEmail(true);
+        try {
+            const res = await fetch('http://localhost:8000/api/auth/verify-email-change', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user?.token}`
+                },
+                body: JSON.stringify({ new_email: newEmail, otp: emailOtp })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                if (data.token) loginWithToken(data.token);
+                setEmail(newEmail);
+                setShowEmailModal(false);
+                setNewEmail('');
+                setEmailOtp('');
+                setOtpSent(false);
+                showToast('Email updated successfully!');
+            } else {
+                showToast(data.detail || 'Invalid verification code.', 'error');
+            }
+        } catch (err) {
+            showToast('Error verifying email change.', 'error');
+        } finally {
+            setVerifyingEmail(false);
+        }
+    };
+
     const [deleteConfirm, setDeleteConfirm] = useState('');
 
     const handleSaveProfile = async () => {
@@ -426,8 +494,7 @@ const AccountSettings = () => {
                 body: JSON.stringify(user?.role === 'business' ? {
                     clinic_name: clinicName || null,
                     clinic_phone: clinicPhone || null,
-                    first_name: ownerFullName || null, // Map to first_name for owner
-                    email: email || null,
+                    first_name: ownerFullName || null,
                     loyalty_points_per_peso: parseFloat(loyaltyPointsPerPeso.toString()),
                     loyalty_points_per_reservation: parseInt(loyaltyPointsPerReservation.toString()),
                     clinic_house_number: clinicHouseNumber || null,
@@ -443,18 +510,17 @@ const AccountSettings = () => {
                     clinic_region: clinicRegion || null,
                     clinic_lat: clinicLat,
                     clinic_lng: clinicLng,
+                    phone: phone || null
                 } : user?.role === 'rider' ? {
                     first_name: firstName || null,
                     last_name: lastName || null,
                     suffix: suffix || null,
-                    email: email || null,
                     phone: phone || null,
                 } : {
                     first_name: firstName || null,
                     middle_name: middleName || null,
                     last_name: lastName || null,
                     suffix: suffix || null,
-                    email: email || null,
                     phone: phone || null,
                     gender: gender || null,
                     birthday: birthday || null,
@@ -462,9 +528,7 @@ const AccountSettings = () => {
             });
             if (res.ok) {
                 const data = await res.json();
-                if (data.token) {
-                    loginWithToken(data.token);
-                }
+                if (data.token) loginWithToken(data.token);
                 showToast('Profile updated successfully!');
             } else {
                 const errorData = await res.json().catch(() => ({}));
@@ -518,8 +582,16 @@ const AccountSettings = () => {
 
     const handleDelete = () => {
         if (deleteConfirm !== 'DELETE') return;
-        logout();
-        navigate('/');
+        setModal({
+            isOpen: true,
+            title: 'Deactivate Account',
+            message: 'Are you sure you want to deactivate your account? This action cannot be undone.',
+            type: 'danger',
+            onConfirm: () => {
+                logout();
+                navigate('/');
+            }
+        });
     };
 
     const initials = (isBusiness ? (clinicName || user?.name || 'C') : (user?.name || user?.email || 'U')).slice(0, 2).toUpperCase();
@@ -528,7 +600,6 @@ const AccountSettings = () => {
         <DashboardLayout title="Account Settings">
             <div className="max-w-4xl mx-auto space-y-8">
 
-                {/* Toast */}
                 <AnimatePresence>
                     {toast && (
                         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
@@ -539,55 +610,49 @@ const AccountSettings = () => {
                     )}
                 </AnimatePresence>
 
-                {/* Profile Header */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-                    className="bg-brand-dark rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 text-white flex flex-col sm:flex-row items-center gap-4 sm:gap-6 relative overflow-hidden text-center sm:text-left">
-                    {user?.avatar && !isBusiness ? (
-                        <img
-                            src={user.avatar}
-                            alt={user.name}
-                            className="w-20 h-20 rounded-full object-cover ring-4 ring-white/20 shrink-0 z-10"
-                        />
-                    ) : (
-                        <div className="w-20 h-20 rounded-full bg-brand text-brand-dark flex items-center justify-center font-black text-2xl shrink-0 z-10">
-                            {initials}
-                        </div>
-                    )}
-                    <div className="z-10">
-                        <h2 className="text-2xl font-black tracking-tight">{user?.name ?? 'customer'}</h2>
-                        <p className="text-white/50 font-medium text-sm">{user?.email}</p>
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                    className="bg-brand-dark rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6 shadow-xl relative overflow-hidden">
+                    <div className="relative z-10">
+                        {user?.avatar && !isBusiness ? (
+                            <img src={user.avatar} alt={user.name} className="w-20 h-20 rounded-full object-cover ring-4 ring-white/10" />
+                        ) : (
+                            <div className="w-20 h-20 rounded-full bg-brand text-brand-dark flex items-center justify-center font-black text-2xl">
+                                {initials}
+                            </div>
+                        )}
+                    </div>
+                    <div className="relative z-10">
+                        <h2 className="text-2xl font-black text-white tracking-tight">{user?.name ?? 'Account'}</h2>
+                        <p className="text-white/50 font-bold text-xs uppercase tracking-widest mt-1">{user?.email}</p>
                     </div>
                     <div className="absolute top-0 right-0 w-64 h-64 bg-brand/10 rounded-full blur-[60px]" />
                 </motion.div>
 
-                {/* Tab nav + Content */}
                 <div className="flex flex-col lg:flex-row gap-6">
-                    {/* Sidebar nav / Tab Bar */}
                     <div className="lg:w-64 shrink-0">
-                        <div className="bg-white rounded-[2rem] p-2 sm:p-4 shadow-xl shadow-accent-brown/5 border border-white flex lg:flex-col overflow-x-auto no-scrollbar lg:overflow-visible gap-1 sm:gap-2">
-                                    {NAV.map(n => {
-                                        let label = n.label;
-                                        if (isBusiness) {
-                                            if (n.id === 'profile') label = 'Clinic Profile';
-                                            if (n.id === 'addresses') label = 'Clinic Locations';
+                        <div className="bg-white rounded-3xl p-2 border border-accent-brown/5 flex lg:flex-col overflow-x-auto no-scrollbar gap-1 shadow-sm">
+                            {NAV.map(n => {
+                                let label = n.label;
+                                if (isBusiness) {
+                                    if (n.id === 'profile') label = 'Clinic Profile';
+                                    if (n.id === 'addresses') label = 'Clinic Locations';
+                                }
+                                return (
+                                    <button key={n.id} onClick={() => {
+                                        setSection(n.id);
+                                        if (n.id === 'password' && isGoogleUser && !hasPassword) {
+                                            setShowGooglePwModal(true);
                                         }
-                                        return (
-                                            <button key={n.id} onClick={() => {
-                                                setSection(n.id);
-                                                if (n.id === 'password' && isGoogleUser && !hasPassword) {
-                                                    setShowGooglePwModal(true);
-                                                }
-                                            }}
-                                                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] sm:text-xs font-black transition-all whitespace-nowrap lg:whitespace-normal group ${section === n.id ? 'bg-brand-dark text-white' : 'text-accent-brown/50 hover:bg-accent-peach/30 hover:text-accent-brown'} ${n.id === 'danger' ? 'lg:mt-4 lg:border-t lg:border-accent-brown/5 lg:pt-4 text-red-400 hover:bg-red-50 hover:text-red-500' : ''}`}>
-                                                <n.icon className={`w-4 h-4 shrink-0 transition-transform ${section === n.id ? 'scale-110' : 'group-hover:scale-110'}`} /> 
-                                                <span>{label}</span>
-                                            </button>
-                                        );
-                                    })}
+                                    }}
+                                        className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[10px] sm:text-xs font-black transition-all whitespace-nowrap lg:whitespace-normal group ${section === n.id ? 'bg-brand-dark text-white shadow-lg shadow-brand/10' : 'text-accent-brown/50 hover:bg-accent-peach/30 hover:text-accent-brown'} ${n.id === 'danger' ? 'lg:mt-4 lg:border-t lg:border-accent-brown/5 lg:pt-4 text-red-400 hover:bg-red-50 hover:text-red-500' : ''}`}>
+                                        <n.icon className={`w-4 h-4 shrink-0 transition-transform ${section === n.id ? 'scale-110' : 'group-hover:scale-110'}`} /> 
+                                        <span>{label}</span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
-                    {/* Panel */}
                     <motion.div key={section} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
                         className="flex-1 bg-white rounded-3xl sm:rounded-[2rem] p-5 sm:p-8 shadow-xl shadow-accent-brown/5 border border-white">
 
@@ -597,7 +662,6 @@ const AccountSettings = () => {
                                 <div className="space-y-5">
                                     {isBusiness ? (
                                         <>
-                                            {/* Clinic Name & Phone */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Clinic Name</label>
@@ -610,28 +674,28 @@ const AccountSettings = () => {
                                                         className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
                                                 </div>
                                             </div>
-                                            {/* Owner Name */}
                                             <div>
                                                 <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Owner Full Name</label>
                                                 <input type="text" value={ownerFullName} onChange={e => setOwnerFullName(e.target.value)} placeholder="Juan Dela Cruz"
                                                     className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
                                             </div>
 
-
-
-                                            {/* Loyalty Settings */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-accent-brown/5">
-
                                                 <div>
                                                     <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Registered Email</label>
-                                                    <input type="email" value={email} readOnly
-                                                        className="w-full bg-accent-peach/10 border-2 border-transparent rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown/50 outline-none cursor-not-allowed" />
+                                                    <div className="relative group">
+                                                        <input type="email" value={email} onChange={e => { setEmail(e.target.value); setNewEmail(e.target.value); }}
+                                                            className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 pl-4 sm:pl-5 pr-16 sm:pr-20 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                                        <button onClick={() => { setShowEmailModal(true); setNewEmail(email); }}
+                                                            className="absolute right-5 top-1/2 -translate-y-1/2 text-[9px] font-black text-brand-dark uppercase tracking-widest hover:text-black transition-colors">
+                                                            Verify
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </>
                                     ) : (
                                         <>
-                                            {/* First & Last Name */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">First Name <span className="text-brand-dark">*</span></label>
@@ -644,7 +708,6 @@ const AccountSettings = () => {
                                                         className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
                                                 </div>
                                             </div>
-                                            {/* Middle Name & Suffix */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 {user?.role !== 'rider' && (
                                                     <div>
@@ -670,12 +733,17 @@ const AccountSettings = () => {
                                                     />
                                                 </div>
                                             </div>
-                                            {/* Email & Phone */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Email Address</label>
-                                                    <input type="email" value={email} readOnly
-                                                        className="w-full bg-accent-peach/10 border-2 border-transparent rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown/50 outline-none cursor-not-allowed" />
+                                                    <div className="relative group">
+                                                        <input type="email" value={email} onChange={e => { setEmail(e.target.value); setNewEmail(e.target.value); }}
+                                                            className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 pl-4 sm:pl-5 pr-16 sm:pr-20 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                                        <button onClick={() => { setShowEmailModal(true); setNewEmail(email); }}
+                                                            className="absolute right-5 top-1/2 -translate-y-1/2 text-[9px] font-black text-brand-dark uppercase tracking-widest hover:text-black transition-colors">
+                                                            Verify
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 <div>
                                                     <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Contact Number</label>
@@ -689,7 +757,6 @@ const AccountSettings = () => {
                                                     </div>
                                                 </div>
                                             </div>
-                                            {/* Gender & Birthday */}
                                             {user?.role !== 'rider' && (
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                     <div>
@@ -718,8 +785,8 @@ const AccountSettings = () => {
                                         </>
                                     )}
                                     <button onClick={handleSaveProfile} disabled={savingProfile}
-                                        className="mt-2 flex items-center gap-2 bg-brand-dark text-white px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors disabled:opacity-50">
-                                        {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Save Changes
+                                        className="mt-2 flex items-center gap-2 bg-brand-dark text-white px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50 shadow-lg shadow-brand/10">
+                                        {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} Save Changes
                                     </button>
                                 </div>
                             </div>
@@ -736,7 +803,7 @@ const AccountSettings = () => {
                                         onClick={() => {
                                             setEditingAddr(null);
                                             setAddrForm({
-                                                full_name: user?.name || '',
+                                                full_name: clinicName || user?.name || '',
                                                 phone: user?.phone || '',
                                                 address_line1: '',
                                                 address_line2: '',
@@ -753,7 +820,7 @@ const AccountSettings = () => {
                                                 region: '',
                                                 lat: null,
                                                 lng: null,
-                                                label: 'Home',
+                                                label: isBusiness ? 'Branch' : 'Home',
                                                 is_default: false,
                                                 delivery_notes: ''
                                             });
@@ -830,7 +897,7 @@ const AccountSettings = () => {
                                                                         method: 'DELETE',
                                                                         headers: { 'Authorization': `Bearer ${user?.token}` }
                                                                     });
-                                                                    if (res.ok) { fetchAddresses(); setConfirmModal(null); }
+                                                                    if (res.ok) { fetchAddresses(); setModal(m => ({ ...m, isOpen: false })); }
                                                                 }
                                                             );
                                                         }}
@@ -969,7 +1036,7 @@ const AccountSettings = () => {
                                                 <p className="font-black text-accent-brown text-sm">{n.label}</p>
                                                 <p className="text-xs text-accent-brown/40 font-medium mt-0.5">{n.sub}</p>
                                             </div>
-                                            <Toggle checked={notifs[n.key]} onChange={() => setNotifs(p => ({ ...p, [n.key]: !p[n.key] }))} />
+                                            <Toggle checked={notifs[n.key as keyof typeof notifs]} onChange={() => setNotifs(p => ({ ...p, [n.key]: !p[n.key as keyof typeof notifs] }))} />
                                         </div>
                                     ))}
                                 </div>
@@ -1008,7 +1075,6 @@ const AccountSettings = () => {
                     </motion.div>
                 </div>
 
-                {/* Google Password Modal */}
                 <AnimatePresence>
                     {showGooglePwModal && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
@@ -1045,10 +1111,9 @@ const AccountSettings = () => {
                     )}
                 </AnimatePresence>
 
-                {/* Address Modal */}
                 <AnimatePresence>
                     {showAddrModal && (
-                        <div className="fixed inset-0 z-[110] flex items-center justify-center px-4">
+                        <div className="fixed inset-0 z-[110] flex items-start justify-center px-4 pt-20 sm:pt-32 overflow-y-auto pb-10">
                             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                                 onClick={() => setShowAddrModal(false)} className="absolute inset-0 bg-accent-brown/60 backdrop-blur-md" />
                             <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }}
@@ -1060,23 +1125,16 @@ const AccountSettings = () => {
                                             <p className="text-xs font-bold text-accent-brown/30 uppercase tracking-widest mt-1">{isBusiness ? 'Branch Details' : 'Delivery Details'}</p>
                                         </div>
                                         <button onClick={() => setShowAddrModal(false)} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-accent-brown/30 hover:text-brand-dark transition-all shadow-sm">
-                                            <Trash2 className="w-5 h-5" />
+                                            <X className="w-5 h-5" />
                                         </button>
                                     </div>
 
                                     <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1 custom-scrollbar">
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">{isBusiness ? 'Clinic Name' : 'Contact Name'}</label>
-                                                {isBusiness ? (
-                                                    <div className="w-full bg-accent-peach/5 border-2 border-dashed border-accent-brown/10 rounded-2xl py-4 px-5 flex items-center gap-2 cursor-not-allowed">
-                                                        <span className="text-sm font-bold text-accent-brown/60">{clinicName || 'Clinic'}</span>
-                                                        <span className="ml-auto text-[8px] font-black uppercase tracking-widest text-accent-brown/20">read only</span>
-                                                    </div>
-                                                ) : (
-                                                    <input type="text" value={addrForm.full_name} onChange={e => setAddrForm({ ...addrForm, full_name: e.target.value })} placeholder="Full Name"
-                                                        className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm" />
-                                                )}
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">{isBusiness ? 'Branch/Clinic Name' : 'Contact Name'}</label>
+                                                <input type="text" value={addrForm.full_name} onChange={e => setAddrForm({ ...addrForm, full_name: e.target.value })} placeholder={isBusiness ? "e.g. Main Branch" : "Full Name"}
+                                                    className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm" />
                                             </div>
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Phone Number</label>
@@ -1114,7 +1172,6 @@ const AccountSettings = () => {
                                             <p className="text-[9px] font-bold text-accent-brown/30 uppercase tracking-widest pl-1 italic">Note: Searching will auto-fill basic location. Click the pin to edit granular details manually.</p>
                                         </div>
 
-                                        {/* Display of current address (Confirming what was entered in map) */}
                                         <div className="p-6 bg-accent-peach/5 rounded-[2rem] border border-accent-peach/10 space-y-4">
                                              <div className="space-y-1">
                                                 <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Precise Address Confirmation</p>
@@ -1124,7 +1181,6 @@ const AccountSettings = () => {
                                             </div>
                                         </div>
 
-                                        {/* Delivery Notes / Landmark Instructions */}
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Delivery Notes / Landmark Instructions</label>
                                             <textarea 
@@ -1136,21 +1192,13 @@ const AccountSettings = () => {
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-4 pt-2">
-                                            {(isBusiness ? ['Main', 'Branch'] : ['Home', 'Work']).map(l => (
+                                            {(isBusiness ? ['Branch'] : ['Home', 'Work']).map(l => (
                                                 <button key={l} onClick={() => setAddrForm({ ...addrForm, label: l })}
                                                     className={`py-4 rounded-2xl text-xs font-black uppercase tracking-widest border-2 transition-all ${addrForm.label === l ? 'border-brand bg-brand/5 text-brand-dark shadow-lg shadow-brand/5' : 'border-transparent bg-white text-accent-brown/30 hover:bg-accent-peach/10'}`}>
                                                     {l}
                                                 </button>
                                             ))}
                                         </div>
-
-                                        <label className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-accent-peach/10 cursor-pointer group">
-                                            <input type="checkbox" checked={addrForm.is_default} onChange={e => setAddrForm({ ...addrForm, is_default: e.target.checked })} className="hidden" />
-                                            <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${addrForm.is_default ? 'bg-brand border-brand text-brand-dark' : 'border-accent-brown/10 group-hover:border-brand/30'}`}>
-                                                {addrForm.is_default && <Check className="w-4 h-4" />}
-                                            </div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown">{isBusiness ? 'Set as Main Branch' : 'Set as Default Address'}</span>
-                                        </label>
 
                                         <button
                                             onClick={async () => {
@@ -1159,7 +1207,6 @@ const AccountSettings = () => {
                                                     return;
                                                 }
                                                 
-                                                // Construct readable address lines for legacy fields
                                                 const line1 = [addrForm.house_number, addrForm.block_number, addrForm.street, addrForm.subdivision].filter(Boolean).join(' ');
                                                 const line2 = [addrForm.barangay, addrForm.city, addrForm.province, addrForm.zip_code].filter(Boolean).join(', ');
 
@@ -1191,18 +1238,22 @@ const AccountSettings = () => {
                                                 const baseUrl = isBusiness ? 'http://localhost:8000/api/business/branches' : 'http://localhost:8000/api/customer/addresses';
                                                 const url = editingAddr ? `${baseUrl}/${editingAddr.id}` : baseUrl;
                                                 
-                                                const res = await fetch(url, {
-                                                    method: editingAddr ? 'PUT' : 'POST',
-                                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user?.token}` },
-                                                    body: JSON.stringify(body)
-                                                });
-                                                 if (res.ok) {
-                                                    fetchAddresses();
-                                                    setShowAddrModal(false);
-                                                    showToast(`${isBusiness ? 'Branch' : 'Address'} ${editingAddr ? 'updated' : 'saved'} successfully!`);
-                                                } else {
-                                                    const errorData = await res.json().catch(() => ({}));
-                                                    showToast(errorData.detail || 'Failed to sync details.', 'error');
+                                                try {
+                                                    const res = await fetch(url, {
+                                                        method: editingAddr ? 'PUT' : 'POST',
+                                                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user?.token}` },
+                                                        body: JSON.stringify(body)
+                                                    });
+                                                    if (res.ok) {
+                                                        fetchAddresses();
+                                                        setShowAddrModal(false);
+                                                        showToast(`${isBusiness ? 'Branch' : 'Address'} ${editingAddr ? 'updated' : 'saved'} successfully!`);
+                                                    } else {
+                                                        const errorData = await res.json().catch(() => ({}));
+                                                        showToast(errorData.detail || 'Failed to sync details.', 'error');
+                                                    }
+                                                } catch (err) {
+                                                    showToast('An error occurred during synchronization.', 'error');
                                                 }
                                             }}
                                             className="w-full bg-brand-dark text-white py-5 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-black transition-all shadow-xl shadow-brand-dark/10"
@@ -1218,52 +1269,7 @@ const AccountSettings = () => {
 
             </div>
 
-            {/* ── Custom Confirm Modal ── */}
-            <AnimatePresence>
-                {confirmModal?.open && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-                        onClick={() => setConfirmModal(null)}
-                    >
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                            onClick={e => e.stopPropagation()}
-                            className="bg-white rounded-[2rem] shadow-2xl shadow-black/20 p-8 max-w-sm w-full flex flex-col items-center gap-6"
-                        >
-                            <div className="w-16 h-16 rounded-[1.25rem] bg-red-50 flex items-center justify-center">
-                                <AlertTriangle className="w-8 h-8 text-red-500" />
-                            </div>
-                            <div className="text-center space-y-2">
-                                <h3 className="font-black text-accent-brown text-lg tracking-tight">{confirmModal.title}</h3>
-                                <p className="text-sm font-medium text-accent-brown/50 leading-relaxed">{confirmModal.message}</p>
-                            </div>
-                            <div className="flex gap-3 w-full">
-                                <button
-                                    onClick={() => setConfirmModal(null)}
-                                    className="flex-1 py-4 bg-accent-peach/10 text-accent-brown font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-accent-peach/20 transition-all"
-                                >
-
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={confirmModal.onConfirm}
-                                    className="flex-1 py-4 bg-red-500 text-white font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
-                                >
-                                    Remove
-                                </button>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            <MapPickerModal
+             <MapPickerModal
                 isOpen={showMapPicker}
                 onClose={() => setShowMapPicker(false)}
                 initialLocation={(pickerMode === 'main' ? (clinicLat && clinicLng ? { lat: clinicLat, lng: clinicLng } : undefined) : (addrForm.lat && addrForm.lng ? { lat: addrForm.lat, lng: addrForm.lng } : undefined))}
@@ -1287,22 +1293,86 @@ const AccountSettings = () => {
                             ...prev,
                             lat,
                             lng,
-                            house_number: granular.houseNumber,
-                            block_number: granular.blockNumber,
-                            street: granular.street,
-                            subdivision: granular.subdivision,
-                            sitio: granular.sitio,
-                            barangay: granular.barangay,
-                            city: granular.city,
-                            district: granular.district,
-                            province: granular.province,
-                            zip_code: granular.zip,
-                            region: granular.region
+                            house_number: granular.houseNumber || '',
+                            block_number: granular.blockNumber || '',
+                            street: granular.street || '',
+                            subdivision: granular.subdivision || '',
+                            sitio: granular.sitio || '',
+                            barangay: granular.barangay || '',
+                            city: granular.city || '',
+                            district: granular.district || '',
+                            province: granular.province || '',
+                            zip_code: granular.zip || '',
+                            region: granular.region || ''
                         }));
                     }
                 }}
             />
 
+            <AnimatePresence>
+                {showEmailModal && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-accent-brown/40 backdrop-blur-md">
+                        <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            className="bg-white rounded-[2.5rem] w-full max-w-md p-8 sm:p-10 shadow-2xl relative overflow-hidden">
+                            
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-brand/5 rounded-full -mr-16 -mt-16" />
+                            
+                            <h3 className="text-2xl font-black text-accent-brown tracking-tighter mb-2 relative">Change Email</h3>
+                            <p className="text-xs font-bold text-accent-brown/40 uppercase tracking-widest mb-8 relative">Verify your new email address</p>
+
+                            <div className="space-y-6 relative">
+                                {!otpSent ? (
+                                    <>
+                                        <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">New Email Address</label>
+                                            <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="new-email@example.com"
+                                                className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all" />
+                                        </div>
+                                        <button onClick={handleRequestEmailChange} disabled={sendingOtp}
+                                            className="w-full bg-brand-dark text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-xl shadow-brand/10">
+                                            {sendingOtp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />} Send Verification Code
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">New Email</label>
+                                            <div className="bg-accent-peach/10 py-3 px-5 rounded-2xl text-xs font-bold text-accent-brown/50 border-2 border-dashed border-accent-peach/30">{newEmail}</div>
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Verification Code</label>
+                                            <input type="text" maxLength={6} value={emailOtp} onChange={e => setEmailOtp(e.target.value.replace(/\D/g, ''))} placeholder="000000"
+                                                className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 px-5 text-center text-2xl font-black tracking-[1em] text-brand-dark outline-none transition-all" />
+                                        </div>
+                                        <button onClick={handleVerifyEmailChange} disabled={verifyingEmail}
+                                            className="w-full bg-brand-dark text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-xl shadow-brand/10">
+                                            {verifyingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} Verify & Update Email
+                                        </button>
+                                        <button onClick={() => setOtpSent(false)} className="w-full text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-accent-brown transition-colors">
+                                            Use a different email
+                                        </button>
+                                    </>
+                                )}
+
+                                <button onClick={() => { setShowEmailModal(false); setOtpSent(false); setNewEmail(''); setEmailOtp(''); }} 
+                                    className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-accent-brown/30 hover:bg-accent-peach/10 transition-all border-2 border-accent-peach/20 hover:border-transparent">
+                                    Cancel
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <ModernModal
+                isOpen={modal.isOpen}
+                onClose={() => setModal(m => ({ ...m, isOpen: false }))}
+                onConfirm={modal.onConfirm}
+                title={modal.title}
+                message={modal.message}
+                type={modal.type}
+            />
         </DashboardLayout>
     );
 };

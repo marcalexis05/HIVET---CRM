@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DashboardLayout from '../../components/DashboardLayout';
-import { ShoppingBag, Package, Truck, CheckCircle, XCircle, AlertCircle, ChevronRight, MapPin, Eye, Store, User, Phone, ShieldCheck, X, MessageSquare, ShieldAlert, Clock, CreditCard, Tag } from 'lucide-react';
+import { ShoppingBag, Package, Truck, CheckCircle, XCircle, AlertCircle, ChevronRight, MapPin, Eye, Store, User, Phone, ShieldCheck, X, MessageSquare, ShieldAlert, Clock, CreditCard, Tag, Loader2 } from 'lucide-react';
 import { Map, AdvancedMarker, InfoWindow, useMap, APIProvider } from '@vis.gl/react-google-maps';
+import ModernModal from '../../components/ModernModal';
 
 interface OrderItem {
     id: number;
@@ -92,6 +93,12 @@ const CustomerOrders = () => {
     const [activeMarker, setActiveMarker] = useState<'branch' | 'delivery' | null>(null);
     const [panoPosition, setPanoPosition] = useState<{ lat: number, lng: number } | null>(null);
     const [panoPov, setPanoPov] = useState<{ heading: number, pitch: number }>({ heading: 0, pitch: 0 });
+    const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'info' | 'success' | 'error' | 'confirm' | 'danger'; onConfirm?: () => void }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
 
     // Cleanup street view on unmount
     useEffect(() => {
@@ -100,7 +107,8 @@ const CustomerOrders = () => {
         };
     }, []);
 
-    const tabs = ['All', 'Pending', 'Processing', 'Completed', 'Cancelled'];
+    const [payNowLoading, setPayNowLoading] = useState<number | null>(null);
+    const tabs = ['All', 'Pending', 'Processing', 'Completed', 'Cancelled', 'Payment Pending'];
 
     // Update Street View Position when target changes (Consistent with Checkout)
     useEffect(() => {
@@ -207,6 +215,40 @@ const CustomerOrders = () => {
             }
         } catch (error) {
             console.error('Error deleting order:', error);
+            setModal({
+                isOpen: true,
+                title: 'Error',
+                message: 'Could not remove this order. Please try again.',
+                type: 'error'
+            });
+        }
+    };
+
+    const handlePayExistingOrder = async (orderId: number) => {
+        setPayNowLoading(orderId);
+        try {
+            const token = localStorage.getItem('hivet_token');
+            const res = await fetch('http://localhost:8000/api/payments/paymongo/order-recheckout', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ order_id: orderId, payment_method: 'gcash' })
+            });
+            if (!res.ok) throw new Error('Failed to create payment session');
+            const data = await res.json();
+            window.location.href = data.checkout_url;
+        } catch (error) {
+            console.error('Error initiating payment:', error);
+            setModal({
+                isOpen: true,
+                title: 'Payment Error',
+                message: 'Could not initiate payment. Please try again.',
+                type: 'error'
+            });
+        } finally {
+            setPayNowLoading(null);
         }
     };
 
@@ -222,6 +264,7 @@ const CustomerOrders = () => {
             case 'Processing': return <Truck className="w-5 h-5 text-blue-500" />;
             case 'Completed': return <CheckCircle className="w-5 h-5 text-emerald-500" />;
             case 'Cancelled': return <XCircle className="w-5 h-5 text-red-500" />;
+            case 'Payment Pending': return <CreditCard className="w-5 h-5 text-blue-500" />;
             default: return <AlertCircle className="w-5 h-5 text-gray-500" />;
         }
     };
@@ -326,11 +369,13 @@ const CustomerOrders = () => {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
-                                        <span className={`px-3 sm:px-4 py-1.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${order.status === 'Completed' ? 'bg-emerald-100 text-emerald-600' :
+                                        <span className={`px-3 sm:px-4 py-1.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${
+                                            order.status === 'Completed' ? 'bg-emerald-100 text-emerald-600' :
                                             order.status === 'Cancelled' ? 'bg-red-100 text-red-600' :
-                                                order.status === 'Pending' ? 'bg-amber-100 text-amber-600' :
-                                                    'bg-blue-100 text-blue-600'
-                                            }`}>
+                                            order.status === 'Pending' ? 'bg-amber-100 text-amber-600' :
+                                            order.status === 'Payment Pending' ? 'bg-blue-100 text-blue-700 animate-pulse' :
+                                            'bg-blue-100 text-blue-600'
+                                        }`}>
                                             {order.status}
                                         </span>
                                         {order.status === 'Cancelled' && (
@@ -386,17 +431,37 @@ const CustomerOrders = () => {
                                         </div>
                                     </div>
                                     <div className="flex flex-col xs:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-                                        {order.status === 'Pending' && (
+                                        {(order.status === 'Pending' || order.status === 'Payment Pending') && (
                                             <motion.button
                                                 whileHover={{ scale: 1.05 }}
                                                 whileTap={{ scale: 0.95 }}
-                                                onClick={() => {
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
                                                     setSelectedOrder(order);
                                                     setIsCancelModalOpen(true);
                                                 }}
                                                 className="w-full xs:w-auto px-6 py-3 bg-white border-2 border-red-50 text-red-500 rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all shadow-sm cursor-pointer"
                                             >
                                                 Cancel Order
+                                            </motion.button>
+                                        )}
+                                        {order.status === 'Payment Pending' && (
+                                            <motion.button
+                                                whileHover={{ scale: 1.05 }}
+                                                whileTap={{ scale: 0.95 }}
+                                                disabled={payNowLoading === order.id}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handlePayExistingOrder(order.id);
+                                                }}
+                                                className="w-full xs:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer"
+                                            >
+                                                {payNowLoading === order.id ? (
+                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                ) : (
+                                                    <CreditCard className="w-3 h-3" />
+                                                )}
+                                                Pay Now
                                             </motion.button>
                                         )}
                                         <motion.button 
@@ -1092,6 +1157,15 @@ const CustomerOrders = () => {
                     </div>
                 )}
             </AnimatePresence>
+            {/* Global Modal */}
+            <ModernModal
+                isOpen={modal.isOpen}
+                onClose={() => setModal(m => ({ ...m, isOpen: false }))}
+                onConfirm={modal.onConfirm}
+                title={modal.title}
+                message={modal.message}
+                type={modal.type}
+            />
         </DashboardLayout>
     );
 };

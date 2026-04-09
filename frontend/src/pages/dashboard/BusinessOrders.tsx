@@ -5,6 +5,7 @@ import { Search, Eye, CheckCircle, XCircle, Clock, Loader2, ChevronDown, Chevron
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { CustomDropdown } from '../../components/CustomDropdown';
+import BranchSelector from '../../components/BranchSelector';
 
 // ALL_ORDERS moved to state
 
@@ -27,6 +28,11 @@ const FULFILLMENT_FILTERS = ['All', 'Delivery', 'Pickup'];
 
 const BusinessOrders = () => {
     const { user } = useAuth();
+    const [branchId, setBranchId] = useState<number | null>(() => {
+        const saved = localStorage.getItem('hivet_selected_branch');
+        if (saved === 'all') return null;
+        return saved ? parseInt(saved) : null;
+    });
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -45,12 +51,17 @@ const BusinessOrders = () => {
         if (user?.token) {
             fetchOrders();
         }
-    }, [user?.token]);
+    }, [user?.token, branchId]);
 
     const fetchOrders = async () => {
         setLoading(true);
         try {
-            const resp = await fetch('http://localhost:8000/api/business/orders', {
+            let url = 'http://localhost:8000/api/business/orders';
+            const params = new URLSearchParams();
+            if (branchId) params.append('branch_id', branchId.toString());
+            if (params.toString()) url += `?${params.toString()}`;
+
+            const resp = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${user?.token}` }
             });
             if (resp.ok) {
@@ -79,6 +90,14 @@ const BusinessOrders = () => {
     return (
         <DashboardLayout title="Orders">
             <div className="space-y-6">
+
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 className="text-3xl font-black text-accent-brown tracking-tighter">Order Logistics</h2>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 mt-1">Real-time fulfillment tracking per branch</p>
+                    </div>
+                    {user?.token && <BranchSelector token={user.token} onBranchChange={setBranchId} currentBranchId={branchId} />}
+                </div>
 
                 {/* Controls */}
                 <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white rounded-2xl p-4 shadow-xl shadow-accent-brown/5 border border-white">

@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, MapPin, Calendar, Clock, ChevronRight, Plus, X, AlertCircle, CheckCircle, Loader2, CalendarX, Clock3 } from 'lucide-react';
+import { Package, MapPin, Calendar, Clock, ChevronRight, Plus, X, AlertCircle, CheckCircle, Loader2, CalendarX, Clock3, CreditCard, Smartphone, Banknote, ShieldCheck, Gift, Sparkles } from 'lucide-react';
+import { APIProvider, useMapsLibrary } from '@vis.gl/react-google-maps';
+import ModernModal from '../../components/ModernModal';
 import DashboardLayout from '../../components/DashboardLayout';
 import { CustomDatePicker } from '../../components/CustomDatePicker';
 import { CustomDropdown } from '../../components/CustomDropdown';
+import { useAuth } from '../../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -18,6 +21,16 @@ interface Branch {
     lng?: number;
 }
 
+interface ClinicService {
+    id: number;
+    name: string;
+    price: number;
+    description: string | null;
+    duration_minutes: number;
+    is_package: boolean;
+    package_items_json: string | null;
+}
+
 interface Clinic {
     id: number;
     name: string;
@@ -28,9 +41,17 @@ interface Clinic {
     lat?: number;
     lng?: number;
     branches: Branch[];
-    services: { id: number; name: string; price: number; description: string | null; duration_minutes: number }[];
+    services: ClinicService[];
     hours: { day_of_week: number; day_name: string; is_open: boolean; open_time: string; close_time: string; break_start: string | null; break_end: string | null }[];
     special_hours: { specific_date: string; is_open: boolean; open_time: string; close_time: string; break_start: string | null; break_end: string | null }[];
+}
+
+interface Voucher {
+    id: number;
+    title: string;
+    code: string;
+    type: string;
+    value: number;
 }
 
 // A flattened selectable option combining clinic + branch
@@ -59,6 +80,7 @@ interface Reservation {
     date: string;
     time: string;
     status: string;
+    payment_status: string;
     location: string;
     notes: string;
     total: number;
@@ -66,8 +88,9 @@ interface Reservation {
 }
 
 const STATUS_STYLES: Record<string, string> = {
+    'Payment Pending': 'bg-blue-100 text-blue-700',
     'Pending': 'bg-yellow-100 text-yellow-700',
-    'Confirmed': 'bg-blue-100 text-blue-700',
+    'Confirmed': 'bg-emerald-100 text-emerald-700',
     'Ready for Pickup': 'bg-green-100 text-green-700',
     'Completed': 'bg-accent-brown/5 text-accent-brown/40',
     'Cancelled': 'bg-red-100 text-red-500',
@@ -92,7 +115,36 @@ const defaultForm = {
 
 const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
+const StreetViewInner = ({ lat, lng }: { lat: number; lng: number }) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const streetViewLib = useMapsLibrary('streetView');
+
+    useEffect(() => {
+        if (!streetViewLib || !containerRef.current) return;
+        new streetViewLib.StreetViewPanorama(containerRef.current, {
+            position: { lat, lng },
+            disableDefaultUI: true,
+            linksControl: false,
+            panControl: false,
+            addressControl: false,
+            pov: { heading: 151.78, pitch: -0.76 },
+            zoom: 1,
+        });
+    }, [streetViewLib, lat, lng]);
+
+    return <div ref={containerRef} className="w-full h-full" />;
+};
+
+const InteractiveStreetView = ({ lat, lng }: { lat: number; lng: number }) => {
+    return (
+        <APIProvider apiKey={MAPS_API_KEY}>
+            <StreetViewInner lat={lat} lng={lng} />
+        </APIProvider>
+    );
+};
+
 const CustomerReservations = () => {
+    const { user } = useAuth();
     const [reservations, setReservations] = useState<Reservation[]>([]);
     const [clinics, setClinics] = useState<Clinic[]>([]);
     const [loading, setLoading] = useState(true);
@@ -104,6 +156,26 @@ const CustomerReservations = () => {
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [showBranches, setShowBranches] = useState(false);
     const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'gcash' | 'paymaya' | 'cash'>('gcash');
+    const [payNowLoading, setPayNowLoading] = useState<number | null>(null);
+    const [selectedDetail, setSelectedDetail] = useState<Reservation | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [activeStatus, setActiveStatus] = useState('All');
+    const [showPackageExplorer, setShowPackageExplorer] = useState(false);
+    const [myVouchers, setMyVouchers] = useState<Voucher[]>([]);
+    const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
+    const [applyingVoucher, setApplyingVoucher] = useState(false);
+    const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'info' | 'success' | 'error' | 'confirm' | 'danger'; onConfirm?: () => void }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+    const ITEMS_PER_PAGE = 5;
+
+
+
+    const tabs = ['All', 'Pending', 'Confirmed', 'Completed', 'Cancelled', 'Payment Pending'];
 
     const token = localStorage.getItem('hivet_token');
     const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
@@ -112,6 +184,8 @@ const CustomerReservations = () => {
         setToast({ msg, type });
         setTimeout(() => setToast(null), 3500);
     };
+
+
 
     // Build flat clinic options list containing all branches so selectedOption works correctly
     const allClinicOptions: ClinicOption[] = clinics.flatMap(c => {
@@ -153,8 +227,16 @@ const CustomerReservations = () => {
 
     const selectedOption: ClinicOption | null = allClinicOptions.find(o => o.key === form.clinic_option_key) || null;
     const availableServices = selectedOption?.services || [];
+    
+    // Robust check for packages (boolean flag + name matching)
+    const isPackageService = (s: ClinicService) => s.is_package || s.name.toLowerCase().includes('package');
+    
+    const regularServices = availableServices.filter(s => !isPackageService(s));
+    const packageServices = availableServices.filter(s => isPackageService(s));
+    
     const selectedService = availableServices.find(s => s.id === form.service_id) || null;
-    const estimatedTotal = selectedService?.price || 0;
+    const baseTotal = selectedService?.price || 0;
+    const estimatedTotal = appliedVoucher ? 0 : baseTotal; // Assuming Service vouchers make it free
 
     // Hours for the selected date (Checks special overrides first)
     const todayHours = (() => {
@@ -183,7 +265,7 @@ const CustomerReservations = () => {
     // Clear selected time if it becomes unavailable
     useEffect(() => {
         if (!form.time || !form.date || !form.clinic_id) return;
-        
+
         const isStillAvailable = BASE_TIMES.filter(t => {
             const isBooked = bookedSlots.includes(t);
             let isPast = false;
@@ -197,7 +279,7 @@ const CustomerReservations = () => {
                 slotDate.setHours(hourInt, parseInt(m), 0, 0);
                 isPast = slotDate.getTime() < new Date().getTime();
             } catch { return false; }
-            
+
             let outsideHours = false;
             if (todayHours && todayHours.is_open) {
                 try {
@@ -239,11 +321,37 @@ const CustomerReservations = () => {
                 if (resRes.ok) { const d = await resRes.json(); setReservations(d.reservations || []); }
                 else { setError('Could not load reservations. Please log in again.'); }
                 if (clinicsRes.ok) { const d = await clinicsRes.json(); setClinics(d.clinics || []); }
+                
+                // Fetch Vouchers
+                const loyaltyRes = await fetch(`${API}/api/loyalty`, { headers: authHeaders });
+                if (loyaltyRes.ok) {
+                    const lData = await loyaltyRes.json();
+                    setMyVouchers((lData.my_vouchers || []).filter((v: Voucher) => v.type === 'Service'));
+                }
             } catch { setError('Could not connect to the server.'); }
             finally { setLoading(false); }
         };
         fetchData();
     }, []);
+
+    // Derived filtering and pagination data
+    const filteredReservations = reservations.filter(res => {
+        if (activeStatus === 'All') return true;
+        return res.status === activeStatus;
+    });
+
+    const totalPages = Math.ceil(filteredReservations.length / ITEMS_PER_PAGE);
+    const paginatedReservations = filteredReservations.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE,
+        currentPage * ITEMS_PER_PAGE
+    );
+
+    // Reset to page 1 if search/filter or deletions make current page invalid
+    useEffect(() => {
+        if (currentPage > totalPages && totalPages > 0) {
+            setCurrentPage(totalPages);
+        }
+    }, [filteredReservations.length, totalPages, currentPage]);
 
     const activeReservation = reservations.find(r => r.status === 'Ready for Pickup' || r.status === 'Confirmed' || r.status === 'Pending');
 
@@ -255,6 +363,7 @@ const CustomerReservations = () => {
         }
         setSubmitting(true);
         try {
+            // Step 1 — create the reservation (Payment Pending)
             const payload = {
                 pet_name: form.pet_name,
                 service: form.service,
@@ -264,35 +373,103 @@ const CustomerReservations = () => {
                 location: selectedOption ? `${selectedOption.address_line1}, ${selectedOption.address_line2}`.replace(/,\s*,/g, ',').trim() : '',
                 notes: form.notes,
                 business_id: form.clinic_id || null,
+                branch_id: selectedOption?.branch_id || null,
                 total_amount: estimatedTotal,
+                voucher_code: appliedVoucher?.code || null,
             };
             const res = await fetch(`${API}/api/reservations`, { method: 'POST', headers: authHeaders, body: JSON.stringify(payload) });
-            if (!res.ok) throw new Error();
+            if (!res.ok) throw new Error('Failed to create reservation');
             const data = await res.json();
-            setReservations(prev => [data.reservation, ...prev]);
-            setShowModal(false);
-            setForm(defaultForm);
-            showToast('Reservation created successfully!');
-        } catch {
-            showToast('Failed to create reservation. Please try again.', 'error');
+            const newReservation = data.reservation;
+            setReservations(prev => [newReservation, ...prev]);
+
+            if (selectedPaymentMethod === 'cash') {
+                // Cash: confirm immediately (no PayMongo), reservation becomes Pending
+                await fetch(`${API}/api/payments/paymongo/reservation-confirm/${newReservation.db_id}`, {
+                    method: 'POST',
+                    headers: authHeaders,
+                });
+                // Update local state to show Pending status
+                setReservations(prev => prev.map(r =>
+                    r.db_id === newReservation.db_id ? { ...r, status: 'Pending', payment_status: 'paid' } : r
+                ));
+                setShowModal(false);
+                setForm(defaultForm);
+                showToast('Reservation booked! Please pay cash at the clinic.');
+            } else {
+                // Step 2 — create PayMongo checkout and redirect
+                const payRes = await fetch(`${API}/api/payments/paymongo/reservation-checkout`, {
+                    method: 'POST',
+                    headers: authHeaders,
+                    body: JSON.stringify({ reservation_id: newReservation.db_id, payment_method: selectedPaymentMethod }),
+                });
+                if (!payRes.ok) {
+                    const err = await payRes.json();
+                    throw new Error(err.detail || 'Failed to create payment session');
+                }
+                const payData = await payRes.json();
+                setShowModal(false);
+                setForm(defaultForm);
+                setAppliedVoucher(null);
+                
+                if (payData.checkout_url) {
+                    window.location.href = payData.checkout_url;
+                }
+            }
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+            showToast(msg, 'error');
         } finally {
             setSubmitting(false);
         }
     };
 
-    const handleCancel = async (dbId: number) => {
-        setCancellingId(dbId);
+    const handlePayExisting = async (reservationDbId: number, method: 'gcash' | 'paymaya' = 'gcash') => {
+        setPayNowLoading(reservationDbId);
         try {
-            const res = await fetch(`${API}/api/reservations/${dbId}/cancel`, { method: 'PATCH', headers: authHeaders });
-            if (!res.ok) throw new Error();
+            const res = await fetch(`${API}/api/payments/paymongo/reservation-checkout`, {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({ reservation_id: reservationDbId, payment_method: method }),
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || 'Failed to create payment session');
+            }
             const data = await res.json();
-            setReservations(prev => prev.map(r => r.db_id === dbId ? { ...r, ...data.reservation } : r));
-            showToast('Reservation cancelled.');
-        } catch {
-            showToast('Could not cancel this reservation.', 'error');
+            if (data.checkout_url) {
+                window.location.href = data.checkout_url;
+            }
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Payment failed.';
+            showToast(msg, 'error');
         } finally {
-            setCancellingId(null);
+            setPayNowLoading(null);
         }
+    };
+
+    const handleCancel = async (dbId: number) => {
+        setModal({
+            isOpen: true,
+            title: 'Cancel Reservation',
+            message: 'Are you sure you want to cancel this reservation?',
+            type: 'confirm',
+            onConfirm: async () => {
+                setModal(m => ({ ...m, isOpen: false }));
+                setCancellingId(dbId);
+                try {
+                    const res = await fetch(`${API}/api/reservations/${dbId}/cancel`, { method: 'PATCH', headers: authHeaders });
+                    if (!res.ok) throw new Error();
+                    const data = await res.json();
+                    setReservations(prev => prev.map(r => r.db_id === dbId ? { ...r, ...data.reservation } : r));
+                    showToast('Reservation cancelled.');
+                } catch {
+                    showToast('Could not cancel this reservation.', 'error');
+                } finally {
+                    setCancellingId(null);
+                }
+            }
+        });
     };
 
     const handleDeleteReservation = async (dbId: number) => {
@@ -324,7 +501,7 @@ const CustomerReservations = () => {
                 {/* Header Bar */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                     <p className="text-sm font-medium text-accent-brown/50">{reservations.length} reservation{reservations.length !== 1 ? 's' : ''} total</p>
-                    <motion.button 
+                    <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => setShowModal(true)}
@@ -365,7 +542,7 @@ const CustomerReservations = () => {
                         className="bg-brand-dark rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-12 text-white relative overflow-hidden flex flex-col lg:flex-row lg:items-center justify-between gap-8">
                         <div className="relative z-10 w-full lg:w-2/3">
                             <div className="flex items-center gap-3 mb-4">
-                                <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${activeReservation.status === 'Ready for Pickup' ? 'bg-green-500/20 text-green-300 border-green-500/30' : activeReservation.status === 'Confirmed' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'}`}>
+                                <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${activeReservation.status === 'Ready for Pickup' ? 'bg-green-500/20 text-green-300 border-green-500/30' : activeReservation.status === 'Confirmed' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30'}`}>
                                     {activeReservation.status}
                                 </span>
                                 <span className="text-[10px] font-black uppercase tracking-widest text-white/50">Order {activeReservation.id}</span>
@@ -387,16 +564,16 @@ const CustomerReservations = () => {
                             <div className="flex items-center gap-3 text-sm font-bold text-white mb-6">
                                 <Clock className="w-4 h-4 text-brand" /> {activeReservation.time}
                             </div>
-                            {(activeReservation.status === 'Pending' || activeReservation.status === 'Confirmed') && (
-                                <motion.button 
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => handleCancel(activeReservation.db_id)} 
+                            {(activeReservation.status === 'Pending' || activeReservation.status === 'Confirmed' || activeReservation.status === 'Payment Pending') && (
+                                <motion.button
+                                    whileHover={{ scale: 1.02, backgroundColor: 'rgba(255, 255, 255, 0.2)' }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={() => handleCancel(activeReservation.db_id)}
                                     disabled={cancellingId === activeReservation.db_id}
-                                    className="w-full bg-red-500/20 text-red-300 border border-red-500/30 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                    className="w-full bg-white/10 backdrop-blur-md text-white border border-white/30 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:border-white/50 transition-all flex items-center justify-center gap-3 cursor-pointer shadow-lg"
                                 >
-                                    {cancellingId === activeReservation.db_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
-                                    Cancel Reservation
+                                    {cancellingId === activeReservation.db_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4 text-white" />}
+                                    <span>Cancel Reservation</span>
                                 </motion.button>
                             )}
                         </div>
@@ -404,77 +581,219 @@ const CustomerReservations = () => {
                     </motion.div>
                 )}
 
-                {/* Reservation History */}
+                {/* Status Tabs */}
                 {!loading && !error && reservations.length > 0 && (
-                    <div>
-                        <h3 className="text-xl font-black text-accent-brown tracking-tighter mb-6">All Reservations</h3>
-                        <div className="space-y-4">
-                            {reservations.map((res, i) => (
-                                <motion.div 
-                                    key={res.id} 
-                                    initial={{ opacity: 0, x: -20 }} 
-                                    animate={{ opacity: 1, x: 0 }} 
-                                    whileHover={{ scale: 1.01, borderColor: '#ff9f1c', boxShadow: '0 20px 25px -5px rgba(61, 43, 31, 0.05)' }}
-                                    whileTap={{ scale: 0.99 }}
-                                    transition={{ delay: i * 0.08 }}
-                                    className="bg-white rounded-2xl p-4 sm:p-6 shadow-xl shadow-accent-brown/5 border border-white transition-all flex flex-col md:flex-row md:items-center justify-between gap-6 group cursor-pointer"
-                                >
-                                    <div className="flex items-start gap-4">
-                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${STATUS_STYLES[res.status]}`}>
-                                            <Package className="w-6 h-6" />
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-3 mb-1">
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">{res.id}</span>
-                                                <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${STATUS_STYLES[res.status]}`}>{res.status}</span>
-                                            </div>
-                                            <p className="font-bold text-accent-brown mb-1">{res.service} — {res.pet_name}</p>
-                                            <div className="flex items-center flex-wrap gap-4 text-[10px] font-black uppercase tracking-widest text-accent-brown/40">
-                                                <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {res.date} · {res.time}</span>
-                                                {res.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {res.location}</span>}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center border-t md:border-t-0 md:border-l border-accent-brown/10 pt-4 md:pt-0 md:pl-6 gap-3">
-                                        <div className="flex items-center gap-2">
-                                            {res.status === 'Cancelled' && (
-                                                <motion.button
-                                                    whileHover={{ scale: 1.1, rotate: 90 }}
-                                                    whileTap={{ scale: 0.9 }}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleDeleteReservation(res.db_id);
-                                                    }}
-                                                    className="w-7 h-7 bg-brand-dark text-white rounded-full flex items-center justify-center hover:bg-black transition-all shadow-md cursor-pointer"
-                                                    title="Remove reservation"
-                                                >
-                                                    <X className="w-3.5 h-3.5" />
-                                                </motion.button>
-                                            )}
-                                            <p className="font-black text-accent-brown text-lg">₱{res.total.toFixed(2)}</p>
-                                        </div>
-                                        {(res.status === 'Pending' || res.status === 'Confirmed') ? (
-                                            <motion.button 
-                                                whileHover={{ scale: 1.1 }}
-                                                whileTap={{ scale: 0.9 }}
-                                                onClick={() => handleCancel(res.db_id)} 
-                                                disabled={cancellingId === res.db_id}
-                                                className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-600 transition-all cursor-pointer"
-                                            >
-                                                {cancellingId === res.db_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
-                                                Cancel
-                                            </motion.button>
-                                        ) : (
-                                            <div className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-brand-dark group-hover:text-brand transition-colors cursor-pointer">
-                                                View Details <ChevronRight className="w-3 h-3" />
-                                            </div>
-                                        )}
-                                    </div>
-                                </motion.div>
-                            ))}
-                        </div>
+                    <div className="flex flex-wrap items-center gap-2 pb-2">
+                        {tabs.map((tab) => (
+                            <motion.button
+                                key={tab}
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => {
+                                    setActiveStatus(tab);
+                                    setCurrentPage(1);
+                                }}
+                                className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+                                    activeStatus === tab 
+                                    ? 'bg-brand-dark text-white shadow-lg shadow-brand-dark/20' 
+                                    : 'bg-white text-accent-brown/50 hover:bg-accent-peach/30 hover:text-accent-brown border border-accent-brown/5'
+                                }`}
+                            >
+                                {tab}
+                                {activeStatus === tab && ` (${filteredReservations.length})`}
+                            </motion.button>
+                        ))}
                     </div>
                 )}
+
+                {/* Reservation History */}
+                {!loading && !error && reservations.length > 0 && (
+                    <>
+                        <div>
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-xl font-black text-accent-brown tracking-tighter">
+                                {activeStatus === 'All' ? 'All Reservations' : `${activeStatus} Reservations`}
+                            </h3>
+                            <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest">
+                                {filteredReservations.length} result{filteredReservations.length !== 1 ? 's' : ''}
+                            </p>
+                        </div>
+                        
+                        {filteredReservations.length === 0 ? (
+                            <div className="bg-white rounded-[2rem] p-16 flex flex-col items-center gap-6 text-center shadow-xl shadow-accent-brown/5 border border-white">
+                                <div className="w-16 h-16 bg-accent-peach/20 rounded-full flex items-center justify-center text-accent-brown/30">
+                                    <X className="w-8 h-8" />
+                                </div>
+                                <div>
+                                    <h4 className="font-black text-accent-brown text-lg uppercase tracking-tight mb-2">No {activeStatus.toLowerCase()} reservations</h4>
+                                    <p className="text-accent-brown/50 text-sm font-medium">We couldn't find any reservations with this status.</p>
+                                </div>
+                                <button onClick={() => setActiveStatus('All')} className="text-[10px] font-black uppercase tracking-widest text-brand-dark hover:text-brand transition-colors cursor-pointer">Clear Filter</button>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {paginatedReservations.map((res, i) => (
+                                    <motion.div
+                                        key={res.id}
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        whileHover={{ scale: 1.01, borderColor: '#ff9f1c', boxShadow: '0 20px 25px -5px rgba(61, 43, 31, 0.05)' }}
+                                        whileTap={{ scale: 0.99 }}
+                                        transition={{ delay: i * 0.08 }}
+                                        className="bg-white rounded-2xl p-4 sm:p-6 shadow-xl shadow-accent-brown/5 border border-white transition-all flex flex-col md:flex-row md:items-center justify-between gap-6 group cursor-pointer"
+                                    >
+                                        <div className="flex items-start gap-4">
+                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${STATUS_STYLES[res.status]}`}>
+                                                <Package className="w-6 h-6" />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-3 mb-1">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">{res.id}</span>
+                                                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${STATUS_STYLES[res.status]}`}>{res.status}</span>
+                                                </div>
+                                                <p className="font-bold text-accent-brown mb-1">{res.service} — {res.pet_name}</p>
+                                                <div className="flex items-center flex-wrap gap-4 text-[10px] font-black uppercase tracking-widest text-accent-brown/40">
+                                                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {res.date} · {res.time}</span>
+                                                    {res.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {res.location}</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center border-t md:border-t-0 md:border-l border-accent-brown/10 pt-4 md:pt-0 md:pl-6 gap-3">
+                                            <div className="flex gap-2">
+                                                {res.payment_status === 'unpaid' && res.status !== 'Cancelled' && (
+                                                    <button
+                                                        onClick={() => handlePayExisting(res.db_id, res.total > 0 ? (selectedPaymentMethod !== 'cash' ? (selectedPaymentMethod as any) : 'gcash') : 'gcash')}
+                                                        className="px-4 py-2 bg-[#ea580c] text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-[#c2410c] transition-all flex items-center gap-2 shadow-sm"
+                                                    >
+                                                        {payNowLoading === res.db_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CreditCard className="w-3 h-3" />}
+                                                        Pay Now
+                                                    </button>
+                                                )}
+                                                {res.status === 'Cancelled' && (
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.1, rotate: 90 }}
+                                                        whileTap={{ scale: 0.9 }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteReservation(res.db_id);
+                                                        }}
+                                                        className="w-7 h-7 bg-brand-dark text-white rounded-full flex items-center justify-center hover:bg-black transition-all shadow-md cursor-pointer"
+                                                        title="Remove reservation"
+                                                    >
+                                                        <X className="w-3.5 h-3.5" />
+                                                    </motion.button>
+                                                )}
+                                                <p className="font-black text-accent-brown text-lg">₱{res.total.toFixed(2)}</p>
+                                            </div>
+
+                                            {res.status === 'Payment Pending' ? (
+                                                <div className="flex flex-col items-center md:items-end gap-2">
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.05 }}
+                                                        whileTap={{ scale: 0.97 }}
+                                                        onClick={(e) => { e.stopPropagation(); handlePayExisting(res.db_id, 'gcash'); }}
+                                                        disabled={payNowLoading === res.db_id}
+                                                        className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-all cursor-pointer shadow-md shadow-blue-500/20 disabled:opacity-60"
+                                                    >
+                                                        {payNowLoading === res.db_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CreditCard className="w-3 h-3" />}
+                                                        Pay Now
+                                                    </motion.button>
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.1 }}
+                                                        whileTap={{ scale: 0.9 }}
+                                                        onClick={(e) => { e.stopPropagation(); handleCancel(res.db_id); }}
+                                                        disabled={cancellingId === res.db_id}
+                                                        className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-600 transition-all cursor-pointer"
+                                                    >
+                                                        {cancellingId === res.db_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                                                        Cancel
+                                                    </motion.button>
+                                                </div>
+                                            ) : (res.status === 'Pending' || res.status === 'Confirmed') ? (
+                                                <motion.button
+                                                    whileHover={{ scale: 1.1 }}
+                                                    whileTap={{ scale: 0.9 }}
+                                                    onClick={(e) => { e.stopPropagation(); handleCancel(res.db_id); }}
+                                                    disabled={cancellingId === res.db_id}
+                                                    className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-600 transition-all cursor-pointer"
+                                                >
+                                                    {cancellingId === res.db_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                                                    Cancel
+                                                </motion.button>
+                                            ) : res.status === 'Cancelled' ? (
+                                                <motion.button
+                                                    whileHover={{ scale: 1.05 }}
+                                                    whileTap={{ scale: 0.97 }}
+                                                    onClick={(e) => { e.stopPropagation(); setSelectedDetail(res); }}
+                                                    className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-accent-brown transition-colors cursor-pointer"
+                                                >
+                                                    View Details <ChevronRight className="w-3 h-3" />
+                                                </motion.button>
+                                            ) : (
+                                                <motion.button
+                                                    whileHover={{ scale: 1.05 }}
+                                                    whileTap={{ scale: 0.97 }}
+                                                    onClick={(e) => { e.stopPropagation(); setSelectedDetail(res); }}
+                                                    className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-brand-dark group-hover:text-brand transition-colors cursor-pointer"
+                                                >
+                                                    View Details <ChevronRight className="w-3 h-3" />
+                                                </motion.button>
+                                            )}
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Pagination Controls */}
+                        {filteredReservations.length > 0 && (
+                            <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 py-4 border-t border-accent-brown/5">
+                                <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest">
+                                    Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredReservations.length)} of {filteredReservations.length}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <motion.button
+                                        whileHover={currentPage > 1 ? { scale: 1.05 } : {}}
+                                        whileTap={currentPage > 1 ? { scale: 0.95 } : {}}
+                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                        className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white text-accent-brown/50 border border-accent-brown/5 hover:bg-accent-peach/20 hover:text-accent-brown transition-all disabled:opacity-30 disabled:hover:bg-white cursor-pointer"
+                                    >
+                                        Prev
+                                    </motion.button>
+                                    
+                                    {[...Array(totalPages)].map((_, i) => {
+                                        const page = i + 1;
+                                        return (
+                                            <motion.button
+                                                key={page}
+                                                whileHover={{ scale: 1.1 }}
+                                                whileTap={{ scale: 0.9 }}
+                                                onClick={() => setCurrentPage(page)}
+                                                className={`w-8 h-8 rounded-xl text-[10px] font-black transition-all ${currentPage === page ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'bg-white text-accent-brown/40 border border-accent-brown/5 hover:bg-accent-peach/20'}`}
+                                            >
+                                                {page}
+                                            </motion.button>
+                                        );
+                                    })}
+
+                                    <motion.button
+                                        whileHover={currentPage < totalPages ? { scale: 1.05 } : {}}
+                                        whileTap={currentPage < totalPages ? { scale: 0.95 } : {}}
+                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white text-brand-dark border border-brand/10 hover:bg-brand/10 transition-all disabled:opacity-30 disabled:hover:bg-white cursor-pointer"
+                                    >
+                                        Next
+                                    </motion.button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    </>
+                )}
+
+            </div>
 
                 {/* New Reservation Modal */}
                 <AnimatePresence>
@@ -483,371 +802,678 @@ const CustomerReservations = () => {
                             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowModal(false)} className="fixed inset-0 bg-accent-brown/20 backdrop-blur-sm z-50 cursor-pointer" />
                             <motion.div initial={{ scale: 0.95, opacity: 0, y: 100 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 100 }}
                                 className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={e => e.stopPropagation()}>
-                                <div className="bg-white rounded-t-[2rem] sm:rounded-[2rem] p-0 w-full max-w-4xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+                                <div className="bg-white rounded-t-[2rem] sm:rounded-[2rem] p-0 w-full max-w-6xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
                                     <div className="flex flex-row items-center justify-between p-5 xs:p-6 sm:p-8 border-b border-accent-brown/5 shrink-0 bg-accent-peach/5 gap-4">
                                         <div className="min-w-0">
                                             <h2 className="text-xl sm:text-2xl font-black text-accent-brown tracking-tighter">New Reservation</h2>
                                             <p className="text-[10px] sm:text-xs font-black text-accent-brown/50 mt-1 uppercase tracking-widest">Book an appointment</p>
                                         </div>
-                                        <motion.button 
+                                        <motion.button
                                             whileHover={{ scale: 1.1, rotate: 90 }}
                                             whileTap={{ scale: 0.9 }}
-                                            onClick={() => setShowModal(false)} 
+                                            onClick={() => setShowModal(false)}
                                             className="w-10 h-10 bg-white hover:bg-red-50 text-accent-brown/50 hover:text-red-500 rounded-xl flex items-center justify-center transition-all shadow-sm shrink-0 cursor-pointer"
                                         >
                                             <X className="w-5 h-5" />
                                         </motion.button>
                                     </div>
 
-                                    <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 xs:p-6 sm:p-8 no-scrollbar">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-                                            {/* Left Column: Form Selections */}
-                                            <div className="space-y-6 px-1">
-                                                {/* Pet Name */}
-                                                <div>
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-2 block pl-1">Pet Name *</label>
-                                                    <input required type="text" value={form.pet_name}
-                                                        onChange={e => setForm(f => ({ ...f, pet_name: e.target.value }))}
-                                                        placeholder="e.g. Max"
-                                                        className="w-full px-5 py-4 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-2xl text-sm font-bold text-accent-brown outline-none transition-all placeholder:text-accent-brown/30 hover:bg-accent-peach/20" />
-                                                </div>
-
-                                                {/* Clinic / Branch Selection */}
-                                                <div>
-                                                    {clinics.length === 0 ? (
-                                                        <div className="px-5 py-4 bg-accent-peach/10 rounded-2xl text-sm text-accent-brown/40 font-medium border border-dashed border-accent-peach/30 text-center">No verified clinics available yet.</div>
-                                                    ) : (
-                                                        <CustomDropdown
-                                                            label="Clinic"
-                                                            value={form.clinic_id ? form.clinic_id.toString() : ''}
-                                                            options={clinics.map(c => ({
-                                                                label: c.name,
-                                                                value: c.id.toString()
-                                                            }))}
-                                                            onChange={val => {
-                                                                const c = clinics.find(cl => cl.id.toString() === val);
-                                                                const mainBranch = c?.branches?.find(b => b.is_main || b.name.toLowerCase().includes('main')) || c?.branches?.[0];
-                                                                setForm(f => ({ 
-                                                                    ...f, 
-                                                                    clinic_id: c?.id || 0,
-                                                                    clinic_option_key: mainBranch ? `${c?.id}-${mainBranch.id}` : `${c?.id}-main`,
-                                                                    service: '', 
-                                                                    service_id: 0 
-                                                                }));
-                                                            }}
-                                                        />
-                                                    )}
-                                                </div>
-
-                                                {/* Service Selection */}
-                                                {selectedOption && (
-                                                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                                                        {availableServices.length === 0 ? (
-                                                            <div className="px-5 py-4 bg-accent-peach/10 rounded-2xl text-sm text-accent-brown/40 font-medium border border-dashed border-accent-peach/30 text-center">No services offered by this clinic yet.</div>
+                                    <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar">
+                                        <div className="flex flex-col lg:flex-row">
+                                            {/* LEFT SIDEBAR: Setup & Previews */}
+                                            <div className="w-full lg:w-[380px] bg-accent-peach/5 border-r border-accent-brown/5 p-6 sm:p-8 space-y-6">
+                                                <div className="space-y-6">
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#ea580c] mb-4">1. Select Clinic & Service</p>
+                                                    
+                                                    {/* Clinic / Branch Selection */}
+                                                    <div>
+                                                        {clinics.length === 0 ? (
+                                                            <div className="px-5 py-4 bg-accent-peach/10 rounded-2xl text-sm text-accent-brown/40 font-medium border border-dashed border-accent-peach/30 text-center">No verified clinics available yet.</div>
                                                         ) : (
                                                             <CustomDropdown
-                                                                label="Service"
-                                                                value={selectedService ? `${selectedService.name} — ₱${selectedService.price}` : 'Select a service...'}
-                                                                options={availableServices.map(s => `${s.name} — ₱${s.price}`)}
+                                                                label="Provider Clinic"
+                                                                value={form.clinic_id ? form.clinic_id.toString() : ''}
+                                                                options={clinics.map(c => ({
+                                                                    label: c.name,
+                                                                    value: c.id.toString()
+                                                                }))}
                                                                 onChange={val => {
-                                                                    const svc = availableServices.find(s => `${s.name} — ₱${s.price}` === val);
-                                                                    setForm(f => ({ ...f, service: svc?.name || '', service_id: svc?.id || 0 }));
+                                                                    const c = clinics.find(cl => cl.id.toString() === val);
+                                                                    const mainBranch = c?.branches?.find(b => b.is_main || b.name.toLowerCase().includes('main')) || c?.branches?.[0];
+                                                                    setForm(f => ({
+                                                                        ...f,
+                                                                        clinic_id: c?.id || 0,
+                                                                        clinic_option_key: mainBranch ? `${c?.id}-${mainBranch.id}` : `${c?.id}-main`,
+                                                                        service: '',
+                                                                        service_id: 0
+                                                                    }));
                                                                 }}
                                                             />
                                                         )}
-                                                        {selectedService?.description && (
-                                                            <p className="mt-2 text-[10px] sm:text-xs text-accent-brown/40 font-medium px-4 leading-relaxed border-l-2 border-brand/20 ml-1 italic">{selectedService.description}</p>
-                                                        )}
-                                                    </motion.div>
-                                                )}
+                                                    </div>
 
-                                                {/* Notes */}
-                                                <div>
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-2 block pl-1">Notes (optional)</label>
-                                                    <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any special requirements..."
-                                                        className="w-full h-24 px-5 py-4 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-2xl text-sm font-medium text-accent-brown outline-none transition-all resize-none placeholder:text-accent-brown/30 hover:bg-accent-peach/20" />
+                                                    {/* Service & Package Selection */}
+                                                    {selectedOption && (
+                                                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+                                                            <div className="space-y-3">
+                                                                <CustomDropdown
+                                                                    label="Desired Service"
+                                                                    value={selectedService && !isPackageService(selectedService) ? `${selectedService.name} — ₱${selectedService.price}` : 'Select a service...'}
+                                                                    options={regularServices.map(s => `${s.name} — ₱${s.price}`)}
+                                                                    onChange={val => {
+                                                                        const svc = regularServices.find(s => `${s.name} — ₱${s.price}` === val);
+                                                                        setForm(f => ({ ...f, service: svc?.name || '', service_id: svc?.id || 0 }));
+                                                                    }}
+                                                                />
+                                                                
+                                                                {packageServices.length > 0 && (
+                                                                    <div className="pt-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setShowPackageExplorer(true)}
+                                                                            className="w-full py-4 px-6 bg-white border-2 border-[#ea580c]/20 hover:border-[#ea580c]/50 text-[#ea580c] rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-between group shadow-sm hover:shadow-md"
+                                                                        >
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className="w-8 h-8 bg-[#ea580c]/10 rounded-lg flex items-center justify-center group-hover:bg-[#ea580c] transition-colors">
+                                                                                    <Package className="w-4 h-4 text-[#ea580c] group-hover:text-white" />
+                                                                                </div>
+                                                                                <span>Browse Clinic Packages</span>
+                                                                            </div>
+                                                                            <ChevronRight className="w-4 h-4 opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                                                                        </button>
+                                                                        {selectedService && isPackageService(selectedService) && (
+                                                                            <div className="mt-3 p-5 bg-[#ea580c]/5 border border-[#ea580c]/20 rounded-2xl space-y-3">
+                                                                                <div className="flex items-center justify-between">
+                                                                                    <div className="flex items-center gap-3">
+                                                                                        <CheckCircle className="w-4 h-4 text-[#ea580c]" />
+                                                                                        <span className="text-xs font-bold text-accent-brown">Selected: {selectedService.name}</span>
+                                                                                    </div>
+                                                                                    <button type="button" onClick={() => setForm(f => ({ ...f, service: '', service_id: 0 }))} className="text-[10px] font-black uppercase text-[#ea580c]/60 hover:text-[#ea580c]">Remove</button>
+                                                                                </div>
+                                                                                
+                                                                                {/* Inclusions in main form */}
+                                                                                {(() => {
+                                                                                    let items = [];
+                                                                                    try { items = selectedService.package_items_json ? JSON.parse(selectedService.package_items_json) : []; } catch { items = []; }
+                                                                                    if (items.length > 0) {
+                                                                                        return (
+                                                                                            <div className="pt-2 border-t border-[#ea580c]/10">
+                                                                                                <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest mb-2">Package Inclusions:</p>
+                                                                                                <div className="flex flex-wrap gap-1.5">
+                                                                                                    {items.map((item: string, idx: number) => (
+                                                                                                        <span key={idx} className="px-2 py-1 bg-white border border-[#ea580c]/10 text-[#ea580c] rounded-md text-[9px] font-bold">
+                                                                                                            {item}
+                                                                                                        </span>
+                                                                                                    ))}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        );
+                                                                                    }
+                                                                                    return null;
+                                                                                })()}
+                                                                            </div>
+                                                                        )}
+
+                                                                    </div>
+                                                                )}
+
+                                                                {selectedService?.description && !isPackageService(selectedService) && (
+                                                                    <p className="mt-3 text-[10px] text-accent-brown/40 font-medium px-4 leading-relaxed border-l-2 border-brand/20 ml-1 italic">{selectedService.description}</p>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Selected Clinic Location Info Card */}
+                                                            {selectedOption && (() => {
+                                                                const selectedClinic = clinics.find(c => c.id === selectedOption.clinic_id);
+                                                                const mainBranch = selectedClinic?.branches?.find(b => b.is_main || b.name.toLowerCase().includes('main')) || selectedClinic?.branches?.[0];
+                                                                const otherBranches = selectedClinic?.branches?.filter(b => b.id !== selectedOption.branch_id) || [];
+                                                                return (
+                                                                    <div className="space-y-4">
+                                                                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                                                                            className="bg-white border border-accent-brown/5 rounded-2xl p-5 flex items-start gap-4 shadow-sm relative overflow-hidden">
+                                                                            <div className="absolute top-0 right-0 w-24 h-24 bg-brand/5 rounded-full blur-3xl -mr-12 -mt-12" />
+                                                                            <div className="w-10 h-10 bg-accent-peach/10 rounded-xl flex items-center justify-center shrink-0 z-10">
+                                                                                <MapPin className="w-5 h-5 text-brand" />
+                                                                            </div>
+                                                                            <div className="min-w-0 z-10">
+                                                                                <h4 className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30 mb-2">Clinic Information</h4>
+                                                                                <p className="text-sm font-black text-accent-brown leading-tight mb-1 flex items-center gap-2">
+                                                                                    {selectedOption.branch_id === (mainBranch?.id ?? null)
+                                                                                        ? selectedOption.clinic_name
+                                                                                        : `${selectedOption.clinic_name}`}
+                                                                                </p>
+                                                                                <p className="text-[10px] font-bold text-accent-brown/50 leading-relaxed">
+                                                                                    {selectedOption.address_line1 && <span className="block">{selectedOption.address_line1}</span>}
+                                                                                    <span className="block">{selectedOption.address_line2}</span>
+                                                                                </p>
+                                                                                {selectedOption.phone && (
+                                                                                    <div className="mt-3">
+                                                                                        <span className="text-[9px] font-black text-[#ea580c] uppercase tracking-wider bg-[#ea580c]/5 px-2 py-1 rounded-md">{selectedOption.phone}</span>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </motion.div>
+
+                                                                        {/* Street View Preview */}
+                                                                        {selectedOption.lat && selectedOption.lng && (
+                                                                            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                                                                                className="bg-white border border-accent-brown/5 rounded-2xl p-1 gap-4 shadow-sm overflow-hidden group">
+                                                                                <div className="w-full aspect-video rounded-xl overflow-hidden bg-accent-peach/10 relative">
+                                                                                    <InteractiveStreetView lat={selectedOption.lat} lng={selectedOption.lng} />
+                                                                                    <div className="absolute top-2 left-2 px-2 py-1 bg-white/90 backdrop-blur-sm rounded-lg shadow-sm border border-accent-brown/5">
+                                                                                        <p className="text-[8px] font-black uppercase tracking-widest text-accent-brown">Live Street View</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </motion.div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </motion.div>
+                                                    )}
                                                 </div>
                                             </div>
 
-                                            {/* Right Column: Scheduling & Info Cards */}
-                                            <div className="space-y-6">
-                                                {/* Date & Time */}
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <CustomDatePicker label="Date" value={form.date} onChange={val => setForm(f => ({ ...f, date: val }))} minDate={new Date().toISOString().split('T')[0]} />
-                                                    </div>
-                                                    <div>
-                                                        <CustomDropdown
-                                                            label="Time"
-                                                            value={form.time}
-                                                            options={BASE_TIMES.filter(t => {
-                                                                let isPast = false;
-                                                                if (form.date) {
-                                                                    try {
-                                                                        const [hourMin, meridiem] = t.split(' ');
-                                                                        const [h, m] = hourMin.split(':');
-                                                                        let hourInt = parseInt(h);
-                                                                        if (meridiem === 'PM' && hourInt !== 12) hourInt += 12;
-                                                                        if (meridiem === 'AM' && hourInt === 12) hourInt = 0;
-                                                                        const slotDate = new Date(form.date);
-                                                                        slotDate.setHours(hourInt, parseInt(m), 0, 0);
-                                                                        isPast = slotDate.getTime() < new Date().getTime();
-                                                                    } catch { /* ignore */ }
-                                                                }
-                                                                
-                                                                let outsideHours = false;
-                                                                if (todayHours && todayHours.is_open) {
-                                                                    try {
-                                                                        const parseT = (s: string) => {
-                                                                            const [hm, mer] = s.split(' ');
-                                                                            let [h, min] = hm.split(':').map(Number);
-                                                                            if (mer === 'PM' && h !== 12) h += 12;
-                                                                            if (mer === 'AM' && h === 12) h = 0;
-                                                                            return h * 60 + min;
-                                                                        };
-                                                                        const slotMins = parseT(t);
-                                                                        const openMins = parseT(todayHours.open_time);
-                                                                        const closeMins = parseT(todayHours.close_time);
-                                                                            
-                                                                        if (slotMins < openMins || slotMins >= closeMins) outsideHours = true;
-                                                                        
-                                                                        if (todayHours.break_start && todayHours.break_end) {
-                                                                            const bStart = parseT(todayHours.break_start);
-                                                                            const bEnd = parseT(todayHours.break_end);
-                                                                            if (slotMins >= bStart && slotMins < bEnd) outsideHours = true;
-                                                                        }
-                                                                    } catch { /* ignore */ }
-                                                                } else if (todayHours && !todayHours.is_open) {
-                                                                    outsideHours = true;
-                                                                } else if (!todayHours) {
-                                                                    outsideHours = true;
-                                                                }
-
-                                                                // HIDE IF past or outside hours, but KEEP if booked (it will be disabled below)
-                                                                return !isPast && !outsideHours;
-                                                            }).map(t => {
-                                                                const isBooked = bookedSlots.includes(t);
-                                                                return {
-                                                                    label: t,
-                                                                    value: t,
-                                                                    disabled: isBooked,
-                                                                    badge: isBooked ? 'Booked' : undefined
-                                                                };
-                                                            })}
-                                                            onChange={val => setForm(f => ({ ...f, time: val }))}
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* Clinic Hours Info */}
-                                                {selectedOption && todayHours && (
-                                                    <div className={`p-5 rounded-2xl border-2 transition-all ${todayHours.is_open ? 'bg-green-50/50 border-green-200 shadow-sm shadow-green-200/20' : 'bg-red-50/50 border-red-200 shadow-sm shadow-red-200/20'}`}>
-                                                        <div className="flex items-center gap-3 mb-2">
-                                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${todayHours.is_open ? 'bg-green-100' : 'bg-red-100'}`}>
-                                                                <Clock3 className={`w-4 h-4 ${todayHours.is_open ? 'text-green-600' : 'text-red-500'}`} />
-                                                            </div>
-                                                            <span className={`font-black text-[10px] uppercase tracking-[0.1em] ${todayHours.is_open ? 'text-green-700' : 'text-red-600'}`}>
-                                                                {todayHours.is_open ? `Open Today` : 'Closed Today'}
-                                                            </span>
+                                            {/* RIGHT CONTENT AREA: Details & Actions */}
+                                            <div className="flex-1 p-6 sm:p-8 space-y-8">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                    {/* Section 1: Personal info & Scheduling */}
+                                                    <div className="space-y-6">
+                                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#ea580c]">2. Reservation Details</p>
+                                                        
+                                                        {/* Pet Name */}
+                                                        <div>
+                                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mb-2 block ml-1">Pet Name *</label>
+                                                            <input required type="text" value={form.pet_name}
+                                                                onChange={e => setForm(f => ({ ...f, pet_name: e.target.value }))}
+                                                                placeholder="e.g. Max"
+                                                                className="w-full px-5 py-4 bg-accent-peach/10 border-2 border-transparent focus:border-[#ea580c]/30 rounded-2xl text-sm font-bold text-accent-brown outline-none transition-all placeholder:text-accent-brown/30" />
                                                         </div>
-                                                        {todayHours.is_open && (
-                                                            <div className="text-xs font-bold text-green-700/80 pl-11">
-                                                                <p className="tracking-tight">{todayHours.open_time} – {todayHours.close_time}</p>
-                                                                {todayHours.break_start && todayHours.break_end && (
-                                                                    <p className="opacity-60 text-[10px] mt-1 flex items-center gap-1.5 font-medium italic">
-                                                                        <span className="w-1 h-1 rounded-full bg-green-300" />
-                                                                        Break: {todayHours.break_start} – {todayHours.break_end}
-                                                                    </p>
+
+                                                        {/* Date & Time */}
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <CustomDatePicker label="Preferred Date" value={form.date} onChange={val => setForm(f => ({ ...f, date: val }))} minDate={new Date().toISOString().split('T')[0]} />
+                                                            <CustomDropdown
+                                                                label="Preferred Time"
+                                                                value={form.time}
+                                                                options={BASE_TIMES.filter(t => {
+                                                                    let isPast = false;
+                                                                    if (form.date) {
+                                                                        try {
+                                                                            const [hourMin, meridiem] = t.split(' ');
+                                                                            const [h, m] = hourMin.split(':');
+                                                                            let hourInt = parseInt(h);
+                                                                            if (meridiem === 'PM' && hourInt !== 12) hourInt += 12;
+                                                                            if (meridiem === 'AM' && hourInt === 12) hourInt = 0;
+                                                                            const slotDate = new Date(form.date);
+                                                                            slotDate.setHours(hourInt, parseInt(m), 0, 0);
+                                                                            isPast = slotDate.getTime() < new Date().getTime();
+                                                                        } catch { /* ignore */ }
+                                                                    }
+                                                                    let outsideHours = false;
+                                                                    if (todayHours && todayHours.is_open) {
+                                                                        try {
+                                                                            const parseT = (s: string) => {
+                                                                                const [hm, mer] = s.split(' ');
+                                                                                let [h, min] = hm.split(':').map(Number);
+                                                                                if (mer === 'PM' && h !== 12) h += 12;
+                                                                                if (mer === 'AM' && h === 12) h = 0;
+                                                                                return h * 60 + min;
+                                                                            };
+                                                                            const slotMins = parseT(t);
+                                                                            const openMins = parseT(todayHours.open_time);
+                                                                            const closeMins = parseT(todayHours.close_time);
+                                                                            if (slotMins < openMins || slotMins >= closeMins) outsideHours = true;
+                                                                            if (todayHours.break_start && todayHours.break_end) {
+                                                                                const bStart = parseT(todayHours.break_start);
+                                                                                const bEnd = parseT(todayHours.break_end);
+                                                                                if (slotMins >= bStart && slotMins < bEnd) outsideHours = true;
+                                                                            }
+                                                                        } catch { /* ignore */ }
+                                                                    } else if (todayHours && !todayHours.is_open) { outsideHours = true; }
+                                                                    else if (!todayHours) { outsideHours = true; }
+                                                                    return !isPast && !outsideHours;
+                                                                }).map(t => {
+                                                                    const isBooked = bookedSlots.includes(t);
+                                                                    return {
+                                                                        label: t,
+                                                                        value: t,
+                                                                        disabled: isBooked,
+                                                                        badge: isBooked ? 'Booked' : undefined
+                                                                    };
+                                                                })}
+                                                                onChange={val => setForm(f => ({ ...f, time: val }))}
+                                                            />
+                                                        </div>
+
+                                                        {/* Clinic Hours Info */}
+                                                        {selectedOption && todayHours && (
+                                                            <div className={`p-5 rounded-2xl border-2 transition-all ${todayHours.is_open ? 'bg-green-50/50 border-green-200 shadow-sm' : 'bg-red-50/50 border-red-200'}`}>
+                                                                <div className="flex items-center gap-3 mb-2">
+                                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${todayHours.is_open ? 'bg-green-100' : 'bg-red-100'}`}>
+                                                                        <Clock3 className={`w-4 h-4 ${todayHours.is_open ? 'text-green-600' : 'text-red-500'}`} />
+                                                                    </div>
+                                                                    <span className={`font-black text-[10px] uppercase tracking-[0.1em] ${todayHours.is_open ? 'text-green-700' : 'text-red-600'}`}>
+                                                                        {todayHours.is_open ? `Clinic is Open Today` : 'Clinic is Closed Today'}
+                                                                    </span>
+                                                                </div>
+                                                                {todayHours.is_open && (
+                                                                    <div className="text-xs font-bold text-green-700/80 pl-11">
+                                                                        <p className="tracking-tight">{todayHours.open_time} – {todayHours.close_time}</p>
+                                                                    </div>
                                                                 )}
                                                             </div>
                                                         )}
                                                     </div>
-                                                )}
 
-                                                {/* Selected Clinic Location Info Card */}
-                                                {selectedOption && (() => {
-                                                    const selectedClinic = clinics.find(c => c.id === selectedOption.clinic_id);
-                                                    const mainBranch = selectedClinic?.branches?.find(b => b.is_main || b.name.toLowerCase().includes('main')) || selectedClinic?.branches?.[0];
-                                                    const otherBranches = selectedClinic?.branches?.filter(b => b.id !== selectedOption.branch_id) || [];
-                                                    return (
-                                                        <div className="space-y-3">
-                                                            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                                                                className="bg-brand/5 border border-brand/20 rounded-2xl p-5 flex items-start gap-5 shadow-sm shadow-brand/5 overflow-hidden relative">
-                                                                <div className="absolute top-0 right-0 w-24 h-24 bg-brand/10 rounded-full blur-3xl -mr-12 -mt-12" />
-                                                                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-md ring-1 ring-brand/10 shrink-0 z-10">
-                                                                    <MapPin className="w-6 h-6 text-brand" />
-                                                                </div>
-                                                                <div className="min-w-0 z-10">
-                                                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-brand-dark opacity-60 mb-2">Clinic Information</h4>
-                                                                    <p className="text-sm font-black text-accent-brown leading-none mb-1.5 flex items-center gap-2">
-                                                                        {selectedOption.branch_id === (mainBranch?.id ?? null) 
-                                                                            ? selectedOption.clinic_name 
-                                                                            : `${selectedOption.clinic_name} — ${selectedOption.address_line1 || 'Branch'}`}
-                                                                    </p>
-                                                                    <p className="text-[10px] font-bold text-accent-brown/60 leading-relaxed">
-                                                                        {selectedOption.address_line1 && (
-                                                                            <span className="block">{selectedOption.address_line1}</span>
-                                                                        )}
-                                                                        <span className="block">{selectedOption.address_line2}</span>
-                                                                        {selectedOption.zip && <span className="block opacity-40 font-medium">Zip: {selectedOption.zip}</span>}
-                                                                    </p>
-                                                                    {selectedOption.phone && (
-                                                                        <div className="mt-3 flex items-center gap-2">
-                                                                            <div className="px-2.5 py-1 bg-brand-dark rounded-lg">
-                                                                                <span className="text-[10px] font-black text-white uppercase tracking-wider">{selectedOption.phone}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </motion.div>
-
-                                                            {/* Street View Preview */}
-                                                            {selectedOption.lat && selectedOption.lng && (
-                                                                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                                                                    className="bg-white border-2 border-accent-peach/20 rounded-2xl p-4 shadow-xl shadow-accent-brown/[0.03] space-y-4 group overflow-hidden relative">
-                                                                    <div className="flex items-center justify-between mb-2">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <div className="w-7 h-7 bg-brand/10 rounded-lg flex items-center justify-center">
-                                                                                <MapPin className="w-4 h-4 text-brand" />
-                                                                            </div>
-                                                                            <div>
-                                                                                <h4 className="text-[10px] font-black uppercase tracking-widest text-accent-brown leading-tight">Live Street View</h4>
-                                                                                <p className="text-[8px] font-bold text-accent-brown/40 uppercase">Destination Visualization</p>
-                                                                            </div>
-                                                                        </div>
-                                                                        <button 
-                                                                            onClick={() => window.open(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${selectedOption.lat},${selectedOption.lng}`, '_blank')}
-                                                                            className="text-[9px] font-black uppercase tracking-widest text-brand-dark hover:text-brand transition-colors flex items-center gap-1.5 cursor-pointer"
-                                                                        >
-                                                                            Full Panora <Plus className="w-3 h-3" />
-                                                                        </button>
-                                                                    </div>
-                                                                    <div className="w-full aspect-[2/1] rounded-xl overflow-hidden bg-accent-peach/10 relative border border-accent-peach/10 group-hover:border-brand/30 transition-colors">
-                                                                        <img 
-                                                                            src={`https://maps.googleapis.com/maps/api/streetview?size=600x300&location=${selectedOption.lat},${selectedOption.lng}&heading=151.78&pitch=-0.76&key=${MAPS_API_KEY}`}
-                                                                            alt="Clinic Street View"
-                                                                            className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700 ease-out"
-                                                                        />
-                                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                                                                    </div>
-                                                                </motion.div>
-                                                            )}
-
-                                                            {/* See more branches */}
-                                                            {otherBranches.length > 0 && (
-                                                                <div className="space-y-2">
-                                                                    <button type="button"
-                                                                        onClick={() => setShowBranches(v => !v)}
-                                                                        className="w-full text-center text-[9px] font-black uppercase tracking-widest text-accent-brown/30 hover:text-brand-dark transition-colors py-1 flex items-center justify-center gap-2 cursor-pointer"
+                                                    {/* Section 2: Vouchers & Rewards */}
+                                                    <div className="space-y-6">
+                                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#ea580c]">3. Vouchers & Rewards</p>
+                                                        
+                                                        {myVouchers.length > 0 ? (
+                                                            <div className="space-y-3">
+                                                                {myVouchers.map((mv) => (
+                                                                    <motion.button
+                                                                        key={mv.id}
+                                                                        type="button"
+                                                                        whileHover={{ scale: 1.02 }}
+                                                                        whileTap={{ scale: 0.98 }}
+                                                                        onClick={() => setAppliedVoucher(appliedVoucher?.id === mv.id ? null : mv)}
+                                                                        className={`w-full p-4 rounded-2xl border-2 transition-all text-left flex items-start gap-4 relative overflow-hidden group ${appliedVoucher?.id === mv.id ? 'border-[#ea580c] bg-[#ea580c]/5 shadow-md' : 'border-accent-brown/5 bg-white hover:border-[#ea580c]/30 shadow-sm'}`}
                                                                     >
-                                                                        <span>{showBranches ? 'Hide other branches' : `See ${otherBranches.length} other branch${otherBranches.length > 1 ? 'es' : ''}`}</span>
-                                                                        <motion.span animate={{ rotate: showBranches ? 180 : 0 }} className="inline-block">▾</motion.span>
-                                                                    </button>
-                                                                    <AnimatePresence>
-                                                                        {showBranches && otherBranches.map(b => {
-                                                                            const isMain = b.id === mainBranch?.id;
-                                                                            const branchOpt: ClinicOption = {
-                                                                                key: `${selectedClinic!.id}-${b.id}`,
-                                                                                clinic_id: selectedClinic!.id,
-                                                                                branch_id: b.id,
-                                                                                label: `${selectedClinic!.name} — ${b.name}`,
-                                                                                address_line1: b.address_line1,
-                                                                                address_line2: b.address_line2,
-                                                                                zip: selectedClinic!.zip,
-                                                                                phone: b.phone || selectedClinic!.phone,
-                                                                                clinic_name: selectedClinic!.name,
-                                                                                services: selectedClinic!.services,
-                                                                                hours: selectedClinic!.hours,
-                                                                                special_hours: selectedClinic!.special_hours,
-                                                                            };
-                                                                            return (
-                                                                                <motion.button 
-                                                                                    key={b.id} 
-                                                                                    type="button"
-                                                                                    whileHover={{ scale: 1.02, backgroundColor: 'rgba(255, 159, 28, 0.05)', borderColor: 'rgba(255, 159, 28, 0.2)' }}
-                                                                                    whileTap={{ scale: 0.98 }}
-                                                                                    initial={{ opacity: 0, y: -8 }} 
-                                                                                    animate={{ opacity: 1, y: 0 }} 
-                                                                                    exit={{ opacity: 0, y: -8 }}
-                                                                                    onClick={() => setForm(f => ({ ...f, clinic_option_key: branchOpt.key, clinic_id: branchOpt.clinic_id, service: '', service_id: 0 }))}
-                                                                                    className="w-full text-left bg-accent-peach/5 border border-transparent rounded-2xl px-4 py-3 flex flex-col gap-0.5 transition-all cursor-pointer"
-                                                                                >
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <span className="text-xs font-black text-accent-brown capitalize">{b.address_line1?.toLowerCase() || b.name}</span>
-                                                                                        {isMain ? (
-                                                                                            <span className="text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">MAIN</span>
-                                                                                        ) : (
-                                                                                            <span className="text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 border border-blue-100">BRANCH</span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                    {b.address_line2 && (
-                                                                                        <p className="text-[9px] font-bold text-accent-brown/40 uppercase mt-0.5">
-                                                                                            <span className="block text-brand/50">{b.address_line2}</span>
-                                                                                        </p>
-                                                                                    )}
-                                                                                </motion.button>
+                                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${appliedVoucher?.id === mv.id ? 'bg-[#ea580c] text-white' : 'bg-blue-100 text-blue-600'}`}>
+                                                                            <Sparkles className="w-4 h-4" />
+                                                                        </div>
+                                                                        <div className="min-w-0 pr-6">
+                                                                            <p className={`font-black text-xs mb-0.5 truncate ${appliedVoucher?.id === mv.id ? 'text-[#ea580c]' : 'text-accent-brown'}`}>{mv.title}</p>
+                                                                            <p className="text-[9px] font-bold text-accent-brown/40 uppercase tracking-widest">{mv.code}</p>
+                                                                        </div>
+                                                                        {appliedVoucher?.id === mv.id && (
+                                                                            <div className="absolute top-3 right-3">
+                                                                                <div className="w-4 h-4 bg-[#ea580c] rounded-full flex items-center justify-center">
+                                                                                    <CheckCircle className="w-2.5 h-2.5 text-white" />
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </motion.button>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="px-6 py-8 bg-accent-peach/5 border border-dashed border-accent-peach/30 rounded-2xl flex flex-col items-center gap-2 text-center">
+                                                                <Gift className="w-8 h-8 text-accent-brown/20" />
+                                                                <p className="text-xs font-bold text-accent-brown/40 uppercase tracking-tight">No rewards available</p>
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {/* Notes */}
+                                                        <div>
+                                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mb-2 block ml-1">Special Notes</label>
+                                                            <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any specific details for the vet..."
+                                                                className="w-full h-[116px] px-5 py-4 bg-accent-peach/10 border-2 border-transparent focus:border-[#ea580c]/30 rounded-2xl text-sm font-medium text-accent-brown outline-none transition-all resize-none placeholder:text-accent-brown/30" />
+                                                        </div>
+                                                    </div>
+                                                </div>
 
-                                                                            );
-                                                                        })}
-                                                                    </AnimatePresence>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })()}
+                                                {/* Payment Method Selection */}
+                                                <div className="pt-8 border-t border-accent-brown/5">
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#ea580c] mb-5">4. Payment Method</p>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
 
-                                                {/* Service Summary Card */}
-                                                {selectedService && (
-                                                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-                                                        className="bg-white rounded-2xl p-5 border border-accent-peach/20 shadow-xl shadow-accent-brown/[0.03] space-y-3">
-                                                        <div className="flex items-center justify-between">
-                                                            <h4 className="font-black text-accent-brown text-sm tracking-tight">{selectedService.name}</h4>
-                                                            <div className="w-8 h-8 rounded-lg bg-accent-peach/10 flex items-center justify-center">
-                                                                <Package className="w-4 h-4 text-accent-brown/40" />
+                                                        
+                                                        <motion.button type="button" onClick={() => setSelectedPaymentMethod('gcash')}
+                                                            className={`relative p-5 rounded-2xl border-2 flex items-center gap-4 transition-all ${selectedPaymentMethod === 'gcash' ? 'border-blue-500 bg-blue-50/50 shadow-md' : 'border-accent-brown/5 bg-white hover:border-accent-brown/20'}`}>
+                                                            <div className="w-10 h-10 rounded-xl bg-[#007DFF]/10 flex items-center justify-center shrink-0">
+                                                                <Smartphone className="w-5 h-5 text-[#007DFF]" />
                                                             </div>
+                                                            <div className="text-left">
+                                                                <p className="font-black text-accent-brown text-sm">GCash</p>
+                                                                <p className="text-[9px] text-accent-brown/40 font-medium uppercase tracking-widest leading-none">E-Wallet</p>
+                                                            </div>
+                                                            {selectedPaymentMethod === 'gcash' && <div className="absolute top-2 right-2 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center"><CheckCircle className="w-2.5 h-2.5 text-white" /></div>}
+                                                        </motion.button>
+
+                                                        <motion.button type="button" onClick={() => setSelectedPaymentMethod('paymaya')}
+                                                            className={`relative p-5 rounded-2xl border-2 flex items-center gap-4 transition-all ${selectedPaymentMethod === 'paymaya' ? 'border-green-500 bg-green-50/50 shadow-md' : 'border-accent-brown/5 bg-white hover:border-accent-brown/20'}`}>
+                                                            <div className="w-10 h-10 rounded-xl bg-[#00A9A5]/10 flex items-center justify-center shrink-0">
+                                                                <CreditCard className="w-5 h-5 text-[#00A9A5]" />
+                                                            </div>
+                                                            <div className="text-left">
+                                                                <p className="font-black text-accent-brown text-sm">Maya</p>
+                                                                <p className="text-[9px] text-accent-brown/40 font-medium uppercase tracking-widest leading-none">E-Wallet</p>
+                                                            </div>
+                                                            {selectedPaymentMethod === 'paymaya' && <div className="absolute top-2 right-2 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center"><CheckCircle className="w-2.5 h-2.5 text-white" /></div>}
+                                                        </motion.button>
+
+                                                        <motion.button type="button" onClick={() => setSelectedPaymentMethod('cash')}
+                                                            className={`relative p-5 rounded-2xl border-2 flex items-center gap-4 transition-all col-span-1 sm:col-span-2 lg:col-span-4 ${selectedPaymentMethod === 'cash' ? 'border-amber-500 bg-amber-50/50 shadow-md' : 'border-accent-brown/5 bg-white hover:border-accent-brown/20'}`}>
+                                                            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
+                                                                <Banknote className="w-5 h-5 text-amber-600" />
+                                                            </div>
+                                                            <div className="text-left">
+                                                                <p className="font-black text-accent-brown text-sm">Cash at Clinic</p>
+                                                                <p className="text-[9px] text-accent-brown/40 font-medium uppercase tracking-widest leading-none">Pay during your visit</p>
+                                                            </div>
+                                                            {selectedPaymentMethod === 'cash' && <div className="absolute top-2 right-2 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center"><CheckCircle className="w-2.5 h-2.5 text-white" /></div>}
+                                                        </motion.button>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 text-[10px] text-accent-brown/40 font-medium px-1">
+                                                        <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
+                                                        Transactions are secured and processed immediately upon confirmation.
+                                                    </div>
+                                                </div>
+
+                                                {/* Footer Actions Inline */}
+                                                <div className="mt-8 pt-8 border-t border-accent-brown/5 flex flex-col sm:flex-row items-center justify-between gap-6 bg-accent-peach/5 p-8 rounded-3xl">
+                                                    <div className="flex items-center gap-6">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] font-black text-accent-brown/30 uppercase tracking-[0.2em] mb-1">Estimated Total</span>
+                                                            <span className="font-black text-brand-dark text-4xl leading-none">₱{estimatedTotal.toFixed(2)}</span>
                                                         </div>
-                                                        <div className="flex items-center gap-5">
-                                                            <div className="flex flex-col">
-                                                                <span className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest mb-0.5">Price</span>
-                                                                <span className="font-black text-brand-dark text-lg leading-none">₱{selectedService.price.toFixed(2)}</span>
-                                                            </div>
-                                                            <div className="w-px h-8 bg-accent-brown/5" />
-                                                            <div className="flex flex-col">
-                                                                <span className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest mb-0.5">Duration</span>
-                                                                <span className="font-bold flex items-center gap-1.5 text-accent-brown/60 text-xs">
-                                                                    <Clock className="w-3 h-3 text-brand" /> {selectedService.duration_minutes} min
-                                                                </span>
-                                                            </div>
+                                                        <div className="w-px h-12 bg-accent-brown/10 hidden sm:block" />
+                                                        <div className="hidden sm:flex flex-col">
+                                                            <span className="text-[9px] font-black text-green-600 uppercase tracking-widest mb-1">Appointment Status</span>
+                                                            <span className="text-xs font-bold text-accent-brown/60">Ready to Book</span>
                                                         </div>
-                                                    </motion.div>
-                                                )}
+                                                    </div>
+                                                    <motion.button type="submit"
+                                                        whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                                                        disabled={submitting || !form.service || !form.pet_name || !form.date || !form.clinic_id || !!(todayHours && !todayHours.is_open)}
+                                                        className="w-full sm:w-auto px-12 bg-brand-dark text-white py-5 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] hover:bg-black transition-all flex items-center justify-center gap-3 shadow-2xl shadow-brand-dark/30 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                        {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                                                        {submitting ? 'Processing...' : 'Complete Reservation'}
+                                                    </motion.button>
+                                                </div>
                                             </div>
-                                        </div>
-
-                                        {/* Footer Actions */}
-                                        <div className="mt-6 pt-6 border-t border-accent-brown/5 flex flex-col sm:flex-row items-center justify-between gap-4">
-                                            <div className="w-full sm:w-auto bg-brand/10 rounded-xl px-6 py-4 flex items-center justify-between sm:min-w-[200px] border border-brand/20">
-                                                <span className="text-[10px] font-black text-brand-dark uppercase tracking-widest">Est. Total</span>
-                                                <span className="font-black text-brand-dark text-xl">₱{estimatedTotal.toFixed(2)}</span>
-                                            </div>
-                                            <motion.button 
-                                                type="submit" 
-                                                whileHover={{ scale: 1.05 }}
-                                                whileTap={{ scale: 0.95 }}
-                                                disabled={submitting || !form.service || !form.pet_name || !form.date || !form.clinic_id || !!(todayHours && !todayHours.is_open)}
-                                                className="w-full sm:w-auto px-10 bg-brand-dark text-white py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-dark/20 disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:max-w-[300px] cursor-pointer"
-                                            >
-                                                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                                                Confirm Reservation
-                                            </motion.button>
                                         </div>
                                     </form>
+
                                 </div>
                             </motion.div>
                         </>
                     )}
                 </AnimatePresence>
-            </div>
+
+            {/* ── View Details Side Panel ───────────────────────── */}
+            <AnimatePresence>
+                {selectedDetail && (
+                    <>
+                        <motion.div
+                            key="detail-backdrop"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setSelectedDetail(null)}
+                            className="fixed inset-0 bg-accent-brown/20 backdrop-blur-sm z-50 cursor-pointer"
+                        />
+                        <motion.div
+                            key="detail-panel"
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                            transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+                            className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8 pt-20 sm:pt-24"
+                            onClick={() => setSelectedDetail(null)}
+                        >
+                        <div
+                            className="w-full max-w-lg bg-white rounded-[2rem] shadow-2xl shadow-accent-brown/15 flex flex-col max-h-[90vh] overflow-hidden"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between p-6 border-b border-accent-brown/5 bg-accent-peach/5 shrink-0">
+                                <div>
+                                    <h2 className="text-xl font-black text-accent-brown tracking-tighter">Reservation Details</h2>
+                                    <p className="text-[10px] font-black text-accent-brown/40 mt-0.5 uppercase tracking-widest">{selectedDetail.id}</p>
+                                </div>
+                                <motion.button
+                                    whileHover={{ scale: 1.1, rotate: 90 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={() => setSelectedDetail(null)}
+                                    className="w-10 h-10 bg-white hover:bg-red-50 text-accent-brown/50 hover:text-red-500 rounded-xl flex items-center justify-center transition-all shadow-sm cursor-pointer"
+                                >
+                                    <X className="w-5 h-5" />
+                                </motion.button>
+                            </div>
+
+                            {/* Body */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar">
+                                {/* Status badges */}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${STATUS_STYLES[selectedDetail.status] || 'bg-gray-100 text-gray-500'}`}>
+                                        {selectedDetail.status}
+                                    </span>
+                                    {selectedDetail.payment_status === 'paid' ? (
+                                        <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center gap-1">
+                                            <CheckCircle className="w-3 h-3" /> Paid
+                                        </span>
+                                    ) : selectedDetail.payment_status === 'unpaid' ? (
+                                        <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full bg-red-100 text-red-500">
+                                            Unpaid
+                                        </span>
+                                    ) : null}
+                                </div>
+
+                                {/* Service + Pet */}
+                                <div className="bg-accent-peach/10 rounded-2xl p-5">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 mb-1">Service</p>
+                                    <p className="font-black text-accent-brown text-lg tracking-tight">{selectedDetail.service}</p>
+                                    <p className="text-sm text-accent-brown/50 font-medium mt-0.5">for <span className="font-bold text-accent-brown">{selectedDetail.pet_name}</span></p>
+                                </div>
+
+                                {/* Date & Time */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-white border border-accent-brown/10 rounded-2xl p-4">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Calendar className="w-3.5 h-3.5 text-brand" />
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40">Date</p>
+                                        </div>
+                                        <p className="font-black text-accent-brown text-sm">{selectedDetail.date}</p>
+                                    </div>
+                                    <div className="bg-white border border-accent-brown/10 rounded-2xl p-4">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Clock className="w-3.5 h-3.5 text-brand" />
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40">Time</p>
+                                        </div>
+                                        <p className="font-black text-accent-brown text-sm">{selectedDetail.time}</p>
+                                    </div>
+                                </div>
+
+                                {/* Location */}
+                                {selectedDetail.location && (
+                                    <div className="bg-white border border-accent-brown/10 rounded-2xl p-4">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <MapPin className="w-3.5 h-3.5 text-brand" />
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40">Location</p>
+                                        </div>
+                                        <p className="font-bold text-accent-brown text-sm leading-relaxed">{selectedDetail.location}</p>
+                                    </div>
+                                )}
+
+                                {/* Notes */}
+                                {selectedDetail.notes && (
+                                    <div className="bg-white border border-accent-brown/10 rounded-2xl p-4">
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 mb-2">Special Notes</p>
+                                        <p className="text-sm text-accent-brown/70 font-medium leading-relaxed">{selectedDetail.notes}</p>
+                                    </div>
+                                )}
+
+                                {/* Total */}
+                                <div className="bg-brand/5 border border-brand/20 rounded-2xl p-5 flex items-center justify-between">
+                                    <div>
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-brand-dark/50 mb-1">Total Amount</p>
+                                        <p className="font-black text-brand-dark text-2xl">&#8369;{selectedDetail.total.toFixed(2)}</p>
+                                    </div>
+                                    {selectedDetail.payment_status === 'paid'
+                                        ? <ShieldCheck className="w-8 h-8 text-emerald-400" />
+                                        : <CreditCard className="w-8 h-8 text-accent-brown/20" />
+                                    }
+                                </div>
+
+                                {/* Meta */}
+                                <div className="text-center pt-1 pb-2">
+                                    <p className="text-[10px] text-accent-brown/30 font-medium">
+                                        Reservation ID: <span className="font-black text-accent-brown/50">{selectedDetail.id}</span>
+                                    </p>
+                                    {selectedDetail.created_at && (
+                                        <p className="text-[10px] text-accent-brown/30 font-medium mt-0.5">
+                                            Booked on {new Date(selectedDetail.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Footer actions */}
+                            <div className="p-6 border-t border-accent-brown/5 shrink-0 space-y-3">
+                                {selectedDetail.status === 'Payment Pending' && (
+                                    <motion.button
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => {
+                                            if (selectedDetail) {
+                                                const dbId = selectedDetail.db_id;
+                                                setSelectedDetail(null);
+                                                handlePayExisting(dbId, 'gcash');
+                                            }
+                                        }}
+                                        disabled={payNowLoading === selectedDetail.db_id}
+                                        className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 cursor-pointer disabled:opacity-60"
+                                    >
+                                        {payNowLoading === selectedDetail.db_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                                        Pay Now
+                                    </motion.button>
+                                )}
+                                {(selectedDetail.status === 'Pending' || selectedDetail.status === 'Confirmed') && (
+                                    <motion.button
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => {
+                                            if (selectedDetail) {
+                                                handleCancel(selectedDetail.db_id);
+                                                setSelectedDetail(null);
+                                            }
+                                        }}
+                                        disabled={cancellingId === selectedDetail.db_id}
+                                        className="w-full bg-red-50 text-red-500 border border-red-200 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-100 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                                    >
+                                        {cancellingId === selectedDetail.db_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                                        Cancel Reservation
+                                    </motion.button>
+                                )}
+                                <button
+                                    onClick={() => setSelectedDetail(null)}
+                                    className="w-full py-3 text-accent-brown/30 hover:text-accent-brown font-black uppercase tracking-widest text-[9px] transition-colors cursor-pointer"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            {/* Package Explorer Sub-Modal */}
+            <AnimatePresence>
+                {showPackageExplorer && (
+                    <>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowPackageExplorer(false)}
+                            className="fixed inset-0 bg-accent-brown/20 backdrop-blur-md z-[60]" />
+                        <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                            <div className="bg-white rounded-[2.5rem] w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden shadow-2xl border border-accent-brown/5">
+                                <div className="p-8 border-b border-accent-brown/5 flex items-center justify-between bg-accent-peach/5">
+                                    <div>
+                                        <h3 className="text-xl font-black text-accent-brown tracking-tighter">Available Packages</h3>
+                                        <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest mt-1">Select a bundle to save</p>
+                                    </div>
+                                    <button onClick={() => setShowPackageExplorer(false)} className="w-10 h-10 bg-white rounded-xl flex items-center justify-center hover:bg-accent-peach/20 transition-all shadow-sm">
+                                        <X className="w-5 h-5 text-accent-brown/40" />
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-4 bg-accent-peach/5">
+                                    {packageServices.map((pkg) => {
+                                        let items: string[] = [];
+                                        try { items = pkg.package_items_json ? JSON.parse(pkg.package_items_json) : []; } catch { items = []; }
+                                        const isSelected = form.service_id === pkg.id;
+                                        return (
+                                            <motion.button
+                                                key={pkg.id}
+                                                whileHover={{ scale: 1.01 }}
+                                                whileTap={{ scale: 0.99 }}
+                                                onClick={() => {
+                                                    setForm(f => ({ ...f, service: pkg.name, service_id: pkg.id }));
+                                                    setShowPackageExplorer(false);
+                                                }}
+                                                className={`w-full text-left p-6 rounded-[2.5rem] border-2 transition-all relative overflow-hidden group ${isSelected ? 'border-[#ea580c] bg-white shadow-xl shadow-[#ea580c]/10' : 'border-accent-brown/5 bg-white hover:border-[#ea580c]/30 hover:shadow-lg'}`}
+                                            >
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 relative z-10">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${isSelected ? 'bg-[#ea580c] text-white shadow-lg shadow-[#ea580c]/30' : 'bg-accent-peach/20 text-[#ea580c]'}`}>
+                                                            <Package className="w-7 h-7" />
+                                                        </div>
+                                                        <div>
+                                                            <h4 className={`text-xl font-black tracking-tight ${isSelected ? 'text-[#ea580c]' : 'text-accent-brown'}`}>{pkg.name}</h4>
+                                                            <div className="flex items-center gap-3 mt-1 text-accent-brown/40">
+                                                                <Clock className="w-3.5 h-3.5" />
+                                                                <span className="text-[10px] font-black uppercase tracking-widest leading-none">{pkg.duration_minutes} Mins Duration</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col items-start sm:items-end bg-accent-peach/5 px-4 py-2 rounded-xl">
+                                                        <span className="text-[9px] font-black text-accent-brown/30 uppercase tracking-[0.2em]">Value Deal</span>
+                                                        <span className="text-2xl font-black text-accent-brown tracking-tighter">₱{pkg.price.toLocaleString()}</span>
+                                                    </div>
+                                                </div>
+                                                
+                                                {(items.length > 0 || pkg.description) && (
+                                                    <div className="relative z-10 space-y-4">
+                                                        {items.length > 0 && (
+                                                            <div className="space-y-2">
+                                                                <div className="text-[9px] font-black text-accent-brown/30 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                                                                    <div className="w-1 h-1 bg-[#ea580c] rounded-full" /> Included Services:
+                                                                </div>
+                                                                <div className="grid grid-cols-1 gap-2">
+                                                                    {items.map((item: string, idx: number) => (
+                                                                        <div key={idx} className={`px-4 py-3 rounded-2xl border transition-all flex items-center gap-3 ${isSelected ? 'bg-white border-[#ea580c]/20 text-[#ea580c] shadow-sm' : 'bg-accent-peach/5 border-accent-brown/5 text-accent-brown/60 group-hover:bg-white group-hover:border-accent-brown/10'}`}>
+                                                                            <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-[#ea580c]' : 'bg-accent-brown/20'}`} />
+                                                                            <span className="text-[11px] font-bold">{item}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {pkg.description && (
+                                                            <div className="px-4 py-3 bg-slate-50 border-l-4 border-slate-200 rounded-r-xl">
+                                                                <p className="text-[10px] text-slate-500 font-medium italic leading-relaxed">{pkg.description}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                
+                                                {/* Background Glow */}
+                                                <div className="absolute top-0 right-0 w-48 h-48 bg-[#ea580c]/5 rounded-full blur-[60px] -mr-24 -mt-24 group-hover:bg-[#ea580c]/10 transition-colors" />
+                                            </motion.button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            {/* Global Modal */}
+            <ModernModal
+                isOpen={modal.isOpen}
+                onClose={() => setModal(m => ({ ...m, isOpen: false }))}
+                onConfirm={modal.onConfirm}
+                title={modal.title}
+                message={modal.message}
+                type={modal.type}
+            />
+
+
         </DashboardLayout>
     );
 };

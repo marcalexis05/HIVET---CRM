@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { NavLink, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { LogOut, LayoutDashboard, ShoppingBag, Users, Settings, Bell, Calendar, Award, ShoppingCart, X, Plus, Minus, CreditCard, BarChart2, UserCircle, Menu, Store, Truck } from 'lucide-react';
+import { LogOut, LayoutDashboard, ShoppingBag, Users, Settings, Bell, Calendar, Award, ShoppingCart, X, Plus, Minus, CreditCard, BarChart2, UserCircle, Menu, Store, Truck, Check, MapPin } from 'lucide-react';
 import { Logo } from './Logo';
 
 const MotionLink = motion(Link);
@@ -13,15 +13,18 @@ interface DashboardLayoutProps {
     children: ReactNode;
     title: string;
     hideHeader?: boolean;
+    branchContext?: { id: number | null; name: string; address?: string };
+    branchAction?: ReactNode;
 }
 
-const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayoutProps) => {
+const DashboardLayout = ({ children, title, hideHeader = false, branchContext, branchAction }: DashboardLayoutProps) => {
     const { user, logout } = useAuth();
     const { items, totalItems, totalAmount, removeFromCart, updateQuantity } = useCart();
     const navigate = useNavigate();
     const [isCartOpen, setIsCartOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+    const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [notifications, setNotifications] = useState<any[]>([]);
 
     const fetchNotifications = async () => {
@@ -45,9 +48,39 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
 
     useEffect(() => {
         fetchNotifications();
-        const interval = setInterval(fetchNotifications, 30000); // Polling every 30s
+        const interval = setInterval(fetchNotifications, 30000); 
         return () => clearInterval(interval);
     }, []);
+
+    // Initialize/Sync selection when items change
+    useEffect(() => {
+        const newSelection = new Set(selectedItems);
+        items.forEach(item => {
+            const key = `${item.id}-${item.variant}-${item.size}`;
+            if (!newSelection.has(key)) {
+                newSelection.add(key);
+            }
+        });
+        // Remove selection for items no longer in cart
+        const currentKeys = new Set(items.map(item => `${item.id}-${item.variant}-${item.size}`));
+        Array.from(newSelection).forEach(key => {
+            if (!currentKeys.has(key)) newSelection.delete(key);
+        });
+        
+        setSelectedItems(newSelection);
+    }, [items.length]);
+
+    const toggleSelection = (key: string) => {
+        const next = new Set(selectedItems);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        setSelectedItems(next);
+    };
+
+    const selectedCount = items.filter(i => selectedItems.has(`${i.id}-${i.variant}-${i.size}`)).length;
+    const selectiveAmount = items
+        .filter(i => selectedItems.has(`${i.id}-${i.variant}-${i.size}`))
+        .reduce((sum, i) => sum + (Number(i.price) * i.quantity), 0);
 
     const markAsRead = async (id: number) => {
         const token = localStorage.getItem('hivet_token');
@@ -215,6 +248,11 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                                 )}
                             </motion.button>
                         )}
+                        {branchAction && (
+                            <div className="hidden lg:block">
+                                {branchAction}
+                            </div>
+                        )}
                         <div className="relative">
                             <motion.button
                                 whileHover={{ scale: 1.1 }}
@@ -352,9 +390,20 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
             <main className={`flex-1 flex flex-col w-full max-w-[1920px] mx-auto px-3 sm:px-8 xl:px-12 ${hideHeader ? 'pt-6' : 'pt-24 sm:pt-28 lg:pt-32'} pb-10 lg:pb-16 relative z-10 transition-all`}>
 
                 <div className="mb-8 sm:mb-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-                    <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-accent-brown tracking-tighter leading-none">
-                        {title}
-                    </h1>
+                    <div className="flex flex-col gap-1">
+                        <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-accent-brown tracking-tighter leading-none">
+                            {title}
+                        </h1>
+                        {branchContext?.id && (
+                            <div className="flex items-center gap-1.5 text-brand-dark font-black text-[10px] uppercase tracking-widest bg-brand/10 px-3 py-1 rounded-full self-start mt-4">
+                                <MapPin className="w-3 h-3" />
+                                {branchContext.name}
+                                {branchContext.address && (
+                                    <span className="text-accent-brown/40 font-medium normal-case ml-1">| {branchContext.address}</span>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <motion.div
@@ -487,8 +536,16 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, scale: 0.95 }}
-                                            className="flex gap-4 p-4 bg-white border-2 border-accent-brown/5 rounded-2xl relative group"
+                                            className={`flex gap-4 p-4 bg-white border-2 rounded-2xl relative group transition-all ${selectedItems.has(`${item.id}-${item.variant}-${item.size}`) ? 'border-brand/20 shadow-sm' : 'border-accent-brown/5 opacity-60 grayscale-[0.5]'}`}
                                         >
+                                            <div className="flex items-center pt-1">
+                                                <button 
+                                                    onClick={() => toggleSelection(`${item.id}-${item.variant}-${item.size}`)}
+                                                    className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedItems.has(`${item.id}-${item.variant}-${item.size}`) ? 'bg-brand border-brand text-white' : 'border-accent-brown/20 bg-white'}`}
+                                                >
+                                                    {selectedItems.has(`${item.id}-${item.variant}-${item.size}`) && <Check className="w-3.5 h-3.5" />}
+                                                </button>
+                                            </div>
                                             <button
                                                 onClick={() => removeFromCart(item.id, item.variant, item.size)}
                                                 className="absolute -top-2 -right-2 w-6 h-6 bg-red-100 text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -538,20 +595,43 @@ const DashboardLayout = ({ children, title, hideHeader = false }: DashboardLayou
                             {/* Drawer Footer */}
                             {items.length > 0 && (
                                 <div className="p-6 bg-white border-t border-accent-brown/5 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)]">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <span className="text-xs font-bold text-accent-brown/40 uppercase tracking-widest">Subtotal</span>
-                                        <span className="text-2xl font-black text-accent-brown tracking-tighter">₱{totalAmount.toFixed(2)}</span>
+                                    <div className="flex flex-col gap-2 mb-6">
+                                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-accent-brown/30">
+                                            <span>Selected ({selectedCount})</span>
+                                            <span>Subtotal</span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex gap-1.5">
+                                                <button 
+                                                    onClick={() => setSelectedItems(new Set(items.map(i => `${i.id}-${i.variant}-${i.size}`)))}
+                                                    className="text-[9px] font-black text-brand-dark hover:underline uppercase"
+                                                >
+                                                    Select All
+                                                </button>
+                                                <span className="text-accent-brown/10">|</span>
+                                                <button 
+                                                    onClick={() => setSelectedItems(new Set())}
+                                                    className="text-[9px] font-black text-accent-brown/40 hover:text-red-500 hover:underline uppercase"
+                                                >
+                                                    Clear Selection
+                                                </button>
+                                            </div>
+                                            <span className="text-2xl font-black text-accent-brown tracking-tighter">₱{selectiveAmount.toFixed(2)}</span>
+                                        </div>
                                     </div>
                                     <button
-                                        disabled={hasStockError}
+                                        disabled={hasStockError || selectedCount === 0}
                                         onClick={() => {
                                             setIsCartOpen(false);
+                                            // Filter items to only selected ones before navigating
+                                            const checkoutItems = items.filter(i => selectedItems.has(`${i.id}-${i.variant}-${i.size}`));
+                                            localStorage.setItem('hivet_checkout_filtered', JSON.stringify(checkoutItems));
                                             navigate('/dashboard/customer/checkout');
                                         }}
-                                        className={`w-full py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2 shadow-lg ${hasStockError ? 'bg-accent-brown/20 text-accent-brown/40 cursor-not-allowed shadow-none' : 'bg-brand-dark hover:bg-black text-white shadow-brand-dark/20'}`}
+                                        className={`w-full py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-colors flex items-center justify-center gap-2 shadow-lg ${hasStockError || selectedCount === 0 ? 'bg-accent-brown/20 text-accent-brown/40 cursor-not-allowed shadow-none' : 'bg-brand-dark hover:bg-black text-white shadow-brand-dark/20'}`}
                                     >
                                         <CreditCard className="w-4 h-4" />
-                                        {hasStockError ? 'Resolve Stock Issues' : 'Checkout Now'}
+                                        {hasStockError ? 'Resolve Stock Issues' : selectedCount === 0 ? 'Select items to checkout' : `Checkout ${selectedCount} ${selectedCount === 1 ? 'Item' : 'Items'}`}
                                     </button>
                                     <button
                                         onClick={() => setIsCartOpen(false)}

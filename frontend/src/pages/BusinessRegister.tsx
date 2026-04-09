@@ -169,7 +169,9 @@ const BusinessRegister = () => {
             }
             setStep(3);
         } else if (step === 3) {
-            if (!clinicCity || !clinicProvince) return setError('City and province are required. Please select a location from the map or search bar.');
+            // Remove strict city/province check. Allow progression if some location data is present.
+            const hasLocation = clinicLat || clinicCity || clinicProvince || clinicBarangay || clinicStreet;
+            if (!hasLocation) return setError('Please select a clinic location from the map or search bar.');
             setStep(4);
         } else if (step === 4) {
             if (!baiNumber || !baiDocument) return setError('BAI Animal Welfare Registration number and document are required.');
@@ -345,8 +347,17 @@ const BusinessRegister = () => {
             if (types.includes('locality')) city = c.long_name;
             if (types.includes('administrative_area_level_1')) province = c.long_name;
             if (types.includes('postal_code')) zip = c.long_name;
-            if (types.includes('administrative_area_level_2')) district = c.long_name;
+            if (types.includes('administrative_area_level_2')) {
+                district = c.long_name;
+                if (!province || province.toLowerCase().includes('region') || province === 'Metro Manila' || province === 'National Capital Region') {
+                    if (!province) province = c.long_name;
+                }
+            }
             if (types.includes('neighborhood') || types.includes('subdivision')) subdivision = c.long_name;
+            
+            // Fallbacks
+            if (!city && types.includes('administrative_area_level_3')) city = c.long_name;
+            if (!city && types.includes('administrative_area_level_2') && province !== c.long_name) city = c.long_name;
         });
 
         if (houseNum) setClinicHouseNumber(houseNum);

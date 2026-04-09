@@ -1,73 +1,759 @@
+
+--- ERROR at 2026-04-09 15:15:26.038125 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?period=6m&data_type=all&branch_id=6
 Traceback (most recent call last):
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
-    self.dialect.do_execute(
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
-    cursor.execute(statement, parameters)
-psycopg2.errors.UndefinedColumn: column "clinic_id" of relation "orders" does not exist
-LINE 1: ...total_amount, fulfillment_method, payment_method, clinic_id,...
-                                                             ^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3670, in get_business_analytics
+    fallback_name = branch_name_map.get(branch_id or 0, f"{biz_name} - {main_loc}")
+                                                                        ^^^^^^^^
+NameError: name 'main_loc' is not defined
 
-
-The above exception was the direct cause of the following exception:
-
+--- ERROR at 2026-04-09 15:15:26.468966 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?period=6m&data_type=all&branch_id=6
 Traceback (most recent call last):
-  File "C:\Apache24\htdocs\HIVET - CRM\backend\check_error.py", line 7, in <module>
-    db.commit()
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\orm\session.py", line 2030, in commit
-    trans.commit(_to_root=True)
-  File "<string>", line 2, in commit
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
-    ret_value = fn(self, *arg, **kw)
-                ^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\orm\session.py", line 1311, in commit
-    self._prepare_impl()
-  File "<string>", line 2, in _prepare_impl
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
-    ret_value = fn(self, *arg, **kw)
-                ^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\orm\session.py", line 1286, in _prepare_impl
-    self.session.flush()
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
-    self._flush(objects)
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
-    with util.safe_reraise():
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
-    raise exc_value.with_traceback(exc_tb)
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
-    flush_context.execute()
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
-    rec.execute(self)
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
-    util.preloaded.orm_persistence.save_obj(
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
-    _emit_insert_statements(
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\orm\persistence.py", line 1233, in _emit_insert_statements
-    result = connection.execute(
-             ^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
-    return meth(
-           ^^^^^
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
-    return connection._execute_clauseelement(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
-    ret = self._execute_context(
-          ^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
-    return self._exec_single_context(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
-    self._handle_dbapi_exception(
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
-    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
-    self.dialect.do_execute(
-  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
-    cursor.execute(statement, parameters)
-sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "clinic_id" of relation "orders" does not exist
-LINE 1: ...total_amount, fulfillment_method, payment_method, clinic_id,...
-                                                             ^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3670, in get_business_analytics
+    fallback_name = branch_name_map.get(branch_id or 0, f"{biz_name} - {main_loc}")
+                                                                        ^^^^^^^^
+NameError: name 'main_loc' is not defined
 
-[SQL: INSERT INTO orders (customer_id, status, total_amount, fulfillment_method, payment_method, clinic_id, branch_id, delivery_address, contact_name, contact_phone, cancellation_reason, created_at) VALUES (%(customer_id)s, %(status)s, %(total_amount)s, %(fulfillment_method)s, %(payment_method)s, %(clinic_id)s, %(branch_id)s, %(delivery_address)s, %(contact_name)s, %(contact_phone)s, %(cancellation_reason)s, %(created_at)s) RETURNING orders.id]
-[parameters: {'customer_id': 1, 'status': 'Pending', 'total_amount': 150, 'fulfillment_method': 'pickup', 'payment_method': 'cash', 'clinic_id': 1, 'branch_id': 1, 'delivery_address': 'Test', 'contact_name': 'Test', 'contact_phone': '123', 'cancellation_reason': None, 'created_at': datetime.datetime(2026, 3, 14, 1, 20, 30, 962345)}]
-(Background on this error at: https://sqlalche.me/e/20/f405)
+--- ERROR at 2026-04-09 15:15:33.367664 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?period=6m&data_type=all&branch_id=6
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3670, in get_business_analytics
+    fallback_name = branch_name_map.get(branch_id or 0, f"{biz_name} - {main_loc}")
+                                                                        ^^^^^^^^
+NameError: name 'main_loc' is not defined
+
+--- ERROR at 2026-04-09 15:15:44.684408 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?period=6m&data_type=all&branch_id=6
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3670, in get_business_analytics
+    fallback_name = branch_name_map.get(branch_id or 0, f"{biz_name} - {main_loc}")
+                                                                        ^^^^^^^^
+NameError: name 'main_loc' is not defined
+
+--- ERROR at 2026-04-09 17:13:00.664883 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?data_type=all
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3778, in get_business_analytics
+    "trend": stats["revenue_change"],
+             ~~~~~^^^^^^^^^^^^^^^^^^
+KeyError: 'revenue_change'
+
+--- ERROR at 2026-04-09 17:13:00.855613 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?data_type=all
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3778, in get_business_analytics
+    "trend": stats["revenue_change"],
+             ~~~~~^^^^^^^^^^^^^^^^^^
+KeyError: 'revenue_change'
+
+--- ERROR at 2026-04-09 17:24:51.209035 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?data_type=all
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3543, in get_business_analytics
+    p_name = item.product.name if item.product else "Unknown Product"
+                                  ^^^^^^^^^^^^
+AttributeError: 'OrderItem' object has no attribute 'product'
+
+--- ERROR at 2026-04-09 17:24:51.402309 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?data_type=all
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3543, in get_business_analytics
+    p_name = item.product.name if item.product else "Unknown Product"
+                                  ^^^^^^^^^^^^
+AttributeError: 'OrderItem' object has no attribute 'product'
+
+--- ERROR at 2026-04-09 17:25:20.302151 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?data_type=all&branch_id=6
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 377, in app
+    content = await serialize_response(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 215, in serialize_response
+    raise ResponseValidationError(
+fastapi.exceptions.ResponseValidationError: 1 validation error:
+  {'type': 'missing', 'loc': ('response', 'revenue_trend', 'trend'), 'msg': 'Field required', 'input': {'chartData': [{'name': '2025-11', 'value': 0}, {'name': '2025-12', 'value': 0}, {'name': '2026-01', 'value': 0}, {'name': '2026-02', 'value': 0}, {'name': '2026-03', 'value': 0}, {'name': '2026-04', 'value': 0}]}}
+
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3411, in get_business_analytics
+    GET /api/business/dashboard/analytics
+
+--- ERROR at 2026-04-09 17:26:58.314138 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?data_type=all&branch_id=6
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 377, in app
+    content = await serialize_response(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 215, in serialize_response
+    raise ResponseValidationError(
+fastapi.exceptions.ResponseValidationError: 1 validation error:
+  {'type': 'missing', 'loc': ('response', 'revenue_trend', 'trend'), 'msg': 'Field required', 'input': {'chartData': [{'name': '2025-11', 'value': 0}, {'name': '2025-12', 'value': 0}, {'name': '2026-01', 'value': 0}, {'name': '2026-02', 'value': 0}, {'name': '2026-03', 'value': 0}, {'name': '2026-04', 'value': 0}]}}
+
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3411, in get_business_analytics
+    GET /api/business/dashboard/analytics
+
+--- ERROR at 2026-04-09 17:26:58.381996 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?data_type=all&branch_id=6
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 377, in app
+    content = await serialize_response(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 215, in serialize_response
+    raise ResponseValidationError(
+fastapi.exceptions.ResponseValidationError: 1 validation error:
+  {'type': 'missing', 'loc': ('response', 'revenue_trend', 'trend'), 'msg': 'Field required', 'input': {'chartData': [{'name': '2025-11', 'value': 0}, {'name': '2025-12', 'value': 0}, {'name': '2026-01', 'value': 0}, {'name': '2026-02', 'value': 0}, {'name': '2026-03', 'value': 0}, {'name': '2026-04', 'value': 0}]}}
+
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3411, in get_business_analytics
+    GET /api/business/dashboard/analytics
+
+--- ERROR at 2026-04-09 17:27:34.356554 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?data_type=all&branch_id=6
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 377, in app
+    content = await serialize_response(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 215, in serialize_response
+    raise ResponseValidationError(
+fastapi.exceptions.ResponseValidationError: 1 validation error:
+  {'type': 'missing', 'loc': ('response', 'revenue_trend', 'trend'), 'msg': 'Field required', 'input': {'chartData': [{'name': '2025-11', 'value': 0}, {'name': '2025-12', 'value': 0}, {'name': '2026-01', 'value': 0}, {'name': '2026-02', 'value': 0}, {'name': '2026-03', 'value': 0}, {'name': '2026-04', 'value': 0}]}}
+
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3411, in get_business_analytics
+    GET /api/business/dashboard/analytics
+
+--- ERROR at 2026-04-09 17:27:34.413398 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?data_type=all&branch_id=6
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 377, in app
+    content = await serialize_response(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 215, in serialize_response
+    raise ResponseValidationError(
+fastapi.exceptions.ResponseValidationError: 1 validation error:
+  {'type': 'missing', 'loc': ('response', 'revenue_trend', 'trend'), 'msg': 'Field required', 'input': {'chartData': [{'name': '2025-11', 'value': 0}, {'name': '2025-12', 'value': 0}, {'name': '2026-01', 'value': 0}, {'name': '2026-02', 'value': 0}, {'name': '2026-03', 'value': 0}, {'name': '2026-04', 'value': 0}]}}
+
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3411, in get_business_analytics
+    GET /api/business/dashboard/analytics
+
+--- ERROR at 2026-04-09 17:28:03.298850 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?period=6m&data_type=all&branch_id=6
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 377, in app
+    content = await serialize_response(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 215, in serialize_response
+    raise ResponseValidationError(
+fastapi.exceptions.ResponseValidationError: 1 validation error:
+  {'type': 'missing', 'loc': ('response', 'revenue_trend', 'trend'), 'msg': 'Field required', 'input': {'chartData': [{'name': '2025-11', 'value': 0}, {'name': '2025-12', 'value': 0}, {'name': '2026-01', 'value': 0}, {'name': '2026-02', 'value': 0}, {'name': '2026-03', 'value': 0}, {'name': '2026-04', 'value': 0}]}}
+
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3411, in get_business_analytics
+    GET /api/business/dashboard/analytics
+
+--- ERROR at 2026-04-09 17:28:03.531795 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?period=6m&data_type=all&branch_id=6
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 377, in app
+    content = await serialize_response(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 215, in serialize_response
+    raise ResponseValidationError(
+fastapi.exceptions.ResponseValidationError: 1 validation error:
+  {'type': 'missing', 'loc': ('response', 'revenue_trend', 'trend'), 'msg': 'Field required', 'input': {'chartData': [{'name': '2025-11', 'value': 0}, {'name': '2025-12', 'value': 0}, {'name': '2026-01', 'value': 0}, {'name': '2026-02', 'value': 0}, {'name': '2026-03', 'value': 0}, {'name': '2026-04', 'value': 0}]}}
+
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 3411, in get_business_analytics
+    GET /api/business/dashboard/analytics
+
+--- ERROR at 2026-04-09 23:35:45.532254 ---
+URL: http://localhost:8000/api/auth/forgot-password/send-otp
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 245, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\anyio\_backends\_asyncio.py", line 2502, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\anyio\_backends\_asyncio.py", line 986, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 4184, in forgot_password_send_otp
+    send_professional_otp_email(
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 1582, in send_professional_otp_email
+    msg["Date"] = formatdate(localtime=True)
+                  ^^^^^^^^^^
+NameError: name 'formatdate' is not defined
+
+--- ERROR at 2026-04-09 23:35:51.358765 ---
+URL: http://localhost:8000/api/auth/forgot-password/send-otp
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 245, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\concurrency.py", line 32, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\anyio\_backends\_asyncio.py", line 2502, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\anyio\_backends\_asyncio.py", line 986, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 4184, in forgot_password_send_otp
+    send_professional_otp_email(
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 1582, in send_professional_otp_email
+    msg["Date"] = formatdate(localtime=True)
+                  ^^^^^^^^^^
+NameError: name 'formatdate' is not defined

@@ -6,11 +6,12 @@ import { useNavigate, Link } from 'react-router-dom';
 import {
     Wallet, Banknote, ShieldCheck, MapPin, Store, Truck, Loader2,
     ArrowRight, Tag, CheckCircle, X, Gift, Award, Sparkles, CreditCard,
-    Eye, User, Info
+    Eye, User, Info, Smartphone
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Map, AdvancedMarker, InfoWindow, useMap } from '@vis.gl/react-google-maps';
 import MapPickerModal from '../../components/MapPickerModal';
+import ModernModal from '../../components/ModernModal';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -20,9 +21,9 @@ const calcDist = (lat1: number, lng1: number, lat2: number, lng2: number) => {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
-    const d = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return d < 1 ? `${Math.round(d*1000)}m` : `${d.toFixed(1)}km`;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    const d = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return d < 1 ? `${Math.round(d * 1000)}m` : `${d.toFixed(1)}km`;
 };
 
 // Draws a driving route between two points on a Map
@@ -55,9 +56,24 @@ const PanoMapSyncer = ({ position }: { position: { lat: number; lng: number } | 
 };
 
 const Checkout = () => {
-    const { items, totalAmount, totalItems, clearCart } = useCart();
+    const { items: cartItems, totalAmount: cartTotal, totalItems: cartTotalCount, clearCart } = useCart();
+    const [items, setItems] = useState<any[]>(cartItems);
     const { user } = useAuth();
     const navigate = useNavigate();
+
+    // Load filtered items if they exist
+    useEffect(() => {
+        const filtered = localStorage.getItem('hivet_checkout_filtered');
+        if (filtered) {
+            setItems(JSON.parse(filtered));
+        } else {
+            setItems(cartItems);
+        }
+    }, [cartItems]);
+
+    // Derived totals for the selected items
+    const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
+    const totalAmount = items.reduce((sum, i) => sum + (Number(i.price) * i.quantity), 0);
 
     // Fulfillment & payment
     const [selectedPayment, setSelectedPayment] = useState<'gcash' | 'maya' | 'cash'>('gcash');
@@ -66,6 +82,14 @@ const Checkout = () => {
     const [showSuccess, setShowSuccess] = useState(false);
     const [showMixedModal, setShowMixedModal] = useState(false);
     const [hasAcknowledgedMixed, setHasAcknowledgedMixed] = useState(false);
+    const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'info' | 'success' | 'error' | 'confirm' | 'danger'; onConfirm?: () => void }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+
+
 
     // Address state
     const [loadingData, setLoadingData] = useState(true);
@@ -109,7 +133,7 @@ const Checkout = () => {
 
     // Voucher state
     const [applyingVoucher, setApplyingVoucher] = useState(false);
-    const [appliedVoucher, setAppliedVoucher] = useState<{ id: number; title: string; discount: number; code: string } | null>(null);
+    const [appliedVoucher, setAppliedVoucher] = useState<{ id: number; title: string; discount: number; code: string; type: string } | null>(null);
     const [myVouchers, setMyVouchers] = useState<any[]>([]);
 
     // Fetch vouchers
@@ -150,17 +174,23 @@ const Checkout = () => {
                 throw new Error(data.detail || 'Invalid voucher code');
             }
             const data = await res.json();
-            
+
             let discountVal = data.calculated_discount || 0;
 
             setAppliedVoucher({
                 id: data.id,
                 title: data.title,
                 discount: discountVal,
-                code: data.code
+                code: data.code,
+                type: data.type
             });
         } catch (err: any) {
-            alert(err.message);
+            setModal({
+                isOpen: true,
+                title: 'Voucher Error',
+                message: err.message || 'Invalid voucher code.',
+                type: 'error'
+            });
         } finally {
             setApplyingVoucher(false);
         }
@@ -287,8 +317,11 @@ const Checkout = () => {
 
                 if (response.ok) {
                     const data = await response.json();
-                    // Redirect to PayMongo checkout page
-                    window.location.href = data.checkout_url;
+
+                    if (data.checkout_url) {
+                        // Redirect to PayMongo checkout page (GCash/Maya)
+                        window.location.href = data.checkout_url;
+                    }
                 } else {
                     const errData = await response.json();
                     alert(errData.detail || 'Failed to create payment session. Please try again.');
@@ -467,15 +500,6 @@ const Checkout = () => {
                                                     </div>
                                                 )}
 
-                                                {allAddresses.length > 0 && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setShowAddrModal(true)}
-                                                        className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-brand hover:text-brand-dark transition-all group w-fit mt-2"
-                                                    >
-                                                        Use a Saved Address <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-1" />
-                                                    </button>
-                                                )}
                                             </div>
                                         </>
                                     )}
@@ -495,7 +519,7 @@ const Checkout = () => {
 
                                 {/* Mixed Clinic Warning Banner */}
                                 {isMixedCart && (
-                                    <motion.div 
+                                    <motion.div
                                         initial={{ opacity: 0, y: -10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-4"
@@ -507,7 +531,7 @@ const Checkout = () => {
                                             <h4 className="text-[11px] font-black text-amber-800 uppercase tracking-wider mb-1">Logistics Optimization Note</h4>
                                             <p className="text-[10px] font-medium text-amber-700/70 leading-relaxed">
                                                 Your cart contains items from different partner clinics. If you proceed with pickup, you may need to visit multiple locations.
-                                                <button 
+                                                <button
                                                     onClick={() => setFulfillmentMethod('delivery')}
                                                     className="ml-2 text-amber-900 underline font-black"
                                                 >
@@ -567,221 +591,63 @@ const Checkout = () => {
                                                 }))}
                                         </div>
                                     </div>
-                                </div>
 
                                     {/* Branch Map Panel — appears when a branch is selected */}
                                     <AnimatePresence>
                                         {selectedBranch && selectedBranch.lat && selectedBranch.lng && (
-                                            <motion.div
-                                                key={`${selectedBranch.id}-map`}
-                                                initial={{ opacity: 0, height: 0 }}
-                                                animate={{ opacity: 1, height: 'auto' }}
-                                                exit={{ opacity: 0, height: 0 }}
-                                                className="overflow-hidden rounded-2xl border-2 border-accent-brown/5 shadow-lg"
-                                            >
-                                                <div className="relative" style={{ height: showBranchStreetView ? 480 : 300 }}>
-                                                    <AnimatePresence mode="wait">
-                                                        {!showBranchStreetView ? (
-                                                            <motion.div key="map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
-                                                                <Map
-                                                                    mapId="4c730709b30c1be1"
-                                                                    defaultCenter={
-                                                                        deliveryInfo.lat && deliveryInfo.lng
-                                                                            ? {
-                                                                                lat: (Number(selectedBranch.lat) + deliveryInfo.lat) / 2,
-                                                                                lng: (Number(selectedBranch.lng) + deliveryInfo.lng) / 2
-                                                                              }
-                                                                            : { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }
-                                                                    }
-                                                                    defaultZoom={deliveryInfo.lat && deliveryInfo.lng ? 13 : 15}
-                                                                    gestureHandling="greedy"
-                                                                    disableDefaultUI={false}
-                                                                    mapTypeControl={false}
-                                                                    streetViewControl={false}
-                                                                    fullscreenControl={false}
-                                                                    className="w-full h-full"
-                                                                >
-                                                                    {/* Clinic Pin */}
-                                                                    <AdvancedMarker
-                                                                        position={{ lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}
-                                                                        onClick={() => setBranchActiveMarker(branchActiveMarker === 'branch' ? null : 'branch')}
+                                            <>
+                                                <motion.div
+                                                    key={`${selectedBranch.id}-map`}
+                                                    initial={{ opacity: 0, height: 0 }}
+                                                    animate={{ opacity: 1, height: 'auto' }}
+                                                    exit={{ opacity: 0, height: 0 }}
+                                                    className="overflow-hidden rounded-2xl border-2 border-accent-brown/5 shadow-lg"
+                                                >
+                                                    <div className="relative" style={{ height: showBranchStreetView ? 480 : 300 }}>
+                                                        <AnimatePresence mode="wait">
+                                                            {!showBranchStreetView ? (
+                                                                <motion.div key="map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
+                                                                    <Map
+                                                                        mapId="4c730709b30c1be1"
+                                                                        defaultCenter={
+                                                                            deliveryInfo.lat && deliveryInfo.lng
+                                                                                ? {
+                                                                                    lat: (Number(selectedBranch.lat) + deliveryInfo.lat) / 2,
+                                                                                    lng: (Number(selectedBranch.lng) + deliveryInfo.lng) / 2
+                                                                                }
+                                                                                : { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }
+                                                                        }
+                                                                        defaultZoom={deliveryInfo.lat && deliveryInfo.lng ? 13 : 15}
+                                                                        gestureHandling="greedy"
+                                                                        disableDefaultUI={false}
+                                                                        mapTypeControl={false}
+                                                                        streetViewControl={false}
+                                                                        fullscreenControl={false}
+                                                                        className="w-full h-full"
                                                                     >
-                                                                        <div className="w-10 h-10 bg-brand-dark rounded-xl flex items-center justify-center text-white border-2 border-white shadow-xl ring-4 ring-brand/20 cursor-pointer hover:scale-110 transition-transform">
-                                                                            <Store className="w-5 h-5" />
-                                                                        </div>
-                                                                    </AdvancedMarker>
-
-                                                                    {/* User delivery pin (if lat/lng saved) */}
-                                                                    {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                        {/* Clinic Pin */}
                                                                         <AdvancedMarker
-                                                                            position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}
-                                                                            onClick={() => setBranchActiveMarker(branchActiveMarker === 'customer' ? null : 'customer')}
+                                                                            position={{ lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}
+                                                                            onClick={() => setBranchActiveMarker(branchActiveMarker === 'branch' ? null : 'branch')}
                                                                         >
-                                                                            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-lg ring-4 ring-blue-400/20 cursor-pointer hover:scale-110 transition-transform">
-                                                                                <User className="w-4 h-4" />
+                                                                            <div className="w-10 h-10 bg-brand-dark rounded-xl flex items-center justify-center text-white border-2 border-white shadow-xl ring-4 ring-brand/20 cursor-pointer hover:scale-110 transition-transform">
+                                                                                <Store className="w-5 h-5" />
                                                                             </div>
                                                                         </AdvancedMarker>
-                                                                    )}
 
-                                                                    {/* Directions route */}
-                                                                    {deliveryInfo.lat && deliveryInfo.lng && (
-                                                                        <DirectionsLine
-                                                                            userLat={deliveryInfo.lat}
-                                                                            userLng={deliveryInfo.lng}
-                                                                            clinicLat={Number(selectedBranch.lat)}
-                                                                            clinicLng={Number(selectedBranch.lng)}
-                                                                        />
-                                                                    )}
-
-                                                                    {/* Clinic InfoWindow */}
-                                                                    {branchActiveMarker === 'branch' && (
-                                                                        <InfoWindow
-                                                                            position={{ lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}
-                                                                            onCloseClick={() => setBranchActiveMarker(null)}
-                                                                            headerDisabled={true}
-                                                                        >
-                                                                            <div className="p-3 w-[250px] font-sans flex flex-col gap-2 relative">
-                                                                                <button onClick={() => setBranchActiveMarker(null)} className="absolute top-1 right-1 p-1 rounded-full hover:bg-gray-100 text-gray-400"><X className="w-3 h-3" /></button>
-                                                                                <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
-                                                                                    <div className="w-8 h-8 bg-brand/10 rounded-lg flex items-center justify-center"><Store className="w-4 h-4 text-brand" /></div>
-                                                                                    <div>
-                                                                                        <p className="text-xs font-black text-brand-dark leading-tight">{selectedClinic?.name}</p>
-                                                                                        <p className="text-[9px] font-bold text-accent-brown/50 uppercase tracking-widest">Clinic Branch</p>
-                                                                                    </div>
+                                                                        {/* User delivery pin (if lat/lng saved) */}
+                                                                        {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                            <AdvancedMarker
+                                                                                position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}
+                                                                                onClick={() => setBranchActiveMarker(branchActiveMarker === 'customer' ? null : 'customer')}
+                                                                            >
+                                                                                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-lg ring-4 ring-blue-400/20 cursor-pointer hover:scale-110 transition-transform">
+                                                                                    <User className="w-4 h-4" />
                                                                                 </div>
-                                                                                <button onClick={() => {
-                                                                                    const pos = { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) };
-                                                                                    setSvStartPos(pos);
-                                                                                    branchSvRef.current = null;
-                                                                                    setShowBranchStreetView(true);
-                                                                                    setBranchActiveMarker(null);
-                                                                                }} className="w-full bg-brand/10 text-brand-dark text-[10px] font-black uppercase tracking-widest py-3 rounded-xl hover:bg-brand hover:text-white transition-all flex items-center justify-center gap-2">
-                                                                                    <Eye className="w-4 h-4" /> Street View
-                                                                                </button>
-                                                                                {deliveryInfo.lat && deliveryInfo.lng && (
-                                                                                    <div className="w-full bg-brand-dark/5 border border-brand-dark/10 px-3 py-2 rounded-xl flex items-center justify-between">
-                                                                                        <div className="flex items-center gap-2">
-                                                                                            <Truck className="w-3.5 h-3.5 text-brand-dark/50" />
-                                                                                            <span className="text-[9px] font-black uppercase tracking-widest text-brand-dark/50">Distance</span>
-                                                                                        </div>
-                                                                                        <span className="text-xs font-black text-brand-dark">{calcDist(deliveryInfo.lat, deliveryInfo.lng, Number(selectedBranch.lat), Number(selectedBranch.lng))}</span>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </InfoWindow>
-                                                                    )}
+                                                                            </AdvancedMarker>
+                                                                        )}
 
-                                                                    {/* User InfoWindow */}
-                                                                    {branchActiveMarker === 'customer' && deliveryInfo.lat && deliveryInfo.lng && (
-                                                                        <InfoWindow
-                                                                            position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}
-                                                                            onCloseClick={() => setBranchActiveMarker(null)}
-                                                                            headerDisabled={true}
-                                                                        >
-                                                                            <div className="p-3 w-[250px] font-sans flex flex-col gap-2 relative">
-                                                                                <button onClick={() => setBranchActiveMarker(null)} className="absolute top-1 right-1 p-1 rounded-full hover:bg-gray-100 text-gray-400"><X className="w-3 h-3" /></button>
-                                                                                <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
-                                                                                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center"><User className="w-4 h-4 text-blue-600" /></div>
-                                                                                    <div>
-                                                                                        <p className="text-xs font-black text-brand-dark">{deliveryInfo.contactName || 'Your Location'}</p>
-                                                                                        <p className="text-[9px] font-bold text-accent-brown/50 uppercase tracking-widest">Delivery Address</p>
-                                                                                    </div>
-                                                                                </div>
-                                                                                <button onClick={() => {
-                                                                                    if (deliveryInfo.lat && deliveryInfo.lng) {
-                                                                                        setSvStartPos({ lat: deliveryInfo.lat, lng: deliveryInfo.lng });
-                                                                                    }
-                                                                                    branchSvRef.current = null;
-                                                                                    setShowBranchStreetView(true);
-                                                                                    setBranchActiveMarker(null);
-                                                                                }} className="w-full bg-blue-100 text-blue-800 text-[10px] font-black uppercase tracking-widest py-3 rounded-xl hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-2">
-                                                                                    <Eye className="w-4 h-4" /> Street View
-                                                                                </button>
-                                                                                <div className="w-full bg-brand-dark/5 border border-brand-dark/10 px-3 py-2 rounded-xl flex items-center justify-between">
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <Truck className="w-3.5 h-3.5 text-brand-dark/50" />
-                                                                                        <span className="text-[9px] font-black uppercase tracking-widest text-brand-dark/50">Distance</span>
-                                                                                    </div>
-                                                                                    <span className="text-xs font-black text-brand-dark">{calcDist(deliveryInfo.lat, deliveryInfo.lng, Number(selectedBranch.lat), Number(selectedBranch.lng))}</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        </InfoWindow>
-                                                                    )}
-                                                                </Map>
-                                                            </motion.div>
-                                                        ) : (
-                                                            <motion.div key="sv" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex flex-col bg-black rounded-2xl overflow-hidden">
-                                                                {/* Professional Header Bar */}
-                                                                <div className="absolute top-0 left-0 right-0 z-[30] bg-gradient-to-b from-black/80 to-transparent px-5 pt-4 pb-8 pointer-events-none flex items-start justify-between">
-                                                                    <div className="flex items-center gap-3 pointer-events-none">
-                                                                        <div className="w-9 h-9 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 flex items-center justify-center">
-                                                                            <Eye className="w-4 h-4 text-white" />
-                                                                        </div>
-                                                                        <div>
-                                                                            <p className="text-[9px] font-black uppercase tracking-widest text-white/50">Immersive Street View</p>
-                                                                            <p className="text-xs font-black text-white leading-tight">
-                                                                                {svStartPos && deliveryInfo.lat && svStartPos.lat === deliveryInfo.lat
-                                                                                    ? (deliveryInfo.contactName || 'Your Location')
-                                                                                    : (selectedClinic?.name || 'Clinic Branch')}
-                                                                            </p>
-                                                                        </div>
-                                                                    </div>
-                                                                    <button
-                                                                        onClick={() => { setShowBranchStreetView(false); branchSvRef.current = null; }}
-                                                                        className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 flex items-center justify-center text-white hover:bg-red-500/80 hover:border-red-500 transition-all pointer-events-auto shadow-lg"
-                                                                    >
-                                                                        <X className="w-4 h-4" />
-                                                                    </button>
-                                                                </div>
-
-                                                                {/* Street View — top 62% */}
-                                                                <div className="flex-[0.62] relative">
-                                                                    <div
-                                                                        ref={(el) => {
-                                                                            if (el && !branchSvRef.current) {
-                                                                                const pos = svStartPos || { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) };
-                                                                                const pano = new google.maps.StreetViewPanorama(el, {
-                                                                                    position: pos,
-                                                                                    pov: { heading: 0, pitch: 0 },
-                                                                                    zoom: 1,
-                                                                                    addressControl: false,
-                                                                                    fullscreenControl: false,
-                                                                                    zoomControl: true,
-                                                                                    linksControl: true,
-                                                                                    panControl: false,
-                                                                                    enableCloseButton: false,
-                                                                                    motionTracking: false,
-                                                                                });
-                                                                                pano.addListener('position_changed', () => {
-                                                                                    const p = pano.getPosition();
-                                                                                    if (p) setPanoPosition({ lat: p.lat(), lng: p.lng() });
-                                                                                });
-                                                                                pano.addListener('pov_changed', () => {
-                                                                                    const pov = pano.getPov();
-                                                                                    setPanoPov({ heading: pov.heading, pitch: pov.pitch });
-                                                                                });
-                                                                                branchSvRef.current = pano;
-                                                                                setPanoPosition(pos);
-                                                                            }
-                                                                        }}
-                                                                        className="w-full h-full"
-                                                                    />
-                                                                    {/* Bottom fade into mini-map */}
-                                                                    <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black to-transparent pointer-events-none" />
-                                                                </div>
-
-                                                                {/* Mini-map — bottom 38% with route */}
-                                                                <div className="flex-[0.38] relative overflow-hidden">
-                                                                    <Map
-                                                                        id="sv-minimap"
-                                                                        mapId="46537618861d8583"
-                                                                        defaultCenter={svStartPos || { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}
-                                                                        defaultZoom={15}
-                                                                        disableDefaultUI={true}
-                                                                        gestureHandling="greedy"
-                                                                        className="w-full h-full"
-                                                                    >
-                                                                        <PanoMapSyncer position={panoPosition} />
+                                                                        {/* Directions route */}
                                                                         {deliveryInfo.lat && deliveryInfo.lng && (
                                                                             <DirectionsLine
                                                                                 userLat={deliveryInfo.lat}
@@ -790,88 +656,248 @@ const Checkout = () => {
                                                                                 clinicLng={Number(selectedBranch.lng)}
                                                                             />
                                                                         )}
-                                                                        {/* Current Street View position + heading arrow */}
-                                                                        {panoPosition && (
-                                                                            <AdvancedMarker position={panoPosition}>
-                                                                                <div className="w-10 h-10 flex items-center justify-center" style={{ transform: `rotate(${panoPov.heading}deg)`, transition: 'transform 0.3s ease' }}>
-                                                                                    <div className="w-5 h-5 bg-blue-500 rounded-full border-[3px] border-white shadow-2xl relative">
-                                                                                        <div className="absolute -top-5 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[10px] border-b-blue-500" />
+
+                                                                        {/* Clinic InfoWindow */}
+                                                                        {branchActiveMarker === 'branch' && (
+                                                                            <InfoWindow
+                                                                                position={{ lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}
+                                                                                onCloseClick={() => setBranchActiveMarker(null)}
+                                                                                headerDisabled={true}
+                                                                            >
+                                                                                <div className="p-3 w-[250px] font-sans flex flex-col gap-2 relative">
+                                                                                    <button onClick={() => setBranchActiveMarker(null)} className="absolute top-1 right-1 p-1 rounded-full hover:bg-gray-100 text-gray-400"><X className="w-3 h-3" /></button>
+                                                                                    <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
+                                                                                        <div className="w-8 h-8 bg-brand/10 rounded-lg flex items-center justify-center"><Store className="w-4 h-4 text-brand" /></div>
+                                                                                        <div>
+                                                                                            <p className="text-xs font-black text-brand-dark leading-tight">{selectedClinic?.name}</p>
+                                                                                            <p className="text-[9px] font-bold text-accent-brown/50 uppercase tracking-widest">Clinic Branch</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <button onClick={() => {
+                                                                                        const pos = { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) };
+                                                                                        setSvStartPos(pos);
+                                                                                        branchSvRef.current = null;
+                                                                                        setShowBranchStreetView(true);
+                                                                                        setBranchActiveMarker(null);
+                                                                                    }} className="w-full bg-brand/10 text-brand-dark text-[10px] font-black uppercase tracking-widest py-3 rounded-xl hover:bg-brand hover:text-white transition-all flex items-center justify-center gap-2">
+                                                                                        <Eye className="w-4 h-4" /> Street View
+                                                                                    </button>
+                                                                                    {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                                        <div className="w-full bg-brand-dark/5 border border-brand-dark/10 px-3 py-2 rounded-xl flex items-center justify-between">
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <Truck className="w-3.5 h-3.5 text-brand-dark/50" />
+                                                                                                <span className="text-[9px] font-black uppercase tracking-widest text-brand-dark/50">Distance</span>
+                                                                                            </div>
+                                                                                            <span className="text-xs font-black text-brand-dark">{calcDist(deliveryInfo.lat, deliveryInfo.lng, Number(selectedBranch.lat), Number(selectedBranch.lng))}</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </InfoWindow>
+                                                                        )}
+
+                                                                        {/* User InfoWindow */}
+                                                                        {branchActiveMarker === 'customer' && deliveryInfo.lat && deliveryInfo.lng && (
+                                                                            <InfoWindow
+                                                                                position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}
+                                                                                onCloseClick={() => setBranchActiveMarker(null)}
+                                                                                headerDisabled={true}
+                                                                            >
+                                                                                <div className="p-3 w-[250px] font-sans flex flex-col gap-2 relative">
+                                                                                    <button onClick={() => setBranchActiveMarker(null)} className="absolute top-1 right-1 p-1 rounded-full hover:bg-gray-100 text-gray-400"><X className="w-3 h-3" /></button>
+                                                                                    <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
+                                                                                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center"><User className="w-4 h-4 text-blue-600" /></div>
+                                                                                        <div>
+                                                                                            <p className="text-xs font-black text-brand-dark">{deliveryInfo.contactName || 'Your Location'}</p>
+                                                                                            <p className="text-[9px] font-bold text-accent-brown/50 uppercase tracking-widest">Delivery Address</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <button onClick={() => {
+                                                                                        if (deliveryInfo.lat && deliveryInfo.lng) {
+                                                                                            setSvStartPos({ lat: deliveryInfo.lat, lng: deliveryInfo.lng });
+                                                                                        }
+                                                                                        branchSvRef.current = null;
+                                                                                        setShowBranchStreetView(true);
+                                                                                        setBranchActiveMarker(null);
+                                                                                    }} className="w-full bg-blue-100 text-blue-800 text-[10px] font-black uppercase tracking-widest py-3 rounded-xl hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-2">
+                                                                                        <Eye className="w-4 h-4" /> Street View
+                                                                                    </button>
+                                                                                    <div className="w-full bg-brand-dark/5 border border-brand-dark/10 px-3 py-2 rounded-xl flex items-center justify-between">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <Truck className="w-3.5 h-3.5 text-brand-dark/50" />
+                                                                                            <span className="text-[9px] font-black uppercase tracking-widest text-brand-dark/50">Distance</span>
+                                                                                        </div>
+                                                                                        <span className="text-xs font-black text-brand-dark">{calcDist(deliveryInfo.lat, deliveryInfo.lng, Number(selectedBranch.lat), Number(selectedBranch.lng))}</span>
                                                                                     </div>
                                                                                 </div>
-                                                                            </AdvancedMarker>
-                                                                        )}
-                                                                        {/* Clinic pin */}
-                                                                        <AdvancedMarker position={{ lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}>
-                                                                            <div className="w-8 h-8 bg-brand-dark rounded-xl flex items-center justify-center text-white border-2 border-white shadow-xl">
-                                                                                <Store className="w-4 h-4" />
-                                                                            </div>
-                                                                        </AdvancedMarker>
-                                                                        {/* User delivery pin */}
-                                                                        {deliveryInfo.lat && deliveryInfo.lng && (
-                                                                            <AdvancedMarker position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}>
-                                                                                <div className="w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-lg">
-                                                                                    <User className="w-3.5 h-3.5" />
-                                                                                </div>
-                                                                            </AdvancedMarker>
+                                                                            </InfoWindow>
                                                                         )}
                                                                     </Map>
-
-                                                                    {/* HUD overlay */}
-                                                                    <div className="absolute top-3 left-3 z-10 pointer-events-none flex flex-col gap-2">
-                                                                        <div className="bg-black/60 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10 shadow-lg flex items-center gap-2">
-                                                                            <div className="w-6 h-6 rounded-lg bg-blue-500/30 flex items-center justify-center">
-                                                                                <MapPin className="w-3 h-3 text-blue-400" />
+                                                                </motion.div>
+                                                            ) : (
+                                                                <motion.div key="sv" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex flex-col bg-black rounded-2xl overflow-hidden">
+                                                                    {/* Professional Header Bar */}
+                                                                    <div className="absolute top-0 left-0 right-0 z-[30] bg-gradient-to-b from-black/80 to-transparent px-5 pt-4 pb-8 pointer-events-none flex items-start justify-between">
+                                                                        <div className="flex items-center gap-3 pointer-events-none">
+                                                                            <div className="w-9 h-9 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 flex items-center justify-center">
+                                                                                <Eye className="w-4 h-4 text-white" />
                                                                             </div>
                                                                             <div>
-                                                                                <p className="text-[7px] font-black uppercase tracking-widest text-white/40">Heading</p>
-                                                                                <p className="text-[10px] font-black text-white">{Math.round(panoPov.heading)}°</p>
+                                                                                <p className="text-[9px] font-black uppercase tracking-widest text-white/50">Immersive Street View</p>
+                                                                                <p className="text-xs font-black text-white leading-tight">
+                                                                                    {svStartPos && deliveryInfo.lat && svStartPos.lat === deliveryInfo.lat
+                                                                                        ? (deliveryInfo.contactName || 'Your Location')
+                                                                                        : (selectedClinic?.name || 'Clinic Branch')}
+                                                                                </p>
                                                                             </div>
                                                                         </div>
-                                                                        {deliveryInfo.lat && deliveryInfo.lng && (
-                                                                            <div className="bg-black/60 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10 shadow-lg flex items-center gap-2">
-                                                                                <div className="w-6 h-6 rounded-lg bg-brand/30 flex items-center justify-center">
-                                                                                    <Truck className="w-3 h-3 text-brand" />
-                                                                                </div>
-                                                                                <div>
-                                                                                    <p className="text-[7px] font-black uppercase tracking-widest text-white/40">Distance</p>
-                                                                                    <p className="text-[10px] font-black text-white">{calcDist(deliveryInfo.lat, deliveryInfo.lng, Number(selectedBranch.lat), Number(selectedBranch.lng))}</p>
-                                                                                </div>
-                                                                            </div>
-                                                                        )}
+                                                                        <button
+                                                                            onClick={() => { setShowBranchStreetView(false); branchSvRef.current = null; }}
+                                                                            className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 flex items-center justify-center text-white hover:bg-red-500/80 hover:border-red-500 transition-all pointer-events-auto shadow-lg"
+                                                                        >
+                                                                            <X className="w-4 h-4" />
+                                                                        </button>
                                                                     </div>
 
-                                                                    {/* Legend */}
-                                                                    <div className="absolute bottom-3 right-3 z-10 pointer-events-none flex flex-col gap-1.5">
-                                                                        <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10">
-                                                                            <div className="w-3 h-3 rounded bg-brand-dark flex items-center justify-center"><Store className="w-2 h-2 text-white" /></div>
-                                                                            <span className="text-[8px] font-black text-white/70 uppercase tracking-widest">{selectedClinic?.name || 'Clinic'}</span>
-                                                                        </div>
-                                                                        {deliveryInfo.lat && deliveryInfo.lng && (
-                                                                            <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10">
-                                                                                <div className="w-3 h-3 rounded-full bg-blue-500 flex items-center justify-center"><User className="w-2 h-2 text-white" /></div>
-                                                                                <span className="text-[8px] font-black text-white/70 uppercase tracking-widest">Your Location</span>
-                                                                            </div>
-                                                                        )}
+                                                                    {/* Street View — top 62% */}
+                                                                    <div className="flex-[0.62] relative">
+                                                                        <div
+                                                                            ref={(el) => {
+                                                                                if (el && !branchSvRef.current) {
+                                                                                    const pos = svStartPos || { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) };
+                                                                                    const pano = new google.maps.StreetViewPanorama(el, {
+                                                                                        position: pos,
+                                                                                        pov: { heading: 0, pitch: 0 },
+                                                                                        zoom: 1,
+                                                                                        addressControl: false,
+                                                                                        fullscreenControl: false,
+                                                                                        zoomControl: true,
+                                                                                        linksControl: true,
+                                                                                        panControl: false,
+                                                                                        enableCloseButton: false,
+                                                                                        motionTracking: false,
+                                                                                    });
+                                                                                    pano.addListener('position_changed', () => {
+                                                                                        const p = pano.getPosition();
+                                                                                        if (p) setPanoPosition({ lat: p.lat(), lng: p.lng() });
+                                                                                    });
+                                                                                    pano.addListener('pov_changed', () => {
+                                                                                        const pov = pano.getPov();
+                                                                                        setPanoPov({ heading: pov.heading, pitch: pov.pitch });
+                                                                                    });
+                                                                                    branchSvRef.current = pano;
+                                                                                    setPanoPosition(pos);
+                                                                                }
+                                                                            }}
+                                                                            className="w-full h-full"
+                                                                        />
+                                                                        {/* Bottom fade into mini-map */}
+                                                                        <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black to-transparent pointer-events-none" />
                                                                     </div>
-                                                                </div>
-                                                            </motion.div>
-                                                        )}
-                                                    </AnimatePresence>
-                                                </div>
-                                            </motion.div>
+
+                                                                    {/* Mini-map — bottom 38% with route */}
+                                                                    <div className="flex-[0.38] relative overflow-hidden">
+                                                                        <Map
+                                                                            id="sv-minimap"
+                                                                            mapId="46537618861d8583"
+                                                                            defaultCenter={svStartPos || { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}
+                                                                            defaultZoom={15}
+                                                                            disableDefaultUI={true}
+                                                                            gestureHandling="greedy"
+                                                                            className="w-full h-full"
+                                                                        >
+                                                                            <PanoMapSyncer position={panoPosition} />
+                                                                            {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                                <DirectionsLine
+                                                                                    userLat={deliveryInfo.lat}
+                                                                                    userLng={deliveryInfo.lng}
+                                                                                    clinicLat={Number(selectedBranch.lat)}
+                                                                                    clinicLng={Number(selectedBranch.lng)}
+                                                                                />
+                                                                            )}
+                                                                            {/* Current Street View position + heading arrow */}
+                                                                            {panoPosition && (
+                                                                                <AdvancedMarker position={panoPosition}>
+                                                                                    <div className="w-10 h-10 flex items-center justify-center" style={{ transform: `rotate(${panoPov.heading}deg)`, transition: 'transform 0.3s ease' }}>
+                                                                                        <div className="w-5 h-5 bg-blue-500 rounded-full border-[3px] border-white shadow-2xl relative">
+                                                                                            <div className="absolute -top-5 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[10px] border-b-blue-500" />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </AdvancedMarker>
+                                                                            )}
+                                                                            {/* Clinic pin */}
+                                                                            <AdvancedMarker position={{ lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}>
+                                                                                <div className="w-8 h-8 bg-brand-dark rounded-xl flex items-center justify-center text-white border-2 border-white shadow-xl">
+                                                                                    <Store className="w-4 h-4" />
+                                                                                </div>
+                                                                            </AdvancedMarker>
+                                                                            {/* User delivery pin */}
+                                                                            {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                                <AdvancedMarker position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}>
+                                                                                    <div className="w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-lg">
+                                                                                        <User className="w-3.5 h-3.5" />
+                                                                                    </div>
+                                                                                </AdvancedMarker>
+                                                                            )}
+                                                                        </Map>
+
+                                                                        {/* HUD overlay */}
+                                                                        <div className="absolute top-3 left-3 z-10 pointer-events-none flex flex-col gap-2">
+                                                                            <div className="bg-black/60 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10 shadow-lg flex items-center gap-2">
+                                                                                <div className="w-6 h-6 rounded-lg bg-blue-500/30 flex items-center justify-center">
+                                                                                    <MapPin className="w-3 h-3 text-blue-400" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <p className="text-[7px] font-black uppercase tracking-widest text-white/40">Heading</p>
+                                                                                    <p className="text-[10px] font-black text-white">{Math.round(panoPov.heading)}°</p>
+                                                                                </div>
+                                                                            </div>
+                                                                            {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                                <div className="bg-black/60 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10 shadow-lg flex items-center gap-2">
+                                                                                    <div className="w-6 h-6 rounded-lg bg-brand/30 flex items-center justify-center">
+                                                                                        <Truck className="w-3 h-3 text-brand" />
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <p className="text-[7px] font-black uppercase tracking-widest text-white/40">Distance</p>
+                                                                                        <p className="text-[10px] font-black text-white">{calcDist(deliveryInfo.lat, deliveryInfo.lng, Number(selectedBranch.lat), Number(selectedBranch.lng))}</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Legend */}
+                                                                        <div className="absolute bottom-3 right-3 z-10 pointer-events-none flex flex-col gap-1.5">
+                                                                            <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10">
+                                                                                <div className="w-3 h-3 rounded bg-brand-dark flex items-center justify-center"><Store className="w-2 h-2 text-white" /></div>
+                                                                                <span className="text-[8px] font-black text-white/70 uppercase tracking-widest">{selectedClinic?.name || 'Clinic'}</span>
+                                                                            </div>
+                                                                            {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                                <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10">
+                                                                                    <div className="w-3 h-3 rounded-full bg-blue-500 flex items-center justify-center"><User className="w-2 h-2 text-white" /></div>
+                                                                                    <span className="text-[8px] font-black text-white/70 uppercase tracking-widest">Your Location</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
+                                                    </div>
+                                                </motion.div>
+                                            </>
                                         )}
                                     </AnimatePresence>
                                     <div className="p-4 bg-accent-peach/30 rounded-xl border border-brand/10">
                                         <p className="text-sm font-bold text-accent-brown mb-1">Pick up tomorrow after 10:00 AM</p>
                                         <p className="text-xs text-accent-brown/60">Please bring a valid ID and your order confirmation email when collecting your items.</p>
                                     </div>
-                                </>
-                            )}
-                        </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
 
                     {/* Vouchers & Rewards Section */}
                     <div className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-10 shadow-sm border border-accent-brown/5">
-                         <div className="flex items-center gap-4 mb-6">
+                        <div className="flex items-center gap-4 mb-6">
                             <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 shrink-0">
                                 <Tag className="w-6 h-6" />
                             </div>
@@ -894,7 +920,7 @@ const Checkout = () => {
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <span className="font-black text-brand">-₱{appliedVoucher.discount.toLocaleString()}</span>
-                                    <button 
+                                    <button
                                         onClick={() => setAppliedVoucher(null)}
                                         className="p-1.5 hover:bg-white rounded-lg transition-colors text-accent-brown/40 hover:text-red-500"
                                     >
@@ -906,8 +932,8 @@ const Checkout = () => {
                             <div className="space-y-6">
                                 <div className="flex gap-3">
                                     <div className="relative flex-1">
-                                        <input 
-                                            type="text" 
+                                        <input
+                                            type="text"
                                             placeholder="Enter voucher code"
                                             id="voucher-input"
                                             className="w-full bg-accent-peach/10 border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-3.5 outline-none text-accent-brown font-black text-xs uppercase tracking-widest transition-all"
@@ -918,7 +944,7 @@ const Checkout = () => {
                                             }}
                                         />
                                     </div>
-                                    <button 
+                                    <button
                                         onClick={() => {
                                             const input = document.getElementById('voucher-input') as HTMLInputElement;
                                             handleApplyVoucher(input.value);
@@ -969,12 +995,14 @@ const Checkout = () => {
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
+
+
                             {/* GCash via PayMongo */}
                             <button
                                 onClick={() => setSelectedPayment('gcash')}
-                                className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer ${selectedPayment === 'gcash' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
+                                className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer ${selectedPayment === 'gcash' ? 'border-brand bg-brand/5 text-brand-dark shadow-sm' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
                             >
-                                <Wallet className="w-8 h-8 shrink-0" />
+                                <Smartphone className="w-8 h-8 shrink-0 text-[#007DFF]" />
                                 <div className="text-center">
                                     <span className="text-[10px] font-black uppercase tracking-widest block">GCash</span>
                                     <span className="text-[7px] font-bold uppercase tracking-widest opacity-50 block">via PayMongo</span>
@@ -984,9 +1012,9 @@ const Checkout = () => {
                             {/* Maya via PayMongo */}
                             <button
                                 onClick={() => setSelectedPayment('maya')}
-                                className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer ${selectedPayment === 'maya' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
+                                className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer ${selectedPayment === 'maya' ? 'border-brand bg-brand/5 text-brand-dark shadow-sm' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
                             >
-                                <CreditCard className="w-8 h-8 shrink-0" />
+                                <CreditCard className="w-8 h-8 shrink-0 text-[#00A9A5]" />
                                 <div className="text-center">
                                     <span className="text-[10px] font-black uppercase tracking-widest block">Maya</span>
                                     <span className="text-[7px] font-bold uppercase tracking-widest opacity-50 block">via PayMongo</span>
@@ -998,12 +1026,13 @@ const Checkout = () => {
                                 onClick={() => setSelectedPayment('cash')}
                                 className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer col-span-2 ${selectedPayment === 'cash' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
                             >
-                                <Banknote className="w-8 h-8 shrink-0" />
+                                <Banknote className="w-8 h-8 shrink-0 text-amber-600" />
                                 <span className="text-[10px] font-black uppercase tracking-widest text-center">
                                     {fulfillmentMethod === 'delivery' ? 'Cash on Delivery' : 'Cash on Pickup'}
                                 </span>
                             </button>
                         </div>
+
 
                         {(selectedPayment === 'gcash' || selectedPayment === 'maya') && (
                             <motion.div
@@ -1017,6 +1046,7 @@ const Checkout = () => {
                                 </p>
                             </motion.div>
                         )}
+
                     </div>
                 </div>
 
@@ -1273,6 +1303,17 @@ const Checkout = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
+            {/* Global Modal */}
+            <ModernModal
+                isOpen={modal.isOpen}
+                onClose={() => setModal(m => ({ ...m, isOpen: false }))}
+                onConfirm={modal.onConfirm}
+                title={modal.title}
+                message={modal.message}
+                type={modal.type}
+            />
+
+
         </DashboardLayout>
     );
 };

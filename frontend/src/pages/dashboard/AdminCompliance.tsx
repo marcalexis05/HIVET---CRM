@@ -93,6 +93,8 @@ const AdminCompliance = () => {
     const [actionLoading, setActionLoading] = useState(false);
     const [viewingDoc, setViewingDoc] = useState<{ url: string, name: string, rotation: number } | null>(null);
     const [rejectionReason, setRejectionReason] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const pageSize = 5;
 
     const token = localStorage.getItem('hivet_token');
 
@@ -122,6 +124,7 @@ const AdminCompliance = () => {
         setSelected(null);
         setConfirmAction(null);
         setRejectionReason('');
+        setCurrentPage(1);
     }, [tab]);
 
     const records = tab === 'clinics' ? clinics : riders;
@@ -133,6 +136,9 @@ const AdminCompliance = () => {
             String(r.id).includes(search);
         return matchStatus && matchSearch;
     });
+
+    const totalPages = Math.ceil(filtered.length / pageSize);
+    const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
     const counts = (src: AnyRecord[]) => ({
         all: src.length,
@@ -200,7 +206,7 @@ const AdminCompliance = () => {
                             <div className={`w-10 h-10 ${c.bg} rounded-xl flex items-center justify-center ${c.color} shrink-0`}>{c.icon}</div>
                             <div>
                                 <p className="text-2xl font-black text-accent-brown">{c.value}</p>
-                                <p className="text-[9px] font-black text-accent-brown/40 uppercase tracking-widest">{c.label}</p>
+                                <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest">{c.label}</p>
                             </div>
                         </motion.div>
                     ))}
@@ -231,12 +237,12 @@ const AdminCompliance = () => {
                     <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left">
                             <thead>
-                                <tr className="border-b border-accent-brown/5 text-[9px] font-black uppercase tracking-widest text-accent-brown/40">
-                                    <th className="px-6 py-4">{tab === 'clinics' ? 'Clinic' : 'Rider'}</th>
-                                    <th className="px-6 py-4">Documents</th>
-                                    <th className="px-6 py-4">Email</th>
-                                    <th className="px-6 py-4">Status</th>
-                                    <th className="px-6 py-4 text-right">Action</th>
+                                <tr className="border-b border-accent-brown/5 text-[10px] font-black uppercase tracking-widest text-accent-brown/40">
+                                    <th className="px-6 py-5">{tab === 'clinics' ? 'Clinic' : 'Rider'}</th>
+                                    <th className="px-6 py-5">Documents</th>
+                                    <th className="px-6 py-5">Email</th>
+                                    <th className="px-6 py-5">Status</th>
+                                    <th className="px-6 py-5 text-right">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -255,7 +261,7 @@ const AdminCompliance = () => {
                                         </div>
                                     </td></tr>
                                 )}
-                                {!loading && filtered.map((r, i) => (
+                                {!loading && paginated.map((r, i) => (
                                     <motion.tr key={r.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
                                         className="border-b border-accent-brown/5 hover:bg-accent-peach/5 transition-all cursor-pointer group"
                                         onClick={() => setSelected(r)}>
@@ -265,10 +271,10 @@ const AdminCompliance = () => {
                                                     {tab === 'clinics' ? <Store className="w-4 h-4" /> : <Truck className="w-4 h-4" />}
                                                 </div>
                                                 <div>
-                                                    <p className="font-bold text-accent-brown text-xs group-hover:text-brand-dark transition-colors">
+                                                    <p className="font-bold text-accent-brown text-sm group-hover:text-brand-dark transition-colors">
                                                         {getDisplayName(r, tab)}
                                                     </p>
-                                                    <p className="text-[10px] text-accent-brown/40">
+                                                    <p className="text-xs text-accent-brown/40">
                                                         {tab === 'clinics' ? (r as ClinicRecord).owner_name : (r as RiderRecord).phone} · {tab === 'clinics' ? 'CL-' : 'RD-'}{String(r.id).padStart(4, '0')}
                                                     </p>
                                                 </div>
@@ -310,12 +316,12 @@ const AdminCompliance = () => {
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-xs text-accent-brown/60 font-bold">{r.email}</td>
+                                        <td className="px-6 py-4 text-sm text-accent-brown/60 font-bold">{r.email}</td>
                                         <td className="px-6 py-4"><StatusBadge status={r.compliance_status} /></td>
                                         <td className="px-6 py-4 text-right">
                                             <button onClick={e => { e.stopPropagation(); setSelected(r); }}
-                                                className="flex items-center gap-1 ml-auto text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-brand-dark hover:bg-brand/5 px-3 py-1.5 rounded-lg transition-all">
-                                                <Eye className="w-3 h-3" /> Review
+                                                className="flex items-center gap-1.5 ml-auto text-xs font-black uppercase tracking-widest text-accent-brown/40 hover:text-brand-dark hover:bg-brand/5 px-4 py-2 rounded-xl transition-all">
+                                                <Eye className="w-3.5 h-3.5" /> Review
                                             </button>
                                         </td>
                                     </motion.tr>
@@ -326,7 +332,7 @@ const AdminCompliance = () => {
 
                     {/* Mobile Cards */}
                     <div className="md:hidden divide-y divide-accent-brown/5">
-                        {filtered.map((r, i) => (
+                        {paginated.map((r, i) => (
                             <motion.div key={r.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
                                 className="p-5 cursor-pointer" onClick={() => setSelected(r)}>
                                 <div className="flex items-center justify-between mb-3">
@@ -353,10 +359,45 @@ const AdminCompliance = () => {
                         )}
                     </div>
 
-                    <div className="p-4 border-t border-accent-brown/5">
-                        <span className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest">
-                            Showing {filtered.length} of {records.length} {tab}
+                    <div className="p-4 border-t border-accent-brown/5 flex items-center justify-between">
+                        <span className="text-xs font-bold text-accent-brown/40 uppercase tracking-widest">
+                            Showing {paginated.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filtered.length)} of {filtered.length} {tab}
                         </span>
+                        {totalPages > 1 && (
+                            <div className="flex gap-1.5 items-center">
+                                <button 
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1}
+                                    className="px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:bg-accent-peach/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                    Prev
+                                </button>
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                    .filter(p => p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1))
+                                    .map((p, idx, arr) => {
+                                        const prev = arr[idx - 1];
+                                        const showEllipsis = prev && p - prev > 1;
+                                        return (
+                                            <span key={p} className="flex items-center gap-1.5">
+                                                {showEllipsis && <span className="text-[10px] text-accent-brown/30 font-bold">…</span>}
+                                                <button
+                                                    onClick={() => setCurrentPage(p)}
+                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${currentPage === p ? 'bg-brand text-white shadow-md shadow-brand/20' : 'text-accent-brown/60 hover:bg-accent-peach/30'}`}
+                                                >
+                                                    {p}
+                                                </button>
+                                            </span>
+                                        );
+                                    })}
+                                <button 
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage === totalPages}
+                                    className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-brand-dark hover:bg-brand/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

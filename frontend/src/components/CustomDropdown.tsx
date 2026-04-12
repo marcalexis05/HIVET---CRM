@@ -53,7 +53,7 @@ export const CustomDropdown = ({
     return (
         <div className={`relative w-full ${className}`} ref={ref}>
             {label && (
-                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3 mb-2 block">
+                <label className="text-[11px] font-black uppercase tracking-widest text-accent-brown/40 block mb-3 ml-2">
                     {label} 
                     {isRequired && <span className="text-brand-dark ml-1">*</span>}
                     {isOptional && (
@@ -64,10 +64,10 @@ export const CustomDropdown = ({
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full bg-accent-peach/20 border-2 transition-all rounded-[2rem] py-4 px-5 text-sm font-semibold text-accent-brown flex items-center justify-between outline-none group ${
+                className={`w-full bg-[#F7F6F2] border-2 transition-all rounded-3xl py-4 px-8 text-base font-bold text-accent-brown flex items-center justify-between outline-none group ${
                     isOpen 
-                        ? 'border-brand/30 bg-white shadow-lg shadow-brand/5 ring-4 ring-brand/5' 
-                        : 'border-transparent hover:bg-accent-peach/30'
+                        ? 'border-brand-dark/20 bg-white shadow-xl shadow-brand-dark/5 ring-1 ring-brand-dark/30' 
+                        : 'border-transparent hover:bg-black/5'
                 }`}
             >
                 <div className="flex items-center gap-3">

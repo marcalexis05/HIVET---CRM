@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle, ArrowRight, ShoppingBag } from 'lucide-react';
@@ -62,16 +62,16 @@ const PaymentSuccess = () => {
                     <CheckCircle className="w-10 h-10 text-green-500" />
                 </div>
                 
-                <h1 className="text-3xl font-black text-brand-dark mb-3">Payment Successful!</h1>
+                <h1 className="text-3xl font-black text-accent-brown mb-3">Payment Successful!</h1>
                 <p className="text-accent-brown/60 font-medium mb-8 text-sm">
                     Your payment was processed securely via PayMongo. Your order has been placed and is now being reviewed by the clinic.
                 </p>
 
-                <div className="mb-8 px-6 py-4 bg-brand-dark/5 rounded-[2rem] border border-brand-dark/5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-dark/40 mb-1">Redirecting to Dashboard</p>
+                <div className="mb-8 px-6 py-4 bg-brand-dark/5 rounded-[2rem] border border-accent-brown/5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/40 mb-1">Redirecting to Dashboard</p>
                     <div className="flex items-center justify-center gap-2">
-                        <span className="text-2xl font-black text-brand-dark">{seconds}</span>
-                        <span className="text-[10px] font-bold text-brand-dark/30 uppercase tracking-widest">seconds remaining</span>
+                        <span className="text-2xl font-black text-accent-brown">{seconds}</span>
+                        <span className="text-[10px] font-bold text-accent-brown/30 uppercase tracking-widest">seconds remaining</span>
                     </div>
                 </div>
                 
@@ -86,7 +86,7 @@ const PaymentSuccess = () => {
                     
                     <button 
                         onClick={() => navigate('/dashboard/customer/catalog')}
-                        className="w-full bg-brand/10 text-brand-dark py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-brand/20 transition-all text-[10px] cursor-pointer"
+                        className="w-full bg-brand/10 text-accent-brown py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-brand/20 transition-all text-[10px] cursor-pointer"
                     >
                         <ShoppingBag className="w-4 h-4" />
                         Continue Shopping

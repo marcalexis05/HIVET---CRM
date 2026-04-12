@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, X, Shield, Lock, FileText, Globe, HelpCircle } from 'lucide-react';
+import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, X, Shield, Lock, FileText, Globe, HelpCircle, ArrowUpRight, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Logo } from './Logo';
 
@@ -8,172 +8,125 @@ interface FooterProps {
     variant?: 'main' | 'business' | 'rider';
 }
 
-type LegalSection = 'Help Center' | 'Safety Center' | 'Terms of Service' | 'Security' | 'Privacy Policy' | 'Cookies' | null;
+type LegalSection = 'Help Center' | 'FAQs' | 'About' | 'Customer Support' | 'Technical Support' | 'Safety Center' | 'Terms of Service' | 'Security' | 'Privacy Policy' | 'Cookies' | 'Direct Line' | null;
 
 export function Footer({ variant = 'main' }: FooterProps) {
     const [activeSection, setActiveSection] = useState<LegalSection>(null);
+    const [isCopied, setIsCopied] = useState(false);
     const isBusiness = variant === 'business';
     const isRider = variant === 'rider';
 
-    const brandName = isBusiness ? 'Hi-Vet Partners' : isRider ? 'Hi-Vet Riders' : 'Hi-Vet';
+    const brandName = isBusiness ? 'Partner Network' : isRider ? 'Rider Fleet' : 'Hi-Vet';
     const description = isBusiness 
-        ? 'The ultimate business management platform designed exclusively for veterinary professionals and clinic owners.'
+        ? 'High-performance infrastructure for the modern veterinary professional. Built for scale, security, and precision.'
         : isRider 
-            ? 'Join the premier network of pet healthcare delivery drivers. Turn your miles into meaningful missions.'
-            : 'Redefining the standard of pet care with professional tools and a community-driven approach. Your pet\'s wellbeing is our priority.';
-
-    const supportTitle = isBusiness ? 'Partner Support' : isRider ? 'Rider Support' : 'Support';
-    const supportEmail = isBusiness ? 'partners@hi-vet.com' : isRider ? 'riders@hi-vet.com' : 'hello@hi-vet.com';
-    const supportPhone = isBusiness ? '+1 (800) VET-PRO1' : isRider ? '+1 (800) HIVET-GO' : '+1 (555) 123-4567';
+            ? 'The logistical backbone of pet healthcare. Synchronizing deliveries with surgical precision across the network.'
+            : 'Architecting the future of veterinary care through advanced logistics and compassionate technology.';
 
     const globalEmail = 'hivetveterinary3@gmail.com';
     const globalPhone = '+63-912-345-6789';
-    const globalAddress = (
-        <>
-            Deparo,<br />
-            Brgy 174, Caloocan City,<br />
-            Metro Manila, 1421, Philippines
-        </>
-    );
+    const globalAddress = "Deparo, Brgy 174, Caloocan City, Metro Manila";
 
     const legalContent = {
-        'Help Center': {
-            title: 'How can we help?',
-            icon: HelpCircle,
-            content: 'We are humbly committed to providing the support you need. Our team is available to assist you with order tracking, platform navigation, and account management. Please reach out to our dedicated support channels for immediate assistance.'
-        },
-        'Safety Center': {
-            title: 'Our Safety Commitment',
-            icon: Globe,
-            content: 'The well-being of your pets and the integrity of our medical deliveries are our highest priorities. We utilize climate-controlled logistics and strict verification protocols to ensure every treatment reaches its destination safely.'
-        },
-        'Terms of Service': {
-            title: 'Platform Agreements',
-            icon: FileText,
-            content: 'By utilizing the Hi-Vet platform, you agree to our professional standards of care. We maintain a transparent relationship with all users, partners, and riders to ensure a fair and efficient healthcare ecosystem.'
-        },
-        'Security': {
-            title: 'Advanced Protection',
-            icon: Shield,
-            content: 'Your data is secured using industry-leading AES-256 encryption. We implement rigorous security audits and proactive threat monitoring to protect your personal and medical information around the clock.'
-        },
-        'Privacy Policy': {
-            title: 'Your Privacy Matters',
-            icon: Lock,
-            content: 'We humbly respect your privacy. Hi-Vet never sells user data. We only collect essential information required to facilitate life-saving care and improve our dedicated services for the pet community.'
-        },
-        'Cookies': {
-            title: 'Cookie Preferences',
-            icon: Globe,
-            content: 'We use essential cookies to provide a personalized and secure experience. These small data points help us remember your preferences and ensure our platform functions with the professional speed you expect.'
-        }
+        'Help Center': { title: 'Operational Support', icon: HelpCircle, content: 'Our precision response team is available 24/7 to manage logistical synchronization and platform utility.' },
+        'FAQs': { title: 'Standard Protocols', icon: HelpCircle, content: 'Comprehensive documentation on operational standards, fulfillment timelines, and network compliance.' },
+        'About': { title: 'The Manifesto', icon: Globe, content: 'Hi-Vet is a technological heritage company dedicated to the architectural advancement of pet healthcare delivery.' },
+        'Customer Support': { title: 'Concierge Care', icon: Mail, content: 'Direct access to our senior care architects for personalized solution management.' },
+        'Technical Support': { title: 'Systems Infrastructure', icon: Shield, content: 'Real-time monitoring and technical maintenance for the Hi-Vet global digital network.' },
+        'Safety Center': { title: 'Risk Integrity', icon: Globe, content: 'Our commitment to climate-controlled safety protocols and medical-grade delivery standards.' },
+        'Terms of Service': { title: 'Governance Agreement', icon: FileText, content: 'Professional standards of interaction and operational usage for all network participants.' },
+        'Security': { title: 'Encryption Standards', icon: Shield, content: 'AES-256 bank-grade encryption protocols protecting the sanctity of medical and personal data.' },
+        'Privacy Policy': { title: 'Data Sovereignty', icon: Lock, content: 'Rigorous privacy standards ensuring zero third-party data commercialization.' },
+        'Cookies': { title: 'Preference Nodes', icon: Globe, content: 'Essential operational data required for synchronized platform performance.' },
+        'Direct Line': { title: 'Direct Response Line', icon: Phone, content: 'Our senior care architects are available for immediate logistical synchronization. Reach us at +63-912-345-6789.' }
     };
 
-    // Prevent body scroll when modal is open
     useEffect(() => {
-        if (activeSection) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = 'unset';
-        }
+        if (activeSection) document.body.style.overflow = 'hidden';
+        else document.body.style.overflow = 'unset';
     }, [activeSection]);
 
     return (
-        <footer className="py-16 xs:py-24 bg-accent-brown text-accent-cream rounded-t-[3rem] xs:rounded-t-[5rem] mt-12 xs:mt-20 relative">
-            <div className="container mx-auto px-6 xs:px-8">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-12 xs:gap-16 md:gap-8 pb-12 xs:pb-16">
-                    {/* Branding Column */}
-                    <div className="md:col-span-4 space-y-6 xs:space-y-8">
-                        <Link to="/" className="flex items-center gap-3 group w-fit">
-                            <div className="w-12 h-12 xs:w-14 xs:h-14 bg-white rounded-2xl flex items-center justify-center p-2 group-hover:scale-110 transition-transform shadow-lg shadow-black/20">
-                                <Logo className="w-full h-full text-brand-dark" />
-                            </div>
-                            <span className="text-xl xs:text-2xl font-black tracking-tighter text-white">{brandName}</span>
-                        </Link>
-                        <p className="text-accent-cream/50 text-sm xs:text-base leading-relaxed max-w-sm font-medium">
-                            {description}
-                        </p>
-                        <div className="flex gap-3 xs:gap-4">
+        <footer className="bg-[#0A0A0A] text-white rounded-t-[4rem] relative overflow-hidden">
+            {/* Background Accent */}
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand/5 rounded-full blur-[120px] -z-0" />
+            
+            <div className="container mx-auto px-8 pt-16 pb-8 relative z-10">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-16 mb-12">
+                    {/* Prestigious Branding */}
+                    <div className="md:col-span-5 space-y-6">
+                        <div className="space-y-4">
+                            <Link to="/" className="flex items-center gap-4 group w-fit">
+                                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center p-2.5 group-hover:rotate-6 transition-transform shadow-2xl">
+                                    <Logo className="w-full h-full text-brand-dark" />
+                                </div>
+                                <div className="space-y-0.5">
+                                    <span className="text-2xl font-black tracking-tighter uppercase whitespace-nowrap">{brandName}</span>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-brand animate-pulse" />
+                                        <span className="text-[10px] font-black tracking-[0.4em] uppercase text-white/30">Network Live</span>
+                                    </div>
+                                </div>
+                            </Link>
+                            <p className="text-white/40 text-sm font-medium leading-relaxed max-w-sm italic">
+                                "{description}"
+                            </p>
+                        </div>
+                        
+                        <div className="flex gap-3">
                             {[Facebook, Twitter, Instagram, Youtube].map((Icon, i) => (
-                                <button key={i} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-brand hover:text-white transition-all border border-white/5">
-                                    <Icon className="w-5 h-5" />
+                                <button key={i} className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white text-brand-dark transition-all border border-white/10 group">
+                                    <Icon className="w-4 h-4 group-hover:scale-110 transition-transform" />
                                 </button>
                             ))}
                         </div>
                     </div>
 
-                    {/* Quick Links / Platform */}
-                    <div className="md:col-span-2 space-y-6 xs:space-y-8">
-                        <h4 className="text-xs xs:text-sm font-black uppercase tracking-[0.2em] text-brand">Platform</h4>
-                        <ul className="space-y-3 xs:space-y-4 text-accent-cream/60 font-medium text-sm xs:text-base">
-                            <li><Link to="/catalog" className="hover:text-white transition-colors">Catalog</Link></li>
-                            <li><a href="/#orders" className="hover:text-white transition-colors">Orders</a></li>
-                            <li><a href="/#loyalty" className="hover:text-white transition-colors">Loyalty Program</a></li>
-                            <li><Link to="/for-clinics" className="hover:text-brand transition-colors text-brand font-bold">For Clinic Owners</Link></li>
-                            <li><Link to="/for-riders" className="hover:text-brand transition-colors text-brand font-bold">For Riders</Link></li>
-                        </ul>
-                    </div>
-
-                    {/* Support / Help */}
-                    <div className="md:col-span-2 space-y-6 xs:space-y-8">
-                        <h4 className="text-xs xs:text-sm font-black uppercase tracking-[0.2em] text-brand">{supportTitle}</h4>
-                        <ul className="space-y-3 xs:space-y-4 text-accent-cream/60 font-medium text-sm xs:text-base">
-                            {['Help Center', 'Safety Center', 'Terms of Service'].map((item) => (
-                                <li key={item}>
-                                    <button 
-                                        onClick={() => setActiveSection(item as LegalSection)}
-                                        className="hover:text-white transition-colors text-left uppercase text-[10px] tracking-widest font-black"
-                                    >
-                                        {item}
-                                    </button>
-                                </li>
-                            ))}
-                            {isBusiness || isRider ? (
-                                <>
-                                    <li className="pt-2 flex items-center gap-2 text-[10px] text-white/40 uppercase font-black tracking-widest">
-                                        <Mail className="w-3 h-3" /> {supportEmail}
-                                    </li>
-                                    <li className="flex items-center gap-2 text-[10px] text-white/40 uppercase font-black tracking-widest">
-                                        <Phone className="w-3 h-3" /> {supportPhone}
-                                    </li>
-                                </>
-                            ) : null}
-                        </ul>
-                    </div>
-
-                    {/* Stay Connected */}
-                    <div className="md:col-span-4 space-y-6 xs:space-y-8">
-                        <h4 className="text-xs xs:text-sm font-black uppercase tracking-[0.2em] text-brand">Stay Connected</h4>
+                    {/* Navigation Columns */}
+                    <div className="md:col-span-7 grid grid-cols-2 md:grid-cols-3 gap-8">
                         <div className="space-y-6">
-                            <div className="flex items-center gap-4 group">
-                                <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center shrink-0 group-hover:bg-brand/20 group-hover:border-brand/30 transition-all duration-300">
-                                    <Mail className="w-5 h-5 text-accent-cream/70 group-hover:text-brand transition-colors" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-white/30 mb-0.5">Email Us</span>
-                                    <span className="font-semibold text-sm xs:text-base text-accent-cream/80 group-hover:text-white transition-colors">{globalEmail}</span>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-4 group">
-                                <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center shrink-0 group-hover:bg-brand/20 group-hover:border-brand/30 transition-all duration-300">
-                                    <Phone className="w-5 h-5 text-accent-cream/70 group-hover:text-brand transition-colors" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-white/30 mb-0.5">Call Us</span>
-                                    <span className="font-semibold text-sm xs:text-base text-accent-cream/80 group-hover:text-white transition-colors">{globalPhone}</span>
-                                </div>
-                            </div>
-
-                            <div className="flex items-start gap-4 group">
-                                <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center shrink-0 group-hover:bg-brand/20 group-hover:border-brand/30 transition-all duration-300">
-                                    <MapPin className="w-5 h-5 text-accent-cream/70 group-hover:text-brand transition-colors" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-white/30 mb-0.5">Visit Us</span>
-                                    <span className="font-semibold text-sm xs:text-base text-accent-cream/80 leading-relaxed group-hover:text-white transition-colors">
-                                        {globalAddress}
-                                    </span>
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-brand">Ecosystem</h4>
+                            <ul className="space-y-4">
+                                {['About', 'Help Center', 'Safety Center'].map((item) => (
+                                    <li key={item}>
+                                        <button onClick={() => setActiveSection(item as LegalSection)} className="text-white/40 hover:text-white text-xs font-black uppercase tracking-widest transition-colors flex items-center gap-2 group">
+                                            {item}
+                                            <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                        <div className="space-y-6">
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-brand">Protocols</h4>
+                            <ul className="space-y-4">
+                                {['Terms of Service', 'Security', 'Privacy Policy'].map((item) => (
+                                    <li key={item}>
+                                        <button onClick={() => setActiveSection(item as LegalSection)} className="text-white/40 hover:text-white text-xs font-black uppercase tracking-widest transition-colors flex items-center gap-2 group">
+                                            {item}
+                                            <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                        <div className="col-span-2 md:col-span-1 space-y-6">
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-brand">Direct Sync</h4>
+                            <div className="space-y-6">
+                                <a href={`mailto:${globalEmail}`} className="block border-l-2 border-brand/20 pl-4 py-1 hover:border-brand transition-colors">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-white/20 mb-1">Electronic Mail</p>
+                                    <p className="text-sm font-bold text-white/70">{globalEmail}</p>
+                                </a>
+                                <button 
+                                    onClick={() => setActiveSection('Direct Line')} 
+                                    className="block w-full text-left border-l-2 border-brand/20 pl-4 py-1 hover:border-brand transition-colors cursor-pointer"
+                                >
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-white/20 mb-1">Direct Line</p>
+                                    <p className="text-sm font-bold text-white/70">{globalPhone}</p>
+                                </button>
+                                <div className="block border-l-2 border-brand/20 pl-4 py-1">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-white/20 mb-1">HQ Distribution</p>
+                                    <p className="text-[11px] font-medium text-white/40 leading-relaxed uppercase tracking-tight">{globalAddress}</p>
                                 </div>
                             </div>
                         </div>
@@ -181,15 +134,15 @@ export function Footer({ variant = 'main' }: FooterProps) {
                 </div>
 
                 {/* Bottom Bar */}
-                <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-[8px] xs:text-[10px] font-black uppercase tracking-[0.2em] xs:tracking-[0.3em] text-accent-cream/20 text-center md:text-left">
-                    <p>© 2026 {brandName}. All Rights Reserved.</p>
-                    <div className="flex gap-6 xs:gap-8">
-                        {['Security', 'Privacy Policy', 'Cookies'].map((item) => (
-                            <button 
-                                key={item}
-                                onClick={() => setActiveSection(item as LegalSection)}
-                                className="hover:text-white transition-colors"
-                            >
+                <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
+                    <div className="flex items-center gap-6">
+                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/10">
+                            © 2026 HI-VET INFRASTRUCTURE SOLUTIONS.
+                        </p>
+                    </div>
+                    <div className="flex gap-10">
+                        {['Cookies', 'Technical Support'].map((item) => (
+                            <button key={item} onClick={() => setActiveSection(item as LegalSection)} className="text-[10px] font-black uppercase tracking-[0.3em] text-white/10 hover:text-brand transition-colors">
                                 {item}
                             </button>
                         ))}
@@ -197,57 +150,58 @@ export function Footer({ variant = 'main' }: FooterProps) {
                 </div>
             </div>
 
-            {/* Legal Overlay Modal */}
+            {/* Professional Protocol Modal */}
             <AnimatePresence>
                 {activeSection && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setActiveSection(null)}
-                            className="absolute inset-0 bg-accent-brown/80 backdrop-blur-md"
-                        />
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="relative w-full max-w-lg bg-white rounded-[2.5rem] p-8 xs:p-12 shadow-2xl overflow-hidden"
-                        >
-                            <button 
-                                onClick={() => setActiveSection(null)}
-                                className="absolute top-8 right-8 w-10 h-10 bg-accent-peach/20 rounded-full flex items-center justify-center text-accent-brown hover:bg-brand hover:text-white transition-all transform hover:rotate-90"
-                            >
-                                <X className="w-5 h-5" />
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setActiveSection(null)} className="absolute inset-0 bg-black/95 backdrop-blur-3xl" />
+                        <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} className="relative w-full max-w-2xl bg-[#111] rounded-[3.5rem] p-12 lg:p-16 border border-white/10 shadow-2xl overflow-hidden" >
+                            <button onClick={() => setActiveSection(null)} className="absolute top-10 right-10 w-12 h-12 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-white hover:bg-brand hover:text-accent-brown transition-all" >
+                                <X className="w-6 h-6" />
                             </button>
-
-                            <div className="space-y-6">
-                                <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center">
-                                    {(() => {
-                                        const Icon = legalContent[activeSection].icon;
-                                        return <Icon className="w-8 h-8 text-brand" />;
-                                    })()}
+                            <div className="space-y-10">
+                                <div className="space-y-6">
+                                    <div className="w-20 h-20 bg-brand/10 border border-brand/20 rounded-[2rem] flex items-center justify-center">
+                                        {(() => {
+                                            const Icon = legalContent[activeSection].icon;
+                                            return <Icon className="w-10 h-10 text-brand" />;
+                                        })()}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-brand">System Protocol</p>
+                                        <h3 className="text-4xl font-black text-white tracking-tighter uppercase">{legalContent[activeSection].title}</h3>
+                                    </div>
                                 </div>
+                                <p className="text-xl text-white/50 leading-relaxed italic font-medium">"{legalContent[activeSection].content}"</p>
                                 
-                                <div className="space-y-2">
-                                    <h3 className="text-2xl xs:text-3xl font-black text-accent-brown tracking-tighter">
-                                        {legalContent[activeSection].title}
-                                    </h3>
-                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand">Legal & Transparency</p>
-                                </div>
+                                {(activeSection === 'Direct Line' || activeSection === 'Technical Support' || activeSection === 'Customer Support') && (
+                                    <div className="flex flex-col sm:flex-row gap-4">
+                                        <motion.button 
+                                            whileHover={{ scale: 1.02 }}
+                                            whileTap={{ scale: 0.98 }}
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(globalPhone);
+                                                setIsCopied(true);
+                                                setTimeout(() => setIsCopied(false), 2000);
+                                            }}
+                                            className="flex-1 bg-white/5 border border-white/10 text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] hover:bg-white/10 transition-all flex items-center justify-center gap-3"
+                                        >
+                                            {isCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                                            {isCopied ? 'Copied to Clipboard' : 'Copy Number'}
+                                        </motion.button>
+                                        <motion.button 
+                                            whileHover={{ scale: 1.02 }}
+                                            whileTap={{ scale: 0.98 }}
+                                            onClick={() => window.open(`tel:${globalPhone}`, '_self')}
+                                            className="flex-1 bg-brand text-accent-brown py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] hover:brightness-110 transition-all flex items-center justify-center gap-3"
+                                        >
+                                            <Phone className="w-4 h-4" />
+                                            Place Call Now
+                                        </motion.button>
+                                    </div>
+                                )}
 
-                                <p className="text-sm xs:text-base text-accent-brown/60 leading-relaxed font-medium">
-                                    {legalContent[activeSection].content}
-                                </p>
-
-                                <div className="pt-6">
-                                    <button 
-                                        onClick={() => setActiveSection(null)}
-                                        className="w-full btn-primary py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-brand/20"
-                                    >
-                                        I Understand
-                                    </button>
-                                </div>
+                                <button onClick={() => setActiveSection(null)} className="w-full bg-white text-black py-6 rounded-2xl font-black uppercase tracking-[0.3em] text-[11px] hover:bg-brand hover:text-accent-brown transition-all" > Close Documentation </button>
                             </div>
                         </motion.div>
                     </div>

@@ -12,15 +12,17 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
+from email.utils import formatdate, make_msgid
 import traceback
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 
 import asyncio
 from datetime import datetime, timedelta
 from typing import Optional, List
+import urllib.parse
 from urllib.parse import urlencode
 
-from fastapi import FastAPI, HTTPException, Depends, Request, UploadFile, File, Form, Query, APIRouter
+from fastapi import FastAPI, HTTPException, Depends, Request, UploadFile, File, Form, Query, APIRouter, BackgroundTasks
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
@@ -30,7 +32,7 @@ from dotenv import load_dotenv
 from jose import JWTError, jwt
 from passlib.hash import pbkdf2_sha256
 
-from sqlalchemy import create_engine, Column, String, Text, DateTime, text, Integer, Boolean, Float, ForeignKey, func, inspect
+from sqlalchemy import create_engine, Column, String, Text, DateTime, text, Integer, Boolean, Float, ForeignKey, func, inspect, or_
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from dateutil.relativedelta import relativedelta
 
@@ -56,12 +58,66 @@ EMAIL_APP_PWD = "dpan oejd uzvs tepw"
 
 PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY", "test_key_placeholder")
 
+PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY", "test_key_placeholder")
+
+
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# ---------------------------------------------------------------------------
+# Database Migrations
+# ---------------------------------------------------------------------------
+def run_migrations():
+    inspector = inspect(engine)
+    if "rider_profiles" in inspector.get_table_names():
+        columns = [c['name'] for c in inspector.get_columns('rider_profiles')]
+        if 'birthday' not in columns:
+            print("Adding birthday column to rider_profiles...")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE rider_profiles ADD COLUMN birthday VARCHAR(255) NULL"))
+                conn.commit()
+        if 'gender' not in columns:
+            print("Adding gender column to rider_profiles...")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE rider_profiles ADD COLUMN gender VARCHAR(255) NULL"))
+                conn.commit()
+        if 'middle_name' not in columns:
+            print("Adding middle_name column to rider_profiles...")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE rider_profiles ADD COLUMN middle_name VARCHAR(255) NULL"))
+                conn.commit()
+
+    if "business_profiles" in inspector.get_table_names():
+        columns = [c['name'] for c in inspector.get_columns('business_profiles')]
+        if 'owner_birthday' not in columns:
+            print("Adding owner_birthday column to business_profiles...")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE business_profiles ADD COLUMN owner_birthday VARCHAR(255) NULL"))
+                conn.commit()
+        if 'owner_gender' not in columns:
+            print("Adding owner_gender column to business_profiles...")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE business_profiles ADD COLUMN owner_gender VARCHAR(255) NULL"))
+                conn.commit()
+
+    if "reservations" in inspector.get_table_names():
+        columns = [c['name'] for c in inspector.get_columns('reservations')]
+        if 'voucher_code' not in columns:
+            print("Adding voucher_code column to reservations...")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE reservations ADD COLUMN voucher_code VARCHAR(100) NULL"))
+                conn.commit()
+        if 'tracking_id' not in columns:
+            print("Adding tracking_id column to reservations...")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE reservations ADD COLUMN tracking_id VARCHAR(100) NULL"))
+                conn.commit()
+
+run_migrations()
 
 class Customer(Base):
     __tablename__ = "customer"
@@ -85,6 +141,7 @@ class Customer(Base):
     loyalty_points = Column(Integer, default=0)
     referral_code  = Column(String, unique=True, nullable=True)
     last_active = Column(DateTime, nullable=True)
+    is_deleted  = Column(Boolean, default=False)
     created_at  = Column(DateTime, default=datetime.utcnow)
 
 class SuperAdminUser(Base):
@@ -119,12 +176,15 @@ class RiderProfile(Base):
     password_hash = Column(String, nullable=True)
     first_name    = Column(String, nullable=True)
     last_name     = Column(String, nullable=True)
+    middle_name   = Column(String, nullable=True)
     suffix        = Column(String, nullable=True)
     name          = Column(String, nullable=True)  # full name
     phone         = Column(String, nullable=True)
     home_address  = Column(String, nullable=True)
     role          = Column(String, default="rider")
     picture       = Column(String, nullable=True)
+    gender        = Column(String, nullable=True)
+    birthday      = Column(String, nullable=True)
     # Legacy FK kept for backward compat (old riders who were in customer table)
     customer_id   = Column(Integer, nullable=True, unique=True)
     # Vehicle & compliance
@@ -158,6 +218,7 @@ class RiderProfile(Base):
     home_lat          = Column(Float, nullable=True)
     home_lng          = Column(Float, nullable=True)
     last_active   = Column(DateTime, nullable=True)
+    is_deleted    = Column(Boolean, default=False)
     created_at    = Column(DateTime, default=datetime.utcnow)
 
 
@@ -178,6 +239,8 @@ class BusinessProfile(Base):
     owner_home_address    = Column(String, nullable=True)
     owner_id_document_url = Column(String, nullable=True)  # government-issued ID file
     owner_phone           = Column(String, nullable=True)
+    owner_birthday        = Column(String, nullable=True)
+    owner_gender          = Column(String, nullable=True)
     # Clinic Location
     clinic_house_number   = Column(String, nullable=True)
     clinic_block_number   = Column(String, nullable=True)
@@ -205,6 +268,7 @@ class BusinessProfile(Base):
     loyalty_points_per_reservation = Column(Integer, default=10) # flat reward (fallback)
     
     last_active           = Column(DateTime, nullable=True)
+    is_deleted            = Column(Boolean, default=False)
     created_at            = Column(DateTime, default=datetime.utcnow)
 
 class BranchInventory(Base):
@@ -233,6 +297,7 @@ class Product(Base):
     sizes_json   = Column(Text, nullable=True)
     stars        = Column(Float, default=0.0)
     loyalty_points = Column(Integer, default=0)
+    is_archived    = Column(Boolean, default=False)
     created_at   = Column(DateTime, default=datetime.utcnow)
 
 class ProductReview(Base):
@@ -350,7 +415,6 @@ class Notification(Base):
     link        = Column(String, nullable=True)
     is_read     = Column(Boolean, default=False)
     created_at  = Column(DateTime, default=datetime.utcnow)
-    created_at  = Column(DateTime, default=datetime.utcnow)
 
 class LoyaltyVoucher(Base):
     __tablename__ = "loyalty_vouchers"
@@ -398,6 +462,8 @@ class Reservation(Base):
     location            = Column(String, nullable=True)
     notes               = Column(Text, nullable=True)
     total_amount        = Column(Float, default=0.0)
+    voucher_code        = Column(String, nullable=True)
+    tracking_id         = Column(String, unique=True, nullable=True)
     created_at          = Column(DateTime, default=datetime.utcnow)
 
 class BusinessOperatingHours(Base):
@@ -671,6 +737,23 @@ async def get_current_user(request: Request) -> dict:
 # ---------------------------------------------------------------------------
 # Background task: auto-cancel overdue reservations
 # ---------------------------------------------------------------------------
+def get_distance(lat1, lon1, lat2, lon2):
+    """Calculate the Haversine distance between two points on the earth."""
+    from math import radians, cos, sin, asin, sqrt
+    if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+        return 999999.0
+        
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    dlon = lon2 - lon1 
+    dlat = lat2 - lat1 
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a)) 
+    r = 6371 # Radius of earth in kilometers
+    return c * r
+
+# ---------------------------------------------------------------------------
+# Background task: auto-cancel overdue reservations
+# ---------------------------------------------------------------------------
 async def auto_cancel_overdue_reservations():
     """Runs every 60 s. Cancels Pending/Confirmed/Payment Pending reservations
     whose scheduled date+time has already passed (using Philippine time UTC+8)."""
@@ -703,7 +786,7 @@ async def auto_cancel_overdue_reservations():
                 db.close()
         except Exception as e:
             print(f"[Auto-Cancel] Error: {e}")
-        await asyncio.sleep(60)  # run every 60 seconds
+        await asyncio.sleep(60)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -1151,6 +1234,30 @@ class BusinessAnalyticsData(BaseModel):
     retention_change: str = ""
     distribution_data: List[dict] = []
 
+@app.delete("/api/account")
+async def delete_account(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Soft delete the current user's account and related entities."""
+    user_id = int(current_user["sub"])
+    role = current_user.get("role")
+    
+    if role == "customer":
+        target = db.query(Customer).filter(Customer.id == user_id).first()
+    elif role == "business":
+        target = db.query(BusinessProfile).filter(BusinessProfile.id == user_id).first()
+        # Also archive all products
+        db.query(Product).filter(Product.business_id == user_id).update({"is_archived": True})
+    elif role == "rider":
+        target = db.query(RiderProfile).filter(RiderProfile.id == user_id).first()
+    else:
+        raise HTTPException(status_code=403, detail="Admins cannot delete their own accounts via this endpoint.")
+        
+    if not target:
+        raise HTTPException(status_code=404, detail="Account not found.")
+        
+    target.is_deleted = True
+    db.commit()
+    return {"message": "Account deactivated successfully."}
+
 def add_notification(db: Session, user_id: int, n_type: str, title: str, desc: str, link: str = None, role: str = "customer"):
     """Adds a notification for either a customer or a business owner."""
     notif = Notification(
@@ -1212,11 +1319,11 @@ async def get_business_orders(
         .join(Product, OrderItem.product_id == Product.id)\
         .join(Order, OrderItem.order_id == Order.id)\
         .join(Customer, Order.customer_id == Customer.id)\
-        .filter(Order.clinic_id == business_id)\
+        .filter(Product.business_id == business_id)\
         .filter(Order.status != "Payment Pending")
 
     if branch_id:
-        query = query.filter(Order.branch_id == branch_id)
+        query = query.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
 
     results = query.order_by(Order.created_at.desc()).all()
         
@@ -1262,22 +1369,12 @@ async def update_business_order_status(order_id: int, body: BusinessOrderStatusU
     except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    # Verify this order belongs to this business
-    # The order_id from frontend might look like ORD-12-34 but we only need the numeric DB ID
-    # Actually wait, the order ID in the URL path is just order_id (int).
-    
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-
-    # Verify this order belongs to this business
-    if order.clinic_id != business_id:
-        # Fallback for legacy orders without clinic_id
-        order_has_business_items = db.query(OrderItem).join(Product, OrderItem.product_id == Product.id)\
-            .filter(OrderItem.order_id == order_id, Product.business_id == business_id).first()
-            
-        if not order_has_business_items:
-            raise HTTPException(status_code=403, detail="Not authorized to edit this order")
+    # Verify this order contains items that belong to this business
+    order_has_business_items = db.query(OrderItem).join(Product, OrderItem.product_id == Product.id)\
+        .filter(OrderItem.order_id == order_id, Product.business_id == business_id).first()
+        
+    if not order_has_business_items:
+        raise HTTPException(status_code=403, detail="Not authorized to edit this order")
 
     previous_status = order.status
     order.status = body.status
@@ -1438,29 +1535,49 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
     # 5. Send Welcome Email if new, then redirect
     if is_new:
         magic_link = f"{FRONTEND_URL}/auth/callback?token={token}"
+        
+
         html_content = f"""
-        <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #FAFAFA; color: #333333; border-radius: 8px;">
-            <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #4A3E3D; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; margin: 0;">Hi-Vet CRM</h1>
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+                body {{ margin: 0; padding: 0; background-color: #F7F6F2; font-family: 'Outfit', sans-serif; }}
+                .container {{ max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 48px; overflow: hidden; box-shadow: 0 40px 80px rgba(0, 0, 0, 0.06); border: 1px solid rgba(0,0,0,0.05); }}
+                .content {{ padding: 80px 60px; text-align: center; }}
+                .brand-tag {{ color: #F26B21; font-weight: 900; font-size: 11px; text-transform: uppercase; letter-spacing: 4px; display: block; margin-bottom: 20px; }}
+                h1 {{ color: #262626; font-size: 32px; font-weight: 900; margin: 0 0 25px 0; letter-spacing: -1px; }}
+                p {{ color: #4A4A4A; font-size: 16px; line-height: 1.7; margin: 0 0 35px 0; font-weight: 500; font-style: italic; opacity: 0.7; }}
+                .action-card {{ background-color: #F7F6F2; border-radius: 40px; padding: 45px; border: 1px solid rgba(0,0,0,0.03); margin-bottom: 30px; }}
+                .footer {{ background-color: #ffffff; padding: 40px; text-align: center; border-top: 1px solid rgba(0,0,0,0.05); }}
+                .footer-text {{ color: #262626; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; opacity: 0.2; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="content">
+                    <span class="brand-tag">Initialization Receipt</span>
+                    <h1>Welcome to Hi-Vet</h1>
+                    <p>You have successfully initialized your professional identity via Google. We are honored to accompany you in your companion's health journey.</p>
+                    <div class="action-card">
+                        <p style="margin: 0 0 20px 0; color: #262626; font-weight: 900; not-italic; opacity: 1;">Access Your Portfolio</p>
+                        <a href="{magic_link}" style="display: inline-block; background: #262626; color: #ffffff; text-decoration: none; padding: 22px 45px; border-radius: 25px; font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; box-shadow: 0 20px 40px rgba(0,0,0,0.1);">Enter Portal Now</a>
+                    </div>
+                    <p style="font-size: 11px; color: #262626; margin: 0; opacity: 0.3;">Need assistance? Reply directly to this administrative handshake.</p>
+                </div>
+                <div class="footer">
+                    <p class="footer-text">HI-VET &bull; Dedicated to your companion's care &copy; 2026</p>
+                </div>
             </div>
-            <div style="background-color: #FFFFFF; border: 1px solid #EAEAEA; border-radius: 12px; padding: 40px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
-                <h2 style="font-size: 20px; font-weight: 700; color: #4A3E3D; margin-top: 0; margin-bottom: 15px;">Complete Your Google Sign-up</h2>
-                <p style="font-size: 15px; line-height: 1.6; color: #666666; margin-bottom: 30px; margin-top: 0;">
-                    Welcome to Hi-Vet CRM! You have successfully linked your Google account. Please click the button below to verify your email and securely access your Customer Dashboard.
-                </p>
-                <a href="{magic_link}" style="display: inline-block; background-color: #E85D04; color: #FFFFFF; text-decoration: none; padding: 16px 32px; font-size: 14px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; border-radius: 50px; margin-bottom: 30px; box-shadow: 0 4px 10px rgba(232, 93, 4, 0.3);">
-                    Verify & Login
-                </a>
-                <p style="font-size: 13px; color: #999999; margin-bottom: 0;">
-                    If the button above does not work, copy and paste the following link into your browser:<br/>
-                    <a href="{magic_link}" style="color: #E85D04; word-break: break-all;">{magic_link}</a>
-                </p>
-            </div>
-        </div>
+        </body>
+        </html>
         """
+        
         msg = MIMEMultipart("alternative")
         msg["Subject"] = "Welcome to Hi-Vet - Complete Your Sign-Up"
-        msg["From"] = f"Hi-Vet CRM <{EMAIL_SENDER}>"
+        msg["From"] = f'"Hi-Vet Assistant" <{EMAIL_SENDER}>'
         msg["To"] = email
         msg.attach(MIMEText(html_content, "html"))
         
@@ -1481,37 +1598,238 @@ OTP_STORE: dict = {}  # Format: { "email": { "otp": "123456", "expires": datetim
 
 class SendOtpRequest(BaseModel):
     email: str
+    name: Optional[str] = None
+    gender: Optional[str] = None
+    last_name: Optional[str] = None
 
 class EmailChangeRequest(BaseModel):
     new_email: str
 
 class EmailChangeVerifyRequest(BaseModel):
     new_email: str
-    otp: str
 
-def send_professional_otp_email(email: str, otp_code: str, title: str, description: str, subject: str):
+async def send_bespoke_reservation_email(to_email: str, receipt_data: dict, is_business: bool = False):
+    """Sends a professional, minimalist dual-card invoice email (button-free) using local SMTP."""
+    subject = "New Reservation Alert - Hi-Vet" if is_business else "Your Hi-Vet Reservation Receipt"
+    
+    # Minimalist Invoice Design (No Buttons)
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap');
+            body {{ margin: 0; padding: 0; background-color: #F8FAFC; font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }}
+            .surface {{ padding: 60px 20px; text-align: center; }}
+            .container {{ max-width: 580px; margin: 0 auto; text-align: left; }}
+            
+            .card {{
+                background-color: #ffffff;
+                border-radius: 12px;
+                padding: 45px;
+                margin-bottom: 24px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                border: 1px solid rgba(0,0,0,0.02);
+            }}
+            
+            .header-info {{ color: #ea580c; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }}
+            .header-addr {{ color: #64748B; font-size: 13px; font-weight: 500; margin-bottom: 20px; line-height: 1.4; }}
+            .amount-container {{ display: table; width: 100%; margin-bottom: 8px; }}
+            .amount-text {{ font-size: 52px; font-weight: 900; color: #ea580c; letter-spacing: -2px; line-height: 1; }}
+            .amount-currency {{ font-size: 40px; font-weight: 700; vertical-align: top; margin-right: 2px; }}
+            .date-subtitle {{ color: #64748B; font-size: 14px; font-weight: 500; margin-bottom: 40px; }}
+            
+            .divider {{ height: 1px; background-color: #F1F5F9; margin: 30px 0; }}
+            
+            .text-link-group {{ margin: 25px 0; }}
+            .text-link {{ 
+                color: #64748B; 
+                text-decoration: none; 
+                font-size: 13px; 
+                font-weight: 600; 
+                margin-right: 25px; 
+                display: inline-flex; 
+                align-items: center; 
+            }}
+            
+            .data-grid {{ width: 100%; margin-top: 25px; border-collapse: collapse; }}
+            .data-label {{ color: #64748B; font-size: 14px; font-weight: 500; padding: 8px 0; vertical-align: top; width: 50%; }}
+            .data-value {{ color: #1E293B; font-size: 14px; font-weight: 600; padding: 8px 0; text-align: right; }}
+            
+            .item-header {{ color: #1E293B; font-size: 15px; font-weight: 700; margin-bottom: 4px; }}
+            .item-subheader {{ color: #64748B; font-size: 13px; font-weight: 500; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 0.5px; }}
+            
+            .invoice-table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
+            .invoice-row-main td {{ padding: 20px 0 5px 0; border-top: 1px solid #F1F5F9; }}
+            .invoice-row-sub td {{ padding: 0 0 20px 0; }}
+            
+            .invoice-label {{ font-size: 15px; font-weight: 700; color: #1E293B; }}
+            .invoice-price {{ font-size: 15px; font-weight: 700; color: #ea580c; text-align: right; }}
+            .invoice-desc {{ font-size: 13px; font-weight: 500; color: #64748B; }}
+            
+            .totals-row td {{ padding: 12px 0; border-top: 1px solid #F1F5F9; }}
+            .totals-label {{ font-size: 15px; font-weight: 700; color: #1E293B; }}
+            .totals-value {{ font-size: 15px; font-weight: 700; color: #ea580c; text-align: right; }}
+            
+            .footer-note {{ color: #94A3B8; font-size: 13px; font-weight: 500; margin-top: 30px; border-top: 1px solid #F1F5F9; padding-top: 20px; }}
+            .footer-link {{ color: #3B82F6; text-decoration: none; font-weight: 600; }}
+            
+            .voucher-pill {{ 
+                background-color: #F8FAFC; 
+                color: #1E293B; 
+                font-size: 10px; 
+                font-weight: 700; 
+                padding: 4px 8px; 
+                border-radius: 4px; 
+                border: 1px solid #E2E8F0;
+                display: inline-block;
+                margin-top: 4px;
+            }}
+            
+            .qr-container {{ 
+                margin-top: 30px; 
+                padding: 20px; 
+                background: #F8FAFC; 
+                border-radius: 12px; 
+                text-align: center;
+                border: 1px solid #F1F5F9;
+            }}
+            .qr-image {{ width: 140px; height: 140px; margin-bottom: 12px; }}
+            .qr-hint {{ font-size: 11px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; }}
+
+            @media only screen and (max-width: 600px) {{
+                .surface {{ padding: 30px 15px; }}
+                .card {{ padding: 25px; }}
+                .amount-text {{ font-size: 40px; }}
+                .text-link {{ display: block; margin-bottom: 12px; }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="surface">
+            <div class="container">
+                <!-- CARD 1: SUMMARY -->
+                <div class="card">
+                    <div class="header-info">{receipt_data.get('clinic_name', 'Hi-Vet Clinic')}</div>
+                    <div class="header-addr">{receipt_data.get('location', 'Main Branch')}</div>
+                    <div class="amount-container">
+                        <span class="amount-text">{receipt_data.get('total_amount')}</span>
+                    </div>
+                    <div class="date-subtitle">Finalized on {receipt_data.get('date')}</div>
+                    
+                    <div class="divider"></div>
+
+                    <table class="data-grid">
+                        <tr>
+                            <td class="data-label">Receipt number</td>
+                            <td class="data-value">{receipt_data.get('reservation_id')}</td>
+                        </tr>
+                        <tr>
+                            <td class="data-label">Customer Name</td>
+                            <td class="data-value">{receipt_data.get('customer_name')}</td>
+                        </tr>
+                        <tr>
+                            <td class="data-label">Pet Name</td>
+                            <td class="data-value">{receipt_data.get('pet_name')}</td>
+                        </tr>
+                        <tr>
+                            <td class="data-label">Payment method</td>
+                            <td class="data-value">
+                                {f"Voucher Redemption" if receipt_data.get('voucher_code') else "Electronic Settlement"}
+                            </td>
+                        </tr>
+                    </table>
+
+                    <div class="qr-container">
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={receipt_data.get('qr_content')}" class="qr-image" alt="Receipt QR">
+                        <div class="qr-hint">Scan to verify authenticity</div>
+                    </div>
+                </div>
+
+                <!-- CARD 2: ITEMIZED BREAKDOWN -->
+                <div class="card">
+                    <div class="item-header">Receipt #{receipt_data.get('reservation_id')}</div>
+                    <div class="item-subheader">{receipt_data.get('date')} • {receipt_data.get('time')}</div>
+                    
+                    <table class="invoice-table">
+                        <tr class="invoice-row-main">
+                            <td class="invoice-label">
+                                {receipt_data.get('service_name')}
+                                {f'<br><span class="voucher-pill">Redeemed Reward</span>' if receipt_data.get('voucher_code') else ''}
+                            </td>
+                            <td class="invoice-price">{receipt_data.get('base_price')}</td>
+                        </tr>
+                        <tr class="invoice-row-sub">
+                            <td class="invoice-desc">Quantity: 1</td>
+                            <td></td>
+                        </tr>
+                        {f'''
+                        <tr class="invoice-row-main">
+                            <td>
+                                <div class="invoice-label">Voucher: {receipt_data.get('voucher_title')}</div>
+                                <div class="invoice-desc">{receipt_data.get('voucher_type')} • {receipt_data.get('voucher_code')}</div>
+                            </td>
+                            <td style="color: #10B981; text-align: right; font-weight: 700;">{receipt_data.get('discount_amount')}</td>
+                        </tr>
+                        ''' if receipt_data.get('voucher_code') else ''}
+                        
+                        <tr class="totals-row">
+                            <td class="totals-label">Total</td>
+                            <td class="totals-value">{receipt_data.get('total_amount')}</td>
+                        </tr>
+                        <tr class="totals-row">
+                            <td class="totals-label">Amount paid</td>
+                            <td class="totals-value">{receipt_data.get('total_amount')}</td>
+                        </tr>
+                    </table>
+
+                    <div class="footer-note">
+                        Questions? Contact us at <a href="mailto:support@hi-vet.com" class="footer-link">support@hi-vet.com</a>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 30px;">
+                    <p style="font-size: 11px; font-weight: 700; color: #CBD5E1; text-transform: uppercase; letter-spacing: 2px;">
+                        HI-VET &bull; INTEGRATED CLINICAL SYSTEMS &copy; 2026
+                    </p>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = subject
+    msg['From'] = EMAIL_SENDER
+    msg['To'] = to_email
+    msg['Date'] = formatdate(localtime=True)
+    msg['Message-ID'] = make_msgid()
+    msg.attach(MIMEText(html_content, 'html'))
+
+    try:
+        # Use existing async-friendly SMTP sending pattern
+        await asyncio.to_thread(_send_smtp_direct, to_email, msg)
+        return True
+    except Exception as e:
+        print(f"[Bespoke Email Error] {e}")
+        return False
+
+def _send_smtp_direct(to_email, msg):
+    """Sync helper for sending SMTP emails in a thread."""
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(EMAIL_SENDER, EMAIL_APP_PWD)
+        server.send_message(msg)
+
+def send_professional_otp_email(email: str, otp_code: str, title: str, description: str, subject: str, customer_name: str = "Valued Customer", gender: str = None, last_name: str = ""):
     """Sends a professional OTP email using a consistent high-end template."""
-    # Load mascot image bytes for CID inline embedding
-    mascot_img_bytes = None
-    mascot_path = r"C:\Users\Gene\.gemini\antigravity\brain\35c9e455-75fa-454a-a22c-5d092fedd953\hivet_mascot_email_header_1775572118329.png"
-    if os.path.exists(mascot_path):
-        try:
-            with Image.open(mascot_path) as img:
-                img.thumbnail((300, 300))
-                if img.mode != 'RGB':
-                    bg = Image.new("RGB", img.size, (255, 255, 255))
-                    if img.mode == 'RGBA':
-                        bg.paste(img, mask=img.split()[3])
-                    else:
-                        bg.paste(img)
-                    img = bg
-                buffered = io.BytesIO()
-                img.save(buffered, format="JPEG", quality=85, optimize=True)
-                mascot_img_bytes = buffered.getvalue()
-        except Exception as e:
-            print(f"ERROR: Could not load mascot for email: {e}")
+    prefix = "Valued Partner"
+    if gender == "Male": prefix = f"Mr. {last_name}"
+    elif gender == "Female": prefix = f"Ms. {last_name}"
+    else: prefix = customer_name
 
-    # Professional HTML Email Template
+    # Warm Institutional Architecture (Approachable & Professional)
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -1519,44 +1837,62 @@ def send_professional_otp_email(email: str, otp_code: str, title: str, descripti
         <meta charset="utf-8">
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
-            body {{ margin: 0; padding: 0; background-color: #FFF9F5; }}
-            .container {{ max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 48px; min-width: 320px; overflow: hidden; box-shadow: 0 30px 60px rgba(0, 0, 0, 0.04); border: 1px solid #FFEDE0; }}
-            .hero-section {{ padding: 30px 40px; text-align: center; background: #ffffff; }}
-            .mascot {{ width: 240px; height: auto; border-radius: 32px; filter: drop-shadow(0 15px 30px rgba(232, 93, 4, 0.15)); }}
-            .content {{ padding: 0 60px 60px 60px; text-align: center; font-family: 'Outfit', sans-serif; }}
-            .brand-name {{ color: #E85D04; font-weight: 900; font-size: 20px; letter-spacing: -0.5px; margin-top: 15px; display: block; text-transform: uppercase; }}
-            h1 {{ color: #2D2422; font-size: 32px; font-weight: 900; margin: 20px 0; letter-spacing: -1px; }}
-            p {{ color: #6B5E5C; font-size: 16px; line-height: 1.6; margin: 0 0 32px 0; font-weight: 500; }}
-            .otp-container {{ background-color: #FFF5F0; border-radius: 40px; padding: 10px; border: 2px solid #FFD8C2; display: inline-block; }}
-            .otp-box {{ background-color: #ffffff; border-radius: 32px; padding: 25px 40px; border: 1px solid #FFD8C2; box-shadow: 0 10px 20px rgba(232, 93, 4, 0.05); }}
-            .otp-code {{ font-size: 52px; font-weight: 900; letter-spacing: 12px; color: #E85D04; font-family: 'Outfit', monospace; margin-left: 12px; }}
-            .footer {{ background-color: #FDFBFA; padding: 40px; text-align: center; border-top: 1px solid #FFEDE0; }}
-            .footer-text {{ color: #A69491; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }}
-            .footer-sub {{ color: #C4B5B2; font-size: 10px; line-height: 1.6; }}
+            body {{ margin: 0; padding: 0; background-color: #FAF9F6; }}
+            .surface {{ padding: 60px 20px; text-align: center; }}
+            .card {{ 
+                max-width: 680px; 
+                margin: 0 auto; 
+                background-color: #ffffff; 
+                border-radius: 40px; 
+                overflow: hidden; 
+                box-shadow: 0 30px 80px rgba(38, 38, 38, 0.05); 
+                border: 1px solid rgba(0, 0, 0, 0.03); 
+                display: inline-block; 
+                text-align: center;
+                width: 100%;
+            }}
+            .accent-bar {{ 
+                height: 6px; 
+                background-color: #F26B21; 
+                width: 100%;
+            }}
+            .content {{ padding: 65px 60px; font-family: 'Outfit', sans-serif; }}
+            .brand-tag {{ color: #F26B21; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 4px; display: block; margin-bottom: 25px; opacity: 0.8; }}
+            .greeting {{ color: #262626; font-weight: 900; font-size: 32px; letter-spacing: -1px; margin: 0 0 15px 0; line-height: 1.2; }}
+            p {{ color: #4A4A4A; font-size: 16px; line-height: 1.8; margin: 0 0 45px 0; font-weight: 500; opacity: 0.7; }}
+            
+            .otp-container {{ 
+                background-color: #FAF9F6; 
+                border-radius: 32px; 
+                padding: 45px 20px; 
+                margin: 0 auto;
+                max-width: 460px;
+                border: 1px solid rgba(0, 0, 0, 0.03);
+            }}
+            .otp-code {{ font-size: 64px; font-weight: 900; letter-spacing: 15px; color: #262626; display: block; margin-left: 15px; }}
+            .otp-label {{ font-size: 10px; font-weight: 900; color: #F26B21; text-transform: uppercase; letter-spacing: 5px; margin-top: 20px; display: block; opacity: 0.6; }}
+            
+            .footer {{ background-color: #ffffff; padding: 40px 60px; text-align: center; border-top: 1px solid rgba(0, 0, 0, 0.03); }}
+            .footer-text {{ color: #262626; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; opacity: 0.2; }}
         </style>
     </head>
     <body>
-        <div class="container">
-            <div class="hero-section">
-                <img src="cid:mascot" alt="Hi-Vet Mascot" class="mascot">
-                <span class="brand-name">HI-VET</span>
-            </div>
-            <div class="content">
-                <h1>{title}</h1>
-                <p>{description}</p>
-                <div class="otp-container">
-                    <div class="otp-box">
+        <div class="surface">
+            <div class="card">
+                <div class="accent-bar"></div>
+                <div class="content">
+                    <span class="brand-tag">Safe Initialization</span>
+                    <h1 class="greeting">We are honored to assist you, {prefix}</h1>
+                    <p>{description}</p>
+                    <div class="otp-container">
                         <span class="otp-code">{otp_code}</span>
+                        <span class="otp-label">Your Security Token</span>
                     </div>
+                    <p style="font-size: 11px; margin-top: 40px; margin-bottom: 0; opacity: 0.4; font-weight: 700;">Valid for 10 minutes</p>
                 </div>
-                <p style="font-size: 13px; color: #A69491; margin: 40px 0 0 0;">This code expires in 10 minutes.</p>
-            </div>
-            <div class="footer">
-                <p class="footer-text">Making the world better for furry friends</p>
-                <p class="footer-sub">
-                    &copy; 2026 Hi-Vet. All rights reserved.<br>
-                    Premium Veterinary Care Solutions.
-                </p>
+                <div class="footer">
+                    <span class="footer-text">HI-VET &bull; Your Companion in Health &copy; 2026</span>
+                </div>
             </div>
         </div>
     </body>
@@ -1575,7 +1911,7 @@ def send_professional_otp_email(email: str, otp_code: str, title: str, descripti
     © 2026 Hi-Vet. All rights reserved.
     """
     
-    msg = MIMEMultipart("related")
+    msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = f'"Hi-Vet Assistant" <{EMAIL_SENDER}>'
     msg["To"] = email
@@ -1586,19 +1922,8 @@ def send_professional_otp_email(email: str, otp_code: str, title: str, descripti
     msg["X-Priority"] = "1 (Highest)"
     msg["Importance"] = "High"
 
-    msg_alternative = MIMEMultipart("alternative")
-    msg_alternative.attach(MIMEText(text_content, "plain"))
-    msg_alternative.attach(MIMEText(html_content, "html"))
-    msg.attach(msg_alternative)
-
-    if mascot_img_bytes:
-        try:
-            img_mime = MIMEImage(mascot_img_bytes, _subtype="jpeg")
-            img_mime.add_header("Content-ID", "<mascot>")
-            img_mime.add_header("Content-Disposition", "inline")
-            msg.attach(img_mime)
-        except Exception as e:
-            print(f"Error attaching mascot: {e}")
+    msg.attach(MIMEText(text_content, "plain"))
+    msg.attach(MIMEText(html_content, "html"))
 
     if not EMAIL_SENDER or not EMAIL_APP_PWD:
          raise HTTPException(status_code=500, detail="Email service not configured.")
@@ -1628,9 +1953,12 @@ def send_otp(body: SendOtpRequest, db: Session = Depends(get_db)):
     send_professional_otp_email(
         email=body.email,
         otp_code=otp_code,
-        title="Verify your email",
-        description="Hello! You're just one step away from premium pet care management. Use the code below to complete your registration.",
-        subject=f"{otp_code} is your Hi-Vet verification code"
+        title="Verification Required",
+        description="We are honored to assist with your account setup. Please use the verification code to securely confirm your identity and proceed.",
+        subject=f"{otp_code} is your Hi-Vet verification code",
+        customer_name=body.name or "Valued Partner",
+        gender=body.gender,
+        last_name=body.last_name or ""
     )
     
     return {"message": "Verification code sent"}
@@ -1790,6 +2118,8 @@ class RegisterRequest(BaseModel):
     middle_name: str = ""
     suffix: str = ""
     phone: str = ""
+    gender: Optional[str] = None
+    birthday: Optional[str] = None
     role: str = "user"
     # Business: Clinic Info
     clinic_name: Optional[str] = None
@@ -1879,7 +2209,9 @@ async def register_customer(body: RegisterRequest, db: Session = Depends(get_db)
         is_bicycle = (body.vehicle_type or "").strip().lower() == "bicycle"
         parts = []
         if body.first_name: parts.append(body.first_name.strip())
+        if body.middle_name: parts.append(body.middle_name.strip())
         if body.last_name: parts.append(body.last_name.strip())
+        if body.suffix: parts.append(body.suffix.strip())
         rider_full_name = " ".join(parts).strip() or "Rider"
 
         rider_prof = RiderProfile(
@@ -1887,6 +2219,7 @@ async def register_customer(body: RegisterRequest, db: Session = Depends(get_db)
             password_hash=pwd_hash,
             first_name=body.first_name,
             last_name=body.last_name,
+            middle_name=body.middle_name,
             suffix=body.suffix,
             name=rider_full_name,
             phone=body.phone,
@@ -1915,6 +2248,8 @@ async def register_customer(body: RegisterRequest, db: Session = Depends(get_db)
             home_region=body.home_region,
             home_lat=body.home_lat,
             home_lng=body.home_lng,
+            birthday=body.birthday,
+            gender=body.gender,
             compliance_status="pending"
         )
         db.add(rider_prof)
@@ -1939,6 +2274,8 @@ async def register_customer(body: RegisterRequest, db: Session = Depends(get_db)
             owner_home_address=body.owner_home_address,
             owner_id_document_url=body.owner_id_document_url,
             owner_phone=body.phone,
+            owner_birthday=body.birthday,
+            owner_gender=body.gender,
             clinic_house_number=body.clinic_house_number,
             clinic_block_number=body.clinic_block_number,
             clinic_street=body.clinic_street,
@@ -1963,10 +2300,15 @@ async def register_customer(body: RegisterRequest, db: Session = Depends(get_db)
         db.refresh(new_user)
 
         # Automatically create the primary Main Branch based on signup address
+        line1 = " ".join(filter(None, [new_user.clinic_house_number, new_user.clinic_block_number, new_user.clinic_street, new_user.clinic_subdivision]))
+        line2 = ", ".join(filter(None, [new_user.clinic_barangay, new_user.clinic_city, new_user.clinic_province, new_user.clinic_zip]))
+
         main_branch = BusinessBranch(
             business_id=new_user.id,
             name="Main Branch",
             phone=new_user.clinic_phone or body.phone,
+            address_line1=line1,
+            address_line2=line2,
             house_number=new_user.clinic_house_number,
             block_number=new_user.clinic_block_number,
             street=new_user.clinic_street,
@@ -1994,6 +2336,8 @@ async def register_customer(body: RegisterRequest, db: Session = Depends(get_db)
             middle_name=body.middle_name,
             suffix=body.suffix,
             phone=body.phone,
+            gender=body.gender,
+            birthday=body.birthday,
             role=body.role,
             picture=f"https://api.dicebear.com/7.x/avataaars/svg?seed={body.email}"
         )
@@ -2115,6 +2459,7 @@ async def get_public_catalog(db: Session = Depends(get_db)):
     """Fetch all products across all clinics for the user marketplace."""
     results = db.query(Product, BusinessProfile.clinic_name)\
         .join(BusinessProfile, Product.business_id == BusinessProfile.id)\
+        .filter(Product.is_archived == False)\
         .order_by(Product.created_at.desc()).all()
     
     catalog = []
@@ -2197,8 +2542,8 @@ async def get_business_catalog(
     
     business_id = int(current_user["sub"])
     
-    # Base query
-    query = db.query(Product).filter(Product.business_id == business_id)
+    # Base query: Only active (non-archived) products
+    query = db.query(Product).filter(Product.business_id == business_id, Product.is_archived == False)
     
     products = query.order_by(Product.created_at.desc()).all()
     
@@ -2325,7 +2670,8 @@ async def delete_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     
-    db.delete(product)
+    # Mark as archived instead of hard deleting to preserve order history and satisfy FK constraints
+    product.is_archived = True
     db.commit()
     return {"message": "Product deleted"}
 
@@ -2443,7 +2789,8 @@ async def get_business_reviews(
 
 def _reservation_to_dict(r: Reservation, customer_name: Optional[str] = None) -> dict:
     return {
-        "id": f"RV-{r.id:04d}",
+        "id": r.tracking_id or f"RV-{r.id:04d}",
+        "tracking_id": r.tracking_id or f"RV-{r.id:04d}",
         "db_id": r.id,
         "customer_id": r.customer_id,
         "customer_name": customer_name or f"Customer #{r.customer_id}",
@@ -2460,10 +2807,169 @@ def _reservation_to_dict(r: Reservation, customer_name: Optional[str] = None) ->
         "notes": r.notes or "",
         "total": r.total_amount,
         "total_amount": r.total_amount,
-        "created_at": r.created_at.isoformat(),
+        "created_at": r.created_at.isoformat() if r.created_at else None,
     }
 
+@app.get("/api/public/verify/{tracking_id}", response_class=HTMLResponse)
+async def verify_reservation_public(tracking_id: str, db: Session = Depends(get_db)):
+    """Public verification page for QR codes - mobile friendly."""
+    # Find reservation
+    res = db.query(Reservation).filter(Reservation.tracking_id == tracking_id).first()
+    if not res:
+        return HTMLResponse(content="""
+            <html><body style="font-family: sans-serif; text-align: center; padding: 50px; background: #0f172a; color: #fff;">
+                <h1 style="color: #ef4444;">Invalid Receipt</h1>
+                <p>This reservation ID could not be verified in our system.</p>
+                <a href="/" style="color: #ea580c; text-decoration: none;">Return to Home</a>
+            </body></html>
+        """, status_code=404)
+
+    # Fetch clinic and customer for more context
+    clinic = db.query(BusinessProfile).filter(BusinessProfile.id == res.business_id).first()
+    customer = db.query(Customer).filter(Customer.id == res.customer_id).first()
+    
+    clinic_name = clinic.clinic_name if clinic else "Hi-Vet Clinic"
+    customer_name = f"{customer.first_name} {customer.last_name}" if customer and customer.first_name else (customer.name if customer else "Guest")
+    
+    # Format Date
+    try:
+        raw_date = datetime.strptime(res.date, "%Y-%m-%d")
+        formatted_date = raw_date.strftime("%B %d, %Y")
+    except:
+        formatted_date = res.date
+
+    status_color = "#22c55e" if res.status in ["Confirmed", "Completed"] else "#ea580c" if res.status == "Pending" else "#94a3b8"
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reservation Verified - Hi-Vet</title>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700;900&display=swap" rel="stylesheet">
+        <style>
+            body {{ 
+                margin: 0; padding: 0; 
+                font-family: 'Outfit', sans-serif; 
+                background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); 
+                color: #f8fafc;
+                min-height: 100vh;
+                display: flex; justify-content: center; align-items: center;
+            }}
+            .container {{
+                width: 90%; max-width: 450px;
+                background: rgba(255, 255, 255, 0.03);
+                backdrop-filter: blur(20px);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 40px;
+                padding: 40px 30px;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+                text-align: center;
+                animation: slideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+            }}
+            @keyframes slideUp {{
+                from {{ transform: translateY(30px); opacity: 0; }}
+                to {{ transform: translateY(0); opacity: 1; }}
+            }}
+            .status-badge {{
+                display: inline-block;
+                padding: 10px 24px;
+                background: {status_color};
+                color: white;
+                border-radius: 50px;
+                font-size: 11px;
+                font-weight: 900;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+                margin-bottom: 30px;
+                box-shadow: 0 10px 20px -5px {status_color}66;
+            }}
+            .icon-wrapper {{
+                width: 80px; height: 80px;
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 30px;
+                display: flex; justify-content: center; align-items: center;
+                margin: 0 auto 30px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }}
+            .icon-wrapper svg {{ width: 40px; height: 40px; color: #ea580c; }}
+            h1 {{ font-size: 28px; font-weight: 900; margin: 0 0 10px; }}
+            .subtitle {{ color: #94a3b8; font-size: 14px; margin-bottom: 40px; }}
+            
+            .receipt-card {{
+                background: rgba(255, 255, 255, 0.02);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+                border-radius: 30px;
+                padding: 30px;
+                text-align: left;
+                margin-bottom: 30px;
+            }}
+            .row {{ display: flex; justify-content: space-between; margin-bottom: 15px; }}
+            .label {{ color: #64748b; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }}
+            .value {{ color: #f1f5f9; font-size: 14px; font-weight: 700; }}
+            .divider {{ height: 1px; background: rgba(255, 255, 255, 0.05); margin: 20px 0; }}
+            .total-row {{ display: flex; justify-content: space-between; align-items: flex-end; }}
+            .total-label {{ color: #f8fafc; font-size: 14px; font-weight: 900; }}
+            .total-value {{ color: #ea580c; font-size: 24px; font-weight: 900; }}
+            
+            .footer-claim {{ color: #475569; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-top: 20px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="status-badge">{res.status}</div>
+            <div class="icon-wrapper">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+            </div>
+            <h1>Verified Receipt</h1>
+            <p class="subtitle">Valid Reservation – {clinic_name}</p>
+            
+            <div class="receipt-card">
+                <div class="row">
+                    <span class="label">ID</span>
+                    <span class="value">{res.tracking_id}</span>
+                </div>
+                <div class="row">
+                    <span class="label">Customer</span>
+                    <span class="value">{customer_name}</span>
+                </div>
+                <div class="row">
+                    <span class="label">Pet</span>
+                    <span class="value">{res.pet_name}</span>
+                </div>
+                <div class="row">
+                    <span class="label">Service</span>
+                    <span class="value">{res.service}</span>
+                </div>
+                <div class="divider"></div>
+                <div class="row">
+                    <span class="label">Date</span>
+                    <span class="value">{formatted_date}</span>
+                </div>
+                <div class="row">
+                    <span class="label">Time</span>
+                    <span class="value">{res.time}</span>
+                </div>
+                <div class="divider"></div>
+                <div class="total-row">
+                    <span class="total-label">Subtotal</span>
+                    <span class="total-value">₱{res.total_amount:,.2f}</span>
+                </div>
+            </div>
+            
+            <div class="footer-claim">Verified by Hi-Vet Security</div>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
 @app.get("/api/reservations")
+
 async def get_reservations(
     branch_id: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -2497,6 +3003,7 @@ async def get_booked_slots(clinic_id: int, date: str, db: Session = Depends(get_
 @app.post("/api/reservations")
 async def create_reservation(
     body: ReservationCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -2510,13 +3017,24 @@ async def create_reservation(
         res_time_obj = datetime.strptime(body.time, "%I:%M %p").time()
         res_datetime = datetime.combine(res_date_obj, res_time_obj)
         
-        # Check if in the past
-        if res_datetime < datetime.now():
-            raise HTTPException(status_code=400, detail="Cannot book a reservation in the past.")
+        # Current time in Philippine Standard Time (UTC+8)
+        now_pht = datetime.utcnow() + timedelta(hours=8)
+        
+        # Check if in the past (with a 10-minute grace period for same-day submissions)
+        # This prevents 400 errors for "just now" bookings if the server/client clocks drift.
+        grace_period = timedelta(minutes=10)
+        if res_datetime < (now_pht - grace_period):
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot book a reservation in the past. Please select a future time slot."
+            )
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date or time format.")
 
     # 2. Check Operating Hours (Special Date Overrides first)
+    if not body.business_id:
+        raise HTTPException(status_code=400, detail="A valid Healthcare Provider (Business ID) is required to book a reservation.")
+
     special = db.query(BusinessSpecialDateHours).filter(
         BusinessSpecialDateHours.business_id == body.business_id,
         BusinessSpecialDateHours.specific_date == body.date
@@ -2525,7 +3043,7 @@ async def create_reservation(
     selected_hours = None
     if special:
         if not special.is_open:
-            raise HTTPException(status_code=400, detail=f"Clinic is closed on {body.date}.")
+            raise HTTPException(status_code=400, detail=f"The clinic has marked {body.date} as a closed holiday/special date.")
         selected_hours = special
     else:
         # Check regular hours (0=Sun in DB, 1=Mon, ..., 6=Sat)
@@ -2535,8 +3053,17 @@ async def create_reservation(
             BusinessOperatingHours.business_id == body.business_id,
             BusinessOperatingHours.day_of_week == dow_db
         ).first()
-        if not hours or not hours.is_open:
-            raise HTTPException(status_code=400, detail="Clinic is closed on this day.")
+        
+        if not hours:
+            # Fallback: If no hours are defined, the clinic might not have finished setup.
+            # Instead of a generic 400, provide a helpful error.
+            raise HTTPException(
+                status_code=400, 
+                detail="Clinic configuration error: Operating hours are not defined for this day. Please contact the clinic."
+            )
+            
+        if not hours.is_open:
+            raise HTTPException(status_code=400, detail="The clinic is closed on this day of the week.")
         selected_hours = hours
 
     # 3. Time range check (Clinic Open/Close and Break)
@@ -2546,17 +3073,20 @@ async def create_reservation(
             close_t = datetime.strptime(selected_hours.close_time, "%I:%M %p").time()
             
             if res_time_obj < open_t or res_time_obj >= close_t:
-                raise HTTPException(status_code=400, detail=f"Clinic is only open from {selected_hours.open_time} to {selected_hours.close_time}.")
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Requested time is outside business hours. This clinic is open from {selected_hours.open_time} to {selected_hours.close_time}."
+                )
             
             # Check Break time
             if getattr(selected_hours, 'break_start', None) and getattr(selected_hours, 'break_end', None):
                 break_s = datetime.strptime(selected_hours.break_start, "%I:%M %p").time()
                 break_e = datetime.strptime(selected_hours.break_end, "%I:%M %p").time()
                 if res_time_obj >= break_s and res_time_obj < break_e:
-                    raise HTTPException(status_code=400, detail="Clinic is on break during this requested time.")
+                    raise HTTPException(status_code=400, detail="The clinic is on break during this requested time period.")
         except ValueError:
             # If clinic hours in DB are misconfigured
-            pass
+            raise HTTPException(status_code=500, detail="Clinic operating hours are misconfigured in our system.")
 
     # 4. Double-Booking Prevention
     # Check if any non-cancelled order already exists for this clinic, date, and time.
@@ -2570,8 +3100,11 @@ async def create_reservation(
         raise HTTPException(status_code=400, detail="This time slot is already reserved. Please choose another time.")
 
     # 5. Handle Voucher Application
-    final_amount = body.total_amount or 0.0
+    base_price = body.total_amount or 0.0
+    final_amount = base_price
     voucher_id_applied = None
+    applied_voucher_title = None
+    applied_voucher_type = None
     
     if body.voucher_code:
         v_res = db.query(UserVoucher, LoyaltyVoucher).join(
@@ -2590,6 +3123,9 @@ async def create_reservation(
                 final_amount = 0.0
                 uv.is_used = True
                 voucher_id_applied = uv.id
+                applied_voucher_title = lv.title
+                applied_voucher_type = lv.type
+                
                 # Add history entry
                 db.add(LoyaltyHistory(
                     customer_id=customer_id,
@@ -2602,6 +3138,11 @@ async def create_reservation(
                 pass
 
     # 6. Create the reservation
+    # Apply strict rounding to avoid floating point precision issues (e.g., 0.000000001)
+    final_amount = round(float(final_amount), 2)
+    if final_amount < 0.01:
+        final_amount = 0.0
+
     new_status = "Pending" if final_amount <= 0 else "Payment Pending"
     new_payment_status = "paid" if final_amount <= 0 else "unpaid"
 
@@ -2617,6 +3158,7 @@ async def create_reservation(
         location=body.location,
         notes=body.notes,
         total_amount=final_amount,
+        voucher_code=body.voucher_code if voucher_id_applied else None,
         status=new_status,
         payment_status=new_payment_status,
     )
@@ -2624,24 +3166,84 @@ async def create_reservation(
     db.commit()
     db.refresh(new_res)
 
-    # NOTIFY BUSINESS OWNER
+    # 7. Collect Data for Receipt/Notification Summary
+    customer_name = current_user.get("name") or f"{current_user.get('first_name', '')} {current_user.get('last_name', '')}".strip() or "Valued Customer"
+    
+    # Fetch Clinic Name
+    clinic_name = db.query(BusinessProfile.clinic_name).filter(BusinessProfile.id == body.business_id).scalar() or "Hi-Vet Clinic"
+    
+    # Format Date (e.g., April 9, 2026)
+    try:
+        raw_date = datetime.strptime(new_res.date, "%Y-%m-%d")
+        formatted_date = raw_date.strftime("%B %d, %Y")
+    except:
+        formatted_date = new_res.date
+
+    # Generate Professional Tracking ID
+    curr_year = datetime.now().year
+    rand_suffix = random.randint(1000, 9999)
+    tracking_id = f"#RV-{curr_year}-{new_res.id:06d}-{rand_suffix}"
+    new_res.tracking_id = tracking_id
+    db.commit()
+    
+    # Prepare QR content (Verification URL)
+    base_url = str(request.base_url).rstrip('/')
+    verify_url = f"{base_url}/api/public/verify/{tracking_id}"
+    
+    receipt_data = {
+        "reservation_id": tracking_id,
+        "customer_name": customer_name,
+        "clinic_name": clinic_name,
+        "pet_name": new_res.pet_name,
+        "service_name": new_res.service,
+        "date": formatted_date,
+        "time": new_res.time,
+        "location": new_res.location or "Main Clinic",
+        "base_price": f"₱{base_price:,.2f}",
+        "discount_amount": f"-₱{base_price:,.2f}" if voucher_id_applied else "₱0.00",
+        "total_amount": f"₱{new_res.total_amount:,.2f}",
+        "status": new_res.status,
+        "payment_status": "PAID (Voucher)" if new_res.total_amount <= 0 else "Pending Payment",
+        "notes": new_res.notes or "N/A",
+        "voucher_code": new_res.voucher_code,
+        "voucher_title": applied_voucher_title,
+        "voucher_type": applied_voucher_type,
+        "qr_content": urllib.parse.quote(verify_url)
+    }
+
+    # 8. NOTIFY BUSINESS OWNER
     add_notification(
         db, body.business_id, "System",
         "New Reservation Request!",
-        f"A new booking for {body.service} ({body.pet_name}) has been initiated. Awaiting payment.",
+        f"A new booking for {body.service} ({body.pet_name}) by {customer_name}. Status: {new_res.status}.",
         "/dashboard/business/reservations",
         role="business"
     )
     
-    # NOTIFY CUSTOMER
+    # 9. NOTIFY CUSTOMER
     add_notification(
         db, customer_id, "System",
-        "Reservation Initiated",
-        f"Your reservation for {body.service} is initiated. Please complete the payment to secure your slot.",
+        "Reservation Confirmed" if new_res.total_amount <= 0 else "Reservation Initiated",
+        f"Your reservation for {body.service} is {'confirmed' if new_res.total_amount <= 0 else 'initiated'}. Thank you for choosing Hi-Vet.",
         "/dashboard/customer/reservations"
     )
 
-    customer_name = current_user.get("name")
+    # 10. Send Professional Bespoke Emails (Landscape)
+    # Email to Customer
+    asyncio.create_task(send_bespoke_reservation_email(
+        to_email=current_user.get("email"),
+        receipt_data=receipt_data
+    ))
+    
+    # Email to Business Owner
+    biz_email = db.query(BusinessProfile.email).filter(BusinessProfile.id == body.business_id).scalar()
+    if biz_email:
+        asyncio.create_task(send_bespoke_reservation_email(
+            to_email=biz_email,
+            receipt_data=receipt_data,
+            is_business=True
+        ))
+
     return {"reservation": _reservation_to_dict(new_res, customer_name=customer_name)}
 
 @app.patch("/api/reservations/{reservation_id}/cancel")
@@ -2662,6 +3264,21 @@ async def cancel_reservation(
     if res.status in ["Completed", "Cancelled"]:
         raise HTTPException(status_code=400, detail="Cannot cancel a completed or already-cancelled reservation")
     res.status = "Cancelled"
+    
+    # Return voucher if one was applied
+    if getattr(res, 'voucher_code', None):
+        uv = db.query(UserVoucher).filter(
+            UserVoucher.code == res.voucher_code,
+            UserVoucher.customer_id == res.customer_id
+        ).first()
+        if uv:
+            uv.is_used = False
+            db.add(LoyaltyHistory(
+                customer_id=res.customer_id,
+                description=f"Voucher Returned – Cancellation of {res.service}",
+                points=0
+            ))
+            
     db.commit()
     db.refresh(res)
 
@@ -2836,6 +3453,8 @@ async def create_reservation_checkout(
         raise HTTPException(status_code=400, detail="This reservation has already been paid.")
     if res.total_amount <= 0:
         raise HTTPException(status_code=400, detail="Reservation has no payable amount.")
+    if res.total_amount < 1.0:
+        raise HTTPException(status_code=400, detail="Online payment requires a minimum of ₱1.00. Please choose cash or contact the clinic.")
 
     # Fetch customer details for billing pre-fill
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
@@ -2887,11 +3506,11 @@ async def create_reservation_checkout(
                 "payment_method_types": enabled_methods,
                 "success_url": f"{FRONTEND_URL}/dashboard/customer/reservations/payment-success?reservation_id={res.id}",
                 "cancel_url": f"{FRONTEND_URL}/dashboard/customer/reservations",
-                "description": f"Reservation #{res.id:04d} – {res.service} at {clinic_name}",
+                "description": f"Reservation {res.tracking_id or f'#RV-{res.id:04d}'} – {res.service} at {clinic_name}",
                 "send_email_receipt": False,
                 "show_description": True,
                 "show_line_items": True,
-                "reference_number": f"RV-{res.id:04d}",
+                "reference_number": res.tracking_id.replace('#', '') if res.tracking_id else f"RV-{res.id:04d}",
                 "statement_descriptor": clinic_name[:22]
             }
         }
@@ -2909,12 +3528,13 @@ async def create_reservation_checkout(
                             "amount": amount_centavos,
                             "payment_method_allowed": ["qrph"],
                             "currency": "PHP",
-                            "description": f"Reservation at {clinic_name} (#RV-{res.id:04d})"
+                            "description": f"Reservation at {clinic_name} ({res.tracking_id or f'#RV-{res.id:04d}'})",
+                            "statement_descriptor": clinic_name[:22]
                         }
                     }
                 }
                 pi_resp = await client.post("https://api.paymongo.com/v1/payment_intents", json=pi_payload, headers={"Content-Type": "application/json", "Authorization": f"Basic {auth_header_val}"})
-                if pi_resp.status_code != 201:
+                if pi_resp.status_code not in [200, 201]:
                     print(f"PI Error: {pi_resp.text}")
                     raise HTTPException(status_code=500, detail="Failed to create payment intent")
                 pi_data = pi_resp.json()["data"]
@@ -2934,7 +3554,7 @@ async def create_reservation_checkout(
                     }
                 }
                 pm_resp = await client.post("https://api.paymongo.com/v1/payment_methods", json=pm_payload, headers={"Content-Type": "application/json", "Authorization": f"Basic {auth_header_val}"})
-                if pm_resp.status_code != 201:
+                if pm_resp.status_code not in [200, 201]:
                     print(f"PM Error: {pm_resp.text}")
                     raise HTTPException(status_code=500, detail="Failed to create payment method")
                 pm_id = pm_resp.json()["data"]["id"]
@@ -3461,9 +4081,9 @@ async def get_business_dashboard_stats(
     biz_id = int(current_user["sub"])
     
     # 1. Product Orders count (Successful) 
-    order_q = db.query(Order).join(OrderItem, OrderItem.order_id == Order.id).join(Product, Product.id == OrderItem.product_id).filter(Order.clinic_id == biz_id, Order.status.notin_(["Cancelled", "Pending"]))
+    order_q = db.query(Order).join(OrderItem, Order.id == OrderItem.order_id).join(Product, OrderItem.product_id == Product.id).filter(Product.business_id == biz_id, Order.status.notin_(["Cancelled", "Pending"]))
     if branch_id:
-        order_q = order_q.filter(Order.branch_id == branch_id)
+        order_q = order_q.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
     product_orders_count = order_q.distinct().count()
     
     # 2. Service Appointments count (Successful)
@@ -3478,14 +4098,14 @@ async def get_business_dashboard_stats(
     last_month_start = (month_start - timedelta(days=1)).replace(day=1)
     
     # Product revenue (Current vs Previous)
-    curr_prod_q = db.query(OrderItem).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Order.clinic_id == biz_id, Order.created_at >= month_start, Order.status.notin_(["Cancelled", "Pending"]))
+    curr_prod_q = db.query(OrderItem).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= month_start, Order.status.notin_(["Cancelled", "Pending"]))
     if branch_id:
-        curr_prod_q = curr_prod_q.filter(Order.branch_id == branch_id)
+        curr_prod_q = curr_prod_q.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
     monthly_prod_rev = sum(item.price * item.quantity for item in curr_prod_q.all())
     
-    prev_prod_q = db.query(OrderItem).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Order.clinic_id == biz_id, Order.created_at >= last_month_start, Order.created_at < month_start, Order.status.notin_(["Cancelled", "Pending"]))
+    prev_prod_q = db.query(OrderItem).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= last_month_start, Order.created_at < month_start, Order.status.notin_(["Cancelled", "Pending"]))
     if branch_id:
-        prev_prod_q = prev_prod_q.filter(Order.branch_id == branch_id)
+        prev_prod_q = prev_prod_q.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
     prev_monthly_prod_rev = sum(item.price * item.quantity for item in prev_prod_q.all())
     
     # Service revenue (Current vs Previous)
@@ -3511,9 +4131,9 @@ async def get_business_dashboard_stats(
         rev_change_str = "+100% vs last mo" if total_curr_rev > 0 else "0% vs last mo"
     
     # Orders change
-    prev_orders_q = db.query(Order).join(OrderItem, OrderItem.order_id == Order.id).join(Product, Product.id == OrderItem.product_id).filter(Order.clinic_id == biz_id, Order.created_at >= last_month_start, Order.created_at < month_start, Order.status.notin_(["Cancelled", "Pending"]))
+    prev_orders_q = db.query(Order).join(OrderItem, Order.id == OrderItem.order_id).join(Product, Product.id == OrderItem.product_id).filter(Product.business_id == biz_id, Order.created_at >= last_month_start, Order.created_at < month_start, Order.status.notin_(["Cancelled", "Pending"]))
     if branch_id:
-        prev_orders_q = prev_orders_q.filter(Order.branch_id == branch_id)
+        prev_orders_q = prev_orders_q.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
     prev_orders = prev_orders_q.distinct().count()
     
     if prev_orders > 0:
@@ -3549,9 +4169,9 @@ async def get_business_recent_orders(
     biz_id = int(current_user["sub"])
     
     # Get recent orders containing items from this business
-    query = db.query(OrderItem, Order, Customer).join(Order, Order.id == OrderItem.order_id).join(Product, Product.id == OrderItem.product_id).join(Customer, Customer.id == Order.customer_id).filter(Order.clinic_id == biz_id)
+    query = db.query(OrderItem, Order, Customer).join(Order, Order.id == OrderItem.order_id).join(Product, Product.id == OrderItem.product_id).join(Customer, Customer.id == Order.customer_id).filter(Product.business_id == biz_id)
     if branch_id:
-        query = query.filter(Order.branch_id == branch_id)
+        query = query.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
     
     recent_order_items = query.order_by(Order.created_at.desc()).limit(10).all()
     
@@ -3600,12 +4220,12 @@ async def get_business_analytics(
     async def fetch_analytics_data(cutoff):
         # Fetch Orders & OrderItems
         op_query = db.query(OrderItem, Order).join(Order, Order.id == OrderItem.order_id).join(Product, Product.id == OrderItem.product_id).filter(
-            Order.clinic_id == biz_id, 
+            Product.business_id == biz_id, 
             Order.created_at >= cutoff, 
             Order.status.notin_(["Cancelled", "Pending"])
         )
         if branch_id: 
-            op_query = op_query.filter(Order.branch_id == branch_id)
+            op_query = op_query.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
         p_items = op_query.all()
         
         # Fetch Reservations
@@ -3715,7 +4335,6 @@ async def get_business_analytics(
     
     if not top_products:
         top_products = [{"name": "No sales yet", "sold": 0, "revenue": "₱0", "pct": 0, "delta": 0}]
-
     # Services
     top_services = []
     if data_type in ['all', 'services']:
@@ -3740,43 +4359,48 @@ async def get_business_analytics(
         {"name": "Services", "value": len(s_data), "color": "#219EBC"}
     ]
 
-    # 8. Branch Performance (Distribution across ALL branches)
+    # 8. Branch Performance (Consolidated & Accurate)
     branches = db.query(BusinessBranch).filter(BusinessBranch.business_id == biz_id).all()
     biz_profile = db.query(BusinessProfile).filter(BusinessProfile.id == biz_id).first()
     biz_name = biz_profile.clinic_name if biz_profile else "Clinic"
     
-    branch_stats = {b.id: 0 for b in branches}
-    if 0 not in branch_stats: branch_stats[0] = 0 # Fallback for no-branch data
+    # Establish actual branches
+    branch_name_map = {}
+    address_map = {}
+    main_branch_id = 0
+
+    for b in branches:
+        if b.is_main: main_branch_id = b.id
+        addr_pts = [b.house_number, b.street, b.barangay, b.city, b.province]
+        exact_address = ", ".join(p.strip() for p in addr_pts if p and p.strip())
+        branch_name_map[b.id] = f"{biz_name} - {exact_address}" if exact_address else f"{biz_name} - Branch #{b.id}"
+        address_map[b.id] = exact_address
+
+    if not main_branch_id and branches:
+        main_branch_id = branches[0].id
     
-    # Reload ALL data (no branch filter) for branch comparison
-    # Let's run a truly global fetch for the comparison
-    op_global = db.query(OrderItem, Order).join(Order, Order.id == OrderItem.order_id).filter(Order.clinic_id == biz_id, Order.created_at >= cutoff_date, Order.status.notin_(["Cancelled", "Pending"])).all()
+    # Process revenue
+    branch_stats = {bid: 0 for bid in branch_name_map.keys()}
+    
+    op_global = db.query(OrderItem, Order).join(Order, Order.id == OrderItem.order_id).join(Product, Product.id == OrderItem.product_id).filter(Product.business_id == biz_id, Order.created_at >= cutoff_date, Order.status.notin_(["Cancelled", "Pending"])).all()
     rs_global = db.query(Reservation).filter(Reservation.business_id == biz_id, Reservation.created_at >= cutoff_date, Reservation.status.in_(["Completed", "Confirmed"])).all()
     
     for item in op_global:
-        bid = item[1].branch_id or 0
-        branch_stats[bid] = branch_stats.get(bid, 0) + ((item[0].price or 0) * (item[0].quantity or 0))
+        bid = item[1].branch_id
+        target_bid = bid if bid in branch_stats else main_branch_id
+        if target_bid in branch_stats:
+            branch_stats[target_bid] += ((item[0].price or 0) * (item[0].quantity or 0))
+            
     for res in rs_global:
-        bid = res.branch_id or 0
-        if res.status == "Completed":
-            branch_stats[bid] = branch_stats.get(bid, 0) + (res.total_amount or 0)
+        bid = res.branch_id
+        target_bid = bid if bid in branch_stats else main_branch_id
+        if res.status == "Completed" and target_bid in branch_stats:
+            branch_stats[target_bid] += (res.total_amount or 0)
             
     total_rev_all = sum(branch_stats.values()) or 1
     branch_performance = []
     
-    # Name mapping ... (preserving existing logic)
-    branch_name_map = {}
-    address_map = {}
-
-    for b in branches:
-        addr_pts = [b.house_number, b.street, b.barangay, b.city, b.province]
-        exact_address = ", ".join(p.strip() for p in addr_pts if p and p.strip())
-        
-        branch_name_map[b.id] = f"{biz_name} - {exact_address}" if exact_address else f"{biz_name} - Branch #{b.id}"
-        address_map[b.id] = exact_address
-
     for bid, rev in branch_stats.items():
-        if rev == 0 and bid not in branch_name_map: continue
         branch_performance.append({
             "id": bid,
             "branch": branch_name_map.get(bid, f"Branch #{bid}"),
@@ -3787,13 +4411,13 @@ async def get_business_analytics(
     branch_performance.sort(key=lambda x: x["revenue"], reverse=True)
 
     # 9. Retention (Simplified & Context-Aware)
-    r_query = db.query(Order.customer_id).filter(
-        Order.clinic_id == biz_id,
+    r_query = db.query(Order.customer_id).join(OrderItem, Order.id == OrderItem.order_id).join(Product, Product.id == OrderItem.product_id).filter(
+        Product.business_id == biz_id,
         Order.created_at >= cutoff_date,
         Order.status.notin_(["Cancelled", "Pending"])
     )
     if branch_id:
-        r_query = r_query.filter(Order.branch_id == branch_id)
+        r_query = r_query.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
     
     biz_cust_ids = [c[0] for c in r_query.distinct().all()]
     total_cust = len(biz_cust_ids)
@@ -3846,71 +4470,130 @@ class ComplianceUpdateRequest(BaseModel):
 
 
 def send_compliance_email(email: str, clinic_name: str, owner_name: str, status: str, reasoning: str = ""):
-    """Send formal email notification regarding compliance status."""
-    if status == "verified":
-        subject = f"Compliance Status Update: APPROVED – {clinic_name}"
-        html_content = f"""
-        <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #FAFAFA; color: #333333; border-radius: 8px;">
-            <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #4A3E3D; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; margin: 0;">Hi-Vet CRM</h1>
-            </div>
-            <div style="background-color: #FFFFFF; border: 1px solid #EAEAEA; border-radius: 12px; padding: 40px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
-                <p style="font-size: 15px; color: #666666;">Dear {owner_name},</p>
-                <p style="font-size: 15px; color: #666666;">I hope this email finds you well.</p>
-                <div style="font-size: 15px; color: #166534; font-weight: bold; background-color: #f0fdf4; padding: 20px; border-radius: 12px; border: 1px solid #bbf7d0; margin: 25px 0;">
-                    We are pleased to inform you that following a thorough review of your submitted documentation, the compliance requirements for <strong>{clinic_name}</strong> have been officially <span style="text-transform: uppercase;">APPROVED</span>.
-                </div>
-                <p style="font-size: 15px; color: #666666; line-height: 1.6;">Our records indicate that your facility is now fully compliant with the current regulatory standards. No further action is required at this time.</p>
-                <p style="font-size: 15px; color: #666666; line-height: 1.6;">Thank you for your continued commitment to maintaining high standards of quality and safety.</p>
-                <div style="margin-top: 40px; border-top: 1px solid #EAEAEA; padding-top: 25px;">
-                    <p style="font-size: 14px; color: #999999; margin: 0;">Best regards,</p>
-                    <p style="font-size: 14px; color: #4A3E3D; font-weight: 900; margin: 8px 0 0 0; text-transform: uppercase; letter-spacing: 1px;">The Hi-Vet Compliance Team</p>
-                </div>
-            </div>
-        </div>
-        """
-    elif status == "non_compliant":
-        subject = f"Compliance Status Update: ACTION REQUIRED – {clinic_name}"
-        # Format reasoning into bullet points
-        reason_items = reasoning.split('\n') if '\n' in reasoning else [reasoning]
-        reason_list_html = "".join([f"<li style='margin-bottom: 12px; line-height: 1.5;'>{r.strip()}</li>" for r in reason_items if r.strip()])
-        
-        html_content = f"""
-        <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #FAFAFA; color: #333333; border-radius: 8px;">
-            <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #4A3E3D; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; margin: 0;">Hi-Vet CRM</h1>
-            </div>
-            <div style="background-color: #FFFFFF; border: 1px solid #EAEAEA; border-radius: 12px; padding: 40px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
-                <p style="font-size: 15px; color: #666666;">Dear {owner_name},</p>
-                <p style="font-size: 15px; color: #666666;">This email is to notify you regarding the recent compliance review for <strong>{clinic_name}</strong>.</p>
-                <div style="font-size: 15px; color: #991b1b; font-weight: bold; background-color: #fef2f2; padding: 20px; border-radius: 12px; border: 1px solid #fecaca; margin: 25px 0;">
-                    After careful evaluation, we regret to inform you that the compliance status is currently marked as <span style="text-transform: uppercase;">NOT APPROVED</span>.
-                </div>
-                <p style="font-size: 15px; color: #666666; margin-top: 25px; font-weight: bold;">The following items require your immediate attention:</p>
-                <ul style="font-size: 14px; color: #4A3E3D; padding-left: 20px; margin-top: 15px;">
-                    {reason_list_html}
-                </ul>
-                <p style="font-size: 15px; color: #666666; margin-top: 30px; line-height: 1.6;">
-                    To finalize the approval process, please address the findings above and resubmit the necessary documentation through your <a href="{FRONTEND_URL}/login" style="color: #E85D04; font-weight: bold; text-decoration: none;">Partner Portal</a>.
-                </p>
-                <p style="font-size: 15px; color: #666666; line-height: 1.6;">
-                    We are available to assist you should you have any questions regarding these requirements. We look forward to your prompt response to ensure your clinic remains in good standing.
-                </p>
-                <div style="margin-top: 40px; border-top: 1px solid #EAEAEA; padding-top: 25px;">
-                    <p style="font-size: 14px; color: #999999; margin: 0;">Best regards,</p>
-                    <p style="font-size: 14px; color: #4A3E3D; font-weight: 900; margin: 8px 0 0 0; text-transform: uppercase; letter-spacing: 1px;">The Hi-Vet Compliance Team</p>
-                </div>
-            </div>
-        </div>
-        """
-    else:
-        return 
+    """Send formal email notification regarding compliance status using the premium Hi-Vet template."""
+    
+    # 1. Setup Branding (Mascot)
+    mascot_img_bytes = None
+    mascot_path = r"C:\Users\Gene\.gemini\antigravity\brain\35c9e455-75fa-454a-a22c-5d092fedd953\hivet_mascot_email_header_1775572118329.png"
+    if os.path.exists(mascot_path):
+        try:
+            with Image.open(mascot_path) as img:
+                img.thumbnail((300, 300))
+                if img.mode != 'RGB':
+                    bg = Image.new("RGB", img.size, (255, 255, 255))
+                    if img.mode == 'RGBA':
+                        bg.paste(img, mask=img.split()[3])
+                    else:
+                        bg.paste(img)
+                    img = bg
+                buffered = io.BytesIO()
+                img.save(buffered, format="JPEG", quality=85, optimize=True)
+                mascot_img_bytes = buffered.getvalue()
+        except Exception as e:
+            print(f"ERROR: Could not load mascot for compliance email: {e}")
 
-    msg = MIMEMultipart("alternative")
+    # 2. Define Content based on Status
+    if status == "verified":
+        subject = f"Compliance Status Update: APPROVED — {clinic_name}"
+        title = "Compliance Approved"
+        header_color = "#166534"
+        bg_color = "#F0FDF4"
+        border_color = "#BBF7D0"
+        status_text = "APPROVED"
+        main_message = f"We are pleased to inform you that following a thorough review of your submitted documentation, the compliance requirements for <strong>{clinic_name}</strong> have been officially {status_text}."
+        sub_message = "Our records indicate that your facility is now fully compliant with current regulatory standards. No further action is required at this time."
+        list_html = ""
+    else: # non_compliant
+        subject = f"Compliance Status Update: ACTION REQUIRED — {clinic_name}"
+        title = "Action Required"
+        header_color = "#991B1B"
+        bg_color = "#FEF2F2"
+        border_color = "#FECACA"
+        status_text = "NOT APPROVED"
+        main_message = f"After careful evaluation, we regret to inform you that the compliance status for <strong>{clinic_name}</strong> is currently marked as {status_text}."
+        sub_message = "To finalize the approval process, please address the findings below and resubmit the necessary documentation through your portal."
+        
+        reason_items = reasoning.split('\n') if '\n' in reasoning else [reasoning]
+        reason_list = "".join([f"<li style='margin-bottom: 8px;'>{r.strip()}</li>" for r in reason_items if r.strip()])
+        list_html = f"""
+        <div style="text-align: left; margin-top: 25px; padding: 20px; background: #ffffff; border: 1px dashed #FECACA; border-radius: 20px;">
+            <p style="font-size: 13px; font-weight: 900; color: #991B1B; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">Required Adjudications:</p>
+            <ul style="font-size: 14px; color: #6B5E5C; margin: 0; padding-left: 20px; line-height: 1.6;">
+                {reason_list}
+            </ul>
+        </div>
+        """
+
+    # 3. Build the HTML Template
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+            body {{ margin: 0; padding: 0; background-color: #FFF9F5; font-family: 'Outfit', sans-serif; }}
+            .container {{ max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 48px; overflow: hidden; box-shadow: 0 30px 60px rgba(0, 0, 0, 0.04); border: 1px solid #FFEDE0; }}
+            .hero-section {{ padding: 30px 40px; text-align: center; background: #ffffff; }}
+            .mascot {{ width: 200px; height: auto; border-radius: 32px; filter: drop-shadow(0 15px 30px rgba(232, 93, 4, 0.15)); }}
+            .brand-name {{ color: #E85D04; font-weight: 900; font-size: 18px; letter-spacing: -0.5px; margin-top: 15px; display: block; text-transform: uppercase; }}
+            .content {{ padding: 0 50px 50px 50px; text-align: center; }}
+            h1 {{ color: #2D2422; font-size: 30px; font-weight: 900; margin: 10px 0 20px 0; letter-spacing: -1px; }}
+            .status-banner {{ background-color: {bg_color}; border: 1px solid {border_color}; border-radius: 32px; padding: 30px; margin-bottom: 25px; }}
+            .status-msg {{ font-size: 16px; color: #4A3E3D; line-height: 1.6; margin: 0; font-weight: 500; }}
+            .sub-msg {{ color: #6B5E5C; font-size: 14px; line-height: 1.6; margin-top: 20px; font-weight: 500; }}
+            .footer {{ background-color: #FDFBFA; padding: 40px; text-align: center; border-top: 1px solid #FFEDE0; }}
+            .footer-text {{ color: #A69491; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }}
+            .footer-sub {{ color: #C4B5B2; font-size: 10px; line-height: 1.6; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="hero-section">
+                <img src="cid:mascot" alt="Hi-Vet Mascot" class="mascot">
+                <span class="brand-name">HI-VET COMPLIANCE</span>
+            </div>
+            <div class="content">
+                <p style="color: #A69491; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;">Portal Notification</p>
+                <h1>{title}</h1>
+                <div class="status-banner">
+                    <p class="status-msg">Dear {owner_name},</p>
+                    <p class="status-msg" style="margin-top: 10px;">{main_message}</p>
+                    {list_html}
+                </div>
+                <p class="sub-msg">{sub_message}</p>
+                
+                <div style="margin-top: 35px; text-align: center;">
+                    <a href="{FRONTEND_URL}/login" style="display: inline-block; background: #E85D04; color: #ffffff; text-decoration: none; padding: 18px 40px; border-radius: 20px; font-weight: 900; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 10px 20px rgba(232, 93, 4, 0.2);">Access Partner Portal</a>
+                </div>
+            </div>
+            <div class="footer">
+                <p class="footer-text">Maintaining High Standards in Veterinary Care</p>
+                <p class="footer-sub">
+                    &copy; 2026 Hi-Vet Compliance. All rights reserved.<br>
+                    Regulatory Affairs & Quality Assurance Division.
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    # 4. Assemble and Send
+    msg = MIMEMultipart("related")
     msg["Subject"] = subject
-    msg["From"] = f"Hi-Vet Compliance <{EMAIL_SENDER}>"
+    msg["From"] = f'"Hi-Vet Compliance" <{EMAIL_SENDER}>'
     msg["To"] = email
-    msg.attach(MIMEText(html_content, "html"))
+    
+    msg_alt = MIMEMultipart("alternative")
+    msg.attach(msg_alt)
+    msg_alt.attach(MIMEText(html_content, "html"))
+
+    if mascot_img_bytes:
+        img = MIMEImage(mascot_img_bytes)
+        img.add_header('Content-ID', '<mascot>')
+        img.add_header('Content-Disposition', 'inline', filename='mascot.jpg')
+        msg.attach(img)
     
     try:
         server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
@@ -3919,6 +4602,135 @@ def send_compliance_email(email: str, clinic_name: str, owner_name: str, status:
         server.quit()
     except Exception as e:
         print("SMTP Error sending compliance notification:", e)
+
+def send_rider_compliance_email(email: str, rider_name: str, status: str, reasoning: str = ""):
+    """Send formal email notification regarding rider compliance status using the premium Hi-Vet template."""
+    mascot_img_bytes = None
+    mascot_path = r"C:\Users\Gene\.gemini\antigravity\brain\35c9e455-75fa-454a-a22c-5d092fedd953\hivet_mascot_email_header_1775572118329.png"
+    if os.path.exists(mascot_path):
+        try:
+            with Image.open(mascot_path) as img:
+                img.thumbnail((300, 300))
+                if img.mode != 'RGB':
+                    bg = Image.new("RGB", img.size, (255, 255, 255))
+                    if img.mode == 'RGBA':
+                        bg.paste(img, mask=img.split()[3])
+                    else:
+                        bg.paste(img)
+                    img = bg
+                buffered = io.BytesIO()
+                img.save(buffered, format="JPEG", quality=85, optimize=True)
+                mascot_img_bytes = buffered.getvalue()
+        except Exception as e:
+            print(f"ERROR: Could not load mascot for rider email: {e}")
+
+    if status == "verified":
+        subject = f"Rider Application Status: APPROVED — Welcome to Hi-Vet!"
+        title = "Application Approved"
+        header_color = "#166534"
+        bg_color = "#F0FDF4"
+        border_color = "#BBF7D0"
+        status_text = "APPROVED"
+        main_message = f"We are pleased to inform you that your application to join the Hi-Vet Rider Fleet has been officially {status_text}."
+        sub_message = "Your background clearances and vehicle documents met all our standards. You are now authorized to accept and deliver orders on the platform."
+        list_html = ""
+    else: # non_compliant
+        subject = f"Rider Application Status: ACTION REQUIRED — Hi-Vet Fleet"
+        title = "Action Required"
+        header_color = "#991B1B"
+        bg_color = "#FEF2F2"
+        border_color = "#FECACA"
+        status_text = "NOT APPROVED"
+        main_message = f"After reviewing your application, we regret to inform you that your registration for the Hi-Vet Rider Fleet is currently marked as {status_text}."
+        sub_message = "To proceed with your application, please address the issues below and update your documents accordingly."
+        
+        reason_items = reasoning.split('\n') if '\n' in reasoning else [reasoning]
+        reason_list = "".join([f"<li style='margin-bottom: 8px;'>{r.strip()}</li>" for r in reason_items if r.strip()])
+        list_html = f'''
+        <div style="text-align: left; margin-top: 25px; padding: 20px; background: #ffffff; border: 1px dashed #FECACA; border-radius: 20px;">
+            <p style="font-size: 13px; font-weight: 900; color: #991B1B; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">Required Updates:</p>
+            <ul style="font-size: 14px; color: #6B5E5C; margin: 0; padding-left: 20px; line-height: 1.6;">
+                {reason_list}
+            </ul>
+        </div>
+        '''
+
+    html_content = f'''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+            body {{ margin: 0; padding: 0; background-color: #FFF9F5; font-family: 'Outfit', sans-serif; }}
+            .container {{ max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 48px; overflow: hidden; box-shadow: 0 30px 60px rgba(0, 0, 0, 0.04); border: 1px solid #FFEDE0; }}
+            .hero-section {{ padding: 30px 40px; text-align: center; background: #ffffff; }}
+            .mascot {{ width: 200px; height: auto; border-radius: 32px; filter: drop-shadow(0 15px 30px rgba(232, 93, 4, 0.15)); }}
+            .brand-name {{ color: #E85D04; font-weight: 900; font-size: 18px; letter-spacing: -0.5px; margin-top: 15px; display: block; text-transform: uppercase; }}
+            .content {{ padding: 0 50px 50px 50px; text-align: center; }}
+            h1 {{ color: #2D2422; font-size: 30px; font-weight: 900; margin: 10px 0 20px 0; letter-spacing: -1px; }}
+            .status-banner {{ background-color: {bg_color}; border: 1px solid {border_color}; border-radius: 32px; padding: 30px; margin-bottom: 25px; }}
+            .status-msg {{ font-size: 16px; color: #4A3E3D; line-height: 1.6; margin: 0; font-weight: 500; }}
+            .sub-msg {{ color: #6B5E5C; font-size: 14px; line-height: 1.6; margin-top: 20px; font-weight: 500; }}
+            .footer {{ background-color: #FDFBFA; padding: 40px; text-align: center; border-top: 1px solid #FFEDE0; }}
+            .footer-text {{ color: #A69491; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }}
+            .footer-sub {{ color: #C4B5B2; font-size: 10px; line-height: 1.6; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="hero-section">
+                <img src="cid:mascot" alt="Hi-Vet Mascot" class="mascot">
+                <span class="brand-name">HI-VET RIDER FLEET</span>
+            </div>
+            <div class="content">
+                <p style="color: #A69491; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;">Registration Update</p>
+                <h1>{title}</h1>
+                <div class="status-banner">
+                    <p class="status-msg">Dear {rider_name},</p>
+                    <p class="status-msg" style="margin-top: 10px;">{main_message}</p>
+                    {list_html}
+                </div>
+                <p class="sub-msg">{sub_message}</p>
+                
+                <div style="margin-top: 35px; text-align: center;">
+                    <a href="{FRONTEND_URL}/login/rider" style="display: inline-block; background: #E85D04; color: #ffffff; text-decoration: none; padding: 18px 40px; border-radius: 20px; font-weight: 900; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 10px 20px rgba(232, 93, 4, 0.2);">Access Rider App</a>
+                </div>
+            </div>
+            <div class="footer">
+                <p class="footer-text">Delivering Care Safely & Promptly</p>
+                <p class="footer-sub">
+                    &copy; 2026 Hi-Vet Network. All rights reserved.<br>
+                    Logistics & Fleet Operations Department.
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
+
+    msg = MIMEMultipart("related")
+    msg["Subject"] = subject
+    msg["From"] = f'"Hi-Vet Fleet Operations" <{EMAIL_SENDER}>'
+    msg["To"] = email
+    
+    msg_alt = MIMEMultipart("alternative")
+    msg.attach(msg_alt)
+    msg_alt.attach(MIMEText(html_content, "html"))
+
+    if mascot_img_bytes:
+        img = MIMEImage(mascot_img_bytes)
+        img.add_header('Content-ID', '<mascot>')
+        img.add_header('Content-Disposition', 'inline', filename='mascot.jpg')
+        msg.attach(img)
+    
+    try:
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server.login(EMAIL_SENDER, EMAIL_APP_PWD)
+        server.sendmail(EMAIL_SENDER, email, msg.as_string())
+        server.quit()
+    except Exception as e:
+        print("SMTP Error sending rider compliance notification:", e)
 
 @app.put("/api/admin/compliance/{customer_id}")
 async def update_compliance_status(
@@ -3996,11 +4808,13 @@ async def get_riders_compliance(
 
 class RiderComplianceRequest(BaseModel):
     compliance_status: str  # pending | verified | non_compliant
+    notes: Optional[str] = None
 
 @app.put("/api/admin/riders/{rider_id}/compliance")
 async def update_rider_compliance(
     rider_id: int,
     body: RiderComplianceRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -4016,8 +4830,29 @@ async def update_rider_compliance(
         prof = db.query(RiderProfile).filter(RiderProfile.customer_id == rider_id).first()
     if not prof:
         raise HTTPException(status_code=404, detail="Rider not found")
+        
+    old_status = prof.compliance_status
+    if body.compliance_status == "non_compliant" and body.notes:
+        prof.rejection_reason = body.notes
+    
     prof.compliance_status = body.compliance_status
     db.commit()
+
+    # Send email notification if status changed and is verified or non_compliant
+    if body.compliance_status != old_status and body.compliance_status in ["verified", "non_compliant"]:
+        # Find email and name
+        email = prof.email
+        rider_name = "Rider"
+        if not email and prof.customer_id:
+            c = db.query(Customer).filter(Customer.id == prof.customer_id).first()
+            if c:
+                email = c.email
+                rider_name = f"{c.first_name} {c.last_name}".strip() if (c.first_name or c.last_name) else c.name
+        
+        if email:
+            notes_str = body.notes or prof.rejection_reason or ""
+            background_tasks.add_task(send_rider_compliance_email, email, rider_name, body.compliance_status, notes_str)
+
     return {"message": "Rider compliance status updated", "compliance_status": body.compliance_status}
 
 @app.get("/api/admin/alerts")
@@ -4066,13 +4901,18 @@ async def get_admin_alerts(
     return {"notifications": alerts}
 
 
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str
 
+
 @app.post("/api/auth/login")
 async def login_customer(body: LoginRequest, db: Session = Depends(get_db)):
     """Local login for customers, businesses, riders, and admins."""
+
+    
     user = None
     is_rider = False
 
@@ -4097,6 +4937,10 @@ async def login_customer(body: LoginRequest, db: Session = Depends(get_db)):
 
     if not user or not user.password_hash:
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    # Block deactivated accounts
+    if getattr(user, 'is_deleted', False):
+        raise HTTPException(status_code=401, detail="This account has been deactivated.")
 
     if not pbkdf2_sha256.verify(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -4170,11 +5014,21 @@ async def login_customer(body: LoginRequest, db: Session = Depends(get_db)):
 @app.post("/api/auth/forgot-password/send-otp")
 def forgot_password_send_otp(body: SendOtpRequest, db: Session = Depends(get_db)):
     """Generates and sends a 6-digit OTP to the user's email for password reset."""
-    customer = db.query(Customer).filter(Customer.email == body.email).first()
-    if not customer:
+    # Search across all relevant tables
+    user = db.query(Customer).filter(Customer.email == body.email).first()
+    if not user:
+        user = db.query(BusinessProfile).filter(BusinessProfile.email == body.email).first()
+    if not user:
+        user = db.query(RiderProfile).filter(RiderProfile.email == body.email).first()
+    if not user:
+        user = db.query(SuperAdminUser).filter(SuperAdminUser.email == body.email).first()
+    if not user:
+        user = db.query(SystemAdminUser).filter(SystemAdminUser.email == body.email).first()
+
+    if not user:
         raise HTTPException(status_code=404, detail="Email not found")
         
-    if not customer.password_hash:
+    if not user.password_hash:
         raise HTTPException(status_code=400, detail="You registered using Google. Please log in with Google to manage your account.")
         
     otp_code = f"{random.randint(0, 999999):06d}"
@@ -4199,8 +5053,18 @@ class ResetPasswordRequest(BaseModel):
 @app.post("/api/auth/forgot-password/reset")
 def forgot_password_reset(body: ResetPasswordRequest, db: Session = Depends(get_db)):
     """Validates OTP and sets a new password."""
-    customer = db.query(Customer).filter(Customer.email == body.email).first()
-    if not customer:
+    # Search across all relevant tables
+    user = db.query(Customer).filter(Customer.email == body.email).first()
+    if not user:
+        user = db.query(BusinessProfile).filter(BusinessProfile.email == body.email).first()
+    if not user:
+        user = db.query(RiderProfile).filter(RiderProfile.email == body.email).first()
+    if not user:
+        user = db.query(SuperAdminUser).filter(SuperAdminUser.email == body.email).first()
+    if not user:
+        user = db.query(SystemAdminUser).filter(SystemAdminUser.email == body.email).first()
+
+    if not user:
         raise HTTPException(status_code=404, detail="Email not found")
         
     # Verify OTP
@@ -4213,7 +5077,7 @@ def forgot_password_reset(body: ResetPasswordRequest, db: Session = Depends(get_
     if record["otp"] != body.otp:
         raise HTTPException(status_code=400, detail="Invalid verification code")
         
-    customer.password_hash = pbkdf2_sha256.hash(body.new_password)
+    user.password_hash = pbkdf2_sha256.hash(body.new_password)
     db.commit()
     
     # Cleanup OTP after successful reset
@@ -4237,11 +5101,16 @@ async def get_me(request: Request, db: Session = Depends(get_db)):
 
     if role == "business":
         user = db.query(BusinessProfile).filter(BusinessProfile.id == user_id).first()
+    elif role == "rider":
+        user = db.query(RiderProfile).filter(RiderProfile.id == user_id).first()
+        if not user:
+            # Fallback for legacy riders who might be indexed by customer_id
+            user = db.query(RiderProfile).filter(RiderProfile.customer_id == user_id).first()
     else:
         user = db.query(Customer).filter(Customer.id == user_id).first()
         
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail=f"{role.capitalize()} profile not found")
         
     res = {
         "id": user.id,
@@ -4274,7 +5143,22 @@ async def get_me(request: Request, db: Session = Depends(get_db)):
             "clinic_lng": user.clinic_lng,
             "bai_number": user.bai_number,
             "mayors_permit": user.mayors_permit,
-            "compliance_status": user.compliance_status
+            "compliance_status": user.compliance_status,
+            "owner_birthday": user.owner_birthday,
+            "owner_gender": user.owner_gender,
+        })
+    elif role == "rider":
+        res.update({
+            "name": user.name,
+            "first_name": user.first_name,
+            "middle_name": getattr(user, 'middle_name', None),
+            "last_name": user.last_name,
+            "suffix": user.suffix,
+            "phone": user.phone,
+            "birthday": user.birthday,
+            "gender": user.gender,
+            "vehicle_type": user.vehicle_type,
+            "picture": user.picture
         })
     else:
         res.update({
@@ -4301,6 +5185,9 @@ class ProfileUpdate(BaseModel):
     phone:       Optional[str] = None
     gender:      Optional[str] = None
     birthday:    Optional[str] = None
+    owner_birthday: Optional[str] = None
+    owner_gender:   Optional[str] = None
+    vehicle_type: Optional[str] = None
     # Business Profile Fields
     clinic_name: Optional[str] = None
     clinic_phone: Optional[str] = None
@@ -4333,6 +5220,19 @@ async def update_profile(body: ProfileUpdate, request: Request, db: Session = De
         role = payload.get("role", "user")
     except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
+
+    # AGE VALIDATION (18+)
+    from datetime import datetime
+    target_birthday = body.owner_birthday if role == "business" else body.birthday
+    if target_birthday:
+        try:
+            bdate = datetime.strptime(target_birthday, "%Y-%m-%d")
+            today = datetime.utcnow()
+            age = today.year - bdate.year - ((today.month, today.day) < (bdate.month, bdate.day))
+            if age < 18:
+                raise HTTPException(status_code=400, detail="You must be at least 18 years old to use Hi-Vet.")
+        except ValueError:
+            pass # ignore invalid format for now or handle specifically
         
     if role == "business":
         user = db.query(BusinessProfile).filter(BusinessProfile.id == user_id).first()
@@ -4357,6 +5257,8 @@ async def update_profile(body: ProfileUpdate, request: Request, db: Session = De
         if body.phone is not None: user.owner_phone = body.phone
         if body.loyalty_points_per_peso is not None: user.loyalty_points_per_peso = body.loyalty_points_per_peso
         if body.loyalty_points_per_reservation is not None: user.loyalty_points_per_reservation = body.loyalty_points_per_reservation
+        if body.owner_birthday is not None: user.owner_birthday = body.owner_birthday
+        if body.owner_gender is not None: user.owner_gender = body.owner_gender
     elif role == "rider":
         user = db.query(RiderProfile).filter(RiderProfile.id == user_id).first()
         if not user:
@@ -4368,6 +5270,9 @@ async def update_profile(body: ProfileUpdate, request: Request, db: Session = De
         if body.last_name is not None: user.last_name = body.last_name
         if body.suffix is not None: user.suffix = body.suffix
         if body.phone is not None: user.phone = body.phone
+        if body.vehicle_type is not None: user.vehicle_type = body.vehicle_type
+        if body.birthday is not None: user.birthday = body.birthday
+        if body.gender is not None: user.gender = body.gender
         
         # Calculate full name for Rider
         parts = []
@@ -5001,15 +5906,19 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
         db.add(order_item)
     db.commit()
 
-    # NOTIFY BUSINESS OWNER
-    if body.clinic_id:
-        add_notification(
-            db, body.clinic_id, "System",
-            "New Incoming Order!",
-            f"You have a new order (#HV-{new_order.id:04d}) awaiting processing.",
-            "/dashboard/business/orders",
-            role="business"
-        )
+    # NOTIFY BUSINESS OWNERS (Split per Clinic)
+    notified_biz = set()
+    for item in body.items:
+        p = db.query(Product).filter(Product.id == item.id).first()
+        if p and p.business_id and p.business_id not in notified_biz:
+            add_notification(
+                db, p.business_id, "System",
+                "New Incoming Order!",
+                f"You have a new order (#HV-{new_order.id:04d}) awaiting processing.",
+                "/dashboard/business/orders",
+                role="business"
+            )
+            notified_biz.add(p.business_id)
     
     # NOTIFY CUSTOMER
     add_notification(
@@ -5186,14 +6095,7 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
             "description": f"Product from Hi-Vet CRM"
         })
 
-    if body.fulfillmentMethod == "delivery":
-        line_items.append({
-            "amount": 15000, # 150.00 PHP
-            "currency": "PHP",
-            "name": "Shipping Fee",
-            "quantity": 1,
-            "description": "Flat rate delivery fee"
-        })
+    # Shipping fee removed per user request (placeholder 150)
 
     enabled_methods = ["qrph", "gcash", "paymaya"]
     if body.paymentMethod == "maya":
@@ -5231,8 +6133,7 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
             if body.paymentMethod == "qrph":
                 # 1. Calculate Total Amount in Centavos
                 total_centavos = sum(int(float(item.price) * 100) * item.quantity for item in body.items)
-                if body.fulfillmentMethod == "delivery":
-                    total_centavos += 15000 # 150.00 PHP
+                # Shipping fee removed per user request
 
                 # 2. Create Payment Intent
                 pi_payload = {
@@ -5242,12 +6143,13 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
                             "payment_method_allowed": ["qrph"],
                             "payment_method_options": {"card": {"request_three_d_secure": "any"}},
                             "currency": "PHP",
-                            "description": f"Payment for Order #HV-{new_order.id:04d} at {clinic_name}"
+                            "description": f"Payment for Order #HV-{new_order.id:04d} at {clinic_name}",
+                            "statement_descriptor": clinic_name[:22]
                         }
                     }
                 }
                 pi_resp = await client.post("https://api.paymongo.com/v1/payment_intents", json=pi_payload, headers={"Content-Type": "application/json", "Authorization": f"Basic {auth_header_val}"})
-                if pi_resp.status_code != 201:
+                if pi_resp.status_code not in [200, 201]:
                     print(f"PI Error: {pi_resp.text}")
                     raise HTTPException(status_code=500, detail="Failed to create payment intent")
                 pi_data = pi_resp.json()["data"]
@@ -5268,7 +6170,7 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
                     }
                 }
                 pm_resp = await client.post("https://api.paymongo.com/v1/payment_methods", json=pm_payload, headers={"Content-Type": "application/json", "Authorization": f"Basic {auth_header_val}"})
-                if pm_resp.status_code != 201:
+                if pm_resp.status_code not in [200, 201]:
                     print(f"PM Error: {pm_resp.text}")
                     raise HTTPException(status_code=500, detail="Failed to create payment method")
                 pm_id = pm_resp.json()["data"]["id"]
@@ -5603,15 +6505,7 @@ async def retry_order_payment(body: dict, request: Request, db: Session = Depend
             "description": f"Product from {clinic_name}"
         })
 
-    # Add Shipping Fee if it's delivery
-    if order.fulfillment_method == "delivery":
-        line_items.append({
-            "amount": 15000, # 150.00 PHP
-            "currency": "PHP",
-            "name": "Shipping Fee",
-            "quantity": 1,
-            "description": "Flat rate delivery fee"
-        })
+    # Shipping fee removed per user request (placeholder 150)
 
     enabled_methods = ["qrph", "gcash", "paymaya"]
     if payment_method == "paymaya" or payment_method == "maya":
@@ -5648,8 +6542,7 @@ async def retry_order_payment(body: dict, request: Request, db: Session = Depend
             if enabled_methods == ["qrph"]:
                 # 1. Total Amount
                 total_centavos = sum(int(float(item.price) * 100) * item.quantity for item in order_items)
-                if order.fulfillment_method == "delivery":
-                    total_centavos += 15000
+                # Shipping fee removed per user request
 
                 # 2. Create Intent
                 pi_payload = {
@@ -5658,12 +6551,13 @@ async def retry_order_payment(body: dict, request: Request, db: Session = Depend
                             "amount": total_centavos,
                             "payment_method_allowed": ["qrph"],
                             "currency": "PHP",
-                            "description": f"Payment for Order #HV-{order.id:04d} at {clinic_name}"
+                            "description": f"Payment for Order #HV-{order.id:04d} at {clinic_name}",
+                            "statement_descriptor": clinic_name[:22]
                         }
                     }
                 }
                 pi_resp = await client.post("https://api.paymongo.com/v1/payment_intents", json=pi_payload, headers={"Content-Type": "application/json", "Authorization": f"Basic {auth_header_val}"})
-                if pi_resp.status_code != 201:
+                if pi_resp.status_code not in [200, 201]:
                     print(f"PI Error: {pi_resp.text}")
                     raise HTTPException(status_code=500, detail="Failed to create payment intent")
                 pi_data = pi_resp.json()["data"]
@@ -5684,7 +6578,7 @@ async def retry_order_payment(body: dict, request: Request, db: Session = Depend
                     }
                 }
                 pm_resp = await client.post("https://api.paymongo.com/v1/payment_methods", json=pm_payload, headers={"Content-Type": "application/json", "Authorization": f"Basic {auth_header_val}"})
-                if pm_resp.status_code != 201:
+                if pm_resp.status_code not in [200, 201]:
                     print(f"PM Error: {pm_resp.text}")
                     raise HTTPException(status_code=500, detail="Failed to create payment method")
                 pm_id = pm_resp.json()["data"]["id"]
@@ -5763,15 +6657,20 @@ async def confirm_paymongo_payment(order_id: int, request: Request, db: Session 
         # TRIGGER CUSTOM RECEIPT
         send_clinic_order_receipt(db, order_id)
         
-        # NOTIFY BUSINESS OWNER
-        if order.clinic_id:
-            add_notification(
-                db, order.clinic_id, "System",
-                "Order Payment Received!",
-                f"Order #HV-{order.id:04d} has been successfully paid by the customer.",
-                "/dashboard/business/orders",
-                role="business"
-            )
+        # NOTIFY BUSINESS OWNERS (Split per Clinic)
+        notified_biz = set()
+        paid_items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+        for itm in paid_items:
+            p = db.query(Product).filter(Product.id == itm.product_id).first()
+            if p and p.business_id and p.business_id not in notified_biz:
+                add_notification(
+                    db, p.business_id, "System",
+                    "Order Payment Received!",
+                    f"Order #HV-{order.id:04d} has been successfully paid by the customer.",
+                    "/dashboard/business/orders",
+                    role="business"
+                )
+                notified_biz.add(p.business_id)
         
         add_notification(
             db, customer_id, "System", 
@@ -5839,6 +6738,7 @@ async def get_orders(request: Request, db: Session = Depends(get_db)):
             "branch_lng": branch_lng,
             "branch_name": branch_name,
             "branch_address": branch_address,
+            "clinic_id": o.clinic_id,
             "contact_name": o.contact_name,
             "contact_phone": o.contact_phone,
             "cancellation_reason": o.cancellation_reason,
@@ -5850,10 +6750,35 @@ async def get_orders(request: Request, db: Session = Depends(get_db)):
                 "quantity": i.quantity,
                 "variant": i.variant,
                 "size": i.size,
-                "image": i.image
+                "image": i.image,
+                "business_id": db.query(Product.business_id).filter(Product.id == i.product_id).scalar()
             } for i in items]
         })
     return {"orders": results}
+
+@app.get("/api/clinics/branches/{branch_id}")
+async def get_clinic_branch(branch_id: int, db: Session = Depends(get_db)):
+    """Fetch details for a specific branch, including its parent clinic name."""
+    branch = db.query(BusinessBranch).filter(BusinessBranch.id == branch_id).first()
+    if not branch:
+        raise HTTPException(status_code=404, detail="Branch not found")
+    
+    clinic = db.query(BusinessProfile).filter(BusinessProfile.id == branch.business_id).first()
+    return {
+        "branch": {
+            "id": branch.id,
+            "name": branch.name,
+            "clinic_id": branch.business_id,
+            "clinic_name": clinic.clinic_name if clinic else "Clinic",
+            "address_line1": branch.address_line1,
+            "address_line2": branch.address_line2,
+            "phone": branch.phone,
+            "lat": branch.lat,
+            "lng": branch.lng,
+            "is_main": branch.is_main
+        }
+    }
+
 
 @app.get("/api/orders/check-purchased/{product_id}")
 async def check_purchased(product_id: int, request: Request, db: Session = Depends(get_db)):
@@ -5906,15 +6831,20 @@ async def cancel_order(order_id: int, body: CancelOrderRequest, request: Request
         "/dashboard/customer/orders"
     )
     
-    # NOTIFY BUSINESS OWNER
-    if order.clinic_id:
-        add_notification(
-            db, order.clinic_id, "System",
-            "Order Cancelled by Customer",
-            f"Customer has cancelled order #HV-{order.id:04d}.",
-            "/dashboard/business/orders",
-            role="business"
-        )
+    # NOTIFY BUSINESS OWNERS (Split per Clinic)
+    notified_biz = set()
+    cancelled_items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+    for itm in cancelled_items:
+        p = db.query(Product).filter(Product.id == itm.product_id).first()
+        if p and p.business_id and p.business_id not in notified_biz:
+            add_notification(
+                db, p.business_id, "System",
+                "Order Cancelled by Customer",
+                f"Customer has cancelled order #HV-{order.id:04d}.",
+                "/dashboard/business/orders",
+                role="business"
+            )
+            notified_biz.add(p.business_id)
     
     return {"message": "Order cancelled successfully"}
 
@@ -5978,7 +6908,7 @@ async def get_notifications(request: Request, db: Session = Depends(get_db)):
     }
 
 @app.patch("/api/notifications/{n_id}/read")
-async def mark_notification_read(n_id: int, request: Request, db: Session = Depends(get_db)):
+async def mark_notification_read(n_id: str, request: Request, db: Session = Depends(get_db)):
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -5989,10 +6919,21 @@ async def mark_notification_read(n_id: int, request: Request, db: Session = Depe
     except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
 
+    # Handle synthetic admin alerts (clinic_X, rider_X)
+    if n_id.startswith("clinic_") or n_id.startswith("rider_"):
+        return {"message": "System alert marked as read (locally)"}
+
+    try:
+        int_id = int(n_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid notification ID")
+
     if role == "business":
-        notif = db.query(Notification).filter(Notification.id == n_id, Notification.business_id == user_id).first()
+        notif = db.query(Notification).filter(Notification.id == int_id, Notification.business_id == user_id).first()
+    elif role in ["super_admin", "system_admin"]:
+        notif = db.query(Notification).filter(Notification.id == int_id).first()
     else:
-        notif = db.query(Notification).filter(Notification.id == n_id, Notification.customer_id == user_id).first()
+        notif = db.query(Notification).filter(Notification.id == int_id, Notification.customer_id == user_id).first()
         
     if not notif:
         raise HTTPException(status_code=404, detail="Notification not found")
@@ -6022,7 +6963,7 @@ async def mark_all_read(request: Request, db: Session = Depends(get_db)):
     return {"message": "All notifications marked as read"}
 
 @app.delete("/api/notifications/{n_id}")
-async def delete_notification(n_id: int, request: Request, db: Session = Depends(get_db)):
+async def delete_notification(n_id: str, request: Request, db: Session = Depends(get_db)):
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -6033,10 +6974,21 @@ async def delete_notification(n_id: int, request: Request, db: Session = Depends
     except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
 
+    # Handle synthetic admin alerts (clinic_X, rider_X)
+    if n_id.startswith("clinic_") or n_id.startswith("rider_"):
+        return {"message": "System alert dismissed (locally)"}
+
+    try:
+        int_id = int(n_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid notification ID")
+
     if role == "business":
-        notif = db.query(Notification).filter(Notification.id == n_id, Notification.business_id == user_id).first()
+        notif = db.query(Notification).filter(Notification.id == int_id, Notification.business_id == user_id).first()
+    elif role in ["super_admin", "system_admin"]:
+        notif = db.query(Notification).filter(Notification.id == int_id).first()
     else:
-        notif = db.query(Notification).filter(Notification.id == n_id, Notification.customer_id == user_id).first()
+        notif = db.query(Notification).filter(Notification.id == int_id, Notification.customer_id == user_id).first()
         
     if not notif:
         raise HTTPException(status_code=404, detail="Notification not found")
@@ -6254,235 +7206,6 @@ async def validate_voucher(body: VoucherCodeRequest, db: Session = Depends(get_d
 # Routes â€“ Rider
 # ---------------------------------------------------------------------------
 
-class RiderStatusUpdate(BaseModel):
-    is_online: bool
-
-class RiderLocationUpdate(BaseModel):
-    lat: float
-    lng: float
-
-class OrderStatusUpdate(BaseModel):
-    status: str # Picked Up, Delivered
-
-@app.get("/api/rider/profile")
-async def get_rider_profile(request: Request, db: Session = Depends(get_db)):
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-    try:
-        payload = decode_token(auth_header.split(" ", 1)[1])
-        customer_id = int(payload["sub"])
-    except (JWTError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid token")
-    
-    profile = db.query(RiderProfile).filter(RiderProfile.customer_id == customer_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Rider profile not found")
-    
-    return profile
-
-@app.patch("/api/rider/status")
-async def update_rider_status(body: RiderStatusUpdate, request: Request, db: Session = Depends(get_db)):
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-    try:
-        payload = decode_token(auth_header.split(" ", 1)[1])
-        customer_id = int(payload["sub"])
-    except (JWTError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid token")
-    
-    profile = db.query(RiderProfile).filter(RiderProfile.customer_id == customer_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Rider profile not found")
-    
-    profile.is_online = body.is_online
-    db.commit()
-    db.refresh(profile)
-    return profile
-
-@app.get("/api/rider/available-orders")
-async def get_available_orders(request: Request, db: Session = Depends(get_db)):
-    # Simple implementation: all Pending orders with fulfillment_method == 'delivery'
-    orders = db.query(Order).filter(Order.status == "Pending", Order.fulfillment_method == "delivery").all()
-    results = []
-    for o in orders:
-        items = db.query(OrderItem).filter(OrderItem.order_id == o.id).all()
-        results.append({
-            "id": o.id,
-            "status": o.status,
-            "total_amount": o.total_amount,
-            "fulfillment_method": o.fulfillment_method,
-            "created_at": str(o.created_at),
-            "items": [{
-                "name": i.product_name,
-                "quantity": i.quantity
-            } for i in items]
-        })
-    return {"orders": results}
-
-@app.get("/api/rider/earnings")
-async def get_rider_earnings(request: Request, db: Session = Depends(get_db)):
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-    try:
-        payload = decode_token(auth_header.split(" ", 1)[1])
-        customer_id = int(payload["sub"])
-    except (JWTError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid token")
-    
-    profile = db.query(RiderProfile).filter(RiderProfile.customer_id == customer_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Rider profile not found")
-    
-    return {
-        "total_earnings": profile.total_earnings,
-        "completed_orders": 0, # Mocked for now
-        "today_earnings": 0    # Mocked for now
-    }
-
-@app.post("/api/rider/orders/{order_id}/accept")
-async def accept_order(order_id: int, request: Request, db: Session = Depends(get_db)):
-    current_user = await get_current_user(request)
-    rider_id = int(current_user["sub"])
-    
-    profile = db.query(RiderProfile).filter(RiderProfile.customer_id == rider_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Rider profile not found")
-        
-    order = db.query(Order).filter(Order.id == order_id, Order.status == "Pending").first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Available order not found")
-        
-    order.rider_id = profile.id
-    order.status = "Processing"
-    order.assigned_at = datetime.utcnow()
-    db.commit()
-    return {"message": "Order accepted", "order_id": order_id}
-
-@app.patch("/api/rider/orders/{order_id}/status")
-async def update_order_delivery_status(order_id: int, body: OrderStatusUpdate, request: Request, db: Session = Depends(get_db)):
-    current_user = await get_current_user(request)
-    rider_id = int(current_user["sub"])
-    
-    profile = db.query(RiderProfile).filter(RiderProfile.customer_id == rider_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Rider profile not found")
-        
-    order = db.query(Order).filter(Order.id == order_id, Order.rider_id == profile.id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Assigned order not found")
-        
-    if body.status == "Picked Up":
-        order.picked_up_at = datetime.utcnow()
-    elif body.status == "Delivered":
-        if order.status != "Completed":
-            # --- DEDUCT STOCK ---
-            reduce_stock(db, order_id)
-            order.status = "Completed"
-            order.delivered_at = datetime.utcnow()
-            
-            # Add earnings (simplified logic)
-            profile.total_earnings += 5000 # ₱50.00
-            
-            # --- AWARD LOYALTY POINTS TO CUSTOMER ---
-            # Fetch business profile for rates
-            biz = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
-            items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
-            total_points = 0
-            for item in items:
-                prod = db.query(Product).filter(Product.id == item.product_id).first()
-                if prod and prod.loyalty_points > 0:
-                    total_points += prod.loyalty_points * item.quantity
-                elif biz:
-                    total_points += int(item.price * item.quantity * biz.loyalty_points_per_peso)
-                else:
-                    total_points += int(item.price * item.quantity * 0.01) # fallback multiplier (1%)
-                    
-            if total_points > 0:
-                customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
-                if customer:
-                    customer.loyalty_points += total_points
-                    db.add(LoyaltyHistory(
-                        customer_id=order.customer_id,
-                        description=f"Purchase Reward – Order #HV-{order.id:04d}",
-                        points=total_points
-                    ))
-        
-    db.commit()
-
-    # NOTIFY CUSTOMER
-    status_msg = f"Your order #HV-{order.id:04d} status is now: {body.status}"
-    if body.status == "Picked Up":
-        status_msg = f"A rider has picked up your order #HV-{order.id:04d} and is on the way!"
-    elif body.status == "Delivered":
-        status_msg = f"Your order #HV-{order.id:04d} has been delivered. Enjoy!"
-
-    add_notification(
-        db, order.customer_id, "System",
-        f"Delivery Update: {body.status}",
-        status_msg,
-        "/dashboard/customer/orders"
-    )
-
-    return {"message": f"Order status updated to {body.status}"}
-
-@app.patch("/api/rider/location")
-async def update_rider_location(body: RiderLocationUpdate, request: Request, db: Session = Depends(get_db)):
-    current_user = await get_current_user(request)
-    rider_id = int(current_user["sub"])
-    
-    profile = db.query(RiderProfile).filter(RiderProfile.customer_id == rider_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Rider profile not found")
-        
-    profile.current_lat = body.lat
-    profile.current_lng = body.lng
-    profile.last_location_update = datetime.utcnow()
-    db.commit()
-    return {"message": "Location updated"}
-
-@app.get("/api/rider/active-order")
-async def get_active_order(request: Request, db: Session = Depends(get_db)):
-    current_user = await get_current_user(request)
-    rider_id = int(current_user["sub"])
-    
-    profile = db.query(RiderProfile).filter(RiderProfile.customer_id == rider_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Rider profile not found")
-        
-    order = db.query(Order).filter(
-        Order.rider_id == profile.id, 
-        Order.status.in_(["Processing", "Picked Up"])
-    ).first()
-    
-    if not order:
-        return {"order": None}
-        
-    items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
-    
-    # Get Clinic Info for Pickup
-    clinic = None
-    if order.clinic_id:
-        clinic = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
-    
-    return {
-        "order": {
-            "id": order.id,
-            "status": order.status,
-            "delivery_address": order.delivery_address,
-            "delivery_lat": order.delivery_lat,
-            "delivery_lng": order.delivery_lng,
-            "picked_up_at": order.picked_up_at.isoformat() if order.picked_up_at else None,
-            "items": [{"name": i.product_name, "quantity": i.quantity} for i in items],
-            "clinic": {
-                "name": clinic.clinic_name if clinic else "Hi-Vet Hub",
-                "lat": clinic.clinic_lat if clinic else 14.5995, # Fallback to Manila
-                "lng": clinic.clinic_lng if clinic else 120.9842
-            } if clinic else None
-        }
-    }
 
 # ---------------------------------------------------------------------------
 # Routes â€“ Admin
@@ -6506,9 +7229,9 @@ async def get_admin_users(request: Request, db: Session = Depends(get_db)):
     if not is_admin:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    customers = db.query(Customer).all()
-    businesses = db.query(BusinessProfile).all()
-    riders = db.query(RiderProfile).all()
+    customers = db.query(Customer).filter(Customer.is_deleted == False).all()
+    businesses = db.query(BusinessProfile).filter(BusinessProfile.is_deleted == False).all()
+    riders = db.query(RiderProfile).filter(RiderProfile.is_deleted == False).all()
     super_admins = db.query(SuperAdminUser).all()
     system_admins = db.query(SystemAdminUser).all()
 
@@ -6672,9 +7395,19 @@ async def delete_platform_user(user_id: str, request: Request, db: Session = Dep
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
-    db.delete(target)
-    db.commit()
-    return {"message": f"Successfully deleted {user_id}"}
+    # Perform soft-delete if the model supports it
+    if hasattr(target, 'is_deleted'):
+        target.is_deleted = True
+        # If business, archive products
+        if isinstance(target, BusinessProfile):
+            db.query(Product).filter(Product.business_id == target.id).update({"is_archived": True})
+        db.commit()
+        return {"message": f"Successfully deactivated {user_id} (Soft-deleted)"}
+    else:
+        # Fallback for models without soft-delete flag
+        db.delete(target)
+        db.commit()
+        return {"message": f"Successfully deleted {user_id}"}
 
 @app.post("/api/admin/users/{user_id}/suspend")
 async def toggle_user_suspension(user_id: str, request: Request, db: Session = Depends(get_db)):
@@ -7112,6 +7845,356 @@ async def get_paymongo_status(intent_id: str, db: Session = Depends(get_db)):
             print(f"Status check exception: {e}")
             return {"status": "processing"}
 
+
+
+# ─── Rider Specific Endpoints ───────────────────────────────────────────────
+
+@app.get("/api/rider/profile")
+async def get_rider_role_profile(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Fetch rider-specific profile data including online status."""
+    if current_user.get("role") != "rider":
+        raise HTTPException(status_code=403, detail="Rider access required")
+    rider = db.query(RiderProfile).filter(RiderProfile.id == int(current_user["sub"])).first()
+    if not rider:
+        # Fallback for old rider linkage
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == int(current_user["sub"])).first()
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider profile not found")
+    return {
+        "id": rider.id,
+        "is_online": rider.is_online,
+        "compliance_status": rider.compliance_status,
+        "total_earnings": rider.total_earnings
+    }
+
+@app.patch("/api/rider/status")
+async def update_rider_online_status(body: dict, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Toggle rider's online visibility for accepting delivery jobs."""
+    if current_user.get("role") != "rider":
+        raise HTTPException(status_code=403, detail="Rider access required")
+    rider = db.query(RiderProfile).filter(RiderProfile.id == int(current_user["sub"])).first()
+    if not rider:
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == int(current_user["sub"])).first()
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider profile not found")
+    
+    # Optional: Verify compliance
+    if rider.compliance_status != "verified":
+        raise HTTPException(status_code=403, detail="Your rider account is not yet verified by Admin.")
+
+    rider.is_online = body.get("is_online", False)
+    db.commit()
+    return {"message": "Status updated", "is_online": rider.is_online}
+
+@app.patch("/api/rider/location")
+async def update_rider_gps_location(body: dict, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Periodic GPS update for real-time tracking during deliveries."""
+    if current_user.get("role") != "rider":
+        raise HTTPException(status_code=403, detail="Rider access required")
+    rider = db.query(RiderProfile).filter(RiderProfile.id == int(current_user["sub"])).first()
+    if not rider:
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == int(current_user["sub"])).first()
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider profile not found")
+
+    rider.current_lat = body.get("lat")
+    rider.current_lng = body.get("lng")
+    rider.last_location_update = datetime.utcnow()
+    db.commit()
+    return {"status": "success"}
+
+@app.get("/api/rider/earnings")
+async def get_rider_earnings_summary(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Fetch earnings summary: today, total completed orders, and accumulated earnings."""
+    if current_user.get("role") != "rider":
+        raise HTTPException(status_code=403, detail="Rider access required")
+    
+    rider = db.query(RiderProfile).filter(RiderProfile.id == int(current_user["sub"])).first()
+    if not rider:
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == int(current_user["sub"])).first()
+    
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider profile not found")
+
+    # Calculate today's earnings (standardizing on 'Completed' as final status)
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    completed_today = db.query(Order).filter(
+        Order.rider_id == rider.id,
+        Order.status == "Completed",
+        Order.delivered_at >= today
+    ).all()
+    today_earnings = sum(50 for o in completed_today) # Standardized ₱50 per delivery
+    
+    total_completed = db.query(Order).filter(
+        Order.rider_id == rider.id,
+        Order.status == "Completed"
+    ).count()
+
+    return {
+        "total_earnings": rider.total_earnings or 0,
+        "completed_orders": total_completed,
+        "today_earnings": today_earnings
+    }
+
+    # Total completed orders
+    total_completed = db.query(Order).filter(
+        Order.rider_id == rider.id,
+        Order.status == "Delivered"
+    ).count()
+
+    return {
+        "today_earnings": today_earnings,
+        "completed_orders": total_completed,
+        "total_earnings": rider.total_earnings or 0
+    }
+
+@app.get("/api/rider/available-orders")
+async def get_available_jobs(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Pull list of orders requiring delivery (Status = 'Processing' and no rider assigned).
+    Filters by distance if rider location is known."""
+    if current_user.get("role") != "rider":
+        raise HTTPException(status_code=403, detail="Rider access required")
+    
+    rider = db.query(RiderProfile).filter(RiderProfile.id == int(current_user["sub"])).first()
+    if not rider:
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == int(current_user["sub"])).first()
+
+    # We show all 'Pending' and 'Processing' orders that are for delivery and don't have a rider
+    orders = db.query(Order).filter(
+        Order.status.in_(["Pending", "Processing"]),
+        Order.fulfillment_method == "delivery",
+        Order.rider_id == None
+    ).all()
+    
+    print(f"DEBUG: Found {len(orders)} total delivery orders.")
+    results = []
+    for o in orders:
+        # Determine Pickup Location
+        pickup_lat, pickup_lng = None, None
+        pickup_name = "Hi-Vet Hub"
+        
+        if o.branch_id:
+            branch = db.query(BusinessBranch).filter(BusinessBranch.id == o.branch_id).first()
+            if branch:
+                pickup_lat, pickup_lng = branch.lat, branch.lng
+                biz = db.query(BusinessProfile).filter(BusinessProfile.id == o.clinic_id).first()
+                if biz:
+                    pickup_name = f"{biz.clinic_name} - {branch.name}"
+                else:
+                    pickup_name = branch.name
+        if not pickup_lat or not pickup_lng:
+            # Fallback: Get business from first item in order
+            item = db.query(OrderItem).filter(OrderItem.order_id == o.id).first()
+            if item:
+                prod = db.query(Product).filter(Product.id == item.product_id).first()
+                if prod:
+                    biz = db.query(BusinessProfile).filter(BusinessProfile.id == prod.business_id).first()
+                    if biz:
+                        pickup_name = biz.clinic_name
+                        # Check for main branch
+                        main_b = db.query(BusinessBranch).filter(BusinessBranch.business_id == biz.id, BusinessBranch.is_main == True).first()
+                        if main_b:
+                            pickup_lat, pickup_lng = main_b.lat, main_b.lng
+                        else:
+                            pickup_lat, pickup_lng = biz.clinic_lat, biz.clinic_lng
+
+        distance = 0.0
+        if rider and rider.current_lat and rider.current_lng and pickup_lat and pickup_lng:
+            distance = get_distance(rider.current_lat, rider.current_lng, pickup_lat, pickup_lng)
+        
+        print(f"DEBUG: Order #{o.id} - Distance: {distance}km - Rider Lat: {rider.current_lat if rider else 'N/A'}")
+        
+        # Filter: Only show orders within 20km for "Nearby" effectiveness
+        if distance > 20.0 and rider and rider.current_lat:
+            print(f"DEBUG: Skipping Order #{o.id} due to distance (>20km)")
+            continue
+
+        # Format friendly time
+        time_str = "Just now"
+        if o.created_at:
+            diff = datetime.utcnow() - o.created_at
+            if diff.total_seconds() < 60: time_str = "Just now"
+            elif diff.total_seconds() < 3600: time_str = f"{int(diff.total_seconds() // 60)}m ago"
+            else: time_str = f"{int(diff.total_seconds() // 3600)}h ago"
+
+        results.append({
+            "id": o.id,
+            "total_amount": o.total_amount,
+            "delivery_address": o.delivery_address,
+            "delivery_lat": o.delivery_lat,
+            "delivery_lng": o.delivery_lng,
+            "pickup_name": pickup_name,
+            "pickup_lat": pickup_lat,
+            "pickup_lng": pickup_lng,
+            "distance_km": round(distance, 1),
+            "created_at": time_str,
+            "status": o.status
+        })
+        
+    # Sort by distance (nearest first)
+    results.sort(key=lambda x: x["distance_km"])
+    
+    return {"orders": results}
+
+@app.get("/api/rider/active-order")
+async def get_ongoing_job(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Check if the current rider has an active delivery in progress."""
+    if current_user.get("role") != "rider":
+        raise HTTPException(status_code=403, detail="Rider access required")
+    
+    rider = db.query(RiderProfile).filter(RiderProfile.id == int(current_user["sub"])).first()
+    if not rider:
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == int(current_user["sub"])).first()
+
+    if not rider:
+         return {"order": None}
+
+    order = db.query(Order).filter(
+        Order.rider_id == rider.id,
+        Order.status.in_(["Processing", "Picked Up", "Out for Delivery"])
+    ).first()
+    
+    if not order:
+        return {"order": None}
+        
+    # Inject pickup data (Branch or Clinic)
+    pickup_lat, pickup_lng = None, None
+    pickup_name = "Hi-Vet Hub"
+    pickup_address = "Main Branch Address"
+    
+    if order.branch_id:
+        branch = db.query(BusinessBranch).filter(BusinessBranch.id == order.branch_id).first()
+        if branch:
+            pickup_lat, pickup_lng = branch.lat, branch.lng
+            pickup_address = f"{branch.house_number or ''} {branch.street or ''}, {branch.barangay or ''}, {branch.city or ''}".strip(', ')
+            if not pickup_address: pickup_address = branch.address_line1 or "Branch Address"
+            
+            biz = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
+            if biz:
+                pickup_name = f"{biz.clinic_name} - {branch.name}"
+            else:
+                pickup_name = branch.name
+    elif order.clinic_id:
+        biz = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
+        if biz:
+            pickup_lat, pickup_lng = biz.clinic_lat, biz.clinic_lng
+            pickup_name = biz.clinic_name
+            pickup_address = f"{biz.clinic_house_number or ''} {biz.clinic_street or ''}, {biz.clinic_barangay or ''}, {biz.clinic_city or ''}".strip(', ')
+            if not pickup_address: pickup_address = "Clinic Address"
+    
+    # Fetch items
+    items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
+    item_list = []
+    for it in items:
+        p = db.query(Product).filter(Product.id == it.product_id).first()
+        item_list.append({"name": p.name if p else "Product", "quantity": it.quantity})
+
+    return {
+        "order": {
+            "id": order.id,
+            "status": order.status,
+            "delivery_address": order.delivery_address,
+            "delivery_lat": order.delivery_lat,
+            "delivery_lng": order.delivery_lng,
+            "items": item_list,
+            "clinic": {
+                "name": pickup_name,
+                "address": pickup_address,
+                "lat": pickup_lat,
+                "lng": pickup_lng
+            }
+        }
+    }
+
+@app.post("/api/rider/orders/{order_id}/accept")
+async def accept_delivery_job(order_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Claim a delivery request."""
+    if current_user.get("role") != "rider":
+        raise HTTPException(status_code=403, detail="Rider access required")
+    
+    rider = db.query(RiderProfile).filter(RiderProfile.id == int(current_user["sub"])).first()
+    if not rider:
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == int(current_user["sub"])).first()
+
+    order = db.query(Order).filter(Order.id == order_id, Order.rider_id == None).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order already claimed or not found.")
+        
+    order.rider_id = rider.id
+    order.status = "Processing"
+    order.assigned_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Order accepted"}
+
+@app.patch("/api/rider/orders/{order_id}/status")
+async def update_delivery_step(order_id: int, body: dict, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Move the delivery through stages: Picked Up -> Delivered."""
+    if current_user.get("role") != "rider":
+        raise HTTPException(status_code=403, detail="Rider access required")
+    
+    new_status = body.get("status")
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    order.status = new_status
+    if new_status == "Pending":
+        order.rider_id = None
+        order.assigned_at = None
+    elif new_status == "Picked Up":
+        order.picked_up_at = datetime.utcnow()
+    elif new_status == "Delivered":
+        if order.status != "Completed":
+            # --- DEDUCT STOCK ---
+            reduce_stock(db, order_id)
+            order.status = "Completed"
+            order.delivered_at = datetime.utcnow()
+            
+            # Update rider earnings
+            rider = db.query(RiderProfile).filter(RiderProfile.id == order.rider_id).first()
+            if rider:
+                rider.total_earnings = (rider.total_earnings or 0) + 5000 # Standard ₱50 delivery fee
+            
+            # --- AWARD LOYALTY POINTS TO CUSTOMER ---
+            biz = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
+            items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+            total_points = 0
+            for item in items:
+                prod = db.query(Product).filter(Product.id == item.product_id).first()
+                if prod and prod.loyalty_points > 0:
+                    total_points += prod.loyalty_points * item.quantity
+                elif biz:
+                    total_points += int(item.price * item.quantity * biz.loyalty_points_per_peso)
+                else:
+                    total_points += int(item.price * item.quantity * 0.01)
+                    
+            if total_points > 0:
+                customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
+                if customer:
+                    customer.loyalty_points += total_points
+                    db.add(LoyaltyHistory(
+                        customer_id=order.customer_id,
+                        description=f"Purchase Reward – Order #HV-{order.id:04d}",
+                        points=total_points
+                    ))
+        
+    db.commit()
+
+    # NOTIFY CUSTOMER
+    status_msg = f"Your order #HV-{order.id:04d} status is now: {new_status}"
+    if new_status == "Picked Up":
+        status_msg = f"A rider has picked up your order #HV-{order.id:04d} and is on the way!"
+    elif new_status == "Delivered":
+        status_msg = f"Your order #HV-{order.id:04d} has been delivered. Enjoy!"
+
+    add_notification(
+        db, order.customer_id, "System",
+        f"Delivery Update: {new_status}",
+        status_msg,
+        "/dashboard/customer/orders"
+    )
+
+    return {"message": f"Order status updated to {new_status}"}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

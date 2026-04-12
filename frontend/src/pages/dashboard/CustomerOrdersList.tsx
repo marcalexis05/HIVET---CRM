@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import DashboardLayout from '../../components/DashboardLayout';
-import { ShoppingBag, Package, Truck, CheckCircle, XCircle, AlertCircle, ChevronRight, MapPin, Eye, Store, User, Phone, ShieldCheck, X, MessageSquare, ShieldAlert, Clock, CreditCard, Tag, Loader2 } from 'lucide-react';
-import { Map, AdvancedMarker, InfoWindow, useMap, APIProvider } from '@vis.gl/react-google-maps';
+import { ShoppingBag, Package, Truck, CheckCircle, XCircle, AlertCircle, ChevronRight, MapPin, Eye, Store, User, Phone, ShieldCheck, X, MessageSquare, ShieldAlert, Clock, CreditCard, Tag, Loader2, Activity, Trophy } from 'lucide-react';
+import { APIProvider, useMap, AdvancedMarker, InfoWindow, Map } from '@vis.gl/react-google-maps';
 import ModernModal from '../../components/ModernModal';
+import QrCodeModal from '../../components/QrCodeModal';
 
 interface OrderItem {
     id: number;
@@ -40,10 +42,29 @@ interface Order {
 
 
 
-const DirectionsLine = ({ userLat, userLng, clinicLat, clinicLng }: { userLat: number | null, userLng: number | null, clinicLat: number, clinicLng: number }) => {
-    const map = useMap();
+const MapBoundsHandler = ({ points, id, padding }: { points: { lat: number; lng: number }[], id?: string, padding?: number | google.maps.Padding }) => {
+    const map = useMap(id);
     useEffect(() => {
-        const maps = (window as any).google.maps;
+        if (!map || points.length < 1 || !window.google) return;
+        const bounds = new window.google.maps.LatLngBounds();
+        let validPoints = 0;
+        points.forEach(p => {
+            if (p.lat !== undefined && p.lng !== undefined && !isNaN(p.lat) && !isNaN(p.lng)) {
+                bounds.extend(p);
+                validPoints++;
+            }
+        });
+        if (validPoints > 0) {
+            map.fitBounds(bounds, padding || { top: 120, right: 80, bottom: 120, left: 80 });
+        }
+    }, [map, points, padding]);
+    return null;
+};
+
+const DirectionsLine = ({ userLat, userLng, clinicLat, clinicLng, id }: { userLat: number | null, userLng: number | null, clinicLat: number, clinicLng: number, id?: string }) => {
+    const map = useMap(id);
+    useEffect(() => {
+        const maps = (window as any).google?.maps;
         if (!maps || !map || !userLat || !userLng) return;
 
         const renderer = new maps.DirectionsRenderer({
@@ -51,8 +72,8 @@ const DirectionsLine = ({ userLat, userLng, clinicLat, clinicLng }: { userLat: n
             suppressMarkers: true,
             polylineOptions: {
                 strokeColor: '#F58634',
-                strokeWeight: 6,
-                strokeOpacity: 0.8
+                strokeWeight: 5,
+                strokeOpacity: 0.7
             }
         });
 
@@ -79,6 +100,7 @@ const DirectionsLine = ({ userLat, userLng, clinicLat, clinicLng }: { userLat: n
 };
 
 const CustomerOrders = () => {
+    const navigate = useNavigate();
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('All');
@@ -88,6 +110,8 @@ const CustomerOrders = () => {
     const [cancelReason, setCancelReason] = useState('');
     const [isCancelling, setIsCancelling] = useState(false);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const ordersPerPage = 6;
     const [showStreetView, setShowStreetView] = useState(false);
     const streetViewInstance = useRef<google.maps.StreetViewPanorama | null>(null);
     const [activeMarker, setActiveMarker] = useState<'branch' | 'delivery' | null>(null);
@@ -108,6 +132,37 @@ const CustomerOrders = () => {
     }, []);
 
     const [payNowLoading, setPayNowLoading] = useState<number | null>(null);
+    const [qrModalOpen, setQrModalOpen] = useState(false);
+    const [qrData, setQrData] = useState('');
+    const [qrStatus, setQrStatus] = useState<'pending' | 'succeeded' | 'expired' | 'processing'>('pending');
+    const pollingInterval = useRef<any>(null);
+
+    const startPolling = (intentId: string) => {
+        if (pollingInterval.current) clearInterval(pollingInterval.current);
+        setQrStatus('processing');
+        pollingInterval.current = setInterval(async () => {
+            try {
+                const token = localStorage.getItem('hivet_token');
+                const res = await fetch(`http://localhost:8000/api/payments/paymongo/status/${intentId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.status === 'succeeded') {
+                        setQrStatus('succeeded');
+                        if (pollingInterval.current) clearInterval(pollingInterval.current);
+                        setTimeout(() => {
+                            setQrModalOpen(false);
+                            fetchOrders();
+                        }, 2000);
+                    } else if (data.status === 'expired') {
+                        setQrStatus('expired');
+                        if (pollingInterval.current) clearInterval(pollingInterval.current);
+                    }
+                }
+            } catch (err) { console.error('Polling error:', err); }
+        }, 5000);
+    };
     const tabs = ['All', 'Pending', 'Processing', 'Completed', 'Cancelled', 'Payment Pending'];
 
     // Update Street View Position when target changes (Consistent with Checkout)
@@ -123,7 +178,9 @@ const CustomerOrders = () => {
                     ? { lat: Number(selectedOrder.branch_lat), lng: Number(selectedOrder.branch_lng) }
                     : { lat: Number(selectedOrder.delivery_lat), lng: Number(selectedOrder.delivery_lng) };
             }
-            if (pos.lat && pos.lng) {
+            
+            // Sanity check: Ensure coordinates are valid numbers before setting
+            if (pos.lat && pos.lng && !isNaN(pos.lat) && !isNaN(pos.lng)) {
                 streetViewInstance.current.setPosition(pos);
                 setPanoPosition(pos as { lat: number, lng: number });
             }
@@ -172,6 +229,11 @@ const CustomerOrders = () => {
         }
         return () => document.body.classList.remove('map-modal-active');
     }, [isDetailsModalOpen, isCancelModalOpen]);
+
+    // Reset pagination when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeTab, fulfillmentFilter]);
 
     const handleCancelOrder = async () => {
         if (!selectedOrder || !cancelReason) return;
@@ -224,32 +286,19 @@ const CustomerOrders = () => {
         }
     };
 
-    const handlePayExistingOrder = async (orderId: number) => {
-        setPayNowLoading(orderId);
-        try {
-            const token = localStorage.getItem('hivet_token');
-            const res = await fetch('http://localhost:8000/api/payments/paymongo/order-recheckout', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ order_id: orderId, payment_method: 'gcash' })
-            });
-            if (!res.ok) throw new Error('Failed to create payment session');
-            const data = await res.json();
-            window.location.href = data.checkout_url;
-        } catch (error) {
-            console.error('Error initiating payment:', error);
-            setModal({
-                isOpen: true,
-                title: 'Payment Error',
-                message: 'Could not initiate payment. Please try again.',
-                type: 'error'
-            });
-        } finally {
-            setPayNowLoading(null);
-        }
+    const handlePayExistingOrder = (order: Order) => {
+        // Prepare items for Checkout
+        const checkoutItems = order.items.map(item => ({
+            ...item,
+            price: item.price, // Ensure consistency
+            quantity: item.quantity
+        }));
+        
+        localStorage.setItem('hivet_checkout_filtered', JSON.stringify(checkoutItems));
+        localStorage.setItem('hivet_checkout_paying_order', JSON.stringify(order));
+        
+        // Navigate to checkout at the payment step
+        navigate('/dashboard/customer/checkout?step=3');
     };
 
     const filteredOrders = orders.filter(o => {
@@ -257,6 +306,16 @@ const CustomerOrders = () => {
         const matchesFulfillment = fulfillmentFilter === 'All' || o.fulfillment_method === fulfillmentFilter;
         return matchesStatus && matchesFulfillment;
     });
+
+    // Architecture Noir: Dashboard Stats Calculation
+    const totalOrders = orders.length;
+    const inTransitCount = orders.filter(o => o.status === 'Processing' || o.status === 'In Transit').length;
+    const deliveredCount = orders.filter(o => o.status === 'Completed' || o.status === 'Delivered').length;
+
+    const indexOfLastOrder = currentPage * ordersPerPage;
+    const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
+    const paginatedOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
+    const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
 
     const getStatusIcon = (status: string) => {
         switch (status) {
@@ -279,223 +338,308 @@ const CustomerOrders = () => {
     ];
 
     return (
-        <DashboardLayout title="My Orders">
-            <div className="space-y-8">
-                {/* Status Tabs */}
-                <div className="flex flex-col gap-6">
-                    {/* Fulfillment Method Filter */}
-                    <div className="flex items-center gap-1 bg-brand-dark/5 p-1.5 rounded-2xl w-fit border border-brand-dark/5 shadow-inner">
-                        {[
-                            { id: 'All', label: 'All Methods', icon: <ShoppingBag className="w-3.5 h-3.5" /> },
-                            { id: 'delivery', label: 'Home Delivery', icon: <Truck className="w-3.5 h-3.5" /> },
-                            { id: 'pickup', label: 'Clinic Pickup', icon: <Store className="w-3.5 h-3.5" /> }
-                        ].map((m) => (
-                            <button
-                                key={m.id}
-                                onClick={() => setFulfillmentFilter(m.id as any)}
-                                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
-                                    fulfillmentFilter === m.id 
-                                        ? 'bg-white text-brand-dark shadow-md border border-brand-dark/5' 
-                                        : 'text-brand-dark/40 hover:text-brand-dark hover:bg-white/50'
-                                }`}
-                            >
-                                {m.icon}
-                                {m.label}
-                            </button>
-                        ))}
-                    </div>
+        <DashboardLayout title="My Orders" hideHeader={isDetailsModalOpen || isCancelModalOpen}>
+            <div className="space-y-12">
+                {/* HI-VET ARCHITECTURE NOIR: CINEMATIC HERO */}
+                <div className="relative pt-8 pb-12 overflow-hidden">
+                    <div className="relative z-10">
+                        <motion.h1 
+                            initial={{ opacity: 0, x: -30 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="text-7xl font-black text-accent-brown tracking-tighter leading-none mb-4"
+                        >
+                            Logistics <span className="text-brand">Hub</span>
+                        </motion.h1>
+                        <motion.p 
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.1 }}
+                            className="text-[11px] font-black text-accent-brown/40 uppercase tracking-[0.4em] mb-12"
+                        >
+                            Track & Manage Your High-Performance Deliveries
+                        </motion.p>
 
-                    {/* Status Tabs */}
-                    <div className="relative">
-                        <div className="flex items-center gap-1.5 xs:gap-2 overflow-x-auto no-scrollbar pb-2 px-1">
-                            {tabs.map(tab => (
-                                <motion.button
-                                    key={tab}
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => setActiveTab(tab)}
-                                    className={`px-2.5 xs:px-6 py-2.5 xs:py-3 rounded-full font-black text-[8px] xs:text-[10px] uppercase tracking-wider xs:tracking-widest transition-all whitespace-nowrap cursor-pointer transform hover:scale-110 active:scale-95 ${activeTab === tab
-                                        ? 'bg-brand-dark text-white shadow-xl shadow-brand-dark/30 border-2 border-brand-dark'
-                                        : 'bg-brand-dark/70 text-white hover:bg-brand-dark shadow-sm border-2 border-brand-dark/10'
-                                        }`}
+                        {/* Quick Stats Bar */}
+                        <div className="flex flex-wrap gap-4">
+                            {[
+                                { label: 'Total Volume', value: totalOrders, icon: <ShoppingBag className="w-4 h-4" />, color: 'bg-white' },
+                                { label: 'In Transit', value: inTransitCount, icon: <Truck className="w-4 h-4" />, color: 'bg-blue-50 text-blue-600' },
+                                { label: 'Delivered', value: deliveredCount, icon: <Trophy className="w-4 h-4" />, color: 'bg-emerald-50 text-emerald-600' }
+                            ].map((stat, i) => (
+                                <motion.div
+                                    key={i}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.2 + (i * 0.1) }}
+                                    className={`${stat.color} px-8 py-5 rounded-[2rem] border border-accent-brown/5 shadow-xl shadow-accent-brown/5 flex items-center gap-6 min-w-[240px] group hover:scale-105 transition-transform cursor-default`}
                                 >
-                                    {tab}
-                                </motion.button>
+                                    <div className="w-12 h-12 rounded-2xl bg-white shadow-inner flex items-center justify-center border border-accent-brown/5 group-hover:rotate-12 transition-transform">
+                                        {stat.icon}
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">{stat.label}</p>
+                                        <p className="text-3xl font-black text-accent-brown tracking-tighter leading-none">{stat.value.toString().padStart(2, '0')}</p>
+                                    </div>
+                                </motion.div>
                             ))}
                         </div>
-                        {/* Visual Scroll Indicator for mobile */}
-                        <div className="absolute right-0 top-0 bottom-2 w-8 bg-gradient-to-l from-[#FAF3E0] to-transparent pointer-events-none sm:hidden" />
+                    </div>
+                    
+                    {/* Background Atmosphere */}
+                    <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-brand/5 rounded-full blur-[120px] -mr-32 -mt-32 opacity-50 pointer-events-none" />
+                </div>
+
+                {/* HI-VET ARCHITECTURE NOIR: CONTROL HUB */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 pb-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                        {/* Fulfillment Filter */}
+                        <div className="flex items-center gap-1 bg-slate-50 p-1.5 rounded-3xl border border-accent-brown/5 shadow-inner">
+                            {[
+                                { id: 'All', label: 'All', icon: <Activity className="w-3 h-3" /> },
+                                { id: 'delivery', label: 'Home Delivery', icon: <Truck className="w-3 h-3" /> },
+                                { id: 'pickup', label: 'Clinic Pickup', icon: <Store className="w-3 h-3" /> }
+                            ].map((m) => (
+                                <button
+                                    key={m.id}
+                                    onClick={() => setFulfillmentFilter(m.id as any)}
+                                    className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
+                                        fulfillmentFilter === m.id 
+                                            ? 'bg-white text-accent-brown shadow-xl border border-accent-brown/5' 
+                                            : 'text-accent-brown/30 hover:text-accent-brown'
+                                    }`}
+                                >
+                                    {m.icon}
+                                    {m.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="w-[1px] h-8 bg-accent-brown/10 mx-2 hidden sm:block" />
+
+                        {/* Status Tabs */}
+                        <div className="flex flex-wrap items-center gap-2">
+                            {tabs.map((tab, i) => {
+                                const count = tab === 'All' ? orders.length : orders.filter(o => o.status === tab).length;
+                                return (
+                                    <motion.button
+                                        key={tab}
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => setActiveTab(tab)}
+                                        className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-3 cursor-pointer ${
+                                            activeTab === tab 
+                                                ? 'bg-brand text-white shadow-xl shadow-brand/20 border border-brand/10' 
+                                                : 'bg-white text-accent-brown/40 border border-accent-brown/5 hover:border-brand/20'
+                                        }`}
+                                    >
+                                        {tab}
+                                        <span className={`px-2 py-0.5 rounded-lg text-[9px] ${activeTab === tab ? 'bg-white/20 text-white' : 'bg-slate-50 text-accent-brown/40 border border-accent-brown/5'}`}>
+                                            {count}
+                                        </span>
+                                    </motion.button>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
 
+                {/* HI-VET ARCHITECTURE NOIR: ORDER LIST */}
                 {loading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         {[1, 2, 3, 4].map(i => (
-                            <div key={i} className="h-64 bg-white/50 animate-pulse rounded-[2rem]"></div>
+                            <div key={i} className="h-48 bg-white/50 animate-pulse rounded-[3rem] border border-accent-brown/5"></div>
                         ))}
                     </div>
                 ) : filteredOrders.length === 0 ? (
-                    <div className="bg-white rounded-3xl sm:rounded-[2rem] p-8 xs:p-16 sm:p-20 flex flex-col items-center justify-center text-center shadow-sm border border-accent-brown/5">
-                        <div className="w-16 h-16 sm:w-24 sm:h-24 bg-accent-peach/30 rounded-[2rem] flex items-center justify-center mb-6">
-                            <ShoppingBag className="w-8 h-8 sm:w-10 sm:h-10 text-brand" />
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white rounded-[3rem] p-24 flex flex-col items-center gap-6 text-center shadow-2xl shadow-accent-brown/5 border border-white"
+                    >
+                        <div className="w-20 h-20 bg-accent-peach/10 rounded-full flex items-center justify-center text-accent-brown/20 stroke-[1]">
+                            <ShoppingBag className="w-10 h-10" />
                         </div>
-                        <h3 className="text-xl sm:text-2xl font-black text-accent-brown tracking-tighter mb-2">No orders found</h3>
-                        <p className="text-[10px] sm:text-base text-accent-brown/50 font-medium">You haven't placed any orders in this category yet.</p>
-                    </div>
+                        <div>
+                            <h4 className="font-black text-accent-brown text-2xl tracking-tighter mb-2">Empty Records</h4>
+                            <p className="text-accent-brown/40 text-sm font-medium max-w-xs mx-auto">We couldn't find any orders matching your current filter selection.</p>
+                        </div>
+                        <button onClick={() => { setActiveTab('All'); setFulfillmentFilter('All'); }} className="px-8 py-3 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-accent-brown rounded-full hover:bg-accent-peach/20 transition-all cursor-pointer">Reset Filters</button>
+                    </motion.div>
                 ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {filteredOrders.map(order => (
-                            <motion.div
-                                key={order.id}
-                                layout
-                                whileHover={{ scale: 1.01, borderColor: '#ff9f1c', boxShadow: '0 20px 25px -5px rgba(61, 43, 31, 0.05)' }}
-                                whileTap={{ scale: 0.99 }}
-                                className="bg-white rounded-[2rem] shadow-sm border border-accent-brown/5 overflow-hidden group cursor-pointer"
-                            >
-                                {/* Order Header */}
-                                <div className="p-4 xs:p-6 sm:p-8 flex items-center justify-between border-b border-accent-brown/5 bg-accent-peach/5">
-                                    <div className="flex items-center gap-3 sm:gap-4">
-                                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-xl sm:rounded-2xl flex items-center justify-center shadow-sm shrink-0">
-                                            {getStatusIcon(order.status)}
-                                        </div>
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-accent-brown/30">Order</span>
-                                                <span className="text-xs sm:text-sm font-black text-accent-brown truncate">#HV-{order.id.toString().padStart(4, '0')}</span>
-                                            </div>
-                                            <p className="text-[8px] sm:text-[10px] font-bold text-accent-brown/40 uppercase mt-0.5">
-                                                {new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <span className={`px-3 sm:px-4 py-1.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${
-                                            order.status === 'Completed' ? 'bg-emerald-100 text-emerald-600' :
-                                            order.status === 'Cancelled' ? 'bg-red-100 text-red-600' :
-                                            order.status === 'Pending' ? 'bg-amber-100 text-amber-600' :
-                                            order.status === 'Payment Pending' ? 'bg-blue-100 text-blue-700 animate-pulse' :
-                                            'bg-blue-100 text-blue-600'
-                                        }`}>
-                                            {order.status}
-                                        </span>
-                                        {order.status === 'Cancelled' && (
-                                            <motion.button 
-                                                whileHover={{ scale: 1.1, rotate: 90 }}
-                                                whileTap={{ scale: 0.9 }}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleHideOrder(order.id);
-                                                }}
-                                                className="w-7 h-7 sm:w-8 sm:h-8 bg-brand-dark text-white rounded-full flex items-center justify-center hover:bg-black transition-all shadow-md cursor-pointer hover:rotate-90 active:scale-90"
-                                                title="Remove order"
-                                            >
-                                                <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                            </motion.button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Order Items */}
-                                <div className="p-4 xs:p-6 sm:p-8 space-y-4">
-                                    {order.items.map((item, idx) => (
-                                        <div key={idx} className="flex gap-4">
-                                            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-accent-peach/10 rounded-xl p-2 shrink-0 flex items-center justify-center">
-                                                <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <h4 className="font-bold text-xs sm:text-sm text-accent-brown truncate">{item.name}</h4>
-                                                <p className="text-[8px] sm:text-[10px] text-accent-brown/40 font-black uppercase tracking-widest">
-                                                    {item.variant} • {item.size}
+                    <div className="space-y-6">
+                        <AnimatePresence mode="popLayout">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                {paginatedOrders.map((order, i) => (
+                                    <motion.div
+                                        key={order.id}
+                                        layout
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: i * 0.05 }}
+                                        whileHover={{ y: -4 }}
+                                        className="group bg-white rounded-[2.5rem] p-6 shadow-xl shadow-accent-brown/5 border border-white hover:border-brand/20 transition-all flex flex-col relative overflow-hidden"
+                                        onClick={() => {
+                                            setSelectedOrder(order);
+                                            setIsDetailsModalOpen(true);
+                                        }}
+                                    >
+                                        <div className="flex items-start gap-6">
+                                            {/* Date Badge */}
+                                            <div className="w-24 h-[100px] bg-slate-50 rounded-[2rem] flex flex-col items-center justify-center border border-accent-brown/5 group-hover:bg-brand/5 group-hover:border-brand/10 transition-colors shrink-0">
+                                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 group-hover:text-brand/40 transition-colors mb-1">
+                                                    {new Date(order.created_at).toLocaleDateString('en-US', { month: 'short' })}
                                                 </p>
-                                                <div className="flex justify-between items-center mt-1">
-                                                    <span className="text-[8px] sm:text-[10px] font-black text-brand-dark tracking-widest uppercase">Qty: {item.quantity}</span>
-                                                    <span className="font-black text-xs sm:text-sm text-accent-brown tracking-tight">₱{item.price.toFixed(2)}</span>
+                                                <p className="text-3xl font-black text-accent-brown tracking-tighter leading-none group-hover:text-brand transition-colors">
+                                                    {new Date(order.created_at).getDate()}
+                                                </p>
+                                                <p className="text-[9px] font-black uppercase tracking-tighter text-accent-brown/40 mt-1">
+                                                    {new Date(order.created_at).getFullYear()}
+                                                </p>
+                                            </div>
+
+                                            {/* Core Info */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <span className="text-[9px] font-black uppercase tracking-widest text-accent-brown/20 truncate pr-4">#HV-2026-{order.id.toString().padStart(6, '0')}</span>
+                                                    <span className={`text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${
+                                                        order.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' :
+                                                        order.status === 'Cancelled' ? 'bg-red-50 text-red-600' :
+                                                        order.status === 'Pending' ? 'bg-amber-50 text-amber-600' :
+                                                        order.status === 'Payment Pending' ? 'bg-blue-50 text-blue-700' :
+                                                        'bg-blue-50 text-blue-600'
+                                                    }`}>
+                                                        {order.status}
+                                                    </span>
+                                                </div>
+
+                                                <h3 className="text-lg font-black text-accent-brown tracking-tight mb-4 group-hover:translate-x-1 transition-transform">
+                                                    {order.items.length} {order.items.length === 1 ? 'Product' : 'Products'} <span className="text-accent-brown/30 font-bold mx-2">·</span> <span className="text-brand">₱{order.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                                                </h3>
+
+                                                {/* Mini Stepper / Method */}
+                                                <div className="flex items-center gap-4">
+                                                    <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-accent-brown/5">
+                                                        {order.fulfillment_method === 'delivery' ? <Truck className="w-3.5 h-3.5 text-brand" /> : <Store className="w-3.5 h-3.5 text-brand" />}
+                                                        <span className="text-[9px] font-black text-accent-brown/40 uppercase tracking-widest">{order.fulfillment_method}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        {[1, 2, 3].map((s) => (
+                                                            <div key={s} className={`w-3 h-1 rounded-full ${
+                                                                (order.status === 'Completed' ? s <= 3 :
+                                                                 order.status === 'Processing' ? s <= 2 :
+                                                                 s <= 1) ? 'bg-brand' : 'bg-accent-brown/10'
+                                                            }`} />
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
 
-                                {/* Order Footer */}
-                                <div className="p-4 xs:p-6 sm:p-8 bg-accent-peach/10 flex flex-col sm:flex-row items-center justify-between border-t border-accent-brown/5 gap-6 sm:gap-4">
-                                    <div className="w-full sm:w-auto text-center sm:text-left">
-                                        <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.2em] text-accent-brown/30 mb-1">Total Amount</p>
-                                        <div className="flex flex-col sm:items-start items-center">
-                                            <p className="text-xl xs:text-2xl font-black text-accent-brown tracking-tighter leading-none">₱{order.total_amount.toFixed(2)}</p>
-                                            {order.discount_amount && order.discount_amount > 0 && (
-                                                <div className="flex items-center gap-1.5 mt-1.5">
-                                                    <Tag className="w-2.5 h-2.5 text-brand" />
-                                                    <p className="text-[9px] font-black text-brand uppercase tracking-widest">Saved ₱{order.discount_amount.toFixed(2)}</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col xs:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-                                        {(order.status === 'Pending' || order.status === 'Payment Pending') && (
-                                            <motion.button
-                                                whileHover={{ scale: 1.05 }}
-                                                whileTap={{ scale: 0.95 }}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setSelectedOrder(order);
-                                                    setIsCancelModalOpen(true);
-                                                }}
-                                                className="w-full xs:w-auto px-6 py-3 bg-white border-2 border-red-50 text-red-500 rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all shadow-sm cursor-pointer"
-                                            >
-                                                Cancel Order
-                                            </motion.button>
-                                        )}
-                                        {order.status === 'Payment Pending' && (
-                                            <motion.button
-                                                whileHover={{ scale: 1.05 }}
-                                                whileTap={{ scale: 0.95 }}
-                                                disabled={payNowLoading === order.id}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handlePayExistingOrder(order.id);
-                                                }}
-                                                className="w-full xs:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer"
-                                            >
-                                                {payNowLoading === order.id ? (
-                                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                                ) : (
-                                                    <CreditCard className="w-3 h-3" />
+                                            {/* Quick Action */}
+                                            <div className="flex flex-col items-center gap-2 border-l border-accent-brown/5 pl-4 ml-2">
+                                                {order.status === 'Payment Pending' && (
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.1 }}
+                                                        whileTap={{ scale: 0.9 }}
+                                                        onClick={(e) => { e.stopPropagation(); handlePayExistingOrder(order); }}
+                                                        className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/20"
+                                                    >
+                                                        <CreditCard className="w-4 h-4" />
+                                                    </motion.button>
                                                 )}
-                                                Pay Now
-                                            </motion.button>
-                                        )}
-                                        <motion.button 
-                                            whileHover={{ scale: 1.05, x: 5 }}
-                                            whileTap={{ scale: 0.95 }}
-                                            onClick={() => {
-                                                setSelectedOrder(order);
-                                                setIsDetailsModalOpen(true);
-                                            }}
-                                            className="w-full xs:w-auto px-6 py-3 bg-brand-dark hover:bg-black text-white rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-brand-dark/10 flex items-center justify-center gap-2 cursor-pointer"
-                                        >
-                                            Order Details <ChevronRight className="w-3 h-3" />
-                                        </motion.button>
-                                    </div>
-                                </div>
+                                                {(order.status === 'Pending' || order.status === 'Payment Pending') && (
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.1 }}
+                                                        whileTap={{ scale: 0.9 }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedOrder(order);
+                                                            setIsCancelModalOpen(true);
+                                                        }}
+                                                        className="w-10 h-10 rounded-xl bg-red-50 text-red-400 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center shadow-lg"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </motion.button>
+                                                )}
+                                                {order.status === 'Cancelled' ? (
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.1, rotate: 90 }}
+                                                        whileTap={{ scale: 0.9 }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleHideOrder(order.id);
+                                                        }}
+                                                        className="w-10 h-10 bg-accent-brown text-white rounded-xl flex items-center justify-center hover:bg-black transition-all shadow-xl"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </motion.button>
+                                                ) : (
+                                                    <motion.button
+                                                        whileHover={{ x: 4 }}
+                                                        className="w-10 h-10 bg-slate-50 text-accent-brown/30 group-hover:bg-brand/10 group-hover:text-brand rounded-xl flex items-center justify-center transition-all"
+                                                    >
+                                                        <ChevronRight className="w-5 h-5" />
+                                                    </motion.button>
+                                                )}
+                                            </div>
+                                        </div>
 
-                                {order.status === 'Cancelled' && order.cancellation_reason && (
-                                    <div className="px-8 pb-8 flex items-start gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-500 shrink-0">
-                                            <MessageSquare className="w-4 h-4" />
-                                        </div>
-                                        <div>
-                                            <p className="text-[9px] font-black uppercase tracking-widest text-red-400">Reason for cancellation</p>
-                                            <p className="text-xs font-semibold text-accent-brown mt-0.5">{order.cancellation_reason}</p>
-                                        </div>
+                                        {/* Background Glow */}
+                                        <div className="absolute top-0 right-0 w-32 h-32 bg-brand/5 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-brand/10 transition-colors opacity-0 group-hover:opacity-100" />
+                                    </motion.div>
+                                ))}
+                            </div>
+                        </AnimatePresence>
+
+                        {/* Pagination Bar */}
+                        {totalPages > 1 && (
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-6 py-12 border-t border-accent-brown/5">
+                                <div className="text-left">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/20 mb-1">Logistics Summary</p>
+                                    <p className="text-[11px] font-black text-accent-brown/40 uppercase tracking-widest">
+                                        Showing Records <span className="text-accent-brown">{(currentPage - 1) * ordersPerPage + 1} – {Math.min(currentPage * ordersPerPage, filteredOrders.length)}</span> of {filteredOrders.length}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <motion.button
+                                        whileHover={currentPage > 1 ? { scale: 1.05 } : {}}
+                                        whileTap={currentPage > 1 ? { scale: 0.95 } : {}}
+                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                        className="h-12 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-white text-accent-brown/50 border border-accent-brown/5 hover:bg-white hover:text-brand transition-all shadow-sm disabled:opacity-30 cursor-pointer"
+                                    >
+                                        Prev
+                                    </motion.button>
+                                    
+                                    <div className="flex items-center gap-2">
+                                        {[...Array(totalPages)].map((_, i) => (
+                                            <motion.button
+                                                key={i + 1}
+                                                whileHover={{ scale: 1.1 }}
+                                                whileTap={{ scale: 0.9 }}
+                                                onClick={() => setCurrentPage(i + 1)}
+                                                className={`w-12 h-12 rounded-2xl text-[11px] font-black transition-all ${currentPage === i + 1 ? 'bg-brand text-white shadow-xl shadow-brand/20' : 'bg-white text-accent-brown/40 border border-accent-brown/5 hover:bg-slate-50'}`}
+                                            >
+                                                {i + 1}
+                                            </motion.button>
+                                        ))}
                                     </div>
-                                )}
-                            </motion.div>
-                        ))}
+
+                                    <motion.button
+                                        whileHover={currentPage < totalPages ? { scale: 1.05 } : {}}
+                                        whileTap={currentPage < totalPages ? { scale: 0.95 } : {}}
+                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="h-12 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest bg-brand text-white shadow-xl shadow-brand/20 transition-all disabled:opacity-30 cursor-pointer"
+                                    >
+                                        Next
+                                    </motion.button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
 
-            {/* Order Details Modal */}
             <AnimatePresence>
                 {isDetailsModalOpen && selectedOrder && (
                     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 lg:p-12">
@@ -504,333 +648,226 @@ const CustomerOrders = () => {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             onClick={() => setIsDetailsModalOpen(false)}
-                            className="absolute inset-0 bg-black/60 backdrop-blur-2xl"
+                            className="absolute inset-0 bg-accent-brown/20 backdrop-blur-2xl"
                         />
                         <motion.div
-                            initial={{ scale: 0.95, opacity: 0, y: 30 }}
+                            initial={{ scale: 0.9, opacity: 0, y: 40 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.95, opacity: 0, y: 30 }}
-                            className="bg-white w-full max-w-7xl h-full lg:h-[85vh] rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,0.4)] relative z-10 overflow-hidden flex flex-col lg:flex-row transition-all"
+                            exit={{ scale: 0.9, opacity: 0, y: 40 }}
+                            className="bg-white w-full max-w-7xl h-full lg:h-[85vh] rounded-[3rem] shadow-[0_40px_100px_rgba(0,0,0,0.2)] relative z-10 overflow-hidden flex flex-col lg:flex-row transition-all border border-white"
                         >
-                            {/* Left Pane: Logistics & Map (42%) */}
+                            {/* Left Pane: Logistics Intelligence (42%) */}
                             <div className="lg:w-[42%] bg-accent-peach/5 border-r border-accent-brown/5 flex flex-col relative overflow-hidden group/pane">
-                                {/* Map Area */}
-                                <div className="flex-1 relative min-h-[300px] lg:min-h-0">
-                                    <AnimatePresence mode="wait">
+                                <div className="flex-1 relative min-h-[350px] lg:min-h-0">
+                                    <AnimatePresence>
                                         {!showStreetView ? (
                                             <motion.div 
                                                 key="map-view"
                                                 initial={{ opacity: 0 }}
                                                 animate={{ opacity: 1 }}
                                                 exit={{ opacity: 0 }}
-                                                className="absolute inset-0"
+                                                className="absolute inset-0 z-10 pointer-events-auto"
                                             >
-                                                <div className="w-full h-full relative">
-                                                <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
+                                                <div className="w-full h-full outline-none" style={{ pointerEvents: 'auto', touchAction: 'none' }}>
                                                     <Map
+                                                        id="main-map"
                                                         mapId="4c730709b30c1be1"
-                                                        center={(selectedOrder.fulfillment_method === 'delivery' && selectedOrder.delivery_lat !== null) 
-                                                            ? { lat: Number(selectedOrder.delivery_lat), lng: Number(selectedOrder.delivery_lng) }
-                                                            : (selectedOrder.delivery_lat !== null && selectedOrder.branch_lat !== null) 
-                                                                ? { lat: (Number(selectedOrder.delivery_lat) + Number(selectedOrder.branch_lat)) / 2, lng: (Number(selectedOrder.delivery_lng) + Number(selectedOrder.branch_lng)) / 2 } 
-                                                                : (selectedOrder.delivery_lat !== null) 
-                                                                    ? { lat: Number(selectedOrder.delivery_lat), lng: Number(selectedOrder.delivery_lng) } 
-                                                                    : (selectedOrder.branch_lat !== null) 
-                                                                        ? { lat: Number(selectedOrder.branch_lat), lng: Number(selectedOrder.branch_lng) } 
-                                                                        : { lat: 14.5995, lng: 120.9842 }}
-                                                        zoom={(selectedOrder.fulfillment_method === 'delivery') ? 16 : 14}
+                                                        defaultCenter={{ lat: 14.5995, lng: 120.9842 }}
+                                                        defaultZoom={15}
                                                         gestureHandling={'greedy'}
                                                         disableDefaultUI={false}
-                                                        mapTypeControl={false}
-                                                        streetViewControl={false}
-                                                        fullscreenControl={false}
+                                                        draggable={true}
                                                         scrollwheel={true}
+                                                        zoomControl={true}
+                                                        streetViewControl={false}
+                                                        mapTypeControl={false}
+                                                        fullscreenControl={false}
                                                         className="w-full h-full"
                                                     >
-                                                        {selectedOrder.delivery_lat !== null && (
+                                                        <MapBoundsHandler 
+                                                            id="main-map"
+                                                            points={[
+                                                                { lat: Number(selectedOrder.delivery_lat), lng: Number(selectedOrder.delivery_lng) },
+                                                                { lat: Number(selectedOrder.branch_lat), lng: Number(selectedOrder.branch_lng) }
+                                                            ]} 
+                                                        />
+                                                        {selectedOrder.delivery_lat && (
                                                             <AdvancedMarker 
                                                                 onClick={() => setActiveMarker('delivery')}
                                                                 position={{ lat: Number(selectedOrder.delivery_lat), lng: Number(selectedOrder.delivery_lng) }}
                                                             >
-                                                                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-lg ring-4 ring-blue-500/20 cursor-pointer hover:scale-110 transition-transform">
-                                                                    <User className="w-4 h-4" />
+                                                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-2xl border-2 border-brand ring-4 ring-brand/10 hover:scale-110 transition-transform">
+                                                                    <User className="w-5 h-5 text-accent-brown" />
                                                                 </div>
                                                             </AdvancedMarker>
                                                         )}
-                                                        {selectedOrder.fulfillment_method !== 'delivery' && selectedOrder.branch_lat !== null && (
+                                                        {selectedOrder.branch_lat && (
                                                             <AdvancedMarker 
                                                                 onClick={() => setActiveMarker('branch')}
-                                                                position={{ lat: Number(selectedOrder.branch_lat), lng: Number(selectedOrder.branch_lng) }} 
+                                                                position={{ lat: Number(selectedOrder.branch_lat), lng: Number(selectedOrder.branch_lng) }}
                                                             >
-                                                                <div className="w-10 h-10 bg-brand-dark rounded-xl flex items-center justify-center text-white border-2 border-white shadow-xl ring-4 ring-brand/20 cursor-pointer hover:scale-110 transition-transform">
-                                                                    <Store className="w-5 h-5" />
+                                                                <div className="w-10 h-10 bg-brand rounded-2xl flex items-center justify-center shadow-2xl border-2 border-white ring-8 ring-brand/5 hover:scale-110 transition-transform">
+                                                                    <Store className="w-5 h-5 text-accent-brown" />
                                                                 </div>
                                                             </AdvancedMarker>
                                                         )}
-                                                        {activeMarker === 'delivery' && selectedOrder.delivery_lat !== null && (
+                                                        {activeMarker === 'delivery' && selectedOrder.delivery_lat && (
                                                             <InfoWindow
                                                                 position={{ lat: Number(selectedOrder.delivery_lat), lng: Number(selectedOrder.delivery_lng) }}
                                                                 onCloseClick={() => setActiveMarker(null)}
                                                                 headerDisabled={true}
                                                             >
-                                                                <div className="p-4 w-[280px] font-sans flex flex-col gap-3 relative">
-                                                                    <button 
-                                                                        onClick={() => setActiveMarker(null)}
-                                                                        className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
-                                                                    >
-                                                                        <X className="w-3.5 h-3.5" />
-                                                                    </button>
-                                                                    <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
-                                                                        <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
-                                                                            <User className="w-5 h-5 text-blue-600" />
+                                                                <div className="p-4 w-[240px] font-sans flex flex-col gap-4 relative">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="w-10 h-10 bg-brand/10 rounded-xl flex items-center justify-center shrink-0">
+                                                                            <User className="w-5 h-5 text-brand" />
                                                                         </div>
                                                                         <div>
-                                                                            <h3 className="text-sm font-black text-brand-dark leading-tight">{selectedOrder.contact_name || 'Customer'}</h3>
-                                                                            <p className="text-[10px] font-bold text-accent-brown/50 uppercase tracking-widest mt-0.5">Delivery Destination</p>
+                                                                            <h3 className="text-xs font-black text-accent-brown leading-tight">Delivery Node</h3>
+                                                                            <p className="text-[9px] font-bold text-accent-brown/40 uppercase tracking-widest mt-0.5">Verified Recipient</p>
                                                                         </div>
                                                                     </div>
-                                                                    
-                                                                    <div className="flex flex-col gap-2">
-                                                                        <button 
-                                                                            onClick={() => {
-                                                                                setShowStreetView(true);
-                                                                            }}
-                                                                            className="w-full bg-blue-100 text-blue-800 text-[10px] font-black uppercase tracking-widest py-3.5 rounded-xl hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-2 group/svb shadow-sm"
-                                                                        >
-                                                                            <Eye className="w-4 h-4 group-hover/svb:scale-110 transition-transform" /> 
-                                                                            Street View
-                                                                        </button>
-                                                                        <div className="w-full bg-brand-dark/5 border border-brand-dark/10 p-3 rounded-xl flex items-center justify-between">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <div className="w-6 h-6 rounded-lg bg-brand-dark/10 flex items-center justify-center text-brand-dark">
-                                                                                    <Truck className="w-3 h-3" />
-                                                                                </div>
-                                                                                <span className="text-[9px] font-black uppercase tracking-widest text-brand-dark/50">Distance</span>
-                                                                            </div>
-                                                                            <span className="text-xs font-black text-brand-dark">
-                                                                                {selectedOrder.delivery_lat && selectedOrder.branch_lat 
-                                                                                    ? calculateDist(Number(selectedOrder.delivery_lat), Number(selectedOrder.delivery_lng), Number(selectedOrder.branch_lat), Number(selectedOrder.branch_lng))
-                                                                                    : '...'}
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
+                                                                    <button 
+                                                                        onClick={() => setShowStreetView(true)}
+                                                                        className="w-full bg-accent-brown text-white text-[9px] font-black uppercase tracking-[0.2em] py-3.5 rounded-xl hover:bg-black transition-all flex items-center justify-center gap-2"
+                                                                    >
+                                                                        <Eye className="w-3.5 h-3.5" />
+                                                                        Open Street View
+                                                                    </button>
                                                                 </div>
                                                             </InfoWindow>
                                                         )}
-                                                        {activeMarker === 'branch' && selectedOrder.branch_lat !== null && (
+                                                        {activeMarker === 'branch' && selectedOrder.branch_lat && (
                                                             <InfoWindow
                                                                 position={{ lat: Number(selectedOrder.branch_lat), lng: Number(selectedOrder.branch_lng) }}
                                                                 onCloseClick={() => setActiveMarker(null)}
                                                                 headerDisabled={true}
                                                             >
-                                                                <div className="p-4 w-[280px] font-sans flex flex-col gap-3 relative">
-                                                                    <button 
-                                                                        onClick={() => setActiveMarker(null)}
-                                                                        className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
-                                                                    >
-                                                                        <X className="w-3.5 h-3.5" />
-                                                                    </button>
-                                                                    <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
+                                                                <div className="p-4 w-[240px] font-sans flex flex-col gap-4 relative">
+                                                                    <div className="flex items-center gap-3">
                                                                         <div className="w-10 h-10 bg-brand/10 rounded-xl flex items-center justify-center shrink-0">
                                                                             <Store className="w-5 h-5 text-brand" />
                                                                         </div>
                                                                         <div>
-                                                                            <h3 className="text-sm font-black text-brand-dark leading-tight">{selectedOrder.branch_name || 'Clinic Profile'}</h3>
-                                                                            <p className="text-[10px] font-bold text-accent-brown/50 uppercase tracking-widest mt-0.5">Verified Location</p>
+                                                                            <h3 className="text-xs font-black text-accent-brown leading-tight">{selectedOrder.branch_name || 'Hi-Vet Clinic'}</h3>
+                                                                            <p className="text-[9px] font-bold text-accent-brown/40 uppercase tracking-widest mt-0.5">Logistics Hub</p>
                                                                         </div>
                                                                     </div>
-                                                                    
-                                                                    <div className="flex flex-col gap-2">
-                                                                        <button 
-                                                                            onClick={() => {
-                                                                                setShowStreetView(true);
-                                                                            }}
-                                                                            className="w-full bg-brand/10 text-brand-dark text-[10px] font-black uppercase tracking-widest py-3.5 rounded-xl hover:bg-brand hover:text-white transition-all flex items-center justify-center gap-2 group/svb shadow-sm"
-                                                                        >
-                                                                            <Eye className="w-4 h-4 group-hover/svb:scale-110 transition-transform" /> 
-                                                                            Street View
-                                                                        </button>
-                                                                        <div className="w-full bg-brand-dark/5 border border-brand-dark/10 p-3 rounded-xl flex items-center justify-between">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <div className="w-6 h-6 rounded-lg bg-brand-dark/10 flex items-center justify-center text-brand-dark">
-                                                                                    <Truck className="w-3 h-3" />
-                                                                                </div>
-                                                                                <span className="text-[9px] font-black uppercase tracking-widest text-brand-dark/50">Distance</span>
-                                                                            </div>
-                                                                            <span className="text-xs font-black text-brand-dark">
-                                                                                {selectedOrder.delivery_lat && selectedOrder.branch_lat 
-                                                                                    ? calculateDist(Number(selectedOrder.delivery_lat), Number(selectedOrder.delivery_lng), Number(selectedOrder.branch_lat), Number(selectedOrder.branch_lng))
-                                                                                    : 'Calculating...'}
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
+                                                                    <button 
+                                                                        onClick={() => setShowStreetView(true)}
+                                                                        className="w-full bg-brand text-accent-brown text-[9px] font-black uppercase tracking-[0.2em] py-3.5 rounded-xl hover:bg-brand-dark hover:text-white transition-all flex items-center justify-center gap-2"
+                                                                    >
+                                                                        <Eye className="w-3.5 h-3.5" />
+                                                                        Open Street View
+                                                                    </button>
                                                                 </div>
                                                             </InfoWindow>
                                                         )}
-                                                        {selectedOrder.fulfillment_method !== 'delivery' && selectedOrder.delivery_lat !== null && selectedOrder.branch_lat !== null && (
-                                                            <DirectionsLine 
-                                                                userLat={Number(selectedOrder.delivery_lat)} 
-                                                                userLng={Number(selectedOrder.delivery_lng)} 
-                                                                clinicLat={Number(selectedOrder.branch_lat)} 
-                                                                clinicLng={Number(selectedOrder.branch_lng)} 
-                                                            />
-                                                        )}
+                                                        <DirectionsLine 
+                                                            id="main-map"
+                                                            userLat={Number(selectedOrder.delivery_lat)} 
+                                                            userLng={Number(selectedOrder.delivery_lng)} 
+                                                            clinicLat={Number(selectedOrder.branch_lat)} 
+                                                            clinicLng={Number(selectedOrder.branch_lng)} 
+                                                        />
                                                     </Map>
-                                                </APIProvider>
-
-                                                {/* Directional Guidance Overlay */}
-                                                {selectedOrder.fulfillment_method === 'pickup' && selectedOrder.branch_lat === null && (
-                                                    <div className="absolute inset-0 flex items-center justify-center bg-white/30 backdrop-blur-[1px] pointer-events-none z-10">
-                                                        <div className="bg-white/95 px-6 py-4 rounded-[2rem] shadow-2xl border border-brand/10 flex flex-col items-center gap-2">
-                                                            <div className="w-1.5 h-1.5 bg-brand rounded-full animate-ping" />
-                                                            <div className="flex items-center gap-2">
-                                                                <ShieldCheck className="w-4 h-4 text-brand" />
-                                                                <p className="text-[10px] font-black uppercase tracking-widest text-brand-dark">Precision Identity Conflict</p>
-                                                            </div>
-                                                            <p className="text-[8px] font-bold text-accent-brown/40 uppercase">Clinic pin missing from High-Precision Registry</p>
-                                                        </div>
-                                                    </div>
-                                                )}
                                                 </div>
 
-
-                                                <div className="absolute bottom-8 left-8 right-8 z-30 pointer-events-none translate-y-2 group-hover/pane:translate-y-0 opacity-0 group-hover/pane:opacity-100 transition-all duration-500">
-                                                    <div className="bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/50 flex items-center justify-between pointer-events-auto">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center text-brand-dark">
-                                                                <Truck className="w-4 h-4" />
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30 leading-none">Travel Distance</p>
-                                                                <p className="text-xs font-black text-brand-dark mt-0.5">
-                                                                    {selectedOrder.fulfillment_method === 'pickup' 
-                                                                        ? 'Store Pickup' 
-                                                                        : (selectedOrder.delivery_lat && selectedOrder.branch_lat 
-                                                                            ? calculateDist(Number(selectedOrder.delivery_lat), Number(selectedOrder.delivery_lng), Number(selectedOrder.branch_lat), Number(selectedOrder.branch_lng))
-                                                                            : 'Pending Location Sync')}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="bg-green-50 px-3 py-1.5 rounded-lg border border-green-100 flex items-center gap-2">
-                                                            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                                                            <span className="text-[9px] font-black text-green-600 uppercase tracking-widest">Real-time Data Active</span>
-                                                        </div>
+                                                <div className="absolute top-8 left-8 z-20 pointer-events-none">
+                                                    <div className="bg-white/90 backdrop-blur-md px-6 py-4 rounded-2xl shadow-xl border border-white/50 pointer-events-auto">
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 mb-1">HV Reference ID</p>
+                                                        <p className="text-sm font-black text-accent-brown">
+                                                            HV-2026-{selectedOrder.id.toString().padStart(6, '0')}-{new Date(selectedOrder.created_at).getTime().toString().slice(-4)}
+                                                        </p>
                                                     </div>
                                                 </div>
+
+
                                             </motion.div>
                                         ) : (
                                             <motion.div 
                                                 key="street-view"
                                                 initial={{ opacity: 0, scale: 1.1 }}
                                                 animate={{ opacity: 1, scale: 1 }}
-                                                exit={{ opacity: 0, scale: 0.95 }}
-                                                className="absolute inset-0 z-[100] flex flex-col"
+                                                exit={{ opacity: 0, scale: 0.9 }}
+                                                className="absolute inset-0 z-50 bg-black flex flex-col"
                                             >
-                                                <div className="absolute top-8 left-8 right-8 z-[110] flex items-center justify-end pointer-events-none">
+                                                <div className="absolute top-8 right-8 z-50">
                                                     <button 
                                                         onClick={() => {
                                                             setShowStreetView(false);
                                                             streetViewInstance.current = null;
                                                         }}
-                                                        className="w-14 h-14 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 flex items-center justify-center text-white hover:bg-red-500 hover:border-red-600 hover:scale-110 active:scale-95 transition-all pointer-events-auto shadow-2xl"
+                                                        className="w-14 h-14 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 text-white hover:bg-red-500 transition-all flex items-center justify-center"
                                                     >
                                                         <X className="w-6 h-6" />
                                                     </button>
                                                 </div>
-
-                                                {/* Split View Container */}
-                                                <div className="flex-1 flex flex-col relative">
-                                                    {/* Top 70%: Street View */}
-                                                    <div className="flex-[0.7] relative bg-black">
-                                                        <div 
-                                                            ref={(el) => {
-                                                                    if (el && !streetViewInstance.current) {
-                                                                        let pos;
-                                                                        if (activeMarker) {
-                                                                            pos = activeMarker === 'branch' 
-                                                                                ? { lat: Number(selectedOrder.branch_lat), lng: Number(selectedOrder.branch_lng) } 
-                                                                                : { lat: Number(selectedOrder.delivery_lat), lng: Number(selectedOrder.delivery_lng) };
-                                                                        } else {
-                                                                            pos = selectedOrder.fulfillment_method === 'pickup'
-                                                                                ? { lat: Number(selectedOrder.branch_lat), lng: Number(selectedOrder.branch_lng) }
-                                                                                : { lat: Number(selectedOrder.delivery_lat), lng: Number(selectedOrder.delivery_lng) };
-                                                                        }
-                                                                    
-                                                                    const pano = new google.maps.StreetViewPanorama(el, {
+                                                <div 
+                                                    ref={(el) => {
+                                                        if (el && !streetViewInstance.current && window.google) {
+                                                            const pos = activeMarker === 'branch' 
+                                                                ? { lat: Number(selectedOrder.branch_lat), lng: Number(selectedOrder.branch_lng) } 
+                                                                : { lat: Number(selectedOrder.delivery_lat), lng: Number(selectedOrder.delivery_lng) };
+                                                            
+                                                            if (!isNaN(pos.lat) && !isNaN(pos.lng)) {
+                                                                try {
+                                                                    streetViewInstance.current = new window.google.maps.StreetViewPanorama(el, {
                                                                         position: pos,
                                                                         pov: { heading: 0, pitch: 0 },
                                                                         zoom: 1,
                                                                         addressControl: false,
                                                                         fullscreenControl: false,
-                                                                        zoomControl: false,
-                                                                        linksControl: true,
-                                                                        panControl: false,
-                                                                        enableCloseButton: false,
                                                                     });
-
-                                                                    pano.addListener('position_changed', () => {
-                                                                        const p = pano.getPosition();
-                                                                        if (p) setPanoPosition({ lat: p.lat(), lng: p.lng() });
-                                                                    });
-
-                                                                    pano.addListener('pov_changed', () => {
-                                                                        const pov = pano.getPov();
-                                                                        setPanoPov({ heading: pov.heading, pitch: pov.pitch });
-                                                                    });
-
-                                                                    streetViewInstance.current = pano;
-                                                                    setPanoPosition(pos);
+                                                                } catch (err) {
+                                                                    console.error("Failed to init StreetView:", err);
                                                                 }
-                                                            }} 
-                                                            className="w-full h-full" 
-                                                        />
-                                                        <div className="absolute inset-0 pointer-events-none border-b-4 border-brand/20 shadow-[inset_0_-50px_100px_rgba(0,0,0,0.5)]" />
-                                                    </div>
-
-                                                    {/* Bottom 30%: Mini-Map Context (The "Map Widget on Street View") */}
-                                                    <div className="flex-[0.3] relative overflow-hidden group/mini shadow-2xl border-t-2 border-brand/5">
-                                                        <div className="absolute inset-0 z-10 pointer-events-none bg-gradient-to-t from-black/20 to-transparent" />
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="w-full h-full"
+                                                />
+                                                
+                                                {/* CINEMATIC MINI-MAP WIDGET */}
+                                                <motion.div 
+                                                    initial={{ opacity: 0, x: 20 }}
+                                                    animate={{ opacity: 1, x: 0 }}
+                                                    className="absolute bottom-8 right-8 w-52 h-36 bg-white/20 backdrop-blur-3xl rounded-[2rem] border border-white/30 shadow-[0_20px_50px_rgba(0,0,0,0.3)] overflow-hidden z-[100] pointer-events-none"
+                                                >
+                                                    <div className="w-full h-full opacity-90 group-hover:opacity-100 transition-opacity pointer-events-auto">
                                                         <Map
-                                                            mapId="46537618861d8583"
-                                                            center={panoPosition || (activeMarker === 'branch' ? { lat: Number(selectedOrder.branch_lat), lng: Number(selectedOrder.branch_lng) } : { lat: Number(selectedOrder.delivery_lat), lng: Number(selectedOrder.delivery_lng) })}
-                                                            zoom={17}
+                                                            id="mini-map"
+                                                            mapId="4c730709b30c1be1"
+                                                            defaultZoom={12}
+                                                            gestureHandling={'none'}
                                                             disableDefaultUI={true}
-                                                            gestureHandling={'greedy'}
-                                                            className="w-full h-full grayscale-[0.2] contrast-[1.1]"
+                                                            className="w-full h-full"
                                                         >
-                                                            {/* User Street View Position & Direction Arrow */}
-                                                            {panoPosition && (
-                                                                <AdvancedMarker position={panoPosition}>
-                                                                    <div 
-                                                                        className="w-10 h-10 flex items-center justify-center transition-transform duration-300"
-                                                                        style={{ transform: `rotate(${panoPov.heading}deg)` }}
-                                                                    >
-                                                                        <div className="w-5 h-5 bg-blue-500 rounded-full border-[3px] border-white shadow-2xl relative">
-                                                                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[12px] border-b-blue-500 drop-shadow-lg" />
-                                                                        </div>
-                                                                    </div>
-                                                                </AdvancedMarker>
-                                                            )}
-
-                                                            {/* Pickup/Destination Markers in Mini-Map */}
-                                                            {selectedOrder.branch_lat && (
-                                                                <AdvancedMarker position={{ lat: Number(selectedOrder.branch_lat), lng: Number(selectedOrder.branch_lng) }}>
-                                                                    <div className="w-8 h-8 bg-brand rounded-xl flex items-center justify-center text-white border-2 border-white shadow-xl">
-                                                                        <Store className="w-4 h-4" />
-                                                                    </div>
-                                                                </AdvancedMarker>
-                                                            )}
+                                                            <MapBoundsHandler 
+                                                                id="mini-map"
+                                                                padding={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                                                                points={[
+                                                                    { lat: Number(selectedOrder.delivery_lat), lng: Number(selectedOrder.delivery_lng) },
+                                                                    { lat: Number(selectedOrder.branch_lat), lng: Number(selectedOrder.branch_lng) }
+                                                                ]} 
+                                                            />
                                                             {selectedOrder.delivery_lat && (
                                                                 <AdvancedMarker position={{ lat: Number(selectedOrder.delivery_lat), lng: Number(selectedOrder.delivery_lng) }}>
-                                                                    <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-lg">
-                                                                        <User className="w-3 h-3" />
+                                                                    <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center border border-brand text-[8px] font-black shadow-sm">
+                                                                        <User className="w-3 h-3 text-accent-brown" />
                                                                     </div>
                                                                 </AdvancedMarker>
                                                             )}
-
-                                                            {/* Directions Line in Mini-Map */}
+                                                            {selectedOrder.branch_lat && (
+                                                                <AdvancedMarker position={{ lat: Number(selectedOrder.branch_lat), lng: Number(selectedOrder.branch_lng) }}>
+                                                                    <div className="w-6 h-6 bg-brand rounded-lg flex items-center justify-center border border-white shadow-sm">
+                                                                        <Store className="w-3 h-3 text-accent-brown" />
+                                                                    </div>
+                                                                </AdvancedMarker>
+                                                            )}
                                                             {selectedOrder.delivery_lat && selectedOrder.branch_lat && (
                                                                 <DirectionsLine 
+                                                                    id="mini-map"
                                                                     userLat={Number(selectedOrder.delivery_lat)} 
                                                                     userLng={Number(selectedOrder.delivery_lng)} 
                                                                     clinicLat={Number(selectedOrder.branch_lat)} 
@@ -838,99 +875,41 @@ const CustomerOrders = () => {
                                                                 />
                                                             )}
                                                         </Map>
-
-                                                        {/* Dynamic Direction HUD */}
-                                                        <div className="absolute top-4 left-4 z-20 pointer-events-none">
-                                                            <div className="bg-white/90 backdrop-blur-md px-3 py-2 rounded-xl border border-white/50 shadow-lg flex items-center gap-3">
-                                                                <div className="w-6 h-6 rounded-lg bg-blue-500 flex items-center justify-center text-white">
-                                                                    <MapPin className="w-3.5 h-3.5" />
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-[8px] font-black uppercase tracking-widest text-accent-brown/40">Immersive HUD</p>
-                                                                    <p className="text-[10px] font-black text-brand-dark">Heading: {Math.round(panoPov.heading)}°</p>
-                                                                </div>
-                                                            </div>
-                                                        </div>
                                                     </div>
-                                                </div>
-
-
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                                                    <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between">
+                                                        <span className="text-[7px] font-black uppercase tracking-widest text-white drop-shadow-md">Logistics Hub</span>
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                                                    </div>
+                                                </motion.div>
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
-                                        
-                                        {/* Precision State Indicator & Fallback Overlay */}
-                                        {((selectedOrder.fulfillment_method === 'delivery' && !selectedOrder.delivery_lat) || 
-                                          (selectedOrder.fulfillment_method === 'pickup' && !selectedOrder.branch_lat)) && !showStreetView && (
-                                            <div className="absolute inset-0 flex items-center justify-center bg-white/40 backdrop-blur-[2px] z-10 pointer-events-none">
-                                                <div className="bg-white/90 px-5 py-3 rounded-2xl shadow-xl border border-accent-brown/5 flex flex-col items-center gap-1.5">
-                                                    <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                                                    <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40">Geographic Context Only</p>
-                                                    <p className="text-[7px] font-bold text-accent-brown/20 uppercase">High-Precision Mapping Unavailable</p>
-                                                </div>
-                                            </div>
-                                        )}
-                                        
-                                        {/* Overlay Reference & Precision Badges */}
-                                        <div className="absolute top-8 left-8 flex flex-col gap-3 z-20">
-                                            {!showStreetView && (
-                                                <>
-                                                    <div className="bg-white/90 backdrop-blur-md px-6 py-3 rounded-2xl shadow-xl border border-white/50">
-                                                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 leading-none mb-1 text-center">Reference</p>
-                                                        <p className="text-sm font-black text-brand-dark leading-none">#HV-{selectedOrder.id.toString().padStart(4, '0')}</p>
-                                                    </div>
-
-                                                </>
-                                            )}
-                                        </div>
                                 </div>
 
-                                {/* Delivery Details Card (Floating Effect) */}
-                                <div className="p-8 lg:absolute lg:bottom-0 lg:left-0 lg:right-0 z-30">
-                                    <div className="bg-white/95 backdrop-blur-md p-8 rounded-[2.5rem] shadow-2xl border border-white/50 space-y-6">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-accent-brown/30">
-                                                {selectedOrder.fulfillment_method === 'pickup' ? 'Clinic Pickup Location' : 'Delivery Destination'}
-                                            </h4>
-                                            <div className="bg-brand/10 text-brand-dark px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">
-                                                {selectedOrder.fulfillment_method}
-                                            </div>
+                                <div className="p-8 pb-12">
+                                    <div className="bg-white/50 backdrop-blur-md p-8 rounded-[2.5rem] border border-accent-brown/5 space-y-6">
+                                        <div className="flex items-center justify-between">
+                                            <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-accent-brown/30">Logistics Identity</h4>
+                                            <span className="px-3 py-1 bg-brand text-[9px] font-black uppercase tracking-widest rounded-full">{selectedOrder.fulfillment_method}</span>
                                         </div>
-
-                                        <div className="grid grid-cols-1 gap-5">
+                                        <div className="space-y-6">
                                             <div className="flex items-start gap-4">
-                                                <div className="w-10 h-10 rounded-xl bg-accent-peach/20 flex items-center justify-center shrink-0">
-                                                    <User className="w-5 h-5 text-brand" />
+                                                <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center border border-accent-brown/5">
+                                                    <User className="w-5 h-5 text-accent-brown" />
                                                 </div>
                                                 <div>
-                                                    <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">
-                                                        {selectedOrder.fulfillment_method === 'pickup' ? 'Clinic Representative' : 'Recipient'}
-                                                    </p>
-                                                    <p className="text-sm font-bold text-accent-brown capitalize">{selectedOrder.contact_name || 'Valued Customer'}</p>
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Primary Contact</p>
+                                                    <p className="text-sm font-black text-accent-brown">{selectedOrder.contact_name}</p>
                                                 </div>
                                             </div>
-
                                             <div className="flex items-start gap-4">
-                                                <div className="w-10 h-10 rounded-xl bg-accent-peach/20 flex items-center justify-center shrink-0">
-                                                    <Phone className="w-5 h-5 text-brand" />
+                                                <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center border border-accent-brown/5">
+                                                    <MapPin className="w-5 h-5 text-accent-brown" />
                                                 </div>
                                                 <div>
-                                                    <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Contact Number</p>
-                                                    <p className="text-sm font-bold text-accent-brown">{selectedOrder.contact_phone || 'Not provided'}</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex items-start gap-4">
-                                                <div className="w-10 h-10 rounded-xl bg-accent-peach/20 flex items-center justify-center shrink-0">
-                                                    <MapPin className="w-5 h-5 text-brand" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Address</p>
-                                                    <p className="text-xs font-bold text-accent-brown leading-relaxed pr-4">
-                                                        {selectedOrder.fulfillment_method === 'pickup' 
-                                                            ? (selectedOrder.branch_address ? `${selectedOrder.branch_name} - ${selectedOrder.branch_address}` : (selectedOrder.branch_name || 'Clinic Branch Address'))
-                                                            : (selectedOrder.delivery_address || 'No address details provided.')}
-                                                    </p>
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Target Address</p>
+                                                    <p className="text-xs font-bold text-accent-brown/60 leading-relaxed pr-4">{selectedOrder.delivery_address || selectedOrder.branch_address}</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -938,99 +917,63 @@ const CustomerOrders = () => {
                                 </div>
                             </div>
 
-                            {/* Right Pane: Order Summary (58%) */}
-                            <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
-                                {/* Header Actions */}
-                                <div className="p-8 pb-4 flex items-center justify-between shrink-0">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-14 h-14 rounded-2xl bg-accent-peach/10 flex items-center justify-center shadow-inner">
-                                            <ShoppingBag className="w-7 h-7 text-brand" />
+                            <div className="flex-1 flex flex-col bg-white overflow-hidden">
+                                <div className="p-10 pb-6 flex items-center justify-between shrink-0">
+                                    <div className="flex items-center gap-6">
+                                        <div className="w-16 h-16 rounded-2xl bg-accent-peach/10 flex items-center justify-center border border-accent-brown/5 group">
+                                            <ShoppingBag className="w-8 h-8 text-brand group-hover:scale-110 transition-transform" />
                                         </div>
                                         <div>
-                                            <h3 className="text-3xl font-black text-accent-brown tracking-tighter">Order Details</h3>
-                                            <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest mt-0.5">Manage and track your order summary</p>
+                                            <h2 className="text-4xl font-black text-accent-brown tracking-tighter">Receipt Summary</h2>
+                                            <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-[0.2em] mt-1">Transaction Verified & Synchronized</p>
                                         </div>
                                     </div>
-                                    <motion.button
-                                        whileHover={{ scale: 1.1, rotate: 90 }}
-                                        whileTap={{ scale: 0.9 }}
+                                    <button 
                                         onClick={() => setIsDetailsModalOpen(false)}
-                                        className="w-14 h-14 rounded-2xl bg-accent-peach/5 border border-accent-brown/5 flex items-center justify-center text-accent-brown/40 hover:bg-brand-dark hover:text-white transition-all duration-500 shadow-sm"
+                                        className="w-14 h-14 rounded-2xl bg-accent-peach/5 border border-accent-brown/5 text-accent-brown/30 hover:bg-black hover:text-white transition-all flex items-center justify-center"
                                     >
                                         <X className="w-6 h-6" />
-                                    </motion.button>
+                                    </button>
                                 </div>
 
-                                {/* Status Dashboard Grid */}
-                                <div className="px-8 py-6 grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
-                                    <div className="p-5 bg-accent-peach/5 rounded-3xl border border-accent-brown/5 group hover:bg-white hover:shadow-xl hover:shadow-accent-brown/5 transition-all">
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30 mb-3 group-hover:text-brand transition-colors">Current Status</p>
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center">
-                                                {getStatusIcon(selectedOrder.status)}
+                                <div className="px-10 py-6 grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
+                                    {[
+                                        { label: 'Status', value: selectedOrder.status, icon: getStatusIcon(selectedOrder.status) },
+                                        { label: 'Method', value: selectedOrder.payment_method, icon: <CreditCard className="w-4 h-4" /> },
+                                        { label: 'Date', value: new Date(selectedOrder.created_at).toLocaleDateString(), icon: <Clock className="w-4 h-4" /> },
+                                        { label: 'Volume', value: `${selectedOrder.items.length} Units`, icon: <Package className="w-4 h-4" /> }
+                                    ].map((stat, i) => (
+                                        <div key={i} className="p-5 bg-accent-peach/5 rounded-[2rem] border border-accent-brown/5">
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30 mb-3">{stat.label}</p>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-accent-brown shadow-sm border border-accent-brown/5">
+                                                    {stat.icon}
+                                                </div>
+                                                <span className="text-[10px] font-black text-accent-brown uppercase truncate">{stat.value}</span>
                                             </div>
-                                            <span className="text-xs font-black text-accent-brown uppercase">{selectedOrder.status}</span>
                                         </div>
-                                    </div>
-                                    <div className="p-5 bg-accent-peach/5 rounded-3xl border border-accent-brown/5 group hover:bg-white hover:shadow-xl hover:shadow-accent-brown/5 transition-all">
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30 mb-3 group-hover:text-brand transition-colors">Payment Method</p>
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center">
-                                                <CreditCard className="w-4 h-4 text-brand-dark" />
-                                            </div>
-                                            <span className="text-xs font-black text-accent-brown uppercase tracking-tighter">{selectedOrder.payment_method}</span>
-                                        </div>
-                                    </div>
-                                    <div className="p-5 bg-accent-peach/5 rounded-3xl border border-accent-brown/5 group hover:bg-white hover:shadow-xl hover:shadow-accent-brown/5 transition-all">
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30 mb-3 group-hover:text-brand transition-colors">Ordered At</p>
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center">
-                                                <Clock className="w-4 h-4 text-brand-dark" />
-                                            </div>
-                                            <span className="text-xs font-black text-accent-brown">
-                                                {new Date(selectedOrder.created_at).toLocaleDateString()}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className="p-5 bg-accent-peach/5 rounded-3xl border border-accent-brown/5 group hover:bg-white hover:shadow-xl hover:shadow-accent-brown/5 transition-all">
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30 mb-3 group-hover:text-brand transition-colors">Order Weight</p>
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-brand-dark">
-                                                <Package className="w-4 h-4" />
-                                            </div>
-                                            <span className="text-xs font-black text-accent-brown uppercase">{selectedOrder.items.length} Items</span>
-                                        </div>
-                                    </div>
+                                    ))}
                                 </div>
 
-                                {/* Order Summary Items - Scrollable */}
-                                <div className="flex-1 overflow-y-auto px-8 py-2 no-scrollbar">
-                                    <div className="space-y-4">
-                                        <div className="flex items-center justify-between pl-1">
-                                            <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-accent-brown/30">Basket Content</h4>
-                                            <p className="text-[10px] font-bold text-accent-brown/40">{selectedOrder.items.length} units total</p>
-                                        </div>
-                                        
-                                        <div className="space-y-3">
+                                <div className="flex-1 overflow-y-auto px-10 py-4 no-scrollbar">
+                                    <div className="space-y-1">
+                                        <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-accent-brown/20 mb-6 pl-1">Basket Portfolio Content</h4>
+                                        <div className="space-y-4">
                                             {selectedOrder.items.map((item, idx) => (
-                                                <div key={idx} className="flex items-center gap-5 p-4 bg-white rounded-[2rem] border border-accent-brown/5 hover:border-brand/20 transition-all group/item shadow-sm hover:shadow-md">
-                                                    <div className="w-16 h-16 bg-accent-peach/10 rounded-2xl p-2 shrink-0 group-hover/item:scale-105 transition-transform duration-300">
-                                                        <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
+                                                <div key={idx} className="flex items-center gap-6 p-5 bg-white rounded-[2.5rem] border border-accent-brown/5 hover:border-brand/20 transition-all group shadow-sm hover:shadow-xl hover:shadow-accent-brown/5">
+                                                    <div className="w-20 h-20 bg-accent-peach/5 rounded-[1.5rem] p-3 shrink-0 flex items-center justify-center border border-accent-brown/5">
+                                                        <img src={item.image} alt={item.name} className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500" />
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="font-black text-sm text-accent-brown group-hover/item:text-brand-dark transition-colors">{item.name}</p>
-                                                        <div className="flex items-center gap-2 mt-1">
-                                                            <span className="px-2 py-0.5 bg-accent-peach/20 rounded text-[8px] font-black text-accent-brown/60 uppercase tracking-widest">
-                                                                {item.variant}
-                                                            </span>
-                                                            <span className="text-[9px] font-bold text-accent-brown/30 uppercase tracking-widest">
-                                                                Size: {item.size}
-                                                            </span>
+                                                        <h5 className="font-black text-base text-accent-brown truncate">{item.name}</h5>
+                                                        <div className="flex items-center gap-2 mt-1.5">
+                                                            <span className="px-2 py-0.5 bg-slate-50 rounded text-[9px] font-black text-accent-brown/40 uppercase tracking-widest">{item.variant}</span>
+                                                            <span className="text-[9px] font-bold text-accent-brown/20 uppercase tracking-widest">Size: {item.size}</span>
                                                         </div>
                                                     </div>
-                                                    <div className="text-right shrink-0 pr-2">
-                                                        <p className="text-sm font-black text-accent-brown tracking-tight">₱{(item.price * item.quantity).toFixed(2)}</p>
-                                                        <p className="text-[9px] font-black text-brand uppercase tracking-widest mt-0.5">Qty {item.quantity}</p>
+                                                    <div className="text-right shrink-0">
+                                                        <p className="text-lg font-black text-accent-brown tracking-tighter leading-none">₱{(item.price * item.quantity).toFixed(2)}</p>
+                                                        <p className="text-[10px] font-black text-brand uppercase tracking-widest mt-1.5">Qty {item.quantity}</p>
                                                     </div>
                                                 </div>
                                             ))}
@@ -1038,32 +981,28 @@ const CustomerOrders = () => {
                                     </div>
                                 </div>
 
-                                {/* Footer: Billing and Total */}
-                                <div className="p-8 pt-6 border-t border-accent-brown/5 bg-accent-peach/5 shrink-0">
-                                    <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                                <div className="p-10 bg-accent-peach/10 border-t border-accent-brown/5 shrink-0">
+                                    <div className="flex flex-col md:flex-row items-center justify-between gap-10">
                                         <div className="flex gap-12">
-                                            <div>
-                                                <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30 mb-1">Subtotal</p>
-                                                <p className="text-base font-bold text-accent-brown/60 tracking-tight">₱{(selectedOrder.total_amount * 0.9).toFixed(2)}</p>
+                                            <div className="text-left">
+                                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 mb-1">Portfolio Subtotal</p>
+                                                <p className="text-xl font-bold text-accent-brown/40">₱{(selectedOrder.total_amount * 0.9).toFixed(2)}</p>
                                             </div>
-                                            <div>
-                                                <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30 mb-1">Fee (Fulfillment)</p>
-                                                <p className="text-base font-bold text-accent-brown/60 tracking-tight">₱{(selectedOrder.total_amount * 0.1).toFixed(2)}</p>
+                                            <div className="text-left">
+                                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 mb-1">Fulfilment Fee</p>
+                                                <p className="text-xl font-bold text-accent-brown/40">₱{(selectedOrder.total_amount * 0.1).toFixed(2)}</p>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-8">
+                                        <div className="flex items-center gap-10">
                                             <div className="text-right">
-                                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/30 mb-1">Total Bill</p>
-                                                <p className="text-4xl font-black text-brand-dark tracking-tighter leading-none">₱{selectedOrder.total_amount.toFixed(2)}</p>
+                                                <p className="text-[11px] font-black uppercase tracking-[0.3em] text-accent-brown/20 mb-1">Total Bill</p>
+                                                <p className="text-6xl font-black text-accent-brown tracking-[-0.05em] leading-none">₱{selectedOrder.total_amount.toFixed(2)}</p>
                                             </div>
-                                            <button
-                                                onClick={() => {
-                                                    setIsDetailsModalOpen(false);
-                                                    setShowStreetView(false);
-                                                }}
-                                                className="px-10 py-5 bg-brand text-brand-dark rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-brand-dark hover:text-white transition-all shadow-xl shadow-brand/20 active:scale-95 duration-300"
+                                            <button 
+                                                onClick={() => setIsDetailsModalOpen(false)}
+                                                className="px-12 py-6 bg-brand text-accent-brown font-black text-xs uppercase tracking-[0.2em] rounded-2xl hover:bg-black hover:text-white transition-all shadow-2xl shadow-brand/20 active:scale-95"
                                             >
-                                                Close Details
+                                                Dismiss Summary
                                             </button>
                                         </div>
                                     </div>
@@ -1074,84 +1013,77 @@ const CustomerOrders = () => {
                 )}
             </AnimatePresence>
 
-            {/* Cancel Order Modal */}
+            {/* HI-VET ARCHITECTURE NOIR: CANCEL MODAL */}
             <AnimatePresence>
                 {isCancelModalOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-5">
+                    <div className="fixed inset-0 z-[300] flex items-center justify-center p-6">
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             onClick={() => setIsCancelModalOpen(false)}
-                            className="absolute inset-0 bg-accent-brown/20 backdrop-blur-sm"
+                            className="absolute inset-0 bg-accent-brown/40 backdrop-blur-xl"
                         />
                         <motion.div
-                            initial={{ scale: 0.95, opacity: 0, y: 100 }}
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.95, opacity: 0, y: 100 }}
-                            className="bg-white w-full max-w-lg rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[85vh] sm:max-h-[90vh]"
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl relative z-10 overflow-hidden border border-white"
                         >
-                            <div className="p-5 xs:p-6 sm:p-10 border-b border-accent-brown/5 bg-accent-peach/10 shrink-0">
-                                <div className="flex items-center gap-3 sm:gap-4 mb-2 sm:mb-3">
-                                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-500 rounded-xl sm:rounded-2xl flex items-center justify-center text-white shadow-lg shadow-red-500/20 shrink-0">
-                                        <ShieldAlert className="w-5 h-5 sm:w-6 sm:h-6" />
+                            <div className="p-10 border-b border-accent-brown/5 bg-red-50/30">
+                                <div className="flex items-center gap-6 mb-4">
+                                    <div className="w-16 h-16 bg-red-500 rounded-3xl flex items-center justify-center text-white shadow-xl shadow-red-500/20">
+                                        <ShieldAlert className="w-8 h-8" />
                                     </div>
-                                    <div className="min-w-0">
-                                        <h3 className="text-lg xs:text-xl sm:text-2xl font-black text-accent-brown tracking-tighter">Cancel Order</h3>
-                                        <p className="text-[9px] sm:text-xs font-bold text-accent-brown/40 uppercase tracking-widest mt-0.5">Order #HV-{selectedOrder?.id.toString().padStart(4, '0')}</p>
+                                    <div>
+                                        <h3 className="text-3xl font-black text-accent-brown tracking-tighter">Cancel Order</h3>
+                                        <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-widest mt-1">Transaction Identity Revocation</p>
                                     </div>
                                 </div>
-                                <p className="text-[11px] sm:text-sm font-medium text-accent-brown/60 leading-tight sm:leading-relaxed max-w-sm">
-                                    Please select a reason for cancelling your order.
+                                <p className="text-sm font-medium text-accent-brown/60 leading-relaxed">
+                                    Warning: Revoking this transaction is permanent. Please specify the intelligence mismatch for our logistics optimization.
                                 </p>
                             </div>
 
-                            <div className="p-5 xs:p-6 sm:p-10 space-y-4 sm:space-y-6 overflow-y-auto no-scrollbar flex-1">
-                                <div className="grid grid-cols-1 gap-2">
-                                    {cancelReasons.map(reason => (
-                                        <button
-                                            key={reason}
-                                            onClick={() => setCancelReason(reason)}
-                                            className={`flex items-center justify-between p-3.5 xs:p-4 rounded-xl border-2 transition-all ${cancelReason === reason
+                            <div className="p-10 space-y-3">
+                                {cancelReasons.map(reason => (
+                                    <button
+                                        key={reason}
+                                        onClick={() => setCancelReason(reason)}
+                                        className={`w-full flex items-center justify-between p-5 rounded-2xl border-2 transition-all cursor-pointer ${
+                                            cancelReason === reason
                                                 ? 'border-red-500 bg-red-50/50 text-red-600'
-                                                : 'border-accent-brown/5 hover:border-accent-brown/10 text-accent-brown/60 hover:bg-accent-peach/10'
-                                                }`}
-                                        >
-                                            <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest">{reason}</span>
-                                            {cancelReason === reason && <CheckCircle className="w-4 h-4" />}
-                                        </button>
-                                    ))}
-                                </div>
-
+                                                : 'border-accent-brown/5 hover:border-accent-brown/10 text-accent-brown/40 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        <span className="text-[11px] font-black uppercase tracking-widest">{reason}</span>
+                                        {cancelReason === reason && <CheckCircle className="w-5 h-5" />}
+                                    </button>
+                                ))}
                                 {cancelReason === 'Other' && (
                                     <textarea
-                                        placeholder="Please tell us more..."
-                                        className="w-full bg-accent-peach/10 border-2 border-accent-brown/5 rounded-xl p-3 sm:p-4 text-xs sm:text-sm font-medium outline-none focus:border-red-500 transition-colors"
-                                        rows={2}
-                                        value={cancelReason === 'Other' ? (cancelReason === cancelReasons[cancelReasons.length - 1] ? '' : cancelReason) : ''}
+                                        placeholder="Intelligence insight..."
+                                        className="w-full bg-slate-50 border-2 border-accent-brown/5 rounded-2xl p-5 text-sm font-bold outline-none focus:border-red-500 transition-colors"
+                                        rows={3}
                                         onChange={(e) => setCancelReason(e.target.value)}
                                     />
                                 )}
                             </div>
 
-                            <div className="p-5 xs:p-6 sm:p-10 bg-accent-peach/5 border-t border-accent-brown/5 shrink-0 flex gap-3 sm:gap-4">
-                                <motion.button
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
+                            <div className="p-10 bg-slate-50 flex gap-4">
+                                <button
                                     onClick={() => setIsCancelModalOpen(false)}
-                                    className="flex-1 px-4 sm:px-8 py-3.5 xs:py-4 bg-white border border-accent-brown/5 text-accent-brown rounded-xl sm:rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-widest hover:bg-accent-peach/20 transition-all shadow-sm"
+                                    className="flex-1 py-5 bg-white border border-accent-brown/5 text-accent-brown rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-accent-peach/10 transition-all cursor-pointer shadow-sm"
                                 >
-                                    Keep
-                                </motion.button>
-                                <motion.button
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
+                                    Abort Cancellation
+                                </button>
+                                <button
                                     onClick={handleCancelOrder}
                                     disabled={!cancelReason || isCancelling}
-                                    className="flex-1 px-4 sm:px-8 py-3.5 xs:py-4 bg-red-500 text-white rounded-xl sm:rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-widest hover:bg-red-600 transition-all disabled:opacity-50 shadow-xl shadow-red-500/20"
+                                    className="flex-1 py-5 bg-red-500 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-red-600 transition-all disabled:opacity-30 shadow-xl shadow-red-500/20 cursor-pointer"
                                 >
-                                    {isCancelling ? '...' : 'Confirm'}
-                                </motion.button>
+                                    {isCancelling ? 'Revoking...' : 'Confirm Revocation'}
+                                </button>
                             </div>
                         </motion.div>
                     </div>
@@ -1165,6 +1097,14 @@ const CustomerOrders = () => {
                 title={modal.title}
                 message={modal.message}
                 type={modal.type}
+            />
+            <QrCodeModal 
+                isOpen={qrModalOpen}
+                onClose={() => setQrModalOpen(false)}
+                qrData={qrData}
+                amount={selectedOrder?.total_amount || 0}
+                reference={`HV-2026-${(selectedOrder?.id || 0).toString().padStart(6, '0')}-${selectedOrder ? new Date(selectedOrder.created_at).getTime().toString().slice(-4) : '0000'}`}
+                status={qrStatus}
             />
         </DashboardLayout>
     );

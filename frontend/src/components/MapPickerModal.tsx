@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Map, useMapsLibrary, useMap } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, useMapsLibrary, useMap } from '@vis.gl/react-google-maps';
 import { X, Search, MapPin, ChevronLeft, Locate, Eye, Map as MapIcon } from 'lucide-react';
 
 interface PSGCBase {
@@ -535,9 +535,11 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
             case 'map':
                 return (
                     <div className="flex-grow flex flex-col relative overflow-hidden">
-                        <Map mapId={import.meta.env.VITE_GOOGLE_MAPS_ID} defaultCenter={markerLocation} defaultZoom={18} disableDefaultUI={true} gestureHandling='greedy' style={{ width: '100%', height: '100%' }}>
-                            <MapContent inputRef={inputRef} setMarkerLocation={setMarkerLocation} setAddress={setAddress} updateReverseGeocode={handleReverseGeocode} setComponents={setComponents} setMapInstance={setMapInstance} setGranular={setGranular} />
-                        </Map>
+                        <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY} libraries={['marker', 'places']}>
+                            <Map mapId={import.meta.env.VITE_GOOGLE_MAPS_ID} center={{ lat: Number(markerLocation.lat), lng: Number(markerLocation.lng) }} defaultZoom={18} disableDefaultUI={true} gestureHandling='greedy' style={{ width: '100%', height: '100%' }}>
+                                <MapContent inputRef={inputRef} setMarkerLocation={setMarkerLocation} setAddress={setAddress} updateReverseGeocode={handleReverseGeocode} setComponents={setComponents} setMapInstance={setMapInstance} setGranular={setGranular} />
+                            </Map>
+                        </APIProvider>
                         
                         <div className="absolute top-6 left-6 right-6 z-20 flex flex-col gap-3">
                             <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 flex items-center px-5 py-2 gap-3 focus-within:ring-4 focus-within:ring-[#EE4D2D]/10 transition-all">

@@ -29,6 +29,8 @@ const AdminRiders = () => {
         message: '',
         type: 'info'
     });
+    const [currentPage, setCurrentPage] = useState(1);
+    const ridersPerPage = 5;
 
     useEffect(() => {
         if (!authLoading) {
@@ -117,6 +119,9 @@ const AdminRiders = () => {
         return matchesSearch && matchesTab;
     });
 
+    const totalPages = Math.ceil(filteredRiders.length / ridersPerPage);
+    const paginatedRiders = filteredRiders.slice((currentPage - 1) * ridersPerPage, currentPage * ridersPerPage);
+
     return (
         <DashboardLayout title="Platform Riders">
             <div className="space-y-6">
@@ -142,7 +147,10 @@ const AdminRiders = () => {
                         {['All Fleet', 'Active', 'Pending', 'Inactive'].map((tab, _i) => (
                             <button 
                                 key={tab} 
-                                onClick={() => setActiveTab(tab)}
+                                onClick={() => {
+                                    setActiveTab(tab);
+                                    setCurrentPage(1);
+                                }}
                                 className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap w-[calc(50%-0.35rem)] md:w-auto shrink-0 ${activeTab === tab ? 'bg-brand text-white shadow-md shadow-brand/20' : 'text-accent-brown/50 hover:bg-accent-peach/30 hover:text-accent-brown'}`}
                             >
                                 {tab}
@@ -173,7 +181,7 @@ const AdminRiders = () => {
                                         </div>
                                     </td></tr>
                                 )}
-                                {!loading && filteredRiders.length === 0 && (
+                                {!loading && paginatedRiders.length === 0 && (
                                     <tr><td colSpan={5}>
                                         <div className="py-20 flex flex-col items-center gap-3 text-center">
                                             <ShieldCheck className="w-10 h-10 text-accent-brown/10" />
@@ -181,7 +189,7 @@ const AdminRiders = () => {
                                         </div>
                                     </td></tr>
                                 )}
-                                {!loading && filteredRiders.map((rider, i) => (
+                                {!loading && paginatedRiders.map((rider, i) => (
                                     <motion.tr
                                         key={rider.id}
                                         initial={{ opacity: 0, y: 10 }}
@@ -244,7 +252,7 @@ const AdminRiders = () => {
 
                     {/* Mobile Card View */}
                     <div className="md:hidden divide-y divide-accent-brown/5">
-                        {filteredRiders.map((rider, i) => (
+                        {paginatedRiders.map((rider, i) => (
                             <motion.div
                                 key={rider.id}
                                 initial={{ opacity: 0, x: -10 }}
@@ -303,13 +311,44 @@ const AdminRiders = () => {
                     </div>
                     {/* Pagination Footer */}
                     <div className="p-4 border-t border-accent-brown/5 flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest max-w-[150px] truncate">Showing {filteredRiders.length} of {riders.length} riders</span>
-                        <div className="flex gap-2">
-                            <button className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:bg-accent-peach/30 transition-colors" disabled>Prev</button>
-                            <button className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-brand text-white shadow-md shadow-brand/20">1</button>
-                            <button className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-accent-brown/60 hover:bg-accent-peach/30 transition-colors">2</button>
-                            <button className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-brand-dark hover:bg-brand/10 transition-colors">Next</button>
-                        </div>
+                        <span className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest max-w-[150px] truncate">
+                            Showing {paginatedRiders.length === 0 ? 0 : (currentPage - 1) * ridersPerPage + 1}–{Math.min(currentPage * ridersPerPage, filteredRiders.length)} of {filteredRiders.length} riders
+                        </span>
+                        {totalPages > 1 && (
+                            <div className="flex gap-1.5 items-center">
+                                <button 
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1}
+                                    className="px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:bg-accent-peach/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
+                                >
+                                    Prev
+                                </button>
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                    .filter(p => p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1))
+                                    .map((p, idx, arr) => {
+                                        const prev = arr[idx - 1];
+                                        const showEllipsis = prev && p - prev > 1;
+                                        return (
+                                            <span key={p} className="flex items-center gap-1.5">
+                                                {showEllipsis && <span className="text-[10px] text-accent-brown/30 font-bold">…</span>}
+                                                <button
+                                                    onClick={() => setCurrentPage(p)}
+                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${currentPage === p ? 'bg-brand text-white shadow-md shadow-brand/20' : 'text-accent-brown/60 hover:bg-accent-peach/30'}`}
+                                                >
+                                                    {p}
+                                                </button>
+                                            </span>
+                                        );
+                                    })}
+                                <button 
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage === totalPages}
+                                    className="px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-brand-dark hover:bg-brand/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

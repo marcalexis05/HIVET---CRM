@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Filter, Mail, Shield, User, Store, MoreVertical, Bike, Loader2, Check, Trash2, ShieldCheck } from 'lucide-react';
+import { Search, Filter, Mail, Shield, User, Store, MoreVertical, Bike, Loader2, Trash2, ShieldCheck } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 
@@ -12,6 +12,8 @@ const AdminCustomers = () => {
     const [activeTab, setActiveTab] = useState('All Users');
     const [actionMenu, setActionMenu] = useState<{ id: string | null; x: number; y: number }>({ id: null, x: 0, y: 0 });
     const [confirmModal, setConfirmModal] = useState<{ show: boolean, type: 'delete' | 'suspend', user: any | null }>({ show: false, type: 'delete', user: null });
+    const [currentPage, setCurrentPage] = useState(1);
+    const usersPerPage = 5;
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -111,6 +113,9 @@ const AdminCustomers = () => {
         return matchesSearch;
     });
 
+    const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+    const paginatedUsers = filteredUsers.slice((currentPage - 1) * usersPerPage, currentPage * usersPerPage);
+
     return (
         <DashboardLayout title="Global Users">
             <div className="space-y-6">
@@ -137,7 +142,10 @@ const AdminCustomers = () => {
                         {['All Users', 'Admins', 'Partners', 'Customers', 'Riders'].map((tab) => (
                             <button 
                                 key={tab} 
-                                onClick={() => setActiveTab(tab)}
+                                onClick={() => {
+                                    setActiveTab(tab);
+                                    setCurrentPage(1);
+                                }}
                                 className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap w-[calc(50%-0.35rem)] md:w-auto shrink-0 ${activeTab === tab ? 'bg-brand text-white shadow-md shadow-brand/20' : 'text-accent-brown/50 hover:bg-accent-peach/30 hover:text-accent-brown'}`}
                             >
                                 {tab}
@@ -169,14 +177,14 @@ const AdminCustomers = () => {
                                             </div>
                                         </td>
                                     </tr>
-                                ) : filteredUsers.length === 0 ? (
+                                ) : paginatedUsers.length === 0 ? (
                                     <tr>
                                         <td colSpan={4} className="py-20 text-center">
                                             <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest">No users found</p>
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredUsers.map((u, i) => (
+                                    paginatedUsers.map((u, i) => (
                                         <motion.tr
                                             key={u.id}
                                             initial={{ opacity: 0, y: 10 }}
@@ -243,12 +251,12 @@ const AdminCustomers = () => {
                                 <Loader2 className="w-10 h-10 text-brand animate-spin mx-auto mb-4" />
                                 <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest">Accessing platform directory...</p>
                             </div>
-                        ) : filteredUsers.length === 0 ? (
+                        ) : paginatedUsers.length === 0 ? (
                             <div className="py-20 text-center">
                                 <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest">No users found</p>
                             </div>
                         ) : (
-                            filteredUsers.map((u, i) => (
+                            paginatedUsers.map((u, i) => (
                                 <motion.div
                                     key={u.id}
                                     initial={{ opacity: 0, x: -10 }}
@@ -300,13 +308,44 @@ const AdminCustomers = () => {
                     {/* Pagination Footer */}
                     {!loading && (
                         <div className="p-4 border-t border-accent-brown/5 flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest max-w-[150px] truncate">Showing {filteredUsers.length} of {users.length} users</span>
-                            <div className="flex gap-2">
-                                <button className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:bg-accent-peach/30 transition-colors" disabled>Prev</button>
-                                <button className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-brand/10 text-brand-dark">1</button>
-                                <button className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-accent-brown/60 hover:bg-accent-peach/30 transition-colors">2</button>
-                                <button className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-brand-dark hover:bg-brand/10 transition-colors">Next</button>
-                            </div>
+                            <span className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest max-w-[150px] truncate">
+                                Showing {paginatedUsers.length === 0 ? 0 : (currentPage - 1) * usersPerPage + 1}–{Math.min(currentPage * usersPerPage, filteredUsers.length)} of {filteredUsers.length} users
+                            </span>
+                            {totalPages > 1 && (
+                                <div className="flex gap-1.5 items-center">
+                                    <button 
+                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                        className="px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:bg-accent-peach/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                    >
+                                        Prev
+                                    </button>
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                        .filter(p => p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1))
+                                        .map((p, idx, arr) => {
+                                            const prev = arr[idx - 1];
+                                            const showEllipsis = prev && p - prev > 1;
+                                            return (
+                                                <span key={p} className="flex items-center gap-1.5">
+                                                    {showEllipsis && <span className="text-[10px] text-accent-brown/30 font-bold">…</span>}
+                                                    <button
+                                                        onClick={() => setCurrentPage(p)}
+                                                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${currentPage === p ? 'bg-brand/10 text-brand-dark' : 'text-accent-brown/60 hover:bg-accent-peach/30'}`}
+                                                    >
+                                                        {p}
+                                                    </button>
+                                                </span>
+                                            );
+                                        })}
+                                    <button 
+                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-brand-dark hover:bg-brand/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

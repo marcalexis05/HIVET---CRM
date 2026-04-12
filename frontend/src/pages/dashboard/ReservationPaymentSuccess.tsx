@@ -73,19 +73,19 @@ const ReservationPaymentSuccess = () => {
                 </motion.div>
 
                 {/* Sparkles badge */}
-                <div className="inline-flex items-center gap-1.5 bg-brand/10 text-brand-dark px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4">
+                <div className="inline-flex items-center gap-1.5 bg-brand/10 text-accent-brown px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4">
                     <Sparkles className="w-3 h-3" />
                     Payment Successful
                 </div>
 
-                <h1 className="text-3xl font-black text-brand-dark tracking-tighter mb-3">
+                <h1 className="text-3xl font-black text-accent-brown tracking-tighter mb-3">
                     Appointment Booked!
                 </h1>
                 <p className="text-accent-brown/60 font-medium mb-2 text-sm leading-relaxed">
                     Your payment was processed securely via PayMongo.
                 </p>
                 <p className="text-accent-brown/50 font-medium mb-8 text-sm leading-relaxed">
-                    Your reservation is now <strong className="text-brand-dark">pending clinic confirmation</strong>. You'll receive a notification once confirmed.
+                    Your reservation is now <strong className="text-accent-brown">pending clinic confirmation</strong>. You'll receive a notification once confirmed.
                 </p>
 
                 {/* Reservation ID display */}
@@ -95,18 +95,18 @@ const ReservationPaymentSuccess = () => {
                             <CalendarCheck className="w-4 h-4 text-brand" />
                             <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50">Reservation ID</span>
                         </div>
-                        <span className="font-black text-brand-dark text-sm">RV-{String(reservationId).padStart(4, '0')}</span>
+                        <span className="font-black text-accent-brown text-sm">RV-{String(reservationId).padStart(4, '0')}</span>
                     </div>
                 )}
 
                 {/* Countdown */}
-                <div className="mb-8 px-6 py-4 bg-brand-dark/5 rounded-[2rem] border border-brand-dark/5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-dark/40 mb-1">
+                <div className="mb-8 px-6 py-4 bg-brand-dark/5 rounded-[2rem] border border-accent-brown/5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/40 mb-1">
                         Redirecting to Reservations
                     </p>
                     <div className="flex items-center justify-center gap-2">
-                        <span className="text-2xl font-black text-brand-dark">{seconds}</span>
-                        <span className="text-[10px] font-bold text-brand-dark/30 uppercase tracking-widest">seconds remaining</span>
+                        <span className="text-2xl font-black text-accent-brown">{seconds}</span>
+                        <span className="text-[10px] font-bold text-accent-brown/30 uppercase tracking-widest">seconds remaining</span>
                     </div>
                 </div>
 

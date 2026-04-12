@@ -17,6 +17,9 @@ interface AuthUser {
     birthday?: string;
     avatar?: string;
     token?: string;
+    vehicle_type?: string;
+    clinic_name?: string;
+    clinic_phone?: string;
 }
 
 interface AuthContextType {
@@ -63,6 +66,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     gender: payload.gender as string | undefined,
                     birthday: payload.birthday as string | undefined,
                     avatar: payload.avatar as string | undefined,
+                    vehicle_type: payload.vehicle_type as string | undefined,
+                    clinic_name: payload.clinic_name as string | undefined,
+                    clinic_phone: payload.clinic_phone as string | undefined,
                     token: stored,
                 });
             } else {
@@ -95,6 +101,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             gender: payload.gender as string | undefined,
             birthday: payload.birthday as string | undefined,
             avatar: payload.avatar as string | undefined,
+            vehicle_type: payload.vehicle_type as string | undefined,
+            clinic_name: payload.clinic_name as string | undefined,
+            clinic_phone: payload.clinic_phone as string | undefined,
             token,
         });
     };

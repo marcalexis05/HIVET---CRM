@@ -15,7 +15,6 @@ import BranchSelector from '../../components/BranchSelector';
 interface ChartDataPoint { name: string; value: number; color?: string; }
 interface KPI { label: string; value: string; trend: string; icon: string; color: string; change?: string; sub?: string; }
 interface RevenueData { trend: string; chartData: ChartDataPoint[]; }
-interface TopProduct { name: string; sold: number; revenue: number; pct: number; }
 
 const ICON_MAP: Record<string, React.ElementType> = { TrendingUp, Users, ShoppingBag, Award, LayoutGrid, Package };
 
@@ -184,8 +183,8 @@ const BusinessDashboard = () => {
                                             key={type.id}
                                             onClick={() => setRevenueType(type.id)}
                                             className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${revenueType === type.id
-                                                    ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20'
-                                                    : 'text-accent-brown/40 hover:text-accent-brown'
+                                                    ? 'bg-accent-brown text-white shadow-lg shadow-accent-brown/20'
+                                                    : 'text-accent-brown hover:text-brand hover:bg-brand/5'
                                                 }`}
                                         >
                                             {type.label}
@@ -203,8 +202,8 @@ const BusinessDashboard = () => {
                                             key={p.id}
                                             onClick={() => setRevenuePeriod(p.id)}
                                             className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${revenuePeriod === p.id
-                                                    ? 'bg-brand text-white shadow-lg shadow-brand/20'
-                                                    : 'text-accent-brown/40 hover:text-accent-brown'
+                                                    ? 'bg-accent-brown text-white shadow-lg shadow-accent-brown/20'
+                                                    : 'text-accent-brown hover:text-brand hover:bg-brand/5'
                                                 }`}
                                         >
                                             {p.label}

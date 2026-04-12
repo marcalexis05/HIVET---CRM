@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, AlertCircle, Info, X, XCircle, AlertTriangle, HelpCircle } from 'lucide-react';
+import { CheckCircle, Info, XCircle, AlertTriangle, HelpCircle } from 'lucide-react';
 
 interface ModernModalProps {
     isOpen: boolean;

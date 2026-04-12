@@ -146,11 +146,11 @@ const CustomerAlerts = () => {
                                 animate={{ opacity: 1, y: 0 }}
                                 className="py-24 text-center bg-white rounded-[2rem] border-2 border-dashed border-accent-brown/10"
                             >
-                                <div className="w-16 h-16 bg-accent-brown/5 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                    <BellOff className="w-8 h-8 text-accent-brown/20" />
+                                <div className="w-16 h-16 bg-brand-dark/5 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                    <BellOff className="w-8 h-8 text-brand-dark/20" />
                                 </div>
-                                <p className="text-sm font-black text-accent-brown/30 uppercase tracking-widest">No alerts to show</p>
-                                <p className="text-xs text-accent-brown/20 font-medium mt-1">You're all caught up!</p>
+                                <p className="text-sm font-black text-brand-dark/30 uppercase tracking-widest">No alerts to show</p>
+                                <p className="text-xs text-brand-dark/20 font-medium mt-1">You're all caught up!</p>
                             </motion.div>
                         ) : (
                             filteredAlerts.map((alert, i) => {
@@ -199,7 +199,7 @@ const CustomerAlerts = () => {
                                                     )}
                                                 </div>
                                                 <h3 className={`font-black tracking-tight text-base leading-snug mb-0.5 ${
-                                                    alert.read ? 'text-accent-brown/50' : 'text-accent-brown'
+                                                    alert.read ? 'text-brand-dark/50' : 'text-brand-dark'
                                                 }`}>
                                                     {alert.title}
                                                 </h3>

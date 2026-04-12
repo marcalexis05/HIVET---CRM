@@ -4,7 +4,6 @@ import { ShoppingCart, Tag, Star, Search, Filter as FilterIcon, Award, ArrowUp, 
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useCart } from '../../context/CartContext';
-import { CustomDropdown } from '../../components/CustomDropdown';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 

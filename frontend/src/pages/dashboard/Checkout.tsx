@@ -2,16 +2,17 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useCart } from '../../context/CartContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
     Wallet, Banknote, ShieldCheck, MapPin, Store, Truck, Loader2,
-    ArrowRight, Tag, CheckCircle, X, Gift, Award, Sparkles, CreditCard,
-    Eye, User, Info, Smartphone
+    Tag, CheckCircle, X, Gift, Sparkles,
+    Eye, User, Info, QrCode, Smartphone
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Map, AdvancedMarker, InfoWindow, useMap } from '@vis.gl/react-google-maps';
 import MapPickerModal from '../../components/MapPickerModal';
 import ModernModal from '../../components/ModernModal';
+import QrCodeModal from '../../components/QrCodeModal';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -27,11 +28,11 @@ const calcDist = (lat1: number, lng1: number, lat2: number, lng2: number) => {
 };
 
 // Draws a driving route between two points on a Map
-const DirectionsLine = ({ userLat, userLng, clinicLat, clinicLng }: { userLat: number, userLng: number, clinicLat: number, clinicLng: number }) => {
+const DirectionsLine = ({ userLat, userLng, clinicLat, clinicLng }: { userLat: number | null, userLng: number | null, clinicLat: number | null, clinicLng: number | null }) => {
     const map = useMap();
     useEffect(() => {
         const maps = (window as any).google?.maps;
-        if (!maps || !map) return;
+        if (!maps || !map || !userLat || !userLng || !clinicLat || !clinicLng) return;
         const renderer = new maps.DirectionsRenderer({
             map,
             suppressMarkers: true,
@@ -55,11 +56,39 @@ const PanoMapSyncer = ({ position }: { position: { lat: number; lng: number } | 
     return null;
 };
 
+// Fits the map bounds to show all provided points
+const FitBoundsHandler = ({ points }: { points: { lat: number; lng: number }[] }) => {
+    const map = useMap();
+    const pointsKey = JSON.stringify(points);
+
+    useEffect(() => {
+        const google = (window as any).google;
+        if (!map || !google || points.length < 2) return;
+        const bounds = new google.maps.LatLngBounds();
+        points.forEach(p => bounds.extend(p));
+        map.fitBounds(bounds, 70);
+    }, [map, pointsKey]);
+    return null;
+};
+
+// Re-centers the map only when the provided coordinates change, without locking it
+const MapReCenterer = ({ lat, lng }: { lat: number | null, lng: number | null }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (map && lat && lng) {
+            map.panTo({ lat, lng });
+        }
+    }, [map, lat, lng]);
+    return null;
+};
+
 const Checkout = () => {
-    const { items: cartItems, totalAmount: cartTotal, totalItems: cartTotalCount, clearCart } = useCart();
+    const { items: cartItems, clearCart } = useCart();
     const [items, setItems] = useState<any[]>(cartItems);
     const { user } = useAuth();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const [payingOrder, setPayingOrder] = useState<any>(null);
 
     // Load filtered items if they exist
     useEffect(() => {
@@ -76,7 +105,8 @@ const Checkout = () => {
     const totalAmount = items.reduce((sum, i) => sum + (Number(i.price) * i.quantity), 0);
 
     // Fulfillment & payment
-    const [selectedPayment, setSelectedPayment] = useState<'gcash' | 'maya' | 'cash'>('gcash');
+    const [currentStep, setCurrentStep] = useState(1);
+    const [selectedPayment, setSelectedPayment] = useState<'gcash' | 'maya' | 'qrph' | 'cash'>('qrph');
     const [fulfillmentMethod, setFulfillmentMethod] = useState<'delivery' | 'pickup'>('delivery');
     const [isPlacingOrder, setIsPlacingOrder] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
@@ -88,6 +118,109 @@ const Checkout = () => {
         message: '',
         type: 'info'
     });
+
+    // QRPh Payment State
+    const [showQrModal, setShowQrModal] = useState(false);
+    const [qrData, setQrData] = useState('');
+    const [qrStatus, setQrStatus] = useState<'pending' | 'succeeded' | 'expired' | 'processing'>('pending');
+    const pollingInterval = useRef<any>(null);
+
+    // Stop polling on unmount
+    useEffect(() => {
+        // Handle step from URL
+        const step = searchParams.get('step');
+        if (step) setCurrentStep(Number(step));
+
+        // Handle existing order payment
+        const orderJson = localStorage.getItem('hivet_checkout_paying_order');
+        if (orderJson) {
+            try {
+                const order = JSON.parse(orderJson);
+                setPayingOrder(order);
+                setFulfillmentMethod(order.fulfillment_method);
+
+                // Pre-fill delivery info from order
+                setDeliveryInfo(prev => ({
+                    ...prev,
+                    contactName: order.contact_name || prev.contactName,
+                    phone: order.contact_phone || prev.phone,
+                    address: order.delivery_address || '',
+                    lat: order.delivery_lat || null,
+                    lng: order.delivery_lng || null,
+                    branch_id: order.branch_id || null,
+                    clinic_id: order.clinic_id || null
+                }));
+
+                // Set items from order (CRITICAL for clinic filtering)
+                if (order.items) {
+                    setItems(order.items);
+                }
+
+                if (order.branch_id) {
+                    // Match branch for map
+                    const fetchBranch = async () => {
+                        try {
+                            const res = await fetch(`${API}/api/clinics/branches/${order.branch_id}`);
+                            if (res.ok) {
+                                const data = await res.json();
+                                setSelectedBranch(data.branch);
+                                setSelectedClinic({ id: data.branch.clinic_id, name: data.branch.clinic_name });
+                                
+                                // Ensure delivery info matches the fetched branch
+                                setDeliveryInfo(prev => ({
+                                    ...prev,
+                                    clinic_id: data.branch.clinic_id,
+                                    branch_id: data.branch.id,
+                                    address: `${data.branch.address_line1}, ${data.branch.address_line2}`,
+                                    phone: data.branch.phone || prev.phone
+                                }));
+                            }
+                        } catch (err) { console.error('Error fetching branch:', err); }
+                    };
+                    fetchBranch();
+                }
+            } catch (err) {
+                console.error('Error parsing paying order:', err);
+            }
+        }
+
+        return () => {
+            if (pollingInterval.current) clearInterval(pollingInterval.current);
+            // We DON'T clear paying order on unmount yet, we wait for success
+        };
+    }, [searchParams]);
+
+    const startPolling = (intentId: string) => {
+        if (pollingInterval.current) clearInterval(pollingInterval.current);
+        setQrStatus('processing');
+
+        pollingInterval.current = setInterval(async () => {
+            try {
+                const res = await fetch(`${API}/api/payments/paymongo/status/${intentId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.status === 'succeeded') {
+                        setQrStatus('succeeded');
+                        if (pollingInterval.current) clearInterval(pollingInterval.current);
+
+                        // Clear cart and redirect after a delay
+                        clearCart();
+                        localStorage.removeItem('hivet_checkout_paying_order');
+                        localStorage.removeItem('hivet_checkout_filtered');
+                        setTimeout(() => {
+                            setShowQrModal(false);
+                            navigate('/dashboard/customer/orders');
+                        }, 2000);
+                    } else if (data.status === 'expired') {
+                        setQrStatus('expired');
+                        if (pollingInterval.current) clearInterval(pollingInterval.current);
+                    }
+                }
+            } catch (err) {
+                console.error('Polling error:', err);
+            }
+        }, 5000);
+    };
 
 
 
@@ -118,7 +251,7 @@ const Checkout = () => {
     });
 
     const [clinics, setClinics] = useState<any[]>([]);
-    const shippingFee = fulfillmentMethod === 'delivery' ? 150 : 0;
+    const shippingFee = 0;
     const isMixedCart = Array.from(new Set(items.map(item => item.business_id).filter(id => id != null))).length > 1;
 
     // Branch map state
@@ -291,6 +424,38 @@ const Checkout = () => {
         setIsPlacingOrder(true);
         try {
             const token = localStorage.getItem('hivet_token');
+
+            if (payingOrder) {
+                // Settlement Flow for existing order
+                const res = await fetch(`${API}/api/payments/paymongo/order-recheckout`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        order_id: payingOrder.id,
+                        payment_method: selectedPayment === 'qrph' ? 'qrph' : selectedPayment
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (selectedPayment === 'qrph' && data.qr_code) {
+                        setQrData(data.qr_code);
+                        setShowQrModal(true);
+                        startPolling(data.intent_id);
+                    } else if (data.checkout_url) {
+                        window.location.href = data.checkout_url;
+                    }
+                } else {
+                    const err = await res.json();
+                    alert(err.detail || 'Failed to initiate payment.');
+                }
+                setIsPlacingOrder(false);
+                return;
+            }
+
             const orderPayload = {
                 items,
                 totalAmount: totalAmount + shippingFee - (appliedVoucher?.discount || 0),
@@ -304,7 +469,7 @@ const Checkout = () => {
                 voucher_code: appliedVoucher?.code || null,
             };
 
-            if (selectedPayment === 'gcash' || selectedPayment === 'maya') {
+            if (selectedPayment === 'gcash' || selectedPayment === 'maya' || selectedPayment === 'qrph') {
                 // PayMongo flow — create session, redirect
                 const response = await fetch(`${API}/api/payments/paymongo/checkout`, {
                     method: 'POST',
@@ -318,7 +483,11 @@ const Checkout = () => {
                 if (response.ok) {
                     const data = await response.json();
 
-                    if (data.checkout_url) {
+                    if (selectedPayment === 'qrph' && data.qr_code) {
+                        setQrData(data.qr_code);
+                        setShowQrModal(true);
+                        startPolling(data.intent_id);
+                    } else if (data.checkout_url) {
                         // Redirect to PayMongo checkout page (GCash/Maya)
                         window.location.href = data.checkout_url;
                     }
@@ -356,698 +525,752 @@ const Checkout = () => {
         }
     };
 
+    // Cleanup paying state on success
+    useEffect(() => {
+        if (showSuccess) {
+            localStorage.removeItem('hivet_checkout_paying_order');
+            localStorage.removeItem('hivet_checkout_filtered');
+        }
+    }, [showSuccess]);
+
     const discount = appliedVoucher?.discount || 0;
     const grandTotal = Math.max(0, totalAmount + shippingFee - discount);
 
     return (
         <DashboardLayout title="Checkout">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-10">
-                {/* Left Column */}
-                <div className="lg:col-span-8 space-y-6 sm:space-y-8">
-
-                    {/* Fulfillment + Delivery/Pickup Card */}
-                    <div className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-10 shadow-sm border border-accent-brown/5">
-                        {/* Toggle */}
-                        <div className="flex gap-4 mb-8">
-                            <button
-                                onClick={() => setFulfillmentMethod('delivery')}
-                                className={`flex-1 p-4 rounded-xl border-2 flex items-center justify-center gap-3 transition-all cursor-pointer ${fulfillmentMethod === 'delivery' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
-                            >
-                                <div className="flex-1 text-left relative">
-                                    <div className="flex items-center gap-2">
-                                        <Truck className="w-5 h-5 text-brand" />
-                                        <span className={`text-[11px] font-black uppercase tracking-widest ${fulfillmentMethod === 'delivery' ? 'text-brand' : 'text-accent-brown'}`}>
-                                            Home Delivery
-                                        </span>
-                                        {isMixedCart && (
-                                            <span className="bg-emerald-500 text-white text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Recommended</span>
-                                        )}
-                                    </div>
-                                    <p className="text-[10px] font-medium text-accent-brown/40">Safe and direct to your door</p>
+            {/* Elegant Stepper */}
+            <div className="mb-12 max-w-4xl mx-auto">
+                <div className="relative flex justify-between">
+                    {[
+                        { step: 1, label: 'Contact', icon: User },
+                        { step: 2, label: 'Delivery', icon: MapPin },
+                        { step: 3, label: 'Payment', icon: Wallet }
+                    ].map((s, idx, arr) => (
+                        <div key={s.step} className="flex-1 relative">
+                            {idx < arr.length - 1 && (
+                                <div className="absolute top-7 left-[calc(50%+36px)] right-[calc(-50%+36px)] h-[2px] bg-accent-brown/10 z-0">
+                                    <motion.div
+                                        className="h-full bg-brand"
+                                        initial={{ width: 0 }}
+                                        animate={{ width: currentStep > s.step ? '100%' : '0%' }}
+                                        transition={{ duration: 0.6, ease: "circOut" }}
+                                    />
                                 </div>
-                            </button>
-                            <button
-                                onClick={() => setFulfillmentMethod('pickup')}
-                                className={`flex-1 p-4 rounded-xl border-2 flex items-center justify-center gap-3 transition-all cursor-pointer ${fulfillmentMethod === 'pickup' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
-                            >
-                                <Store className="w-5 h-5 shrink-0" />
-                                <span className="text-xs font-black uppercase tracking-widest text-left leading-tight">Clinic<br />Pick-up</span>
-                            </button>
+                            )}
+                            <div className="relative z-10 flex flex-col items-center">
+                                <motion.button
+                                    onClick={() => currentStep > s.step && setCurrentStep(s.step)}
+                                    whileHover={currentStep > s.step ? { scale: 1.05 } : {}}
+                                    whileTap={currentStep > s.step ? { scale: 0.95 } : {}}
+                                    className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-sm ${currentStep === s.step
+                                            ? 'bg-brand text-white shadow-xl shadow-brand/20 scale-110'
+                                            : currentStep > s.step
+                                                ? 'bg-white border-2 border-brand/20 text-brand'
+                                                : 'bg-white border-2 border-accent-brown/5 text-accent-brown/20'
+                                        }`}
+                                >
+                                    <s.icon className="w-6 h-6" />
+                                </motion.button>
+                                <span className={`mt-3 text-[10px] font-black uppercase tracking-widest transition-colors duration-500 ${currentStep === s.step ? 'text-accent-brown' : 'text-accent-brown/30'}`}>
+                                    {s.label}
+                                </span>
+                            </div>
                         </div>
+                    ))}
+                </div>
+            </div>
 
-                        {fulfillmentMethod === 'delivery' ? (
-                            <>
-                                <div className="flex items-center justify-between mb-6 pt-6 border-t border-accent-brown/5">
-                                    <div className="flex items-center gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-10">
+                {/* Left Column Content Rendering based on currentStep */}
+                <div className="lg:col-span-8">
+                    <AnimatePresence mode="wait">
+                        {currentStep === 1 && (
+                            <motion.div
+                                key="step1"
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 20 }}
+                                className="space-y-6"
+                            >
+                                <div className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-10 shadow-sm border border-accent-brown/5">
+                                    <div className="flex items-center gap-4 mb-8">
                                         <div className="w-12 h-12 bg-accent-peach/30 rounded-xl flex items-center justify-center text-brand-dark shrink-0">
-                                            <MapPin className="w-6 h-6" />
+                                            <User className="w-6 h-6" />
                                         </div>
                                         <div>
-                                            <h3 className="text-xl font-black text-accent-brown">Delivery Details</h3>
-                                            <p className="text-sm font-medium text-accent-brown/50">Where should we send your order?</p>
+                                            <h3 className="text-xl font-black text-accent-brown">Customer Information</h3>
+                                            <p className="text-sm font-medium text-accent-brown/50">Tell us where to reach you about your order.</p>
                                         </div>
                                     </div>
-                                    {allAddresses.length > 0 && (
-                                        <button
-                                            onClick={() => setShowAddrModal(true)}
-                                            className="px-4 py-2 bg-brand/10 hover:bg-brand text-brand-dark hover:text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-sm"
-                                        >
-                                            Change
-                                        </button>
-                                    )}
+
+                                    <div className="space-y-6">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Full Name</label>
+                                            <input
+                                                type="text"
+                                                value={deliveryInfo.contactName}
+                                                onChange={e => setDeliveryInfo(prev => ({ ...prev, contactName: e.target.value }))}
+                                                placeholder="Enter full name"
+                                                className="w-full bg-accent-peach/5 border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-4 outline-none text-accent-brown font-bold transition-all shadow-sm"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Contact Number</label>
+                                            <input
+                                                type="tel"
+                                                value={deliveryInfo.phone}
+                                                onChange={e => setDeliveryInfo(prev => ({ ...prev, phone: e.target.value }))}
+                                                placeholder="09XX XXX XXXX"
+                                                className="w-full bg-accent-peach/5 border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-4 outline-none text-accent-brown font-bold transition-all shadow-sm"
+                                            />
+                                        </div>
+                                        <div className="space-y-2 opacity-60">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Email Address</label>
+                                            <input
+                                                type="email"
+                                                value={user?.email || ''}
+                                                disabled
+                                                className="w-full bg-gray-50 border-2 border-accent-brown/5 rounded-xl px-4 py-4 outline-none text-accent-brown font-bold cursor-not-allowed"
+                                            />
+                                            <p className="text-[9px] font-medium text-accent-brown/40 mt-1 italic italic">Registered email address will be used for order updates.</p>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div className="space-y-4">
-                                    {loadingData ? (
-                                        <div className="flex flex-col items-center justify-center py-10 opacity-30">
-                                            <Loader2 className="w-8 h-8 animate-spin mb-2" />
-                                            <p className="text-[10px] font-black uppercase tracking-widest">Loading delivery details...</p>
+                                <div className="flex justify-end pt-4">
+                                    <button
+                                        onClick={() => {
+                                            if (!deliveryInfo.contactName || !deliveryInfo.phone) {
+                                                alert('Please provide your name and contact number.');
+                                                return;
+                                            }
+                                            setCurrentStep(2);
+                                        }}
+                                        className="px-10 py-4 bg-brand-dark text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-brand-dark/20 flex items-center gap-3 group"
+                                    >
+                                        Shipping Details
+                                        <div className="w-5 h-5 bg-white/10 rounded-lg flex items-center justify-center group-hover:bg-brand transition-colors">
+                                            <MapPin className="w-3 h-3 text-white" />
                                         </div>
-                                    ) : (
+                                    </button>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {currentStep === 2 && (
+                            <motion.div
+                                key="step2"
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 20 }}
+                                className="space-y-6"
+                            >
+                                {/* Fulfillment + Delivery/Pickup Card */}
+                                <div className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-10 shadow-sm border border-accent-brown/5">
+                                    {/* Toggle */}
+                                    <div className="flex gap-4 mb-8">
+                                        <button
+                                            onClick={() => setFulfillmentMethod('delivery')}
+                                            className={`flex-1 p-4 rounded-xl border-2 flex items-center justify-center gap-3 transition-all cursor-pointer ${fulfillmentMethod === 'delivery' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
+                                        >
+                                            <div className="flex-1 text-left relative">
+                                                <div className="flex items-center gap-2">
+                                                    <Truck className="w-5 h-5 text-brand" />
+                                                    <span className={`text-[11px] font-black uppercase tracking-widest ${fulfillmentMethod === 'delivery' ? 'text-brand' : 'text-accent-brown'}`}>
+                                                        Home Delivery
+                                                    </span>
+                                                    {isMixedCart && (
+                                                        <span className="bg-emerald-500 text-white text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Recommended</span>
+                                                    )}
+                                                </div>
+                                                <p className="text-[10px] font-medium text-accent-brown/40">Safe and direct to your door</p>
+                                            </div>
+                                        </button>
+                                        <button
+                                            onClick={() => setFulfillmentMethod('pickup')}
+                                            className={`flex-1 p-4 rounded-xl border-2 flex items-center justify-center gap-3 transition-all cursor-pointer ${fulfillmentMethod === 'pickup' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
+                                        >
+                                            <Store className="w-5 h-5 shrink-0" />
+                                            <span className="text-xs font-black uppercase tracking-widest text-left leading-tight">Clinic<br />Pick-up</span>
+                                        </button>
+                                    </div>
+
+                                    {fulfillmentMethod === 'delivery' ? (
                                         <>
-                                            {!deliveryInfo.address && (
-                                                <div className="p-4 bg-red-50 border-2 border-red-100 rounded-2xl flex items-center gap-4 mb-2">
-                                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-red-500 shrink-0 shadow-sm">
-                                                        <MapPin className="w-5 h-5" />
+                                            <div className="flex items-center justify-between mb-6 pt-6 border-t border-accent-brown/5">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 bg-accent-peach/30 rounded-xl flex items-center justify-center text-brand-dark shrink-0">
+                                                        <MapPin className="w-6 h-6" />
                                                     </div>
                                                     <div>
-                                                        <p className="text-xs font-black uppercase tracking-widest text-red-500 leading-none mb-1">No saved address found</p>
-                                                        <p className="text-[10px] font-medium text-red-500/60">Please add a delivery address in your account settings to proceed.</p>
+                                                        <h3 className="text-xl font-black text-accent-brown">Delivery Details</h3>
+                                                        <p className="text-sm font-medium text-accent-brown/50">Where should we send your order?</p>
                                                     </div>
                                                 </div>
-                                            )}
-                                            <div className="space-y-4">
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Contact Name</label>
-                                                    <input
-                                                        type="text"
-                                                        value={deliveryInfo.contactName}
-                                                        onChange={e => setDeliveryInfo(prev => ({ ...prev, contactName: e.target.value }))}
-                                                        placeholder="Name of recipient"
-                                                        className="w-full bg-white border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-3 outline-none text-accent-brown font-bold transition-all shadow-sm"
-                                                    />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Delivery Address</label>
-                                                    <div className="relative">
-                                                        <input
-                                                            type="text"
-                                                            readOnly
-                                                            value={deliveryInfo.address}
-                                                            placeholder="Tap 'Edit' to set your delivery location"
-                                                            className="w-full bg-white border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-3 outline-none text-accent-brown font-bold transition-all shadow-sm pr-20 cursor-default"
-                                                        />
-                                                        <button
-                                                            onClick={() => setShowPickerModal(true)}
-                                                            className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-brand-dark text-white rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-black transition-all"
-                                                        >
-                                                            Edit
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Contact Number</label>
-                                                    <input
-                                                        type="tel"
-                                                        value={deliveryInfo.phone}
-                                                        onChange={e => setDeliveryInfo(prev => ({ ...prev, phone: e.target.value }))}
-                                                        placeholder="09XX XXX XXXX"
-                                                        className="w-full bg-white border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-3 outline-none text-accent-brown font-bold transition-all shadow-sm"
-                                                    />
-                                                </div>
-
-                                                {/* Map Preview */}
-                                                {deliveryInfo.lat && deliveryInfo.lng && (
-                                                    <div className="mt-4 rounded-2xl overflow-hidden border-2 border-accent-brown/5 h-52 relative shadow-inner shadow-black/5">
-                                                        <Map
-                                                            mapId="4c730709b30c1be1"
-                                                            defaultCenter={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}
-                                                            defaultZoom={16}
-                                                            disableDefaultUI={true}
-                                                            gestureHandling="greedy"
-                                                            className="w-full h-full grayscale-[0.4] contrast-[1.1]"
-                                                        >
-                                                            <AdvancedMarker position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng! }}>
-                                                                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white border-[3px] border-white shadow-2xl ring-4 ring-blue-400/20">
-                                                                    <User className="w-5 h-5" />
-                                                                </div>
-                                                            </AdvancedMarker>
-                                                        </Map>
-                                                        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/30 to-transparent pointer-events-none" />
-                                                        <div className="absolute bottom-3 left-3 bg-white/80 backdrop-blur-md rounded-lg px-3 py-1.5 shadow-sm">
-                                                            <p className="text-[9px] font-black text-brand-dark uppercase tracking-widest">✓ Precision Verified</p>
-                                                        </div>
-                                                    </div>
+                                                {allAddresses.length > 0 && (
+                                                    <button
+                                                        onClick={() => setShowAddrModal(true)}
+                                                        className="px-4 py-2 bg-brand/10 hover:bg-brand text-brand-dark hover:text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-sm"
+                                                    >
+                                                        Change
+                                                    </button>
                                                 )}
-
                                             </div>
-                                        </>
-                                    )}
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div className="flex items-center gap-4 mb-6 pt-6 border-t border-accent-brown/5">
-                                    <div className="w-12 h-12 bg-brand/10 rounded-xl flex items-center justify-center text-brand-dark shrink-0">
-                                        <Store className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-xl font-black text-accent-brown">Pick-up Location</h3>
-                                        <p className="text-sm font-medium text-accent-brown/50">Select a clinic branch to pick up your items.</p>
-                                    </div>
-                                </div>
 
-                                {/* Mixed Clinic Warning Banner */}
-                                {isMixedCart && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: -10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-4"
-                                    >
-                                        <div className="p-2 bg-amber-100 rounded-xl text-amber-600">
-                                            <Info className="w-4 h-4" />
-                                        </div>
-                                        <div className="flex-1">
-                                            <h4 className="text-[11px] font-black text-amber-800 uppercase tracking-wider mb-1">Logistics Optimization Note</h4>
-                                            <p className="text-[10px] font-medium text-amber-700/70 leading-relaxed">
-                                                Your cart contains items from different partner clinics. If you proceed with pickup, you may need to visit multiple locations.
-                                                <button
-                                                    onClick={() => setFulfillmentMethod('delivery')}
-                                                    className="ml-2 text-amber-900 underline font-black"
-                                                >
-                                                    Switch to Home Delivery?
-                                                </button>
-                                            </p>
-                                        </div>
-                                    </motion.div>
-                                )}
-
-                                <div className="space-y-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Clinic Branch</label>
-                                        <div className="grid grid-cols-1 gap-2">
-                                            {clinics
-                                                .filter(c => items.some(item => item.business_id === c.id))
-                                                .flatMap(c => (c.branches || []).map((b: any) => {
-                                                    const isSelected = deliveryInfo.clinic_id === c.id && deliveryInfo.branch_id === b.id;
-                                                    return (
-                                                        <button
-                                                            key={`${c.id}-${b.id}`}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setDeliveryInfo(prev => ({
-                                                                    ...prev,
-                                                                    clinic_id: c.id,
-                                                                    branch_id: b.id,
-                                                                    address: `${b.address_line1}, ${b.address_line2}`,
-                                                                    phone: b.phone || c.phone || prev.phone
-                                                                }));
-                                                                setSelectedBranch(b);
-                                                                setSelectedClinic(c);
-                                                                setShowBranchStreetView(false);
-                                                                setBranchActiveMarker(null);
-                                                                branchSvRef.current = null;
-                                                            }}
-                                                            className={`w-full text-left p-4 rounded-xl border-2 transition-all flex flex-col gap-1 ${isSelected ? 'border-brand bg-brand/5 shadow-md shadow-brand/10' : 'border-accent-brown/10 bg-accent-peach/5 hover:border-brand/30 hover:bg-white'}`}
-                                                        >
-                                                            <div className="flex items-center justify-between gap-3">
-                                                                <span className="text-xs font-black text-accent-brown">
-                                                                    {c.name} — <span className="text-brand">{b.address_line1 || ''}</span>
-                                                                </span>
-                                                                {b.is_main ? (
-                                                                    <span className="text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">MAIN</span>
-                                                                ) : (
-                                                                    <span className="text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 border border-blue-100">BRANCH</span>
-                                                                )}
-                                                            </div>
-                                                            {b.address_line2 && (
-                                                                <div className="flex items-center gap-1.5 text-[9px] font-bold text-accent-brown/40 uppercase">
-                                                                    <MapPin className="w-2.5 h-2.5" />
-                                                                    {b.address_line2}
+                                            <div className="space-y-4">
+                                                {loadingData ? (
+                                                    <div className="flex flex-col items-center justify-center py-10 opacity-30">
+                                                        <Loader2 className="w-8 h-8 animate-spin mb-2" />
+                                                        <p className="text-[10px] font-black uppercase tracking-widest">Loading delivery details...</p>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        {!deliveryInfo.address && (
+                                                            <div className="p-4 bg-red-50 border-2 border-red-100 rounded-2xl flex items-center gap-4 mb-2">
+                                                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-red-500 shrink-0 shadow-sm">
+                                                                    <MapPin className="w-5 h-5" />
                                                                 </div>
-                                                            )}
-                                                        </button>
-                                                    );
-                                                }))}
-                                        </div>
-                                    </div>
+                                                                <div>
+                                                                    <p className="text-xs font-black uppercase tracking-widest text-red-500 leading-none mb-1">No saved address found</p>
+                                                                    <p className="text-[10px] font-medium text-red-500/60">Please add a delivery address in your account settings to proceed.</p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        <div className="space-y-4">
+                                                            <div className="space-y-2">
+                                                                <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Delivery Address</label>
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="text"
+                                                                        readOnly
+                                                                        value={deliveryInfo.address}
+                                                                        placeholder="Tap 'Edit' to set your delivery location"
+                                                                        className="w-full bg-white border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-4 outline-none text-accent-brown font-bold transition-all shadow-sm pr-20 cursor-default"
+                                                                    />
+                                                                    <button
+                                                                        onClick={() => setShowPickerModal(true)}
+                                                                        className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-brand-dark text-white rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-black transition-all"
+                                                                    >
+                                                                        Edit
+                                                                    </button>
+                                                                </div>
+                                                            </div>
 
-                                    {/* Branch Map Panel — appears when a branch is selected */}
-                                    <AnimatePresence>
-                                        {selectedBranch && selectedBranch.lat && selectedBranch.lng && (
-                                            <>
-                                                <motion.div
-                                                    key={`${selectedBranch.id}-map`}
-                                                    initial={{ opacity: 0, height: 0 }}
-                                                    animate={{ opacity: 1, height: 'auto' }}
-                                                    exit={{ opacity: 0, height: 0 }}
-                                                    className="overflow-hidden rounded-2xl border-2 border-accent-brown/5 shadow-lg"
-                                                >
-                                                    <div className="relative" style={{ height: showBranchStreetView ? 480 : 300 }}>
-                                                        <AnimatePresence mode="wait">
-                                                            {!showBranchStreetView ? (
-                                                                <motion.div key="map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
+                                                            {/* Map Preview */}
+                                                            {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                <div className="mt-4 rounded-3xl overflow-hidden border-2 border-accent-brown/5 h-64 relative shadow-inner shadow-black/5">
                                                                     <Map
                                                                         mapId="4c730709b30c1be1"
-                                                                        defaultCenter={
-                                                                            deliveryInfo.lat && deliveryInfo.lng
-                                                                                ? {
-                                                                                    lat: (Number(selectedBranch.lat) + deliveryInfo.lat) / 2,
-                                                                                    lng: (Number(selectedBranch.lng) + deliveryInfo.lng) / 2
-                                                                                }
-                                                                                : { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }
-                                                                        }
-                                                                        defaultZoom={deliveryInfo.lat && deliveryInfo.lng ? 13 : 15}
+                                                                        defaultCenter={{ lat: deliveryInfo.lat!, lng: deliveryInfo.lng! }}
+                                                                        defaultZoom={16}
+                                                                        disableDefaultUI={true}
                                                                         gestureHandling="greedy"
-                                                                        disableDefaultUI={false}
-                                                                        mapTypeControl={false}
-                                                                        streetViewControl={false}
-                                                                        fullscreenControl={false}
+                                                                        className="w-full h-full grayscale-[0.4] contrast-[1.1]"
+                                                                    >
+                                                                        <AdvancedMarker position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng! }}>
+                                                                            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white border-[3px] border-white shadow-2xl ring-4 ring-blue-400/20">
+                                                                                <User className="w-5 h-5" />
+                                                                            </div>
+                                                                        </AdvancedMarker>
+                                                                        <MapReCenterer lat={deliveryInfo.lat} lng={deliveryInfo.lng} />
+                                                                    </Map>
+                                                                    <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white/40 to-transparent pointer-events-none" />
+                                                                    <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-md rounded-xl px-4 py-2 shadow-lg border border-white/20">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <CheckCircle className="w-4 h-4 text-emerald-500" />
+                                                                            <p className="text-[10px] font-black text-brand-dark uppercase tracking-widest">Precision Verified</p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="flex items-center gap-4 mb-6 pt-6 border-t border-accent-brown/5">
+                                                <div className="w-12 h-12 bg-brand/10 rounded-xl flex items-center justify-center text-brand-dark shrink-0">
+                                                    <Store className="w-6 h-6" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-xl font-black text-accent-brown">Pick-up Location</h3>
+                                                    <p className="text-sm font-medium text-accent-brown/50">Select a clinic branch to pick up your items.</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Mixed Clinic Warning Banner */}
+                                            {isMixedCart && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: -10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-4"
+                                                >
+                                                    <div className="p-2 bg-amber-100 rounded-xl text-amber-600">
+                                                        <Info className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h4 className="text-[11px] font-black text-amber-800 uppercase tracking-wider mb-1">Logistics Optimization Note</h4>
+                                                        <p className="text-[10px] font-medium text-amber-700/70 leading-relaxed">
+                                                            Your cart contains items from different partner clinics. If you proceed with pickup, you may need to visit multiple locations.
+                                                            <button
+                                                                onClick={() => setFulfillmentMethod('delivery')}
+                                                                className="ml-2 text-amber-900 underline font-black"
+                                                            >
+                                                                Switch to Home Delivery?
+                                                            </button>
+                                                        </p>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+
+                                            <div className="space-y-4">
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Clinic Branch</label>
+                                                    <div className="grid grid-cols-1 gap-2">
+                                                        {clinics
+                                                            .filter(c => {
+                                                                if (payingOrder) {
+                                                                    // Primary: Match by clinic/business ID
+                                                                    if (payingOrder.clinic_id || payingOrder.business_id) {
+                                                                        return Number(payingOrder.clinic_id || payingOrder.business_id) === c.id;
+                                                                    }
+                                                                    // Fallback: Match by branch if the parent ID is missing (robustness for existing orders)
+                                                                    if (payingOrder.branch_id) {
+                                                                        return (c.branches || []).some((b: any) => Number(b.id) === Number(payingOrder.branch_id));
+                                                                    }
+                                                                }
+                                                                return items.some(item => (Number(item.business_id) === c.id || Number(item.clinic_id) === c.id));
+                                                            })
+                                                            .flatMap(c => (c.branches || []).map((b: any) => {
+                                                                const isSelected = deliveryInfo.clinic_id === c.id && deliveryInfo.branch_id === b.id;
+                                                                return (
+                                                                    <button
+                                                                        key={`${c.id}-${b.id}`}
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setDeliveryInfo(prev => ({
+                                                                                ...prev,
+                                                                                clinic_id: c.id,
+                                                                                branch_id: b.id,
+                                                                                address: `${b.address_line1}, ${b.address_line2}`,
+                                                                                phone: b.phone || c.phone || prev.phone
+                                                                            }));
+                                                                            setSelectedBranch(b);
+                                                                            setSelectedClinic(c);
+                                                                            setShowBranchStreetView(false);
+                                                                            setBranchActiveMarker(null);
+                                                                            branchSvRef.current = null;
+                                                                        }}
+                                                                        className={`w-full text-left p-5 rounded-2xl border-2 transition-all flex flex-col gap-1 ${isSelected ? 'border-brand bg-brand/5 shadow-md shadow-brand/10' : 'border-accent-brown/10 bg-accent-peach/5 hover:border-brand/30 hover:bg-white'}`}
+                                                                    >
+                                                                        <div className="flex items-center justify-between gap-3">
+                                                                            <span className="text-xs font-black text-accent-brown">
+                                                                                {c.name} — <span className="text-brand">{b.address_line1 || ''}</span>
+                                                                            </span>
+                                                                            {b.is_main ? (
+                                                                                <span className="text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">MAIN</span>
+                                                                            ) : (
+                                                                                <span className="text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 border border-blue-100">BRANCH</span>
+                                                                            )}
+                                                                        </div>
+                                                                        {b.address_line2 && (
+                                                                            <div className="flex items-center gap-1.5 text-[9px] font-bold text-accent-brown/40 uppercase">
+                                                                                <MapPin className="w-2.5 h-2.5" />
+                                                                                {b.address_line2}
+                                                                            </div>
+                                                                        )}
+                                                                    </button>
+                                                                );
+                                                            }))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Branch Map Panel — appears when a branch is selected */}
+                                                <AnimatePresence>
+                                                    {selectedBranch && selectedBranch.lat && selectedBranch.lng && (
+                                                        <>
+                                                            <motion.div
+                                                                key={`${selectedBranch.id}-map`}
+                                                                initial={{ opacity: 0, height: 0 }}
+                                                                animate={{ opacity: 1, height: 'auto' }}
+                                                                exit={{ opacity: 0, height: 0 }}
+                                                                className="overflow-hidden rounded-2xl border-2 border-accent-brown/5 shadow-lg"
+                                                            >
+                                                                <div className="relative" style={{ height: showBranchStreetView ? 480 : 300 }}>
+                                                                    <Map
+                                                                        mapId="sv-minimap"
+                                                                        defaultCenter={{ lat: selectedBranch.lat!, lng: selectedBranch.lng! }}
+                                                                        defaultZoom={15}
+                                                                        disableDefaultUI={true}
+                                                                        gestureHandling="greedy"
                                                                         className="w-full h-full"
                                                                     >
-                                                                        {/* Clinic Pin */}
                                                                         <AdvancedMarker
-                                                                            position={{ lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}
-                                                                            onClick={() => setBranchActiveMarker(branchActiveMarker === 'branch' ? null : 'branch')}
+                                                                            position={{ lat: selectedBranch.lat!, lng: selectedBranch.lng! }}
+                                                                            onClick={() => setBranchActiveMarker('branch')}
                                                                         >
-                                                                            <div className="w-10 h-10 bg-brand-dark rounded-xl flex items-center justify-center text-white border-2 border-white shadow-xl ring-4 ring-brand/20 cursor-pointer hover:scale-110 transition-transform">
+                                                                            <div className="w-10 h-10 bg-brand rounded-full flex items-center justify-center text-white border-[3px] border-white shadow-xl ring-4 ring-brand/20">
                                                                                 <Store className="w-5 h-5" />
                                                                             </div>
                                                                         </AdvancedMarker>
 
-                                                                        {/* User delivery pin (if lat/lng saved) */}
                                                                         {deliveryInfo.lat && deliveryInfo.lng && (
-                                                                            <AdvancedMarker
-                                                                                position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}
-                                                                                onClick={() => setBranchActiveMarker(branchActiveMarker === 'customer' ? null : 'customer')}
-                                                                            >
-                                                                                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-lg ring-4 ring-blue-400/20 cursor-pointer hover:scale-110 transition-transform">
-                                                                                    <User className="w-4 h-4" />
-                                                                                </div>
-                                                                            </AdvancedMarker>
+                                                                            <>
+                                                                                <AdvancedMarker
+                                                                                    position={{ lat: deliveryInfo.lat!, lng: deliveryInfo.lng! }}
+                                                                                    onClick={() => setBranchActiveMarker('customer')}
+                                                                                >
+                                                                                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-lg">
+                                                                                        <User className="w-4 h-4" />
+                                                                                    </div>
+                                                                                </AdvancedMarker>
+                                                                                <DirectionsLine
+                                                                                    userLat={deliveryInfo.lat!}
+                                                                                    userLng={deliveryInfo.lng!}
+                                                                                    clinicLat={selectedBranch.lat!}
+                                                                                    clinicLng={selectedBranch.lng!}
+                                                                                />
+                                                                            </>
                                                                         )}
 
-                                                                        {/* Directions route */}
+                                                                        <PanoMapSyncer position={panoPosition} />
+
                                                                         {deliveryInfo.lat && deliveryInfo.lng && (
-                                                                            <DirectionsLine
-                                                                                userLat={deliveryInfo.lat}
-                                                                                userLng={deliveryInfo.lng}
-                                                                                clinicLat={Number(selectedBranch.lat)}
-                                                                                clinicLng={Number(selectedBranch.lng)}
-                                                                            />
-                                                                        )}
-
-                                                                        {/* Clinic InfoWindow */}
-                                                                        {branchActiveMarker === 'branch' && (
-                                                                            <InfoWindow
-                                                                                position={{ lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}
-                                                                                onCloseClick={() => setBranchActiveMarker(null)}
-                                                                                headerDisabled={true}
-                                                                            >
-                                                                                <div className="p-3 w-[250px] font-sans flex flex-col gap-2 relative">
-                                                                                    <button onClick={() => setBranchActiveMarker(null)} className="absolute top-1 right-1 p-1 rounded-full hover:bg-gray-100 text-gray-400"><X className="w-3 h-3" /></button>
-                                                                                    <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
-                                                                                        <div className="w-8 h-8 bg-brand/10 rounded-lg flex items-center justify-center"><Store className="w-4 h-4 text-brand" /></div>
-                                                                                        <div>
-                                                                                            <p className="text-xs font-black text-brand-dark leading-tight">{selectedClinic?.name}</p>
-                                                                                            <p className="text-[9px] font-bold text-accent-brown/50 uppercase tracking-widest">Clinic Branch</p>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    <button onClick={() => {
-                                                                                        const pos = { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) };
-                                                                                        setSvStartPos(pos);
-                                                                                        branchSvRef.current = null;
-                                                                                        setShowBranchStreetView(true);
-                                                                                        setBranchActiveMarker(null);
-                                                                                    }} className="w-full bg-brand/10 text-brand-dark text-[10px] font-black uppercase tracking-widest py-3 rounded-xl hover:bg-brand hover:text-white transition-all flex items-center justify-center gap-2">
-                                                                                        <Eye className="w-4 h-4" /> Street View
-                                                                                    </button>
-                                                                                    {deliveryInfo.lat && deliveryInfo.lng && (
-                                                                                        <div className="w-full bg-brand-dark/5 border border-brand-dark/10 px-3 py-2 rounded-xl flex items-center justify-between">
-                                                                                            <div className="flex items-center gap-2">
-                                                                                                <Truck className="w-3.5 h-3.5 text-brand-dark/50" />
-                                                                                                <span className="text-[9px] font-black uppercase tracking-widest text-brand-dark/50">Distance</span>
-                                                                                            </div>
-                                                                                            <span className="text-xs font-black text-brand-dark">{calcDist(deliveryInfo.lat, deliveryInfo.lng, Number(selectedBranch.lat), Number(selectedBranch.lng))}</span>
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            </InfoWindow>
-                                                                        )}
-
-                                                                        {/* User InfoWindow */}
-                                                                        {branchActiveMarker === 'customer' && deliveryInfo.lat && deliveryInfo.lng && (
-                                                                            <InfoWindow
-                                                                                position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}
-                                                                                onCloseClick={() => setBranchActiveMarker(null)}
-                                                                                headerDisabled={true}
-                                                                            >
-                                                                                <div className="p-3 w-[250px] font-sans flex flex-col gap-2 relative">
-                                                                                    <button onClick={() => setBranchActiveMarker(null)} className="absolute top-1 right-1 p-1 rounded-full hover:bg-gray-100 text-gray-400"><X className="w-3 h-3" /></button>
-                                                                                    <div className="flex items-center gap-2 border-b border-gray-100 pb-2">
-                                                                                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center"><User className="w-4 h-4 text-blue-600" /></div>
-                                                                                        <div>
-                                                                                            <p className="text-xs font-black text-brand-dark">{deliveryInfo.contactName || 'Your Location'}</p>
-                                                                                            <p className="text-[9px] font-bold text-accent-brown/50 uppercase tracking-widest">Delivery Address</p>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    <button onClick={() => {
-                                                                                        if (deliveryInfo.lat && deliveryInfo.lng) {
-                                                                                            setSvStartPos({ lat: deliveryInfo.lat, lng: deliveryInfo.lng });
-                                                                                        }
-                                                                                        branchSvRef.current = null;
-                                                                                        setShowBranchStreetView(true);
-                                                                                        setBranchActiveMarker(null);
-                                                                                    }} className="w-full bg-blue-100 text-blue-800 text-[10px] font-black uppercase tracking-widest py-3 rounded-xl hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-2">
-                                                                                        <Eye className="w-4 h-4" /> Street View
-                                                                                    </button>
-                                                                                    <div className="w-full bg-brand-dark/5 border border-brand-dark/10 px-3 py-2 rounded-xl flex items-center justify-between">
-                                                                                        <div className="flex items-center gap-2">
-                                                                                            <Truck className="w-3.5 h-3.5 text-brand-dark/50" />
-                                                                                            <span className="text-[9px] font-black uppercase tracking-widest text-brand-dark/50">Distance</span>
-                                                                                        </div>
-                                                                                        <span className="text-xs font-black text-brand-dark">{calcDist(deliveryInfo.lat, deliveryInfo.lng, Number(selectedBranch.lat), Number(selectedBranch.lng))}</span>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </InfoWindow>
+                                                                            <FitBoundsHandler points={[
+                                                                                { lat: deliveryInfo.lat, lng: deliveryInfo.lng },
+                                                                                { lat: selectedBranch.lat, lng: selectedBranch.lng }
+                                                                            ]} />
                                                                         )}
                                                                     </Map>
-                                                                </motion.div>
-                                                            ) : (
-                                                                <motion.div key="sv" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex flex-col bg-black rounded-2xl overflow-hidden">
-                                                                    {/* Professional Header Bar */}
-                                                                    <div className="absolute top-0 left-0 right-0 z-[30] bg-gradient-to-b from-black/80 to-transparent px-5 pt-4 pb-8 pointer-events-none flex items-start justify-between">
-                                                                        <div className="flex items-center gap-3 pointer-events-none">
-                                                                            <div className="w-9 h-9 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 flex items-center justify-center">
-                                                                                <Eye className="w-4 h-4 text-white" />
-                                                                            </div>
-                                                                            <div>
-                                                                                <p className="text-[9px] font-black uppercase tracking-widest text-white/50">Immersive Street View</p>
-                                                                                <p className="text-xs font-black text-white leading-tight">
-                                                                                    {svStartPos && deliveryInfo.lat && svStartPos.lat === deliveryInfo.lat
-                                                                                        ? (deliveryInfo.contactName || 'Your Location')
-                                                                                        : (selectedClinic?.name || 'Clinic Branch')}
-                                                                                </p>
-                                                                            </div>
-                                                                        </div>
+
+                                                                    {/* Street View Toggle & Panel */}
+                                                                    <div className="absolute top-4 right-4 flex flex-col gap-2 z-50">
                                                                         <button
-                                                                            onClick={() => { setShowBranchStreetView(false); branchSvRef.current = null; }}
-                                                                            className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 flex items-center justify-center text-white hover:bg-red-500/80 hover:border-red-500 transition-all pointer-events-auto shadow-lg"
+                                                                            onClick={() => setShowBranchStreetView(!showBranchStreetView)}
+                                                                            className={`p-3 rounded-xl shadow-xl backdrop-blur-md transition-all flex items-center gap-2 ${showBranchStreetView ? 'bg-brand text-white px-5' : 'bg-white/90 text-accent-brown hover:bg-white'}`}
                                                                         >
-                                                                            <X className="w-4 h-4" />
+                                                                            {showBranchStreetView ? (
+                                                                                <>
+                                                                                    <MapPin className="w-4 h-4" />
+                                                                                    <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Back to Map</span>
+                                                                                </>
+                                                                            ) : (
+                                                                                <Eye className="w-5 h-5" />
+                                                                            )}
                                                                         </button>
                                                                     </div>
 
-                                                                    {/* Street View — top 62% */}
-                                                                    <div className="flex-[0.62] relative">
-                                                                        <div
-                                                                            ref={(el) => {
-                                                                                if (el && !branchSvRef.current) {
-                                                                                    const pos = svStartPos || { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) };
-                                                                                    const pano = new google.maps.StreetViewPanorama(el, {
-                                                                                        position: pos,
-                                                                                        pov: { heading: 0, pitch: 0 },
-                                                                                        zoom: 1,
-                                                                                        addressControl: false,
-                                                                                        fullscreenControl: false,
-                                                                                        zoomControl: true,
-                                                                                        linksControl: true,
-                                                                                        panControl: false,
-                                                                                        enableCloseButton: false,
-                                                                                        motionTracking: false,
-                                                                                    });
-                                                                                    pano.addListener('position_changed', () => {
-                                                                                        const p = pano.getPosition();
-                                                                                        if (p) setPanoPosition({ lat: p.lat(), lng: p.lng() });
-                                                                                    });
-                                                                                    pano.addListener('pov_changed', () => {
-                                                                                        const pov = pano.getPov();
-                                                                                        setPanoPov({ heading: pov.heading, pitch: pov.pitch });
-                                                                                    });
-                                                                                    branchSvRef.current = pano;
-                                                                                    setPanoPosition(pos);
-                                                                                }
-                                                                            }}
-                                                                            className="w-full h-full"
-                                                                        />
-                                                                        {/* Bottom fade into mini-map */}
-                                                                        <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black to-transparent pointer-events-none" />
-                                                                    </div>
+                                                                    {showBranchStreetView && (
+                                                                        <div className="absolute inset-0 bg-black z-10">
+                                                                            <div
+                                                                                ref={(el) => {
+                                                                                    const google = (window as any).google;
+                                                                                    if (el && google) {
+                                                                                        if (!branchSvRef.current) {
+                                                                                            const panorama = new google.maps.StreetViewPanorama(el, {
+                                                                                                position: { lat: selectedBranch.lat!, lng: selectedBranch.lng! },
+                                                                                                pov: panoPov,
+                                                                                                zoom: 1,
+                                                                                                addressControl: false,
+                                                                                                showRoadLabels: false,
+                                                                                                disableDefaultUI: true
+                                                                                            });
+                                                                                            panorama.addListener('pov_changed', () => setPanoPov(panorama.getPov()));
+                                                                                            panorama.addListener('position_changed', () => {
+                                                                                                const pos = panorama.getPosition();
+                                                                                                if (pos && typeof pos.toJSON === 'function') {
+                                                                                                    setPanoPosition(pos.toJSON());
+                                                                                                } else if (pos) {
+                                                                                                    setPanoPosition({ lat: pos.lat(), lng: pos.lng() });
+                                                                                                } else {
+                                                                                                    setPanoPosition(null);
+                                                                                                }
+                                                                                            });
+                                                                                            branchSvRef.current = panorama;
+                                                                                        }
+                                                                                    } else {
+                                                                                        branchSvRef.current = null;
+                                                                                    }
+                                                                                }}
+                                                                                className="w-full h-full"
+                                                                            />
 
-                                                                    {/* Mini-map — bottom 38% with route */}
-                                                                    <div className="flex-[0.38] relative overflow-hidden">
-                                                                        <Map
-                                                                            id="sv-minimap"
-                                                                            mapId="46537618861d8583"
-                                                                            defaultCenter={svStartPos || { lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}
-                                                                            defaultZoom={15}
-                                                                            disableDefaultUI={true}
-                                                                            gestureHandling="greedy"
-                                                                            className="w-full h-full"
-                                                                        >
-                                                                            <PanoMapSyncer position={panoPosition} />
-                                                                            {deliveryInfo.lat && deliveryInfo.lng && (
-                                                                                <DirectionsLine
-                                                                                    userLat={deliveryInfo.lat}
-                                                                                    userLng={deliveryInfo.lng}
-                                                                                    clinicLat={Number(selectedBranch.lat)}
-                                                                                    clinicLng={Number(selectedBranch.lng)}
-                                                                                />
-                                                                            )}
-                                                                            {/* Current Street View position + heading arrow */}
-                                                                            {panoPosition && (
-                                                                                <AdvancedMarker position={panoPosition}>
-                                                                                    <div className="w-10 h-10 flex items-center justify-center" style={{ transform: `rotate(${panoPov.heading}deg)`, transition: 'transform 0.3s ease' }}>
-                                                                                        <div className="w-5 h-5 bg-blue-500 rounded-full border-[3px] border-white shadow-2xl relative">
-                                                                                            <div className="absolute -top-5 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[10px] border-b-blue-500" />
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </AdvancedMarker>
-                                                                            )}
-                                                                            {/* Clinic pin */}
-                                                                            <AdvancedMarker position={{ lat: Number(selectedBranch.lat), lng: Number(selectedBranch.lng) }}>
-                                                                                <div className="w-8 h-8 bg-brand-dark rounded-xl flex items-center justify-center text-white border-2 border-white shadow-xl">
-                                                                                    <Store className="w-4 h-4" />
-                                                                                </div>
-                                                                            </AdvancedMarker>
-                                                                            {/* User delivery pin */}
-                                                                            {deliveryInfo.lat && deliveryInfo.lng && (
-                                                                                <AdvancedMarker position={{ lat: deliveryInfo.lat, lng: deliveryInfo.lng }}>
-                                                                                    <div className="w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-lg">
-                                                                                        <User className="w-3.5 h-3.5" />
-                                                                                    </div>
-                                                                                </AdvancedMarker>
-                                                                            )}
-                                                                        </Map>
+                                                                            {/* Mini Map Widget with Directions */}
+                                                                            <div className="absolute bottom-6 left-6 w-56 h-56 rounded-3xl overflow-hidden border-[4px] border-white shadow-2xl z-20 group">
+                                                                                <Map
+                                                                                    mapId="sv-widget-map"
+                                                                                    defaultCenter={{ lat: selectedBranch.lat!, lng: selectedBranch.lng! }}
+                                                                                    defaultZoom={14}
+                                                                                    disableDefaultUI={true}
+                                                                                    gestureHandling="none"
+                                                                                    className="w-full h-full grayscale-[0.2]"
+                                                                                >
+                                                                                    <AdvancedMarker position={{ lat: selectedBranch.lat!, lng: selectedBranch.lng! }}>
+                                                                                        <div className="w-6 h-6 bg-brand rounded-full border-2 border-white shadow-lg" />
+                                                                                    </AdvancedMarker>
 
-                                                                        {/* HUD overlay */}
-                                                                        <div className="absolute top-3 left-3 z-10 pointer-events-none flex flex-col gap-2">
-                                                                            <div className="bg-black/60 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10 shadow-lg flex items-center gap-2">
-                                                                                <div className="w-6 h-6 rounded-lg bg-blue-500/30 flex items-center justify-center">
-                                                                                    <MapPin className="w-3 h-3 text-blue-400" />
-                                                                                </div>
-                                                                                <div>
-                                                                                    <p className="text-[7px] font-black uppercase tracking-widest text-white/40">Heading</p>
-                                                                                    <p className="text-[10px] font-black text-white">{Math.round(panoPov.heading)}°</p>
+                                                                                    {deliveryInfo.lat && deliveryInfo.lng && (
+                                                                                        <>
+                                                                                            <AdvancedMarker position={{ lat: deliveryInfo.lat!, lng: deliveryInfo.lng! }}>
+                                                                                                <div className="w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-lg" />
+                                                                                            </AdvancedMarker>
+                                                                                            <DirectionsLine
+                                                                                                userLat={deliveryInfo.lat!}
+                                                                                                userLng={deliveryInfo.lng!}
+                                                                                                clinicLat={selectedBranch.lat!}
+                                                                                                clinicLng={selectedBranch.lng!}
+                                                                                            />
+                                                                                            <FitBoundsHandler points={[
+                                                                                                { lat: deliveryInfo.lat!, lng: deliveryInfo.lng! },
+                                                                                                { lat: selectedBranch.lat!, lng: selectedBranch.lng! }
+                                                                                            ]} />
+                                                                                        </>
+                                                                                    )}
+                                                                                </Map>
+                                                                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent p-3">
+                                                                                    <p className="text-[8px] font-black text-white uppercase tracking-widest text-center">Route Preview</p>
                                                                                 </div>
                                                                             </div>
-                                                                            {deliveryInfo.lat && deliveryInfo.lng && (
-                                                                                <div className="bg-black/60 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10 shadow-lg flex items-center gap-2">
-                                                                                    <div className="w-6 h-6 rounded-lg bg-brand/30 flex items-center justify-center">
-                                                                                        <Truck className="w-3 h-3 text-brand" />
-                                                                                    </div>
-                                                                                    <div>
-                                                                                        <p className="text-[7px] font-black uppercase tracking-widest text-white/40">Distance</p>
-                                                                                        <p className="text-[10px] font-black text-white">{calcDist(deliveryInfo.lat, deliveryInfo.lng, Number(selectedBranch.lat), Number(selectedBranch.lng))}</p>
-                                                                                    </div>
-                                                                                </div>
-                                                                            )}
                                                                         </div>
-
-                                                                        {/* Legend */}
-                                                                        <div className="absolute bottom-3 right-3 z-10 pointer-events-none flex flex-col gap-1.5">
-                                                                            <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10">
-                                                                                <div className="w-3 h-3 rounded bg-brand-dark flex items-center justify-center"><Store className="w-2 h-2 text-white" /></div>
-                                                                                <span className="text-[8px] font-black text-white/70 uppercase tracking-widest">{selectedClinic?.name || 'Clinic'}</span>
-                                                                            </div>
-                                                                            {deliveryInfo.lat && deliveryInfo.lng && (
-                                                                                <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10">
-                                                                                    <div className="w-3 h-3 rounded-full bg-blue-500 flex items-center justify-center"><User className="w-2 h-2 text-white" /></div>
-                                                                                    <span className="text-[8px] font-black text-white/70 uppercase tracking-widest">Your Location</span>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                </motion.div>
-                                                            )}
-                                                        </AnimatePresence>
-                                                    </div>
-                                                </motion.div>
-                                            </>
-                                        )}
-                                    </AnimatePresence>
-                                    <div className="p-4 bg-accent-peach/30 rounded-xl border border-brand/10">
-                                        <p className="text-sm font-bold text-accent-brown mb-1">Pick up tomorrow after 10:00 AM</p>
-                                        <p className="text-xs text-accent-brown/60">Please bring a valid ID and your order confirmation email when collecting your items.</p>
-                                    </div>
+                                                                    )}
+                                                                </div>
+                                                            </motion.div>
+                                                        </>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
-                            </>
-                        )}
-                    </div>
 
-                    {/* Vouchers & Rewards Section */}
-                    <div className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-10 shadow-sm border border-accent-brown/5">
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 shrink-0">
-                                <Tag className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-black text-accent-brown">Vouchers & Rewards</h3>
-                                <p className="text-sm font-medium text-accent-brown/50">Apply your loyalty rewards for discounts</p>
-                            </div>
-                        </div>
-
-                        {appliedVoucher ? (
-                            <div className="p-4 bg-brand/10 border-2 border-brand/20 rounded-2xl flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-brand rounded-xl flex items-center justify-center text-white shadow-lg">
-                                        <Gift className="w-5 h-5" />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-black uppercase tracking-widest text-brand-dark mb-0.5">Applied Reward</p>
-                                        <p className="font-black text-accent-brown text-sm">{appliedVoucher.title}</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <span className="font-black text-brand">-₱{appliedVoucher.discount.toLocaleString()}</span>
+                                <div className="flex justify-between items-center pt-4">
                                     <button
-                                        onClick={() => setAppliedVoucher(null)}
-                                        className="p-1.5 hover:bg-white rounded-lg transition-colors text-accent-brown/40 hover:text-red-500"
+                                        onClick={() => setCurrentStep(1)}
+                                        className="py-4 px-8 rounded-xl font-black text-[10px] uppercase tracking-widest text-accent-brown/40 hover:text-accent-brown transition-colors"
                                     >
-                                        <X className="w-4 h-4" />
+                                        Back to Identity
                                     </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="space-y-6">
-                                <div className="flex gap-3">
-                                    <div className="relative flex-1">
-                                        <input
-                                            type="text"
-                                            placeholder="Enter voucher code"
-                                            id="voucher-input"
-                                            className="w-full bg-accent-peach/10 border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-3.5 outline-none text-accent-brown font-black text-xs uppercase tracking-widest transition-all"
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    handleApplyVoucher((e.target as HTMLInputElement).value);
-                                                }
-                                            }}
-                                        />
-                                    </div>
                                     <button
                                         onClick={() => {
-                                            const input = document.getElementById('voucher-input') as HTMLInputElement;
-                                            handleApplyVoucher(input.value);
+                                            if (fulfillmentMethod === 'delivery' && !deliveryInfo.address) {
+                                                alert('Please select a delivery address.');
+                                                return;
+                                            }
+                                            if (fulfillmentMethod === 'pickup' && !deliveryInfo.branch_id) {
+                                                alert('Please select a pickup branch.');
+                                                return;
+                                            }
+                                            setCurrentStep(3);
                                         }}
-                                        disabled={applyingVoucher}
-                                        className="px-6 py-3.5 bg-brand-dark text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-brand-dark/10 flex items-center gap-2"
+                                        className="px-10 py-4 bg-brand text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-brand-dark transition-all shadow-xl shadow-brand/20 flex items-center gap-3 group"
                                     >
-                                        {applyingVoucher ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
+                                        Payment Method
+                                        <div className="w-5 h-5 bg-white/10 rounded-lg flex items-center justify-center group-hover:bg-white transition-colors group-hover:text-brand">
+                                            <Wallet className="w-3 h-3" />
+                                        </div>
                                     </button>
                                 </div>
-
-                                {myVouchers.length > 0 && (
-                                    <div className="space-y-3 pt-4 border-t border-accent-brown/5">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Your Available Rewards</p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {myVouchers.map((v) => (
-                                                <button
-                                                    key={v.id}
-                                                    onClick={() => handleApplyVoucher(v.code)}
-                                                    className="px-4 py-2 bg-white border-2 border-accent-brown/5 hover:border-brand hover:bg-brand/5 rounded-xl transition-all group flex items-center gap-3 text-left"
-                                                >
-                                                    <div className="w-8 h-8 rounded-lg bg-accent-peach/30 flex items-center justify-center text-brand transition-colors group-hover:bg-brand group-hover:text-white">
-                                                        <Gift className="w-4 h-4" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-[10px] font-black text-accent-brown leading-tight mb-0.5">{v.title}</p>
-                                                        <p className="text-[8px] font-bold text-accent-brown/40 uppercase tracking-widest">{v.code}</p>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Payment Method Card */}
-                    <div className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-10 shadow-sm border border-accent-brown/5">
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="w-12 h-12 bg-accent-peach/30 rounded-xl flex items-center justify-center text-brand-dark shrink-0">
-                                <Wallet className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-black text-accent-brown">Payment Method</h3>
-                                <p className="text-sm font-medium text-accent-brown/50">All transactions are secure and encrypted.</p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-
-
-                            {/* GCash via PayMongo */}
-                            <button
-                                onClick={() => setSelectedPayment('gcash')}
-                                className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer ${selectedPayment === 'gcash' ? 'border-brand bg-brand/5 text-brand-dark shadow-sm' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
-                            >
-                                <Smartphone className="w-8 h-8 shrink-0 text-[#007DFF]" />
-                                <div className="text-center">
-                                    <span className="text-[10px] font-black uppercase tracking-widest block">GCash</span>
-                                    <span className="text-[7px] font-bold uppercase tracking-widest opacity-50 block">via PayMongo</span>
-                                </div>
-                            </button>
-
-                            {/* Maya via PayMongo */}
-                            <button
-                                onClick={() => setSelectedPayment('maya')}
-                                className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer ${selectedPayment === 'maya' ? 'border-brand bg-brand/5 text-brand-dark shadow-sm' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
-                            >
-                                <CreditCard className="w-8 h-8 shrink-0 text-[#00A9A5]" />
-                                <div className="text-center">
-                                    <span className="text-[10px] font-black uppercase tracking-widest block">Maya</span>
-                                    <span className="text-[7px] font-bold uppercase tracking-widest opacity-50 block">via PayMongo</span>
-                                </div>
-                            </button>
-
-                            {/* Cash */}
-                            <button
-                                onClick={() => setSelectedPayment('cash')}
-                                className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer col-span-2 ${selectedPayment === 'cash' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
-                            >
-                                <Banknote className="w-8 h-8 shrink-0 text-amber-600" />
-                                <span className="text-[10px] font-black uppercase tracking-widest text-center">
-                                    {fulfillmentMethod === 'delivery' ? 'Cash on Delivery' : 'Cash on Pickup'}
-                                </span>
-                            </button>
-                        </div>
-
-
-                        {(selectedPayment === 'gcash' || selectedPayment === 'maya') && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -5 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100 flex items-start gap-3"
-                            >
-                                <ShieldCheck className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-                                <p className="text-xs font-bold text-blue-700 leading-relaxed">
-                                    You'll be redirected to a secure PayMongo payment page to complete your {selectedPayment === 'gcash' ? 'GCash' : 'Maya'} payment. Your order will be created instantly.
-                                </p>
                             </motion.div>
                         )}
 
-                    </div>
+                        {currentStep === 3 && (
+                            <motion.div
+                                key="step3"
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 20 }}
+                                className="space-y-6"
+                            >
+                                {/* Payment Method Card */}
+                                <div className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-10 shadow-sm border border-accent-brown/5">
+                                    <div className="flex items-center gap-4 mb-8">
+                                        <div className="w-12 h-12 bg-accent-peach/30 rounded-xl flex items-center justify-center text-brand-dark shrink-0">
+                                            <Wallet className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-black text-accent-brown">Payment Method</h3>
+                                            <p className="text-sm font-medium text-accent-brown/50">All transactions are secure and encrypted.</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        {/* GCash */}
+                                        <button
+                                            onClick={() => setSelectedPayment('gcash')}
+                                            className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer relative overflow-hidden group ${selectedPayment === 'gcash' ? 'border-[#0057E7] bg-[#0057E7]/5 text-blue-700 shadow-md' : 'border-accent-brown/10 text-accent-brown/40 hover:border-[#0057E7]/30 hover:bg-white'}`}
+                                        >
+                                            <div className="w-12 h-12 rounded-xl bg-[#0057E7] flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
+                                                <Smartphone className="w-6 h-6 text-white" />
+                                            </div>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-center">GCash</span>
+                                            {selectedPayment === 'gcash' && (
+                                                <div className="absolute top-2 right-2">
+                                                    <CheckCircle className="w-4 h-4 text-[#0057E7]" />
+                                                </div>
+                                            )}
+                                        </button>
+
+                                        {/* Maya */}
+                                        <button
+                                            onClick={() => setSelectedPayment('maya')}
+                                            className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer relative overflow-hidden group ${selectedPayment === 'maya' ? 'border-[#00D100] bg-[#00D100]/5 text-green-700 shadow-md' : 'border-accent-brown/10 text-accent-brown/40 hover:border-[#00D100]/30 hover:bg-white'}`}
+                                        >
+                                            <div className="w-12 h-12 rounded-xl bg-[#00D100] flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
+                                                <Smartphone className="w-6 h-6 text-white" />
+                                            </div>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-center">Maya</span>
+                                            {selectedPayment === 'maya' && (
+                                                <div className="absolute top-2 right-2">
+                                                    <CheckCircle className="w-4 h-4 text-[#00D100]" />
+                                                </div>
+                                            )}
+                                        </button>
+
+                                        {/* QRPh via PayMongo */}
+                                        <button
+                                            onClick={() => setSelectedPayment('qrph')}
+                                            className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer relative overflow-hidden group ${selectedPayment === 'qrph' ? 'border-[#ea580c] bg-[#ea580c]/5 text-brand-dark shadow-md' : 'border-accent-brown/10 text-accent-brown/40 hover:border-[#ea580c]/30 hover:bg-white'}`}
+                                        >
+                                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#0038A8] via-[#CE1126] to-[#FCD116] flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
+                                                <QrCode className="w-6 h-6 text-white" />
+                                            </div>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-center">QRPh</span>
+                                            {selectedPayment === 'qrph' && (
+                                                <div className="absolute top-2 right-2">
+                                                    <CheckCircle className="w-4 h-4 text-[#ea580c]" />
+                                                </div>
+                                            )}
+                                        </button>
+
+                                        {/* Cash */}
+                                        <button
+                                            onClick={() => setSelectedPayment('cash')}
+                                            className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer ${selectedPayment === 'cash' ? 'border-brand bg-brand/5 text-brand-dark shadow-md' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30 hover:bg-white'}`}
+                                        >
+                                            <Banknote className="w-12 h-12 shrink-0 text-amber-600 transition-transform" />
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-center leading-tight">
+                                                {fulfillmentMethod === 'delivery' ? 'COD' : 'COP'}
+                                            </span>
+                                        </button>
+                                    </div>
+
+                                    {selectedPayment === 'qrph' && (
+                                        <div className="mt-6 p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-start gap-4">
+                                            <ShieldCheck className="w-6 h-6 text-blue-500 shrink-0" />
+                                            <p className="text-xs font-bold text-blue-700 leading-relaxed">
+                                                A QRPh code will be generated for you to scan and pay using any banking or e-wallet app.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Vouchers & Rewards Card */}
+                                <div className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-10 shadow-sm border border-accent-brown/5">
+                                    <div className="flex items-center gap-4 mb-6">
+                                        <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 shrink-0">
+                                            <Tag className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-black text-accent-brown">Vouchers & Rewards</h3>
+                                            <p className="text-sm font-medium text-accent-brown/50">Apply your loyalty rewards for discounts</p>
+                                        </div>
+                                    </div>
+
+                                    {appliedVoucher ? (
+                                        <div className="p-5 bg-brand/10 border-2 border-brand/20 rounded-2xl flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 bg-brand rounded-2xl flex items-center justify-center text-white shadow-xl shadow-brand/20">
+                                                    <Gift className="w-6 h-6" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-brand-dark mb-0.5">Applied Reward</p>
+                                                    <p className="font-black text-accent-brown text-sm">{appliedVoucher.title}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                <span className="font-black text-brand text-lg">-₱{appliedVoucher.discount.toLocaleString()}</span>
+                                                <button onClick={() => setAppliedVoucher(null)} className="p-2 hover:bg-white rounded-xl transition-colors text-accent-brown/40 hover:text-red-500">
+                                                    <X className="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-6">
+                                            <div className="flex gap-3">
+                                                <div className="relative flex-1">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Enter voucher code"
+                                                        id="voucher-input-step3"
+                                                        className="w-full bg-accent-peach/10 border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-4 outline-none text-accent-brown font-black text-xs uppercase tracking-widest transition-all"
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                handleApplyVoucher((e.target as HTMLInputElement).value);
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        const input = document.getElementById('voucher-input-step3') as HTMLInputElement;
+                                                        handleApplyVoucher(input.value);
+                                                    }}
+                                                    disabled={applyingVoucher}
+                                                    className="px-8 py-4 bg-brand-dark text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-lg flex items-center gap-2"
+                                                >
+                                                    {applyingVoucher ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
+                                                </button>
+                                            </div>
+                                            {myVouchers.length > 0 && (
+                                                <div className="flex flex-wrap gap-2 pt-4 border-t border-accent-brown/5">
+                                                    {myVouchers.map((v) => (
+                                                        <button
+                                                            key={v.id}
+                                                            onClick={() => handleApplyVoucher(v.code)}
+                                                            className="px-4 py-2.5 bg-white border-2 border-accent-brown/5 hover:border-brand hover:bg-brand/5 rounded-xl transition-all group flex items-center gap-3 text-left"
+                                                        >
+                                                            <Gift className="w-4 h-4 text-brand group-hover:scale-110 transition-transform" />
+                                                            <div>
+                                                                <p className="text-[10px] font-black text-accent-brown leading-tight">{v.title}</p>
+                                                                <p className="text-[8px] font-bold text-accent-brown/40 uppercase tracking-widest">{v.code}</p>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex justify-between items-center pt-4">
+                                    <button
+                                        onClick={() => setCurrentStep(2)}
+                                        className="py-4 px-8 rounded-xl font-black text-[10px] uppercase tracking-widest text-accent-brown/40 hover:text-accent-brown transition-colors"
+                                    >
+                                        Back to Shipment
+                                    </button>
+                                    <button
+                                        onClick={handlePlaceOrder}
+                                        disabled={isPlacingOrder || items.length === 0}
+                                        className="px-12 py-5 bg-emerald-600 text-white rounded-3xl font-black text-xs uppercase tracking-[0.2em] hover:bg-emerald-700 transition-all shadow-2xl shadow-emerald-500/20 flex items-center gap-4 group active:scale-95"
+                                    >
+                                        {isPlacingOrder ? (
+                                            <><Loader2 className="w-5 h-5 animate-spin" /> Finalizing...</>
+                                        ) : (
+                                            <>
+                                                {selectedPayment === 'cash' ? 'Confirm Order' : 'Complete Payment'}
+                                                <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center group-hover:bg-white group-hover:text-emerald-600 transition-colors">
+                                                    <CheckCircle className="w-4 h-4" />
+                                                </div>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
 
                 {/* Right Column: Order Summary */}
@@ -1104,14 +1327,25 @@ const Checkout = () => {
                         <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.97 }}
-                            onClick={handlePlaceOrder}
+                            onClick={() => {
+                                if (currentStep === 1) {
+                                    if (!deliveryInfo.contactName || !deliveryInfo.phone) return alert('Please provide contact details.');
+                                    setCurrentStep(2);
+                                } else if (currentStep === 2) {
+                                    if (fulfillmentMethod === 'delivery' && !deliveryInfo.address) return alert('Please select a delivery address.');
+                                    if (fulfillmentMethod === 'pickup' && !deliveryInfo.branch_id) return alert('Please select a pickup branch.');
+                                    setCurrentStep(3);
+                                } else {
+                                    handlePlaceOrder();
+                                }
+                            }}
                             disabled={isPlacingOrder || items.length === 0}
                             className="bg-brand text-white w-full py-4 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-white hover:text-brand-dark hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                             {isPlacingOrder ? (
                                 <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
                             ) : (
-                                selectedPayment === 'cash' ? 'Place Order Now' : 'Proceed to Payment'
+                                currentStep < 3 ? 'Next Step' : (selectedPayment === 'cash' ? 'Place Order Now' : 'Proceed to Payment')
                             )}
                         </motion.button>
 
@@ -1314,6 +1548,14 @@ const Checkout = () => {
             />
 
 
+            <QrCodeModal
+                isOpen={showQrModal}
+                onClose={() => setShowQrModal(false)}
+                qrData={qrData}
+                amount={totalAmount + shippingFee - (appliedVoucher?.discount || 0)}
+                reference={`HV-2026-${(user?.id || 0).toString().padStart(6, '0')}-${Date.now().toString().slice(-4)}`}
+                status={qrStatus}
+            />
         </DashboardLayout>
     );
 };

@@ -368,15 +368,15 @@ const CustomerLoyalty = () => {
                         className="bg-gradient-to-br from-brand-dark to-[#3A2D28] rounded-3xl sm:rounded-[2rem] p-5 xs:p-8 text-white relative overflow-hidden"
                     >
                         <div className="relative z-10">
-                            <div className="w-12 h-12 bg-brand/20 rounded-2xl flex items-center justify-center mb-6">
-                                <Gift className="w-6 h-6 text-brand" />
+                            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-6">
+                                <Gift className="w-6 h-6 text-white" />
                             </div>
                             <h3 className="text-2xl font-black tracking-tight mb-2">Refer a Friend</h3>
                              <p className="text-white/70 text-sm font-medium mb-8">Share your code and earn 500 bonus points for every successful referral.</p>
                             <div className="bg-white/10 rounded-2xl p-3 sm:p-4 border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-                                <span className="font-black text-brand tracking-widest text-sm xs:text-base sm:text-lg break-all text-center sm:text-left">{loyalty.referral_code}</span>
+                                <span className="font-black text-white tracking-widest text-sm xs:text-base sm:text-lg break-all text-center sm:text-left">{loyalty.referral_code}</span>
                                 <motion.button
-                                    whileHover={{ scale: 1.1, backgroundColor: 'rgba(255, 159, 28, 1)', color: '#3d2b1f' }}
+                                    whileHover={{ scale: 1.1, backgroundColor: '#F58634', color: '#fff' }}
                                     whileTap={{ scale: 0.9 }}
                                     onClick={handleCopyReferral}
                                     className="w-full sm:w-10 h-10 bg-white/10 text-white rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer"

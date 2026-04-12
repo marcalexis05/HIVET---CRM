@@ -3,20 +3,12 @@ import DashboardLayout from '../../components/DashboardLayout';
 import { motion } from 'framer-motion';
 import { Store, Users, Bike, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import { X, Mail, Calendar, Hash, TrendingUp, PieChart as PieIcon, Activity } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
 
-interface OnboardingUser {
-    id: string;
-    name: string;
-    status: string;
-    time: string;
-}
 
 const AdminDashboard = () => {
     const { user, isLoading: authLoading } = useAuth();
-    const navigate = useNavigate();
     const [stats, setStats] = useState({ 
         partners: 0, 
         partners_trend: '+0',
@@ -35,11 +27,6 @@ const AdminDashboard = () => {
     });
     const [selectedStat, setSelectedStat] = useState<any>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [onboarding, setOnboarding] = useState<{
-        partners: OnboardingUser[];
-        riders: OnboardingUser[];
-        customers: OnboardingUser[];
-    }>({ partners: [], riders: [], customers: [] });
     const [analytics, setAnalytics] = useState<{
         growth: any[];
         distribution: any[];
@@ -55,11 +42,8 @@ const AdminDashboard = () => {
             if (!token) return;
 
             try {
-                const [statsRes, onboardingRes, analyticsRes] = await Promise.all([
+                const [statsRes, analyticsRes] = await Promise.all([
                     fetch('http://localhost:8000/api/admin/dashboard-stats', {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    }),
-                    fetch('http://localhost:8000/api/admin/recent-onboarding', {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
                     fetch('http://localhost:8000/api/admin/analytics', {
@@ -67,12 +51,10 @@ const AdminDashboard = () => {
                     })
                 ]);
 
-                if (statsRes.ok && onboardingRes.ok && analyticsRes.ok) {
+                if (statsRes.ok && analyticsRes.ok) {
                     const statsData = await statsRes.json();
-                    const onboardingData = await onboardingRes.json();
                     const analyticsData = await analyticsRes.json();
                     setStats(statsData);
-                    setOnboarding(onboardingData);
                     setAnalytics(analyticsData);
                 }
             } catch (err) {

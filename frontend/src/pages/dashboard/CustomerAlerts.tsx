@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Gift, Info, CheckCircle2, Bell } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Gift, Info, Bell, CheckCircle2, Trash2, BellOff } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useNavigate } from 'react-router-dom';
 
@@ -25,9 +25,7 @@ const CustomerAlerts = () => {
         }
     };
 
-    useEffect(() => {
-        fetchNotifications();
-    }, []);
+    useEffect(() => { fetchNotifications(); }, []);
 
     const markAsRead = async (id: number) => {
         const token = localStorage.getItem('hivet_token');
@@ -37,9 +35,7 @@ const CustomerAlerts = () => {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-        } catch (err) {
-            console.error('Failed to mark read:', err);
-        }
+        } catch (err) { console.error(err); }
     };
 
     const markAllAsRead = async () => {
@@ -50,9 +46,7 @@ const CustomerAlerts = () => {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-        } catch (err) {
-            console.error('Failed to mark all read:', err);
-        }
+        } catch (err) { console.error(err); }
     };
 
     const deleteNotification = async (id: number) => {
@@ -62,12 +56,8 @@ const CustomerAlerts = () => {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (res.ok) {
-                setNotifications(prev => prev.filter(n => n.id !== id));
-            }
-        } catch (err) {
-            console.error('Failed to delete notification:', err);
-        }
+            if (res.ok) setNotifications(prev => prev.filter(n => n.id !== id));
+        } catch (err) { console.error(err); }
     };
 
     const deleteAllNotifications = async () => {
@@ -77,17 +67,15 @@ const CustomerAlerts = () => {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (res.ok) {
-                setNotifications([]);
-            }
-        } catch (err) {
-            console.error('Failed to delete all notifications:', err);
-        }
+            if (res.ok) setNotifications([]);
+        } catch (err) { console.error(err); }
     };
 
     const filteredAlerts = filter === 'all'
         ? notifications
         : notifications.filter(n => !n.read);
+
+    const unreadCount = notifications.filter(n => !n.read).length;
 
     const getIcon = (type: string) => {
         switch (type) {
@@ -98,116 +86,153 @@ const CustomerAlerts = () => {
         }
     };
 
-    const getColor = (type: string) => {
+    const getIconStyle = (type: string) => {
         switch (type) {
-            case 'System': return 'bg-brand text-brand-dark';
-            case 'Promo': return 'bg-orange-400 text-white';
-            case 'Reminder': return 'bg-blue-400 text-white';
-            default: return 'bg-accent-brown/10 text-accent-brown';
+            case 'System': return 'bg-brand text-white shadow-lg shadow-brand/30';
+            case 'Promo': return 'bg-orange-500 text-white shadow-lg shadow-orange-500/30';
+            case 'Reminder': return 'bg-blue-500 text-white shadow-lg shadow-blue-500/30';
+            default: return 'bg-accent-brown/20 text-accent-brown';
         }
     };
 
     return (
-        <DashboardLayout title="Alert Center">
-            <div className="max-w-4xl mx-auto space-y-6">
+        <DashboardLayout title="">
+            <div className="max-w-3xl mx-auto space-y-6">
 
-                {/* Header Controls */}
-                <div className="flex items-center justify-between pb-4 border-b border-accent-brown/10">
-                    <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest">
-                        <button
-                            onClick={() => setFilter('all')}
-                            className={`px-4 py-2 rounded-full border transition-all cursor-pointer ${filter === 'all' ? 'bg-brand/10 border-brand/20 text-brand-dark' : 'text-accent-brown/40 hover:text-accent-brown'}`}
-                        >
-                            All Alerts ({notifications.length})
-                        </button>
-                        <button
-                            onClick={() => setFilter('unread')}
-                            className={`px-4 py-2 rounded-full border transition-all cursor-pointer ${filter === 'unread' ? 'bg-brand/10 border-brand/20 text-brand-dark' : 'text-accent-brown/40 hover:text-accent-brown'}`}
-                        >
-                            Unread ({notifications.filter(n => !n.read).length})
-                        </button>
+                {/* Filter + Actions bar */}
+                <div className="flex items-center justify-between pb-5 border-b-2 border-accent-brown/10">
+                    {/* Filter pills */}
+                    <div className="flex items-center gap-2">
+                        {(['all', 'unread'] as const).map(f => (
+                            <button
+                                key={f}
+                                onClick={() => setFilter(f)}
+                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer border ${
+                                    filter === f
+                                        ? 'bg-brand text-white border-brand shadow-md shadow-brand/20'
+                                        : 'bg-white border-accent-brown/15 text-accent-brown/50 hover:border-brand/30 hover:text-brand'
+                                }`}
+                            >
+                                {f === 'all' ? `All (${notifications.length})` : `Unread (${unreadCount})`}
+                            </button>
+                        ))}
                     </div>
-                    <div className="flex items-center gap-4">
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-3">
                         <button
                             onClick={markAllAsRead}
-                            className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-brand-dark transition-colors flex items-center gap-2 cursor-pointer"
+                            className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-accent-brown transition-colors flex items-center gap-1.5 cursor-pointer"
                         >
                             <CheckCircle2 className="w-3.5 h-3.5" /> Mark all read
                         </button>
+                        <div className="w-px h-4 bg-accent-brown/15" />
                         <button
                             onClick={deleteAllNotifications}
-                            className="text-[10px] font-black uppercase tracking-widest text-red-400/60 hover:text-red-500 transition-colors flex items-center gap-2 cursor-pointer"
+                            className="text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-600 transition-colors flex items-center gap-1.5 cursor-pointer"
                         >
-                            <Bell className="w-3.5 h-3.5 rotate-[15deg]" /> Clear All
+                            <Trash2 className="w-3.5 h-3.5" /> Clear All
                         </button>
                     </div>
                 </div>
 
                 {/* Alerts List */}
-                <div className="space-y-4">
-                    {filteredAlerts.length === 0 ? (
-                        <div className="py-20 text-center bg-white/50 rounded-[2rem] border-2 border-dashed border-accent-brown/10">
-                            <Bell className="w-12 h-12 text-accent-brown/10 mx-auto mb-4" />
-                            <p className="text-sm font-bold text-accent-brown/40 uppercase tracking-widest">No alerts to show</p>
-                        </div>
-                    ) : (
-                        filteredAlerts.map((alert, i) => {
-                            const Icon = getIcon(alert.type);
-                            return (
-                                <motion.div
-                                    key={alert.id}
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: i * 0.05 }}
-                                    onClick={() => {
-                                        if (!alert.read) markAsRead(alert.id);
-                                        if (alert.link) navigate(alert.link);
-                                    }}
-                                    className={`p-6 rounded-[2rem] flex flex-col sm:flex-row sm:items-center justify-between gap-6 cursor-pointer transition-all border ${alert.read
-                                        ? 'bg-transparent border-accent-brown/5 hover:bg-white'
-                                        : 'bg-white border-brand/20 shadow-xl shadow-brand/5'
+                <div className="space-y-3">
+                    <AnimatePresence mode="popLayout">
+                        {filteredAlerts.length === 0 ? (
+                            <motion.div
+                                key="empty"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="py-24 text-center bg-white rounded-[2rem] border-2 border-dashed border-accent-brown/10"
+                            >
+                                <div className="w-16 h-16 bg-brand-dark/5 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                    <BellOff className="w-8 h-8 text-brand-dark/20" />
+                                </div>
+                                <p className="text-sm font-black text-brand-dark/30 uppercase tracking-widest">No alerts to show</p>
+                                <p className="text-xs text-brand-dark/20 font-medium mt-1">You're all caught up!</p>
+                            </motion.div>
+                        ) : (
+                            filteredAlerts.map((alert, i) => {
+                                const Icon = getIcon(alert.type);
+                                return (
+                                    <motion.div
+                                        key={alert.id}
+                                        layout
+                                        initial={{ opacity: 0, y: 16 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, x: -30 }}
+                                        transition={{ delay: i * 0.04 }}
+                                        onClick={() => {
+                                            if (!alert.read) markAsRead(alert.id);
+                                            if (alert.link) navigate(alert.link);
+                                        }}
+                                        className={`group relative p-5 rounded-2xl flex items-start sm:items-center justify-between gap-5 cursor-pointer transition-all border-2 ${
+                                            alert.read
+                                                ? 'bg-white border-accent-brown/[0.08] hover:border-accent-brown/20 hover:shadow-md hover:shadow-accent-brown/5'
+                                                : 'bg-white border-brand/25 shadow-lg shadow-brand/[0.08]'
                                         }`}
-                                >
-                                    <div className="flex items-start gap-5">
-                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${getColor(alert.type)}`}>
-                                            <Icon className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-3 mb-1.5">
-                                                <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full ${alert.read ? 'bg-accent-brown/5 text-accent-brown/40' : 'bg-brand/10 text-brand-dark'
-                                                    }`}>
-                                                    {alert.type}
-                                                </span>
-                                                {!alert.read && <span className="w-2 h-2 rounded-full bg-brand"></span>}
-                                            </div>
-                                            <h3 className={`text-lg font-black tracking-tight mb-1 ${alert.read ? 'text-accent-brown/60' : 'text-accent-brown'}`}>
-                                                {alert.title}
-                                            </h3>
-                                            <p className={`text-sm font-medium ${alert.read ? 'text-accent-brown/40' : 'text-accent-brown/70'}`}>
-                                                {alert.desc}
-                                            </p>
-                                        </div>
-                                    </div>
+                                    >
+                                        {/* Unread left strip */}
+                                        {!alert.read && (
+                                            <div className="absolute left-0 top-4 bottom-4 w-1 bg-brand rounded-r-full" />
+                                        )}
 
-                                    <div className="flex flex-col items-end gap-3 pl-[68px] sm:pl-0 shrink-0">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 whitespace-nowrap">
-                                            {new Date(alert.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                                        </span>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                deleteNotification(alert.id);
-                                            }}
-                                            className="w-10 h-10 rounded-2xl bg-accent-peach/20 hover:bg-red-50 text-accent-brown/20 hover:text-red-500 flex items-center justify-center transition-all shadow-sm cursor-pointer"
-                                            title="Remove Notification"
-                                        >
-                                            <Bell className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </motion.div>
-                            );
-                        })
-                    )}
+                                        <div className="flex items-start gap-4 flex-1 min-w-0 pl-2">
+                                            {/* Icon */}
+                                            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${getIconStyle(alert.type)}`}>
+                                                <Icon className="w-5 h-5" />
+                                            </div>
+
+                                            {/* Content */}
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full ${
+                                                        alert.read
+                                                            ? 'bg-accent-brown/[0.08] text-accent-brown/40'
+                                                            : 'bg-brand/15 text-brand-dark'
+                                                    }`}>
+                                                        {alert.type}
+                                                    </span>
+                                                    {!alert.read && (
+                                                        <span className="w-2 h-2 rounded-full bg-brand shrink-0" />
+                                                    )}
+                                                </div>
+                                                <h3 className={`font-black tracking-tight text-base leading-snug mb-0.5 ${
+                                                    alert.read ? 'text-brand-dark/50' : 'text-brand-dark'
+                                                }`}>
+                                                    {alert.title}
+                                                </h3>
+                                                <p className={`text-sm font-medium leading-relaxed ${
+                                                    alert.read ? 'text-accent-brown/35' : 'text-accent-brown/65'
+                                                }`}>
+                                                    {alert.desc}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Right: date + delete */}
+                                        <div className="flex flex-col items-end gap-2 shrink-0">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 whitespace-nowrap">
+                                                {new Date(alert.created_at).toLocaleDateString(undefined, {
+                                                    month: 'short', day: 'numeric', year: 'numeric'
+                                                })}
+                                            </span>
+                                            <motion.button
+                                                whileHover={{ scale: 1.1 }}
+                                                whileTap={{ scale: 0.9 }}
+                                                onClick={(e) => { e.stopPropagation(); deleteNotification(alert.id); }}
+                                                className="w-8 h-8 rounded-xl bg-accent-brown/5 hover:bg-red-50 text-accent-brown/25 hover:text-red-500 flex items-center justify-center transition-all cursor-pointer opacity-0 group-hover:opacity-100"
+                                                title="Remove"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </motion.button>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })
+                        )}
+                    </AnimatePresence>
                 </div>
 
             </div>

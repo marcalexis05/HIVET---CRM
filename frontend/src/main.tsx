@@ -8,7 +8,7 @@ const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <APIProvider apiKey={API_KEY} libraries={['places', 'geocoding']}>
+    <APIProvider apiKey={API_KEY} libraries={['places', 'geocoding', 'marker']}>
       <App />
     </APIProvider>
   </StrictMode>,

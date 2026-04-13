@@ -1,53 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-    ShoppingCart, Star, ChevronRight, CheckCircle2, Award, 
-    Loader2, Navigation2, Ruler, ExternalLink,
-    Store, User, Minus, Plus
+    ShoppingCart, Star, ChevronRight, ChevronLeft, CheckCircle2, Award, 
+    Loader2, ExternalLink,
+    Store, User, Minus, Plus, MessageSquare, Send, Camera, X, MapPin
 } from 'lucide-react';
-import { APIProvider, Map, useMap, AdvancedMarker } from '@vis.gl/react-google-maps';
+import { Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import DashboardLayout from '../../components/DashboardLayout';
+import ModernModal from '../../components/ModernModal';
 import { useCart } from '../../context/CartContext';
-
-const DirectionsLine = ({ userLat, userLng, clinicLat, clinicLng }: { userLat: number | null, userLng: number | null, clinicLat: number, clinicLng: number }) => {
-    const map = useMap();
-    useEffect(() => {
-        const maps = (window as any).google.maps;
-        if (!maps || !map || !userLat || !userLng) return;
-
-        const renderer = new maps.DirectionsRenderer({
-            map: map,
-            suppressMarkers: true,
-            polylineOptions: {
-                strokeColor: '#F58634',
-                strokeWeight: 6,
-                strokeOpacity: 0.8
-            }
-        });
-
-        const service = new maps.DirectionsService();
-        service.route(
-            {
-                origin: { lat: userLat, lng: userLng },
-                destination: { lat: clinicLat, lng: clinicLng },
-                travelMode: maps.TravelMode.DRIVING
-            },
-            (result: any, status: any) => {
-                if (status === 'OK') {
-                    renderer.setDirections(result);
-                }
-            }
-        );
-
-        return () => {
-            renderer.setMap(null);
-        };
-    }, [map, userLat, userLng, clinicLat, clinicLng]);
-
-    return null;
-};
+import { useAuth } from '../../context/AuthContext';
 
 const ProductDetail = () => {
     const { id } = useParams();
@@ -58,33 +22,93 @@ const ProductDetail = () => {
     const [loading, setLoading] = useState(true);
     const [selectedVariant, setSelectedVariant] = useState('');
     const [selectedSize, setSelectedSize] = useState('');
+    const [activeImage, setActiveImage] = useState<string | null>(null);
     const [added, setAdded] = useState(false);
     const [userLoc, setUserLoc] = useState<{lat: number, lng: number} | null>(null);
     const [distance, setDistance] = useState<string | null>(null);
     const [showMap, setShowMap] = useState(false);
     const [quantity, setQuantity] = useState(1);
+    const [reviews, setReviews] = useState<any[]>([]);
+    const [submittingReview, setSubmittingReview] = useState(false);
+    const [newReview, setNewReview] = useState<{rating: number, comment: string, image_url: string}>({ rating: 5, comment: '', image_url: '' });
+    const [hasPurchased, setHasPurchased] = useState(false);
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+    const [selectedBranchId, setSelectedBranchId] = useState<number | null>(() => {
+        const saved = localStorage.getItem('hivet_selected_branch');
+        if (saved === 'all') return null;
+        return saved ? parseInt(saved) : null;
+    });
+    const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'info' | 'success' | 'error' | 'confirm' | 'danger'; onConfirm?: () => void }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
+    const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
+    const [allProductIds, setAllProductIds] = useState<number[]>([]);
+
+    const { user } = useAuth();
+    const token = user?.token;
+
+    const { avgRating, totalReviews } = useMemo(() => {
+        if (!reviews || reviews.length === 0) return { avgRating: 0, totalReviews: 0 };
+        const sum = reviews.reduce((acc, rev) => acc + (rev.rating || 0), 0);
+        return { 
+            avgRating: sum / reviews.length, 
+            totalReviews: reviews.length 
+        };
+    }, [reviews]);
 
     useEffect(() => {
-        const fetchProduct = async () => {
+        const fetchProductData = async () => {
             setLoading(true);
             try {
-                const resp = await fetch(`http://localhost:8000/api/catalog/${id}`);
-                if (resp.ok) {
-                    const data = await resp.json();
+                const pUrl = selectedBranchId
+                    ? `http://localhost:8000/api/catalog/${id}?branch_id=${selectedBranchId}`
+                    : `http://localhost:8000/api/catalog/${id}`;
+                    
+                const [pResp, rResp] = await Promise.all([
+                    fetch(pUrl),
+                    fetch(`http://localhost:8000/api/catalog/${id}/reviews`)
+                ]);
+                
+                if (pResp.ok) {
+                    const data = await pResp.json();
                     setProduct(data);
-                } else {
-                    setProduct(null);
+                    // Reset selection states for the new product
+                    setSelectedVariant('');
+                    setSelectedSize('');
+                    setActiveImage(null);
+                }
+                if (rResp.ok) {
+                    const revs = await rResp.json();
+                    setReviews(revs);
                 }
             } catch (err) {
                 console.error('Fetch error:', err);
-                setProduct(null);
             } finally {
                 setLoading(false);
             }
         };
-        if (id) fetchProduct();
+        if (id) fetchProductData();
 
-        // Get user location for distance calculation
+        const checkPurchaseStatus = async () => {
+            if (!token || !id) return;
+            try {
+                const resp = await fetch(`http://localhost:8000/api/orders/check-purchased/${id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    setHasPurchased(data.has_purchased === true);
+                }
+            } catch (err) {
+                console.error('Error checking purchase status:', err);
+            }
+        };
+        if (token && id) checkPurchaseStatus();
+
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
@@ -94,6 +118,29 @@ const ProductDetail = () => {
                 { enableHighAccuracy: true }
             );
         }
+    }, [id, token, selectedBranchId]);
+
+    useEffect(() => {
+        const fetchRelated = async () => {
+            try {
+                const resp = await fetch('http://localhost:8000/api/catalog/');
+                if (resp.ok) {
+                    const allProducts = await resp.json();
+                    
+                    // Store all IDs for navigation
+                    const ids = allProducts.map((p: any) => p.id);
+                    setAllProductIds(ids);
+
+                    const filtered = allProducts.filter((p: any) => String(p.id) !== String(id));
+                    // Shuffle and pick 4
+                    const shuffled = [...filtered].sort(() => 0.5 - Math.random());
+                    setRelatedProducts(shuffled.slice(0, 4));
+                }
+            } catch (err) {
+                console.error('Error fetching related products:', err);
+            }
+        };
+        fetchRelated();
     }, [id]);
 
     useEffect(() => {
@@ -118,52 +165,174 @@ const ProductDetail = () => {
         }
     }, [userLoc, product]);
 
-    const parsedVariants: {name: string, price: string, image?: string, sizes?: {name: string, price: string, stock: string}[]}[] = useMemo(() => product?.variants_json ? JSON.parse(product.variants_json) : [], [product]);
+    const parsedVariants: any[] = useMemo(() => product?.variants_json ? JSON.parse(product.variants_json) : [], [product]);
     
-    // Sizes are now either from the variant OR the base product
-    const parsedSizes: {name: string, price: string, stock: string, image?: string}[] = useMemo(() => {
+    const parsedSizes: any[] = useMemo(() => {
         if (selectedVariant) {
             const v = parsedVariants.find(v => v.name === selectedVariant);
-            return (v?.sizes || []) as {name: string, price: string, stock: string, image?: string}[];
+            return v?.sizes || [];
         }
-        return (product?.sizes_json ? JSON.parse(product.sizes_json) : []) as {name: string, price: string, stock: string, image?: string}[];
+        return product?.sizes_json ? JSON.parse(product.sizes_json) : [];
     }, [product, selectedVariant, parsedVariants]);
 
-    useEffect(() => {
-        if (product && parsedVariants.length > 0 && !selectedVariant) {
-            // Only auto-select if nothing is selected and we haven't manually cleared it
-        }
-    }, [product, parsedVariants]);
-
-    // Set initial selections once when product is loaded
-    useEffect(() => {
-        if (product) {
-            if (parsedVariants.length > 0) setSelectedVariant(parsedVariants[0].name);
-            if (product.sizes_json) {
-                const sizes = JSON.parse(product.sizes_json);
-                if (sizes.length > 0) setSelectedSize(sizes[0].name);
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingImage(true);
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const resp = await fetch('http://localhost:8000/api/business/upload-product-image', {
+                method: 'POST',
+                body: formData
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                setNewReview(prev => ({ ...prev, image_url: data.url }));
             }
+        } catch (err) {
+            console.error('Upload error:', err);
+        } finally {
+            setUploadingImage(false);
         }
-    }, [product]);
+    };
+
+    const handleReviewSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!token) return;
+        setSubmittingReview(true);
+        try {
+            const resp = await fetch(`http://localhost:8000/api/catalog/${id}/reviews`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(newReview)
+            });
+            if (resp.ok) {
+                const addedReview = await resp.json();
+                setReviews([addedReview, ...reviews]);
+                setNewReview({ rating: 5, comment: '', image_url: '' });
+            } else {
+                const err = await resp.json();
+                setModal({ isOpen: true, title: 'Review Error', message: err.detail || 'Failed to post review.', type: 'error' });
+            }
+        } catch (err) {
+            console.error('Submit error:', err);
+        } finally {
+            setSubmittingReview(false);
+        }
+    };
+
+    const updateQuantityLocal = (increment: boolean) => {
+        const stock = Number(availableStock);
+        if (increment) {
+            if (quantity < stock) setQuantity(prev => prev + 1);
+        } else {
+            setQuantity(prev => Math.max(stock > 0 ? 1 : 0, prev - 1));
+        }
+    };
+
+    const handleQuantityInputChange = (val: string) => {
+        let num = parseInt(val.replace(/[^0-9]/g, ''));
+        if (isNaN(num)) num = availableStock > 0 ? 1 : 0;
+        const stock = Number(availableStock);
+        const finalNum = Math.min(Math.max(stock > 0 ? 1 : 0, num), stock);
+        setQuantity(finalNum);
+    };
+
+    // Long press logic
+    const timerRef = useRef<any>(null);
+    const intervalRef = useRef<any>(null);
+
+    const startCounter = (increment: boolean) => {
+        updateQuantityLocal(increment);
+        timerRef.current = setTimeout(() => {
+            let speed = 100;
+            const run = () => {
+                updateQuantityLocal(increment);
+                intervalRef.current = setTimeout(run, speed);
+                if (speed > 30) speed -= 10;
+            };
+            run();
+        }, 500);
+    };
+
+    const stopCounter = () => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        if (intervalRef.current) clearTimeout(intervalRef.current);
+    };
+
 
     const activeVar = parsedVariants.find(v => v.name === selectedVariant);
     const activeSiz = parsedSizes.find(s => s.name === selectedSize);
-
     const priceFromSize = activeSiz?.price && Number(activeSiz.price) > 0 ? Number(activeSiz.price) : 0;
     const priceFromVariant = activeVar?.price && Number(activeVar.price) > 0 ? Number(activeVar.price) : 0;
-    
-    // Stock level depends on selected variant and size
-    const availableStock = activeSiz ? parseInt(activeSiz.stock || '0') : (product?.stock || 0);
-    
-    const finalPrice = product ? (priceFromSize || priceFromVariant || product.price) : 0;
-    const finalImage = activeSiz?.image || activeVar?.image || product?.image;
+    const availableStock = activeSiz ? parseInt(activeSiz.stock || '0') : (Number(product?.stock) || 0);
 
-    if (loading) {
+    // Sync quantity with available stock
+    useEffect(() => {
+        const stock = Number(availableStock);
+        if (product) {
+            if (stock === 0) {
+                if (quantity !== 0) setQuantity(0);
+            } else if (quantity > stock) {
+                setQuantity(stock);
+            } else if (quantity === 0 && stock > 0) {
+                setQuantity(1);
+            }
+        }
+    }, [availableStock, product, quantity]);
+    const finalPrice = product ? (priceFromSize || priceFromVariant || product.price) : 0;
+    const finalImage = activeImage || activeSiz?.image || activeVar?.image || product?.image;
+
+    const allImages = useMemo(() => {
+        const imgs = new Set<string>();
+        if (product?.image) imgs.add(product.image);
+        parsedVariants.forEach(v => { if (v.image) imgs.add(v.image); });
+        parsedSizes.forEach(s => { if (s.image) imgs.add(s.image); });
+        return Array.from(imgs);
+    }, [product, parsedVariants, parsedSizes]);
+
+    const currentIndexImg = useMemo(() => {
+        return allImages.indexOf(finalImage);
+    }, [allImages, finalImage]);
+
+    const handleImgNav = (direction: 'next' | 'prev') => {
+        if (allImages.length <= 1) return;
+        
+        let newIndex;
+        if (direction === 'next') {
+            newIndex = (currentIndexImg + 1) % allImages.length;
+        } else {
+            newIndex = (currentIndexImg - 1 + allImages.length) % allImages.length;
+        }
+
+        const img = allImages[newIndex];
+        setActiveImage(img);
+        
+        // Try to find a matching variant or size to keep UI in sync
+        const variantMatch = parsedVariants.find(v => v.image === img);
+        if (variantMatch) setSelectedVariant(variantMatch.name);
+        
+        const sizeMatch = parsedSizes.find(s => s.image === img);
+        if (sizeMatch) setSelectedSize(sizeMatch.name);
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleSwitchBranch = (branchId: number) => {
+        localStorage.setItem('hivet_selected_branch', String(branchId));
+        setSelectedBranchId(branchId);
+    };
+
+    if (loading && !product) {
         return (
-            <DashboardLayout title="Loading Product...">
+            <DashboardLayout title="Loading...">
                 <div className="flex flex-col items-center justify-center py-40 gap-4 opacity-40">
-                    <Loader2 className="w-12 h-12 animate-spin text-brand" />
-                    <p className="font-black text-xs uppercase tracking-widest">Retrieving Premium Item...</p>
+                    <Loader2 className="w-12 h-12 animate-spin text-accent-brown" />
+                    <p className="font-black text-xs uppercase tracking-widest text-accent-brown">Syncing Details...</p>
                 </div>
             </DashboardLayout>
         );
@@ -171,11 +340,11 @@ const ProductDetail = () => {
 
     if (!product) {
         return (
-            <DashboardLayout title="Product Not Found">
-                <div className="flex flex-col items-center justify-center py-20">
+            <DashboardLayout title="Not Found">
+                <div className="flex flex-col items-center justify-center py-20 text-center">
                     <h2 className="text-2xl font-black text-accent-brown mb-4">Product Not Found</h2>
-                    <button onClick={() => navigate('/dashboard/customer/catalog')} className="bg-brand-dark text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all cursor-pointer">
-                        Return to Catalog
+                    <button onClick={() => navigate('/dashboard/customer/catalog')} className="bg-accent-brown text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all">
+                        Back to Catalog
                     </button>
                 </div>
             </DashboardLayout>
@@ -202,7 +371,7 @@ const ProductDetail = () => {
 
     const handleBuyNow = () => {
         if (!product) return;
-        addToCart({
+        const checkoutItem = {
             id: product.id,
             business_id: product.business_id,
             name: product.name,
@@ -212,335 +381,387 @@ const ProductDetail = () => {
             variant: selectedVariant,
             size: selectedSize,
             stock: availableStock
-        });
+        };
+        
+        // Add to global cart context
+        addToCart(checkoutItem);
+        
+        // Clear any old checkout state and set filter for THIS item only
+        localStorage.removeItem('hivet_checkout_paying_order');
+        localStorage.setItem('hivet_checkout_filtered', JSON.stringify([checkoutItem]));
+        
         navigate('/dashboard/customer/checkout');
     };
 
     return (
-        <DashboardLayout title="Product Details">
-            <div className="bg-white rounded-[2rem] p-8 md:p-12 shadow-xl shadow-accent-brown/5 border border-white min-h-[80vh]">
+        <DashboardLayout title="">
+            <div className="bg-white min-h-screen">
+                <div className="max-w-[1300px] mx-auto px-4 md:px-8 py-4 transition-all">
+                    
+                    {/* Navigation Trail */}
+                    <div className="flex items-center justify-between mb-6">
+                        <nav className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">
+                            <Link to="/dashboard/customer/catalog" className="hover:text-brand transition-all">Catalog</Link>
+                            <span>/</span>
+                            <span className="text-gray-900 italic uppercase">{product.category}</span>
+                            <span>/</span>
+                            <span className="text-gray-400 uppercase">{product.name}</span>
+                        </nav>
+                    </div>
 
-                {/* Breadcrumbs */}
-                <nav className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mb-10">
-                    <Link to="/dashboard/customer" className="hover:text-brand-dark transition-colors">My Hub</Link>
-                    <ChevronRight className="w-3 h-3" />
-                    <Link to="/dashboard/customer/catalog" className="hover:text-brand-dark transition-colors">Catalog</Link>
-                    <ChevronRight className="w-3 h-3" />
-                    <span className="text-brand-dark truncate">{product.name}</span>
-                </nav>
-
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 xl:gap-16">
-
-                    {/* LEFT COLUMN: Info & Actions */}
-                    <div className="lg:col-span-4 flex flex-col space-y-8">
-                        <div>
-                            <div className="inline-block bg-brand-dark text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-4">
-                                {product.tag}
-                            </div>
-                            <h1 className="text-4xl xl:text-5xl font-black text-accent-brown tracking-tighter leading-tight uppercase mb-4">
-                                {product.name}
-                            </h1>
-
-                            <div className="flex items-center gap-4 text-xs font-bold text-accent-brown/50">
-                                <div className="flex gap-1">
-                                    {[...Array(5)].map((_, i) => (
-                                        <Star key={i} className={`w-3.5 h-3.5 ${i < product.stars ? 'text-brand fill-brand' : 'text-accent-brown/20'}`} />
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+                        
+                        {/* Media Section (Left) */}
+                        <div className="lg:col-span-1">
+                            {/* Smaller Vertical Thumbs - only show if multiple unique images exist */}
+                            {allImages.length > 1 && (
+                                <div className="flex lg:flex-col gap-2">
+                                    {allImages.map((img, i) => (
+                                        <button 
+                                            key={i} 
+                                            className={`w-14 h-14 rounded-xl bg-gray-50 p-1.5 border-2 transition-all ${finalImage === img ? 'border-brand' : 'border-transparent hover:border-gray-200'}`}
+                                            onClick={() => setActiveImage(img)}
+                                        >
+                                            <img src={img} className="w-full h-full object-contain mix-blend-multiply" alt="Thumb" />
+                                        </button>
                                     ))}
                                 </div>
-                                <span>{Math.floor(Math.random() * 200) + 15} reviews</span>
-                            </div>
-
-                            <p className="text-xs font-medium text-brand-dark mt-4">
-                                As low as ₱{(Number(product.price) / 4).toFixed(2)}/month at 0% APR. <button className="underline cursor-pointer">Apply now</button>
-                            </p>
-                        </div>
-
-                        {/* Customization */}
-                        {(parsedVariants.length > 0 || parsedSizes.length > 0) && (
-                        <div className="space-y-6 pt-6 border-t border-accent-brown/10">
-                            <h3 className="text-xs font-black uppercase tracking-widest text-accent-brown">Customize:</h3>
-
-                            {parsedVariants.length > 0 && (
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-accent-brown/50 uppercase">Variant:</span>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-xs font-black text-accent-brown">{selectedVariant}</span>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => setSelectedVariant('')}
-                                            className={`w-6 h-6 rounded-full border-2 cursor-pointer ${!selectedVariant ? 'border-brand-dark' : 'border-transparent'} bg-white transition-all flex items-center justify-center text-[8px] font-black text-accent-brown`}
-                                            title="Default"
-                                        >
-                                            Ø
-                                        </button>
-                                        {parsedVariants.map(v => (
-                                            <button
-                                                key={v.name}
-                                                onClick={() => setSelectedVariant(v.name)}
-                                                className={`w-6 h-6 rounded-full border-2 cursor-pointer ${selectedVariant === v.name ? 'border-brand-dark' : 'border-transparent'} ${v.name.includes('Standard') ? 'bg-orange-100' : 'bg-orange-900'} transition-all`}
-                                                title={v.name}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                            )}
-
-                            {parsedSizes.length > 0 && (
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-accent-brown/50 uppercase">Size:</span>
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex gap-2">
-                                        {parsedSizes.map(s => (
-                                            <button
-                                                key={s.name}
-                                                onClick={() => setSelectedSize(s.name)}
-                                                className={`px-4 py-1 rounded-full border-2 text-[10px] font-black uppercase tracking-widest transition-all ${selectedSize === s.name ? 'border-brand-dark bg-brand/10 text-brand-dark' : 'border-accent-peach/30 text-accent-brown/40'}`}
-                                            >
-                                                {s.name}
-                                            </button>
-                                        ))}
-                                        {parsedSizes.length === 0 && <span className="text-[10px] font-bold text-accent-brown/20 italic">No alternative sizes</span>}
-                                    </div>
-                                    {activeSiz && (
-                                        <p className={`text-[10px] font-black uppercase tracking-widest ${parseInt(activeSiz.stock || '0') > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                            {activeSiz.stock} Items Left
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
                             )}
                         </div>
-                        )}
 
-                        {/* Price & Add to Cart */}
-                        <div className="pt-6 border-t border-accent-brown/10">
-                            <div className="flex items-center justify-between gap-4 mb-8">
-                                <div>
-                                    <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-[0.2em] mb-1 font-outfit">Total Investment</p>
-                                    <h4 className="text-4xl font-black text-accent-brown tracking-tighter">₱{finalPrice}</h4>
-                                    <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${availableStock > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                        {availableStock > 0 ? `${availableStock} units available` : 'Out of stock'}
-                                    </p>
-                                </div>
-                                <div className="text-right">
-                                    <div className="flex items-center gap-1.5 text-brand bg-brand/5 px-3 py-1.5 rounded-full border border-brand/10">
-                                        <Award className="w-4 h-4" />
-                                        <span className="text-[10px] font-black tracking-widest uppercase">Earn {product?.loyalty_points || 0} Points</span>
+                        <div className="lg:col-span-6">
+                            <div className="aspect-square bg-white rounded-3xl overflow-hidden flex items-center justify-center p-6 relative group border border-gray-100 shadow-sm">
+                                <motion.img
+                                    key={finalImage}
+                                    initial={{ opacity: 0, scale: 0.98 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    src={finalImage}
+                                    alt={product.name}
+                                    className="w-full h-full object-contain"
+                                />
+                                
+                                {/* Professional Tag Layout */}
+                                {product.tag && (
+                                    <div className="absolute top-6 left-6 flex flex-col items-start gap-1.5">
+                                        <div className="bg-brand text-white px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-brand/20 flex items-center gap-2">
+                                            {product.tag}
+                                        </div>
+                                        <div className="bg-white/80 backdrop-blur-md text-accent-brown px-3 py-1 text-[7px] font-black uppercase tracking-widest rounded-full border border-accent-brown/5 shadow-sm">
+                                            {product.type} / {product.category}
+                                        </div>
                                     </div>
-                                    <p className="text-[8px] font-bold text-accent-brown/40 uppercase mt-2 tracking-widest">Hivet Rewards Program</p>
-                                </div>
-                            </div>
+                                )}
 
-                            {/* CTAs */}
-                            <div className="flex flex-col gap-4">
-                                <div className="flex items-center gap-4 bg-accent-peach/10 p-3 rounded-2xl border border-accent-peach/20 w-fit">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 ml-2">Quantity:</span>
-                                    <div className="flex items-center gap-4 bg-white rounded-xl p-1 shadow-sm border border-accent-brown/5">
-                                        <button
-                                            onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                                            className="w-8 h-8 rounded-lg flex items-center justify-center text-accent-brown hover:bg-accent-peach/20 transition-colors"
-                                        >
-                                            <Minus className="w-3.5 h-3.5" />
-                                        </button>
-                                        <span className="text-sm font-black text-brand-dark min-w-[20px] text-center">{quantity}</span>
-                                        <button
-                                            onClick={() => setQuantity(Math.min(availableStock, quantity + 1))}
-                                            className="w-8 h-8 rounded-lg flex items-center justify-center text-accent-brown hover:bg-accent-peach/20 transition-colors"
-                                        >
-                                            <Plus className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
-                                    {quantity >= availableStock && availableStock > 0 && (
-                                        <span className="text-[8px] font-black text-red-500 uppercase tracking-tighter animate-pulse">Max Stock Reached</span>
-                                    )}
-                                </div>
-
-                                <div className="flex flex-col sm:flex-row gap-4 text-nowrap">
-                                    <button
-                                        disabled={availableStock <= 0 || quantity > availableStock}
-                                        onClick={handleBuyNow}
-                                        className={`flex-1 py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-colors shadow-lg text-center cursor-pointer ${(availableStock > 0 && quantity <= availableStock) ? "bg-brand-dark hover:bg-black text-white shadow-brand-dark/20" : "bg-accent-brown/20 text-accent-brown/50 cursor-not-allowed"}`}
+                                {/* Floating Navigation Arrows */}
+                                <div className="absolute inset-y-0 left-4 right-4 flex items-center justify-between pointer-events-none">
+                                    <button 
+                                        onClick={() => handleImgNav('prev')}
+                                        className="w-10 h-10 rounded-full bg-white/40 backdrop-blur-md border border-white/50 flex items-center justify-center text-accent-brown hover:bg-white hover:scale-110 transition-all pointer-events-auto shadow-xl"
                                     >
-                                        {availableStock > 0 ? (quantity > availableStock ? "Exceeds Stock" : "Buy Now") : "Sold Out"}
+                                        <ChevronLeft className="w-5 h-5" />
                                     </button>
-                                    <div className="flex flex-1 gap-4">
-                                        <button
-                                            disabled={availableStock <= 0 || quantity > availableStock}
-                                            onClick={handleAddToCart}
-                                            className={`flex-1 py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer ${(availableStock > 0 && quantity <= availableStock) ? (added ? 'bg-green-500 text-white shadow-green-500/20' : 'bg-brand hover:bg-orange-500 text-white shadow-brand/20') : "bg-accent-brown/20 text-accent-brown/50 cursor-not-allowed"}`}
-                                        >
-                                            {added ? (
-                                                <>
-                                                    <CheckCircle2 className="w-4 h-4" />
-                                                    Added!
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <ShoppingCart className="w-4 h-4" />
-                                                    {(availableStock > 0 && quantity <= availableStock) ? "Add to Cart" : (availableStock <= 0 ? "Out of Stock" : "Exceeds Stock")}
-                                                </>
-                                            )}
-                                        </button>
+                                    <button 
+                                        onClick={() => handleImgNav('next')}
+                                        className="w-10 h-10 rounded-full bg-white/40 backdrop-blur-md border border-white/50 flex items-center justify-center text-accent-brown hover:bg-white hover:scale-110 transition-all pointer-events-auto shadow-xl"
+                                    >
+                                        <ChevronRight className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <div className="absolute bottom-6 right-6 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-gray-100 flex items-center gap-2 shadow-sm">
+                                    <Star className="w-3 h-3 text-brand fill-brand" />
+                                    <span className="text-[10px] font-black text-accent-brown tabular-nums">{avgRating.toFixed(1)}</span>
+                                    <span className="text-[9px] font-bold text-gray-300">({totalReviews})</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Intelligence & Actions (Right) */}
+                        <div className="lg:col-span-5 space-y-6">
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-7 h-7 rounded-full bg-accent-brown/5 flex items-center justify-center text-accent-brown">
+                                            <Store className="w-3.5 h-3.5" />
+                                        </div>
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">{product.clinic_name}</span>
                                     </div>
+                                    <span className="text-[8px] font-bold text-accent-brown uppercase tracking-widest">ID: {product.sku || 'HIVET-00'}</span>
+                                </div>
+
+                                <h1 className="text-3xl font-black text-accent-brown tracking-tighter uppercase italic leading-[0.9]">
+                                    {product.name}
+                                </h1>
+
+                                <p className="text-xs font-medium text-gray-400 leading-snug max-w-sm italic">
+                                    "{product.description}"
+                                </p>
+
+                                <div className="pt-4 border-t border-gray-50 flex flex-col">
+                                    <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1">Recommended Value</span>
+                                    <span className="text-4xl font-black text-accent-brown tracking-tighter tabular-nums">₱{finalPrice.toLocaleString()}</span>
                                 </div>
                             </div>
 
-                            {/* Clinic Identity Card */}
-                            {product.clinic_name && (
-                                <div className="mt-8 p-6 bg-accent-peach/10 rounded-[2rem] border border-accent-peach/20 space-y-4">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-brand-dark rounded-xl flex items-center justify-center text-white shadow-lg">
-                                                <Store className="w-5 h-5" />
-                                            </div>
-                                            <div>
-                                                <h4 className="text-xs font-black uppercase tracking-tight text-accent-brown">{product.clinic_name}</h4>
-                                                <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest">{product.clinic_phone || 'Contact Private'}</p>
+                            <div className="space-y-8">
+                                {/* Sizes */}
+                                {parsedSizes.length > 0 && (
+                                    <div className="space-y-4">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown">Unit Selection</span>
+                                        <div className="grid grid-cols-5 gap-3">
+                                            {parsedSizes.map((s: any) => (
+                                                <button 
+                                                    key={s.name} 
+                                                    onClick={() => {
+                                                    setSelectedSize(s.name);
+                                                    if (s.image) setActiveImage(s.image);
+                                                }}
+                                                    className={`h-12 border-2 rounded-xl flex items-center justify-center text-[10px] font-black transition-all ${selectedSize === s.name ? 'bg-accent-brown border-accent-brown text-white shadow-xl' : 'bg-white border-gray-100 text-gray-400 hover:border-brand hover:text-brand'}`}
+                                                >
+                                                    {s.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {/* Market Console */}
+                                <div className="pt-4 space-y-4">
+                                    <div className="flex gap-4 items-center">
+                                        <div className="flex bg-accent-brown/5 rounded-2xl p-1 border border-accent-brown/5">
+                                            <button 
+                                                onMouseDown={() => startCounter(false)}
+                                                onMouseUp={stopCounter}
+                                                onMouseLeave={stopCounter}
+                                                onTouchStart={() => startCounter(false)}
+                                                onTouchEnd={stopCounter}
+                                                className="w-10 h-10 flex items-center justify-center text-accent-brown/20 hover:text-brand transition-colors select-none"
+                                            >
+                                                <Minus className="w-4 h-4" />
+                                            </button>
+                                            <input 
+                                                type="text"
+                                                inputMode="numeric"
+                                                value={quantity}
+                                                onChange={(e) => handleQuantityInputChange(e.target.value)}
+                                                className="w-10 h-10 bg-transparent text-center text-sm font-black text-accent-brown outline-none"
+                                            />
+                                            <button 
+                                                onMouseDown={() => startCounter(true)}
+                                                onMouseUp={stopCounter}
+                                                onMouseLeave={stopCounter}
+                                                onTouchStart={() => startCounter(true)}
+                                                onTouchEnd={stopCounter}
+                                                className="w-10 h-10 flex items-center justify-center text-accent-brown/20 hover:text-brand transition-colors select-none"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        <div className="flex-1 flex gap-3">
+                                            <button 
+                                                disabled={availableStock <= 0}
+                                                onClick={handleBuyNow}
+                                                className="flex-1 h-14 bg-brand text-white rounded-xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-black transition-all shadow-xl shadow-brand/10 active:scale-[0.98] disabled:bg-gray-100 disabled:text-gray-300"
+                                            >
+                                                Checkout Now
+                                                <ChevronRight className="w-4 h-4" />
+                                            </button>
+                                            <button 
+                                                onClick={handleAddToCart}
+                                                className={`w-14 h-14 border-2 rounded-xl flex items-center justify-center transition-all active:scale-95 ${added ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-white border-gray-100 text-accent-brown hover:border-brand hover:text-brand shadow-sm'}`}
+                                            >
+                                                {added ? <CheckCircle2 className="w-5 h-5 animate-pulse" /> : <ShoppingCart className="w-5 h-5" />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[8px] font-black uppercase tracking-[0.2em] text-accent-brown">
+                                        <div className={`w-1.5 h-1.5 rounded-full ${availableStock > 0 ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                                        <span>{availableStock > 0 ? `${availableStock} Precise Units Available` : 'Sold Out Globally'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Logistics & Branch Insights */}
+                    <div className="mt-20 border-t border-gray-50 pt-10">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                            <div className="space-y-6">
+                                <div className="space-y-1">
+                                    <h2 className="text-2xl font-black text-accent-brown tracking-tighter uppercase italic leading-none">Branch Logistics</h2>
+                                    <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">Physical verification points</p>
+                                </div>
+                                <div className="grid grid-cols-1 gap-3">
+                                    {(product.branch_availability || []).map((branch: any) => (
+                                        <div 
+                                            key={branch.branch_id} 
+                                            onClick={() => handleSwitchBranch(branch.branch_id)}
+                                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${selectedBranchId === branch.branch_id ? 'border-brand bg-brand/5 shadow-md' : 'border-gray-50 bg-gray-50/30 hover:border-gray-200'}`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedBranchId === branch.branch_id ? 'bg-brand text-white shadow-lg' : 'bg-white text-gray-300'}`}>
+                                                        <Store className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-black text-accent-brown uppercase tracking-tight">{branch.name}</p>
+                                                        <p className="text-[8px] font-black text-accent-brown uppercase tracking-widest mt-0.5">{branch.stock} Units Stocked</p>
+                                                    </div>
+                                                </div>
+                                                <ChevronRight className={`w-3.5 h-3.5 ${selectedBranchId === branch.branch_id ? 'text-brand' : 'text-gray-100'}`} />
                                             </div>
                                         </div>
-                                        {distance && (
-                                            <div className="flex flex-col items-end">
-                                                <div className="flex items-center gap-1 text-brand">
-                                                    <Ruler className="w-3 h-3" />
-                                                    <span className="text-[10px] font-black">{distance}</span>
-                                                </div>
-                                                <span className="text-[8px] font-bold text-accent-brown/30 uppercase tracking-widest leading-none">Your Location</span>
-                                            </div>
-                                        )}
-                                    </div>
+                                    ))}
+                                </div>
+                            </div>
 
-                                    <div className="grid grid-cols-1 gap-3">
+                            <div className="aspect-[16/10] bg-gray-50 rounded-[2rem] overflow-hidden border border-gray-100 shadow-inner relative">
+                                <Map
+                                    style={{ width: '100%', height: '100%' }}
+                                    defaultCenter={{ lat: product.clinic_lat || 14.5995, lng: product.clinic_lng || 120.9842 }}
+                                    defaultZoom={15}
+                                    gestureHandling={'greedy'}
+                                    disableDefaultUI={true}
+                                    mapId="f1966a3666683884"
+                                >
+                                    {product.clinic_lat && (
+                                        <AdvancedMarker position={{ lat: product.clinic_lat, lng: product.clinic_lng }}>
+                                            <div className="w-9 h-9 bg-brand rounded-xl flex items-center justify-center text-white shadow-2xl border-2 border-white">
+                                                <Store className="w-4 h-4" />
+                                            </div>
+                                        </AdvancedMarker>
+                                    )}
+                                    {userLoc && (
+                                        <AdvancedMarker position={userLoc}>
+                                            <div className="w-7 h-7 bg-blue-500 rounded-full flex items-center justify-center text-white shadow-2xl border-[3px] border-white">
+                                                <User className="w-3.5 h-3.5" />
+                                            </div>
+                                        </AdvancedMarker>
+                                    )}
+                                </Map>
+                                {distance && (
+                                    <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-md p-4 rounded-xl shadow-xl flex items-center justify-between border border-gray-100">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center">
+                                                <MapPin className="w-4 h-4" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[8px] font-black text-gray-300 uppercase tracking-[0.2em]">Travel Distance</p>
+                                                <p className="text-xs font-black text-accent-brown">{distance}</p>
+                                            </div>
+                                        </div>
                                         <button 
-                                            onClick={() => setShowMap(!showMap)}
-                                            className="flex items-center justify-center gap-2 py-3 bg-white border border-brand/20 rounded-xl text-[9px] font-black uppercase tracking-widest text-brand-dark hover:bg-brand hover:text-white transition-all shadow-sm"
+                                            onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&origin=${userLoc?.lat},${userLoc?.lng}&destination=${product.clinic_lat},${product.clinic_lng}`, '_blank')}
+                                            className="h-8 px-4 bg-accent-brown text-white rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-black transition-all"
                                         >
-                                            <Navigation2 className={`w-3 h-3 ${showMap ? 'rotate-180' : ''} transition-transform`} />
-                                            {showMap ? 'Hide Map' : 'Show Map'}
+                                            Route Plan
                                         </button>
                                     </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
 
-                                    <AnimatePresence>
-                                        {showMap && product.clinic_lat && product.clinic_lng && (
-                                            <motion.div 
-                                                initial={{ height: 0, opacity: 0 }}
-                                                animate={{ height: 280, opacity: 1 }}
-                                                exit={{ height: 0, opacity: 0 }}
-                                                className="overflow-hidden rounded-2xl relative border border-brand/10"
-                                            >
-                                                <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
-                                                    <Map
-                                                        style={{ width: '100%', height: '100%' }}
-                                                        defaultCenter={{ lat: product.clinic_lat, lng: product.clinic_lng }}
-                                                        defaultZoom={15}
-                                                        gestureHandling={'greedy'}
-                                                        disableDefaultUI={true}
-                                                        mapId="f1966a3666683884" // Added Map ID to fix AdvancedMarker issues
-                                                    >
-                                                        <AdvancedMarker position={{ lat: product.clinic_lat, lng: product.clinic_lng }}>
-                                                            <div className="w-8 h-8 bg-brand-dark rounded-lg flex items-center justify-center text-white shadow-2xl border-2 border-white ring-4 ring-brand/20">
-                                                                <Store className="w-4 h-4" />
-                                                            </div>
-                                                        </AdvancedMarker>
+                    {/* Community Intelligence & Reviews */}
+                    <div className="mt-20 border-t border-gray-50 pt-10">
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="space-y-1">
+                                <h2 className="text-3xl font-black text-accent-brown tracking-tighter uppercase italic leading-none">Customer Review</h2>
+                                <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">Global Customer Feedback</p>
+                            </div>
+                            <div className="flex items-baseline gap-3">
+                                <span className="text-5xl font-black text-brand italic">{avgRating.toFixed(1)}</span>
+                                <div className="space-y-0.5">
+                                    <div className="flex text-yellow-400 gap-0.5">
+                                        {[1, 2, 3, 4, 5].map(s => <Star key={s} className="w-3.5 h-3.5 fill-current" />)}
+                                    </div>
+                                    <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest">{totalReviews} Customer Reviews</p>
+                                </div>
+                            </div>
+                        </div>
 
-                                                        {userLoc && (
-                                                            <>
-                                                                <AdvancedMarker position={userLoc}>
-                                                                    <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white shadow-2xl border-2 border-white">
-                                                                        <User className="w-3 h-3" />
-                                                                    </div>
-                                                                </AdvancedMarker>
-                                                                <DirectionsLine 
-                                                                    userLat={userLoc.lat} 
-                                                                    userLng={userLoc.lng} 
-                                                                    clinicLat={product.clinic_lat} 
-                                                                    clinicLng={product.clinic_lng} 
-                                                                />
-                                                            </>
-                                                        )}
-                                                    </Map>
-                                                </APIProvider>
-                                                
-                                                <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
-                                                    <button 
-                                                        onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&origin=${userLoc?.lat},${userLoc?.lng}&destination=${product.clinic_lat},${product.clinic_lng}&travelmode=driving`, '_blank')}
-                                                        className="bg-white/90 backdrop-blur-md p-2 rounded-lg shadow-lg border border-brand/20 text-brand-dark hover:bg-brand transition-all"
-                                                        title="Open in Google Maps"
-                                                    >
-                                                        <ExternalLink className="w-4 h-4" />
-                                                    </button>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {reviews.map((rev) => (
+                                <div key={rev.id} className="bg-gray-50/50 p-6 rounded-[1.5rem] border border-gray-50 flex flex-col gap-4 relative overflow-hidden group hover:bg-white hover:border-brand/10 hover:shadow-lg transition-all duration-500">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center font-black text-gray-300 text-xs shadow-sm border border-gray-50">
+                                                {rev.customer_name?.[0]}
+                                            </div>
+                                            <div>
+                                                <h5 className="text-xs font-black text-accent-brown uppercase tracking-tight">{rev.customer_name}</h5>
+                                                <div className="flex text-yellow-400 mt-0.5 gap-0.5">
+                                                    {[...Array(5)].map((_, si) => <Star key={si} className={`w-2.5 h-2.5 ${si < rev.rating ? 'fill-current' : 'text-gray-100'}`} />)}
                                                 </div>
-                                            </motion.div>
+                                            </div>
+                                        </div>
+                                        <span className="text-[8px] font-bold text-gray-200 uppercase tracking-widest font-mono italic">{new Date(rev.created_at).toLocaleDateString()}</span>
+                                    </div>
+                                    <p className="text-xs font-medium text-gray-500 italic leading-relaxed opacity-80 group-hover:opacity-100 transition-opacity px-1">"{rev.comment}"</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Related Products Syndicate (The Randomizer) */}
+                    <div className="mt-20 pt-10 border-t border-gray-100">
+                        <div className="text-center mb-10 space-y-3">
+                            <h2 className="text-4xl font-black text-accent-brown tracking-tighter uppercase italic leading-none">Discover More</h2>
+                            <div className="w-12 h-0.5 bg-brand mx-auto shadow-md shadow-brand/20" />
+                            <p className="text-[8px] font-bold text-gray-300 uppercase tracking-[0.4em] pt-2">Synchronized Catalog Rotations</p>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                            {relatedProducts.map((p) => (
+                                <motion.div 
+                                    key={p.id}
+                                    whileHover={{ y: -5 }}
+                                    onClick={() => {
+                                        navigate(`/dashboard/customer/catalog/${p.id}`);
+                                        window.scrollTo(0, 0);
+                                    }}
+                                    className="group cursor-pointer"
+                                >
+                                    <div className="aspect-[4/5] bg-gray-50 rounded-[2rem] mb-4 relative overflow-hidden flex items-center justify-center p-8 border-2 border-transparent group-hover:border-brand/40 group-hover:bg-white group-hover:shadow-xl transition-all duration-700">
+                                        <img src={p.image} className="w-full h-full object-contain mix-blend-multiply transition-transform duration-1000 group-hover:scale-105" alt={p.name} />
+                                        {p.tag && (
+                                            <div className="absolute top-4 left-4 bg-brand text-white px-3 py-1 text-[7px] font-black uppercase tracking-[0.2em] rounded-full shadow-lg">
+                                                {p.tag}
+                                            </div>
                                         )}
-                                    </AnimatePresence>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Description */}
-                        <div className="pt-6 border-t border-accent-brown/10">
-                            <h3 className="text-xs font-black uppercase tracking-widest text-accent-brown mb-3">Product Description:</h3>
-                            <p className="text-xs font-medium text-accent-brown/60 leading-relaxed">
-                                {product.description} Carefully formulated to provide the highest quality experience, it stands out with premium ingredients and unmatched durability. Perfect for enhancing the daily life of your beloved companion.
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* MIDDLE COLUMN: Main Image */}
-                    <div className="lg:col-span-5 flex items-center justify-center p-8 bg-accent-peach/5 rounded-[2rem] relative group overflow-hidden min-h-[400px]">
-                        <motion.img
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ duration: 0.5 }}
-                            src={finalImage}
-                            alt={product.name}
-                            className="w-full h-full object-contain max-h-[500px] drop-shadow-2xl group-hover:scale-105 transition-transform duration-700"
-                        />
-                    </div>
-
-                    {/* RIGHT COLUMN: Thumbnails & Specs */}
-                    <div className="lg:col-span-3 flex flex-col justify-between gap-8">
-                        {/* Thumbnails Grid */}
-                        <div className="grid grid-cols-2 gap-4">
-                            {/* Product base image first */}
-                            <div onClick={() => setSelectedVariant('')} className={`aspect-square bg-accent-peach/10 rounded-xl overflow-hidden cursor-pointer hover:border-2 border-brand/50 transition-all p-2 flex items-center justify-center ${!selectedVariant ? 'opacity-100 border-2' : 'opacity-70'}`}>
-                                <img src={product.image} alt="Main" className="w-full h-full object-contain" />
-                            </div>
-                            {/* Variant images */}
-                            {parsedVariants.filter(v => v.image).map((v, i) => (
-                                <div key={`v-${i}`} onClick={() => setSelectedVariant(v.name)} className={`aspect-square bg-accent-peach/10 rounded-xl overflow-hidden cursor-pointer hover:border-2 border-brand/50 transition-all p-2 flex items-center justify-center ${selectedVariant === v.name ? 'opacity-100 border-2' : 'opacity-70'}`}>
-                                    <img src={v.image} alt={v.name} className="w-full h-full object-contain" />
-                                </div>
-                            ))}
-                            {/* Size images */}
-                            {parsedSizes.filter(s => s.image).map((s, i) => (
-                                <div key={`s-${i}`} onClick={() => setSelectedSize(s.name)} className={`aspect-square bg-accent-peach/10 rounded-xl overflow-hidden cursor-pointer hover:border-2 border-brand/50 transition-all p-2 flex items-center justify-center ${selectedSize === s.name ? 'opacity-100 border-2' : 'opacity-70'}`}>
-                                    <img src={s.image} alt={s.name} className="w-full h-full object-contain" />
-                                </div>
+                                        <div className="absolute bottom-4 right-4 w-8 h-8 bg-white rounded-lg flex items-center justify-center text-accent-brown shadow-md opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all">
+                                            <ShoppingCart className="w-3 h-3" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1.5 px-1">
+                                        <p className="text-[8px] font-black text-gray-300 uppercase tracking-[0.25em]">{p.category}</p>
+                                        <h4 className="text-sm font-black text-brand transition-colors truncate uppercase italic tracking-tight leading-none">{p.name}</h4>
+                                        <div className="flex items-center justify-between pt-0.5">
+                                            <p className="text-lg font-black text-accent-brown tracking-tighter tabular-nums">₱{Number(p.price).toLocaleString()}</p>
+                                            <div className="flex items-center gap-1.5 grayscale group-hover:grayscale-0 transition-all">
+                                                <Star className="w-2.5 h-2.5 text-brand fill-brand" />
+                                                <span className="text-[9px] font-black text-gray-300">{(p.avg_rating || 0).toFixed(1)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </motion.div>
                             ))}
                         </div>
-
-                        {/* Specifications Card */}
-                        <div className="bg-white border-2 border-accent-brown/5 rounded-2xl p-6 space-y-6">
-                            <div>
-                                <h4 className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mb-1">Category</h4>
-                                <p className="text-xs font-bold text-accent-brown uppercase">{product.category}</p>
-                            </div>
-                            <div className="w-full h-[1px] bg-accent-brown/5" />
-                            <div>
-                                <h4 className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mb-1">Product Type</h4>
-                                <p className="text-xs font-bold text-accent-brown uppercase">{product.type}</p>
-                            </div>
-                            <div className="w-full h-[1px] bg-accent-brown/5" />
-                            <div>
-                                <h4 className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mb-1">Item Weight</h4>
-                                <p className="text-xs font-bold text-accent-brown uppercase">2.4 lbs</p>
-                            </div>
-                        </div>
                     </div>
-
                 </div>
             </div>
+
+            <AnimatePresence>
+                {zoomedImage && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setZoomedImage(null)} className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-xl flex items-center justify-center p-12 cursor-zoom-out">
+                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} onClick={e => e.stopPropagation()} className="relative max-w-5xl max-h-[90vh]">
+                            <img src={zoomedImage} alt="Fullscreen Detail" className="w-full h-full object-contain shadow-2xl rounded-3xl" />
+                            <button onClick={() => setZoomedImage(null)} className="absolute top-6 right-6 text-white/50 hover:text-white transition-all"><X className="w-10 h-10" /></button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <ModernModal isOpen={modal.isOpen} onClose={() => setModal(m => ({ ...m, isOpen: false }))} onConfirm={modal.onConfirm} title={modal.title} message={modal.message} type={modal.type} />
         </DashboardLayout>
     );
 };

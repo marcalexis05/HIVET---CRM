@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Map, useMapsLibrary, useMap } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, useMapsLibrary, useMap } from '@vis.gl/react-google-maps';
 import { X, Search, MapPin, ChevronLeft, Locate, Eye, Map as MapIcon } from 'lucide-react';
 
 interface PSGCBase {
@@ -177,7 +177,8 @@ const MapContent: React.FC<{
     updateReverseGeocode: (lat: number, lng: number) => void;
     setComponents: (comps: google.maps.GeocoderAddressComponent[]) => void;
     setMapInstance: (map: google.maps.Map | null) => void;
-}> = ({ inputRef, setMarkerLocation, setAddress, updateReverseGeocode, setComponents, setMapInstance }) => {
+    setGranular: React.Dispatch<React.SetStateAction<GranularAddress>>;
+}> = ({ inputRef, setMarkerLocation, setAddress, updateReverseGeocode, setComponents, setMapInstance, setGranular }) => {
     const map = useMap();
     const placesLibrary = useMapsLibrary('places');
 
@@ -213,8 +214,52 @@ const MapContent: React.FC<{
             if (place.geometry?.location) {
                 const newLoc = { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() };
                 setMarkerLocation(newLoc);
-                setAddress(place.formatted_address || place.name || '');
-                if (place.address_components) setComponents(place.address_components);
+                const fullAddr = place.formatted_address || place.name || '';
+                setAddress(fullAddr);
+                
+                const comps = place.address_components || [];
+                if (comps.length > 0) {
+                    setComponents(comps);
+                    
+                    // Automatically sync components to granular fields
+                    let houseNumber = '', street = '', barangay = '', city = '', province = '', zip = '', district = '', subdivision = '';
+                    comps.forEach((c: any) => {
+                        const t = c.types;
+                        if (t.includes('street_number')) houseNumber = c.long_name;
+                        if (!houseNumber && (t.includes('premise') || t.includes('subpremise'))) houseNumber = c.long_name;
+                        if (t.includes('route')) street = c.long_name;
+                        if (t.includes('sublocality_level_1') || t.includes('barangay')) barangay = c.long_name;
+                        if (t.includes('locality')) city = c.long_name;
+                        if (t.includes('administrative_area_level_1')) province = c.long_name;
+                        if (t.includes('administrative_area_level_2')) {
+                            district = c.long_name;
+                            if (!province || province.toLowerCase().includes('region')) {
+                                if (!province) province = c.long_name;
+                            }
+                        }
+                        if (t.includes('neighborhood') || t.includes('subdivision')) subdivision = c.long_name;
+                        if (t.includes('postal_code')) zip = c.long_name;
+                    });
+                    
+                    // Fallbacks for city
+                    if (!city && comps.some(c => c.types.includes('administrative_area_level_3'))) {
+                        city = comps.find(c => c.types.includes('administrative_area_level_3'))?.long_name || '';
+                    }
+                    if (!city && district && province !== district) city = district;
+
+                    setGranular((prev: GranularAddress) => ({
+                        ...prev,
+                        houseNumber: houseNumber || prev.houseNumber,
+                        street: street || prev.street,
+                        barangay: barangay || prev.barangay,
+                        city: city || prev.city,
+                        province: province || prev.province,
+                        zip: zip || prev.zip,
+                        district: district || prev.district,
+                        subdivision: subdivision || prev.subdivision
+                    }));
+                }
+                
                 map.panTo(newLoc);
                 map.setZoom(18);
             }
@@ -490,9 +535,11 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
             case 'map':
                 return (
                     <div className="flex-grow flex flex-col relative overflow-hidden">
-                        <Map mapId={import.meta.env.VITE_GOOGLE_MAPS_ID} defaultCenter={markerLocation} defaultZoom={18} disableDefaultUI={true} gestureHandling='greedy' style={{ width: '100%', height: '100%' }}>
-                            <MapContent inputRef={inputRef} setMarkerLocation={setMarkerLocation} setAddress={setAddress} updateReverseGeocode={handleReverseGeocode} setComponents={setComponents} setMapInstance={setMapInstance} />
-                        </Map>
+                        <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY} libraries={['marker', 'places']}>
+                            <Map mapId={import.meta.env.VITE_GOOGLE_MAPS_ID} center={{ lat: Number(markerLocation.lat), lng: Number(markerLocation.lng) }} defaultZoom={18} disableDefaultUI={true} gestureHandling='greedy' style={{ width: '100%', height: '100%' }}>
+                                <MapContent inputRef={inputRef} setMarkerLocation={setMarkerLocation} setAddress={setAddress} updateReverseGeocode={handleReverseGeocode} setComponents={setComponents} setMapInstance={setMapInstance} setGranular={setGranular} />
+                            </Map>
+                        </APIProvider>
                         
                         <div className="absolute top-6 left-6 right-6 z-20 flex flex-col gap-3">
                             <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 flex items-center px-5 py-2 gap-3 focus-within:ring-4 focus-within:ring-[#EE4D2D]/10 transition-all">

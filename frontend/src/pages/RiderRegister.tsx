@@ -1,18 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    ArrowRight, ArrowLeft, ShieldCheck, MailCheck, Bike, Eye, EyeOff, User,
-    FileText, CheckCircle, Lock, Phone as PhoneIcon, Mail as MailIcon, MapPin
+    ArrowRight, ArrowLeft, ChevronLeft, ShieldCheck, MailCheck, Bike, Eye, EyeOff, User,
+    FileText, CheckCircle, Lock, Phone as PhoneIcon, Mail as MailIcon, MapPin, Upload, X, Clock, CheckCircle2
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Logo } from '../components/Logo';
 import { PasswordStrength } from '../components/PasswordStrength';
 import { CustomDropdown } from '../components/CustomDropdown';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { useAuth } from '../context/AuthContext';
+import { CustomDatePicker } from '../components/CustomDatePicker';
+import loginHero from '../assets/login_hero_landscape.png';
 
 const FileUploadField = ({ label, icon: Icon, onUpload, value, docType }: any) => {
     const [uploading, setUploading] = useState(false);
+    const ref = useRef<HTMLInputElement>(null);
     
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -38,112 +40,99 @@ const FileUploadField = ({ label, icon: Icon, onUpload, value, docType }: any) =
     };
 
     return (
-        <div className="group space-y-2">
-            <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">{label}</label>
-            <div className={`relative flex items-center bg-accent-peach/10 border-2 border-dashed ${value ? 'border-brand/40 bg-brand/5' : 'border-accent-brown/10'} hover:border-brand/30 rounded-2xl transition-all h-32 overflow-hidden`}>
-                <input type="file" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer z-10" accept=".pdf,.jpg,.jpeg,.png" />
-                <div className="flex flex-col items-center justify-center w-full gap-2 p-4 text-center">
-                    {uploading ? (
-                        <div className="flex flex-col items-center gap-2">
-                            <div className="w-6 h-6 border-4 border-brand-dark/30 border-t-brand-dark rounded-full animate-spin" />
-                            <span className="text-[10px] font-bold text-accent-brown/40">Uploading...</span>
-                        </div>
-                    ) : value ? (
-                        <>
-                            <div className="w-10 h-10 bg-brand/10 text-brand-dark rounded-full flex items-center justify-center">
-                                <CheckCircle className="w-6 h-6" />
-                            </div>
-                            <span className="text-[10px] font-black text-brand-dark uppercase tracking-widest truncate max-w-[150px]">Document Uploaded</span>
-                        </>
-                    ) : (
-                        <>
-                            <div className="w-10 h-10 bg-accent-brown/5 text-accent-brown/40 rounded-full flex items-center justify-center">
-                                <Icon className="w-5 h-5" />
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[10px] font-black text-accent-brown/60 uppercase tracking-widest block">Click to Upload</span>
-                                <span className="text-[8px] font-bold text-accent-brown/30 uppercase block">PDF, JPG or PNG</span>
-                            </div>
-                        </>
-                    )}
-                </div>
+        <div className="space-y-2">
+            <div className="flex items-center justify-between pl-6">
+                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] italic">{label} <span className="text-brand-dark">*</span></label>
             </div>
+            {value ? (
+                <div className="flex items-center gap-4 bg-green-50 border border-green-100 rounded-[2rem] px-6 py-4 shadow-sm">
+                    <CheckCircle2 className="w-6 h-6 text-green-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                        <p className="text-xs font-black text-green-700 truncate italic">Document Verified</p>
+                        <p className="text-[9px] text-green-500 font-bold uppercase tracking-widest leading-none">Security Gate Passed</p>
+                    </div>
+                    <button type="button" onClick={() => onUpload('')} className="w-8 h-8 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-200 transition-colors shrink-0">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            ) : (
+                <button
+                    type="button"
+                    onClick={() => ref.current?.click()}
+                    className="w-full flex flex-col items-center justify-center gap-3 ring-1 ring-brand-dark/5 hover:ring-brand-dark/30 bg-[#F7F6F2] hover:bg-white rounded-[2.5rem] py-8 px-6 transition-all group shadow-inner"
+                >
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                        {uploading ? <div className="w-6 h-6 border-4 border-brand-dark/30 border-t-brand-dark rounded-full animate-spin" /> : <Upload className="w-6 h-6 text-accent-brown/20 group-hover:text-brand-dark transition-colors" />}
+                    </div>
+                    <div className="text-center">
+                        <span className="block text-[10px] font-black text-accent-brown uppercase tracking-[0.3em] group-hover:text-brand-dark transition-colors italic">{uploading ? 'Processing Data' : 'Initialize Upload'}</span>
+                        <span className="block text-[9px] text-accent-brown/30 font-bold uppercase tracking-widest mt-1 italic">PDF, JPG, or PNG · Max 5MB</span>
+                    </div>
+                    <input ref={ref} type="file" onChange={handleFileChange} className="hidden" accept=".pdf,.jpg,.jpeg,.png" />
+                </button>
+            )}
         </div>
     );
 };
 
 const RequirementCheckbox = ({ label, checked, onChange }: any) => (
-    <label className="flex items-center gap-4 p-4 rounded-2xl bg-accent-peach/10 border-2 border-transparent hover:border-brand/20 transition-all cursor-pointer group">
-        <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${checked ? 'bg-brand-dark border-brand-dark shadow-lg shadow-brand/20' : 'border-accent-brown/20 bg-white group-hover:border-brand/40'}`}>
-            {checked && <CheckCircle className="w-4 h-4 text-white" />}
+    <label className="flex items-center gap-4 p-6 rounded-[2rem] bg-[#F7F6F2] border border-accent-brown/5 hover:bg-white hover:ring-1 hover:ring-brand-dark/30 transition-all cursor-pointer group">
+        <div className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all ${checked ? 'bg-brand-dark border-brand-dark shadow-xl shadow-brand-dark/20' : 'bg-white border-accent-brown/10 group-hover:border-brand-dark'}`}>
+            {checked && <CheckCircle className="w-5 h-5 text-white" />}
         </div>
-        <span className={`text-xs font-bold transition-colors ${checked ? 'text-accent-brown' : 'text-accent-brown/50'}`}>{label}</span>
+        <div className="flex-1">
+             <span className={`text-xs font-black uppercase tracking-widest italic transition-colors ${checked ? 'text-accent-brown' : 'text-accent-brown/40'}`}>{label}</span>
+        </div>
         <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="hidden" />
     </label>
 );
-
-const PendingApproval = ({ email, vehicleType }: { email: string; vehicleType: string }) => (
-    <div className="min-h-screen bg-accent-cream flex items-center justify-center p-6 select-none">
-        <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="max-w-lg w-full bg-white rounded-[2.5rem] shadow-2xl shadow-brand/10 border border-brand/5 overflow-hidden"
-        >
-            <div className="bg-gradient-to-br from-accent-peach to-brand/10 px-10 py-10 text-center flex flex-col items-center gap-4 border-b border-brand/5">
-                <div className="w-20 h-20 bg-white rounded-[1.5rem] shadow-lg shadow-brand/20 flex items-center justify-center">
-                    <Logo className="w-10 h-10" />
-                </div>
-                <div>
-                    <p className="text-[10px] font-black text-brand-dark uppercase tracking-[0.3em] mb-1">Hi-Vet Riders</p>
-                    <h1 className="text-2xl font-black text-accent-brown tracking-tight">Application Under Review</h1>
-                    <p className="text-xs text-accent-brown/50 font-medium mt-1">Your rider registration has been submitted successfully.</p>
+const PendingApproval = ({ email, vehicleType }: { email: string; vehicleType: string }) => (
+    <div className="h-screen bg-white flex font-brand select-none overflow-hidden">
+        <div className="hidden lg:block w-1/2 h-full relative overflow-hidden group">
+            <div className="absolute inset-0 z-0">
+                <img src={loginHero} alt="Rider Operations" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
+                <div className="absolute inset-0 bg-gradient-to-t from-accent-brown via-accent-brown/40 to-transparent opacity-90 transition-opacity" />
+                <div className="absolute inset-0 bg-black/20" />
+            </div>
+            <div className="relative z-10 flex flex-col h-full justify-between p-24">
+                <div className="space-y-12">
+                     <Link to="/" className="inline-flex items-center gap-4 group/back">
+                        <div className="w-14 h-14 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20 group-hover/back:bg-brand-dark transition-all text-white">
+                            <Bike className="w-8 h-8" />
+                        </div>
+                        <span className="text-3xl font-black text-white tracking-widest uppercase italic">Hi-Vet Riders</span>
+                    </Link>
+                    <div className="space-y-8 max-w-lg">
+                        <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Fleet Command</div>
+                        <h1 className="text-7xl font-black text-white leading-[0.8] tracking-tighter uppercase">Rider <br /><span className="text-brand-dark italic font-outfit">Operations.</span></h1>
+                        <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Access your delivery logistics, real-time earnings, and route optimization dashboard.</p>
+                    </div>
                 </div>
             </div>
-            <div className="px-10 py-8 space-y-6">
-                <div className="flex items-start gap-4 p-4 bg-orange-50 border border-orange-100 rounded-2xl">
-                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
-                        <ShieldCheck className="w-5 h-5 text-orange-600" />
-                    </div>
-                    <div>
-                        <p className="text-sm font-black text-orange-700">Pending Compliance Verification</p>
-                        <p className="text-xs text-orange-600/70 font-medium mt-0.5">Our team is reviewing your requirements. This typically takes <strong>24–48 hours</strong>.</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-3 p-4 bg-accent-peach/20 rounded-2xl">
-                    <MailIcon className="w-4 h-4 text-brand-dark shrink-0" />
-                    <div>
-                        <p className="text-[9px] font-black text-accent-brown/40 uppercase tracking-widest">Confirmation Sent To</p>
-                        <p className="text-sm font-black text-accent-brown">{email}</p>
-                    </div>
+        </div>
+
+        <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center bg-white p-6 sm:p-10 relative overflow-hidden">
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-md text-center space-y-8">
+                <div className="w-24 h-24 bg-brand/10 text-brand-dark rounded-[3rem] flex items-center justify-center mx-auto shadow-xl shadow-brand/5">
+                    <Clock className="w-12 h-12 animate-pulse" />
                 </div>
                 <div className="space-y-3">
-                    <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest">What Happens Next</p>
-                    {[
-                        { icon: <ShieldCheck className="w-4 h-4" />, label: 'Document Review', desc: vehicleType === 'Bicycle' ? "Admin reviews your NBI/Police Clearance" : "Admin reviews your License, CR/OR & Clearance", done: true },
-                        { icon: <MailCheck className="w-4 h-4" />, label: 'Approval Status', desc: "You'll receive an email once your account is verified", done: false },
-                        { icon: <Bike className="w-4 h-4" />, label: 'Start Delivering', desc: 'Log in and start delivering care as a Hi-Vet Rider', done: false },
-                    ].map((item, i) => (
-                        <div key={i} className={`flex items-start gap-3 p-3 rounded-xl ${item.done ? 'bg-green-50 border border-green-100' : 'bg-accent-peach/10 border border-accent-brown/5'}`}>
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${item.done ? 'bg-green-100 text-green-600' : 'bg-accent-peach/30 text-accent-brown/40'}`}>{item.icon}</div>
-                            <div className="flex-1">
-                                <p className={`text-xs font-black ${item.done ? 'text-green-700' : 'text-accent-brown/60'}`}>{item.label}</p>
-                                <p className="text-[10px] text-accent-brown/40 font-medium">{item.desc}</p>
-                            </div>
-                            {item.done && <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-1" />}
-                        </div>
-                    ))}
+                    <h2 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Under Review</h2>
+                    <p className="text-sm text-accent-brown/50 font-medium italic">Application submitted for <span className="text-accent-brown font-bold not-italic font-outfit">{email}</span></p>
                 </div>
-                <div className="flex flex-col gap-3 pt-2">
-                    <Link to="/login/rider" className="btn-primary w-full flex items-center justify-center gap-2 py-4 rounded-[1.5rem] text-xs font-black uppercase tracking-widest">
-                        <ArrowRight className="w-4 h-4" /> Go to Rider Login
-                    </Link>
-                    <Link to="/" className="text-center text-[10px] text-accent-brown/40 font-black uppercase tracking-widest hover:text-accent-brown transition-colors py-2">
-                        Return to Homepage
-                    </Link>
+                <div className="bg-accent-peach/10 p-8 rounded-[2.5rem] border border-accent-brown/5 text-left space-y-6">
+                    <div className="flex gap-4">
+                        <div className="w-6 h-6 rounded-full bg-brand-dark text-white flex items-center justify-center text-[10px] font-black shrink-0">1</div>
+                        <p className="text-xs text-accent-brown/70 italic leading-relaxed">Our compliance team will verify your <span className="font-bold text-accent-brown">NBI Clearance</span> and <span className="font-bold text-accent-brown">Driver License</span> within 24-48 business hours.</p>
+                    </div>
+                    <div className="flex gap-4 opacity-50">
+                        <div className="w-6 h-6 rounded-full bg-brand-dark/20 text-accent-brown/40 flex items-center justify-center text-[10px] font-black shrink-0">2</div>
+                        <p className="text-xs text-accent-brown/40 italic leading-relaxed">Once approved, you will receive an activation email with your rider portal access link.</p>
+                    </div>
                 </div>
-            </div>
-        </motion.div>
+                <button onClick={() => window.location.href = '/for-riders'} className="bg-brand-dark text-white w-full py-5 rounded-full font-black text-[10px] uppercase tracking-[0.5em] shadow-xl shadow-brand-dark/20 hover:shadow-brand-dark/40 transition-all italic">Return to Landing</button>
+            </motion.div>
+        </div>
     </div>
 );
 
@@ -158,6 +147,7 @@ const RiderRegister = () => {
 
     // Form state
     const [firstName, setFirstName] = useState('');
+    const [middleName, setMiddleName] = useState('');
     const [lastName, setLastName] = useState('');
     const [suffix, setSuffix] = useState('');
     const [email, setEmail] = useState('');
@@ -178,6 +168,8 @@ const RiderRegister = () => {
     const [homeLandmark, setHomeLandmark] = useState('');
     const [vehicleType, setVehicleType] = useState('Motorcycle');
     const [driverLicense, setDriverLicense] = useState('');
+    const [birthday, setBirthday] = useState('');
+    const [gender, setGender] = useState('');
     
     // Compliance state
     const [licenseUrl, setLicenseUrl] = useState('');
@@ -197,6 +189,24 @@ const RiderRegister = () => {
             return () => clearTimeout(timer);
         }
     }, [countdown]);
+    
+    const calculateAge = (bday: string) => {
+        if (!bday) return 0;
+        const birthDate = new Date(bday);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const month = today.getMonth() - birthDate.getMonth();
+        if (month < 0 || (month === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return age;
+    };
+
+    useEffect(() => {
+        const age = calculateAge(birthday);
+        if (age >= 18) setIs18Above(true);
+        else setIs18Above(false);
+    }, [birthday]);
 
     const navigate = useNavigate();
     const { loginWithToken } = useAuth();
@@ -277,11 +287,18 @@ const RiderRegister = () => {
     const nextStep = () => {
         setError('');
         if (step === 1) {
-            if (!firstName || !lastName || !phone || !homeCity) {
-                return setError('Full Name, Phone, and a verified Home Address are required');
+            if (!firstName || !lastName || !phone || !homeCity || !birthday || !gender) {
+                return setError('First & Last Name, Phone, Birthdate, Sex, and Verified Address are required');
             }
             if (phone.length !== 10 || !phone.startsWith('9')) {
                 return setError('Please enter a valid 10-digit PH mobile number starting with 9.');
+            }
+            const age = calculateAge(birthday);
+            if (age < 18) {
+                return setError('Rider eligibility requires a minimum age of 18.');
+            }
+            if (age > 100) {
+                return setError('Invalid age detected. Please verify your birthdate.');
             }
             setStep(2);
         } else if (step === 2) {
@@ -325,6 +342,7 @@ const RiderRegister = () => {
                     password,
                     otp: otpCode,
                     first_name: firstName, 
+                    middle_name: middleName,
                     last_name: lastName,
                     suffix,
                     phone,
@@ -342,6 +360,8 @@ const RiderRegister = () => {
                     home_region: homeRegion,
                     home_lat: homeLat,
                     home_lng: homeLng,
+                    birthday,
+                    gender,
                     role: 'rider',
                     driver_license: isBicycle ? null : driverLicense,
                     vehicle_type: vehicleType,
@@ -370,32 +390,40 @@ const RiderRegister = () => {
         }
     };
 
+
     const renderStep = () => {
         switch (step) {
             case 1:
                 return (
-                    <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-                        <div className="space-y-2">
-                            <h3 className="text-xl xs:text-2xl font-black text-accent-brown tracking-tighter">Driver Application</h3>
-                            <p className="text-xs xs:text-sm text-accent-brown/50 font-medium italic">Tell us about yourself to get started.</p>
+                    <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                        <div className="space-y-1">
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Rider Identity</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">Identify yourself to join the fleet.</p>
                         </div>
+                        {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center text-sm">{error}</div>}
                         
-                        {error && <div className="bg-red-50 text-red-500 p-3 rounded-xl text-sm font-bold border border-red-100">{error}</div>}
-
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="space-y-4 max-h-[50vh] overflow-y-auto px-1 custom-scrollbar pb-2">
+                             <div className="grid grid-cols-2 gap-4">
                                 <div className="group space-y-2">
-                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">First Name</label>
-                                    <div className="relative">
-                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                        <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Juan" className="w-full bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 pl-11 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm" />
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">First Name <span className="text-brand-dark">*</span></label>
+                                    <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                        <User className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
+                                        <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Juan" className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" />
                                     </div>
                                 </div>
                                 <div className="group space-y-2">
-                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Last Name</label>
-                                    <div className="relative">
-                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                        <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Dela Cruz" className="w-full bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 pl-11 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm" />
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Last Name <span className="text-brand-dark">*</span></label>
+                                    <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                        <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Dela Cruz" className="w-full bg-transparent py-5 px-8 text-accent-brown font-bold text-base outline-none" />
+                                    </div>
+                                </div>
+                            </div>
+
+                             <div className="grid grid-cols-2 gap-4">
+                                <div className="group space-y-2">
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Middle Name <span className="text-[11px] lowercase opacity-50 font-bold italic not-uppercase tracking-normal">(Optional)</span></label>
+                                    <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                        <input type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} placeholder="Optional" className="w-full bg-transparent py-5 px-8 text-accent-brown font-bold text-base outline-none" />
                                     </div>
                                 </div>
                                 <CustomDropdown
@@ -408,20 +436,43 @@ const RiderRegister = () => {
                                         { label: 'Jr.', value: 'Jr.' },
                                         { label: 'Sr.', value: 'Sr.' },
                                         { label: 'II', value: 'II' },
-                                        { label: 'III', value: 'III' },
-                                        { label: 'IV', value: 'IV' }
+                                        { label: 'III', value: 'III' }
                                     ]}
                                     placeholder="None"
                                 />
                             </div>
-                            
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <CustomDatePicker
+                                    label="Birthdate *"
+                                    value={birthday}
+                                    onChange={setBirthday}
+                                />
+                                <div className="group space-y-2">
+                                    <label className="text-[11px] font-black uppercase tracking-widest text-accent-brown/40 block ml-1 italic">Age</label>
+                                    <div className="w-full bg-[#F7F6F2] py-5 px-8 rounded-3xl text-accent-brown font-black text-xl italic opacity-50 ring-1 ring-brand-dark/5">{birthday ? `${calculateAge(birthday)}` : '--'}</div>
+                                </div>
+                            </div>
+
+                             <div>
+                                <CustomDropdown
+                                    label="Sex / Gender *"
+                                    value={gender}
+                                    onChange={setGender}
+                                    options={[
+                                        { label: 'Male', value: 'Male' },
+                                        { label: 'Female', value: 'Female' },
+                                        { label: 'Other', value: 'Other' },
+                                        { label: 'Rather not say', value: 'Rather not say' }
+                                    ]}
+                                    placeholder="Select"
+                                />
+                            </div>
+
                             <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Phone Number</label>
-                                <div className="relative flex items-center bg-accent-peach/10 border-2 border-transparent focus-within:border-brand/30 focus-within:bg-white rounded-2xl transition-all overflow-hidden">
-                                    <div className="flex items-center gap-2 pl-5 pr-3 shrink-0 text-accent-brown font-black text-sm border-r border-accent-brown/10">
-                                        <PhoneIcon className="w-4 h-4 text-accent-brown/30" />
-                                        <span>+63</span>
-                                    </div>
+                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Mobile Phone <span className="text-brand-dark">*</span></label>
+                                <div className="relative flex items-center bg-[#F7F6F2] ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl overflow-hidden transition-all shadow-inner">
+                                    <div className="pl-6 pr-4 py-5 text-accent-brown font-black border-r border-accent-brown/10 text-sm opacity-20 transition-opacity group-focus-within:opacity-100">+63</div>
                                     <input 
                                         type="tel" 
                                         value={phone} 
@@ -433,21 +484,15 @@ const RiderRegister = () => {
                                             setPhone(val.slice(0, 10));
                                         }} 
                                         placeholder="9XX XXX XXXX" 
-                                        className="flex-1 bg-transparent py-4 pl-4 pr-6 text-accent-brown font-semibold outline-none text-sm" 
+                                        className="flex-1 bg-transparent py-5 px-6 text-accent-brown font-bold text-base outline-none" 
                                     />
                                 </div>
                             </div>
 
-                            <div className="group space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Home Address <span className="text-brand-dark">*</span></label>
-                                    <span className="text-[9px] font-bold text-brand-dark/40 uppercase tracking-widest italic flex items-center gap-1">
-                                        <div className="w-1 h-1 rounded-full bg-brand-dark animate-pulse" />
-                                        Pin on Map
-                                    </span>
-                                </div>
-                                <div className="relative">
-                                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark z-10 transition-colors" />
+                            <div className="group space-y-2">
+                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Residential Address <span className="text-brand-dark">*</span></label>
+                                <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                    <MapPin className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark z-10 transition-colors" />
                                     <AddressAutocomplete 
                                         onAddressSelect={(_addr, _components, geometry, granular) => {
                                             if (granular) {
@@ -484,208 +529,185 @@ const RiderRegister = () => {
                                             zip: homeZip,
                                             region: homeRegion
                                         }}
-                                        placeholder="Search or pick on map..."
-                                        className="!py-4 !rounded-2xl shadow-xl border-2 border-transparent focus:border-brand/30 bg-accent-peach/5 pl-11"
+                                        placeholder="123 Rizal St., Quezon City"
+                                        className="!pl-16 !bg-transparent !border-0 !shadow-none !rounded-3xl !py-5 text-base font-bold text-accent-brown"
                                     />
                                 </div>
-                                {homeLandmark && (
-                                    <p className="text-[9px] font-bold text-accent-brown/40 uppercase tracking-widest pl-4 italic">
-                                        📍 {homeLandmark}
-                                    </p>
-                                )}
                             </div>
 
-                            {/* Home Address Confirmation */}
-                            <div className="p-5 bg-accent-peach/5 rounded-2xl border border-accent-peach/10 space-y-2">
-                                <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Verified Residence</p>
-                                <div className="space-y-1">
-                                    <p className="text-sm font-bold text-accent-brown leading-relaxed capitalize">
+                            <div className="p-8 bg-accent-peach/5 rounded-[2.5rem] border border-accent-peach/10 space-y-3 relative overflow-hidden group/addr">
+                                <div className="absolute top-0 right-0 p-6 opacity-5 group-hover/addr:opacity-20 transition-opacity"><User className="w-16 h-16" /></div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Validated Residence</p>
+                                <div className="space-y-2 relative z-10">
+                                    <p className="text-lg font-black text-accent-brown leading-tight capitalize">
                                         {[homeHouseNumber, homeBlockNumber, homeStreet, homeSubdivision, homeSitio, homeBarangay, homeCity, homeProvince, homeZip].filter(Boolean).join(' ')}
                                     </p>
-                                    {!homeCity && <p className="text-[9px] font-black text-red-400 uppercase tracking-widest italic">Please select your location on map</p>}
+                                    {!homeCity && <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-50 text-red-500 rounded-full text-[9px] font-black uppercase tracking-widest italic border border-red-100">Location Incomplete</div>}
                                 </div>
                             </div>
                         </div>
 
-                            <button type="submit" className="btn-primary w-full group flex items-center justify-center gap-3 h-14 text-xs">
-                                Continue Validation <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                            </button>
+                        <button type="submit" className="bg-brand-dark text-white w-full py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4">
+                            Initialize Application <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
+                        </button>
                     </motion.div>
                 );
             case 2:
                 return (
-                    <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-                        <div className="space-y-2">
-                            <h3 className="text-xl xs:text-2xl font-black text-accent-brown tracking-tighter">Vehicle Details</h3>
-                            <p className="text-xs xs:text-sm text-accent-brown/50 font-medium italic">
-                                {vehicleType === 'Bicycle' ? 'No vehicle documents required for bicycle riders.' : 'Original or Notarized CR and Official Receipt.'}
-                            </p>
+                    <motion.div key="s2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                        <div className="space-y-1">
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Vehicle</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">Requirement vary based on vehicle type.</p>
                         </div>
-
-                        {error && <div className="bg-red-50 text-red-500 p-3 rounded-xl text-sm font-bold border border-red-100">{error}</div>}
-
-                        <div className="space-y-4">
-                            <CustomDropdown
-                                label="Vehicle Type"
+                        {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center text-sm">{error}</div>}
+                        
+                        <div className="space-y-6 max-h-[50vh] overflow-y-auto px-1 custom-scrollbar pb-2">
+                             <CustomDropdown
+                                label="Fleet Category"
                                 value={vehicleType}
                                 onChange={setVehicleType}
                                 options={[
-                                    { label: 'Motorcycle', value: 'Motorcycle', icon: <Bike className="w-4 h-4" /> },
-                                    { label: 'Car', value: 'Car', icon: <User className="w-4 h-4" /> },
-                                    { label: 'Bicycle', value: 'Bicycle', icon: <Bike className="w-4 h-4" /> }
+                                    { label: 'Motorcycle', value: 'Motorcycle' },
+                                    { label: 'Bicycle', value: 'Bicycle' }
                                 ]}
+                                placeholder="Select Category"
                             />
 
                             {vehicleType === 'Bicycle' ? (
-                                <div className="flex items-start gap-4 p-5 bg-green-50 border-2 border-green-100 rounded-2xl">
-                                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
-                                        <Bike className="w-5 h-5 text-green-600" />
+                                <div className="flex items-start gap-4 p-8 bg-green-50 border border-green-100 rounded-[2.5rem]">
+                                    <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center shrink-0">
+                                        <Bike className="w-6 h-6 text-green-600" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-black text-green-700">No License or CR/OR Required</p>
-                                        <p className="text-xs text-green-600/80 font-medium mt-1 leading-relaxed">
-                                            Great news! Bicycle riders are not required to submit a Driver's License, Certificate of Registration, or Official Receipt. Just proceed to the next step.
-                                        </p>
+                                        <p className="text-sm font-black text-green-700 uppercase tracking-tighter">Bicycle Rider Protocol</p>
+                                        <p className="text-[11px] text-green-600/80 font-bold uppercase tracking-widest leading-relaxed mt-2 italic">No Driver's License or CR/OR required for cycling partners. Skip to professional clearance.</p>
                                     </div>
                                 </div>
                             ) : (
-                                <>
+                                <div className="space-y-6">
                                     <div className="group space-y-2">
-                                        <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Driver's License Number</label>
-                                        <div className="relative">
-                                            <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                            <input type="text" value={driverLicense} onChange={e => setDriverLicense(e.target.value)} placeholder="AXX-XX-XXXXXX" className="w-full bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 pl-11 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm" />
+                                        <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">License Number <span className="text-brand-dark">*</span></label>
+                                        <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                            <ShieldCheck className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
+                                            <input type="text" value={driverLicense} onChange={e => setDriverLicense(e.target.value)} placeholder="AXX-XX-XXXXXX" className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" />
                                         </div>
                                     </div>
-
                                     <FileUploadField label="Driver's License (Class A)" icon={ShieldCheck} docType="driver_license" value={licenseUrl} onUpload={setLicenseUrl} />
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-2 gap-4">
                                         <FileUploadField label="Certificate of Reg. (CR)" icon={FileText} docType="vehicle_cr" value={vehicleCrUrl} onUpload={setVehicleCrUrl} />
                                         <FileUploadField label="Official Receipt (OR)" icon={FileText} docType="vehicle_or" value={vehicleOrUrl} onUpload={setVehicleOrUrl} />
                                     </div>
-                                </>
+                                </div>
                             )}
                         </div>
 
-                        <div className="flex gap-4">
-                            <button onClick={prevStep} className="flex-1 px-6 rounded-full font-black text-accent-brown/40 hover:text-accent-brown transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
-                                <ArrowLeft className="w-4 h-4" /> Back
+                         <div className="flex gap-4 pt-2">
+                            <button type="button" onClick={prevStep} className="flex-1 px-10 py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] text-accent-brown/30 hover:text-brand-dark transition-all group italic flex items-center justify-center gap-3">
+                                <ChevronLeft className="w-5 h-5 group-hover:-translate-x-2 transition-transform" />
+                                Back
                             </button>
-                                <button type="submit" disabled={loading} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs">
-                                    {loading ? 'Sending...' : 'Verify Email'} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                                </button>
+                            <button type="submit" className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4">Next Stage <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" /></button>
                         </div>
                     </motion.div>
                 );
             case 3:
                 return (
-                    <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-                        <div className="space-y-2">
-                            <h3 className="text-xl xs:text-2xl font-black text-accent-brown tracking-tighter">Clearance & Requirements</h3>
-                            <p className="text-xs xs:text-sm text-accent-brown/50 font-medium italic">Updated NBI or Police Clearance.</p>
+                    <motion.div key="s3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                        <div className="space-y-1">
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Gatekeeping</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">Compliance and account initialization.</p>
                         </div>
-
-                        {error && <div className="bg-red-50 text-red-500 p-3 rounded-xl text-sm font-bold border border-red-100">{error}</div>}
-
-                        <div className="space-y-4">
-                            <FileUploadField label="NBI / Police Clearance" icon={ShieldCheck} docType="nbi_clearance" value={nbiClearanceUrl} onUpload={setNbiClearanceUrl} />
-                            
-                            <div className="space-y-3">
-                                <RequirementCheckbox label="I am 18 years old or above." checked={is18Above} onChange={setIs18Above} />
-                                <RequirementCheckbox label="I have a smartphone (Android 6.0+)." checked={hasAndroid6} onChange={setHasAndroid6} />
-                            </div>
-
-                            <div className="space-y-4 border-t border-accent-brown/5 pt-4 mt-6">
-                                <div className="group space-y-2">
-                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Account Email</label>
-                                    <div className="relative">
-                                        <MailIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20" />
-                                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="rider@example.com" className="w-full bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-5 pl-16 pr-8 text-accent-brown font-semibold outline-none transition-all" />
+                        {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center text-sm">{error}</div>}
+                        
+                        <div className="space-y-6 max-h-[50vh] overflow-y-auto px-1 custom-scrollbar pb-2">
+                             <FileUploadField label="NBI / Police Clearance" icon={ShieldCheck} docType="nbi_clearance" value={nbiClearanceUrl} onUpload={setNbiClearanceUrl} />
+                             
+                             <div className="space-y-4">
+                                <div className="flex items-center gap-6 p-6 rounded-[2rem] bg-green-50/50 border border-green-100">
+                                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
+                                        <CheckCircle2 className="w-6 h-6 text-green-500" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-green-700">Maturity Verified</p>
+                                        <p className="text-[11px] font-bold text-green-600/70 italic uppercase tracking-widest">18+ Age Requirement Passed</p>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <RequirementCheckbox label="Hardware: Android 6.0+ Host" checked={hasAndroid6} onChange={setHasAndroid6} />
+                             </div>
+
+                             <div className="space-y-6 border-t border-accent-brown/5 pt-6">
+                                <div className="group space-y-2">
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Account Identity <span className="text-brand-dark">*</span></label>
+                                    <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                        <MailIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
+                                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="rider@hi-vet.com" className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
                                     <div className="group space-y-2">
-                                        <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Password</label>
-                                        <div className="relative">
-                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20" />
-                                            <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 pl-10 pr-10 text-accent-brown font-semibold outline-none transition-all" />
-                                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-accent-brown/20 hover:text-brand-dark">
-                                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Secret <span className="text-brand-dark">*</span></label>
+                                        <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                            <Lock className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
+                                            <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full bg-transparent py-5 pl-16 pr-12 text-accent-brown font-bold text-base outline-none" />
+                                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-6 top-1/2 -translate-y-1/2 text-accent-brown/20 hover:text-brand-dark">
+                                                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                             </button>
                                         </div>
                                     </div>
                                     <div className="group space-y-2">
-                                        <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Confirm</label>
-                                        <div className="relative">
-                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20" />
-                                            <input type={showConfirmPassword ? "text" : "password"} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••" className="w-full bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 pl-10 pr-10 text-accent-brown font-semibold outline-none transition-all" />
-                                            <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-accent-brown/20 hover:text-brand-dark">
-                                                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Confirm <span className="text-brand-dark">*</span></label>
+                                        <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                            <Lock className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
+                                            <input type={showConfirmPassword ? "text" : "password"} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••" className="w-full bg-transparent py-5 pl-16 pr-12 text-accent-brown font-bold text-base outline-none" />
+                                            <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-6 top-1/2 -translate-y-1/2 text-accent-brown/20 hover:text-brand-dark">
+                                                {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                             </button>
                                         </div>
                                     </div>
                                 </div>
                                 {password && <PasswordStrength password={password} />}
-                            </div>
+                             </div>
                         </div>
 
-                        <div className="flex gap-4">
-                            <button onClick={prevStep} className="flex-1 px-6 rounded-full font-black text-accent-brown/40 hover:text-accent-brown transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
-                                <ArrowLeft className="w-4 h-4" /> Back
+                         <div className="flex gap-4 pt-2">
+                            <button type="button" onClick={prevStep} className="flex-1 px-10 py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] text-accent-brown/30 hover:text-brand-dark transition-all group italic flex items-center justify-center gap-3">
+                                <ChevronLeft className="w-5 h-5 group-hover:-translate-x-2 transition-transform" />
+                                Back
                             </button>
-                                <button type="submit" disabled={loading} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs disabled:opacity-50">
-                                    {loading ? (
-                                        <>
-                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            <span>Sending Code...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            Verify Email <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                                        </>
-                                    )}
-                                </button>
+                            <button type="submit" disabled={loading} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4 disabled:opacity-50">
+                                {loading ? 'Analyzing Data...' : 'Verify Email'} <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
+                            </button>
                         </div>
                     </motion.div>
                 );
             case 4:
                 return (
-                    <motion.div key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
+                    <motion.div key="s4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-12">
                         <div className="space-y-4">
-                            <div className="w-16 h-16 bg-brand/10 text-brand-dark rounded-full flex items-center justify-center mx-auto">
-                                <MailCheck className="w-8 h-8" />
-                            </div>
-                            <div className="text-center space-y-2">
-                                <h3 className="text-2xl font-black text-accent-brown tracking-tighter">Email Verification</h3>
-                                <p className="text-xs text-accent-brown/50 font-medium italic">We sent a code to <span className="text-accent-brown font-bold not-italic">{email}</span></p>
+                            <div className="w-20 h-20 bg-brand/10 text-brand-dark rounded-[2.5rem] flex items-center justify-center"><MailCheck className="w-10 h-10" /></div>
+                            <div className="space-y-2">
+                                <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none italic">Verification</h3>
+                                <p className="text-sm text-accent-brown/40 font-medium italic leading-relaxed">Sent 6-digit gate code to <span className="text-accent-brown font-bold not-italic">{email}</span></p>
                             </div>
                         </div>
-
-                        {error && <div className="bg-red-50 text-red-500 text-sm font-bold p-4 rounded-2xl text-center">{error}</div>}
 
                         <div className="flex justify-between gap-3">
                             {otp.map((digit, idx) => (
-                                <input key={idx} id={`otp-${idx}`} type="text" maxLength={1} value={digit} onChange={(e) => handleOtpChange(idx, e.target.value)} onKeyDown={(e) => handleKeyDown(idx, e)} onPaste={handlePaste} className="w-12 md:w-14 h-16 md:h-18 text-center text-3xl font-black text-brand-dark bg-accent-peach/10 border-2 border-brand-dark/20 focus:border-brand-dark focus:bg-white rounded-2xl outline-none transition-all" />
+                                <input key={idx} id={`otp-${idx}`} type="text" maxLength={1} value={digit} onChange={(e) => handleOtpChange(idx, e.target.value)} onKeyDown={(e) => handleKeyDown(idx, e)} onPaste={handlePaste} className="w-14 h-20 text-center text-3xl font-black text-brand-dark bg-[#F7F6F2] rounded-3xl outline-none transition-all ring-1 ring-brand-dark/5 focus:ring-brand-dark/30 shadow-inner" />
                             ))}
                         </div>
 
-                        <div className="space-y-6">
-                            <p className="text-xs font-bold text-accent-brown/40 ml-4">
-                                No code yet? {' '}
-                                <button
-                                    type="button"
-                                    onClick={handleSendOtp}
-                                    disabled={loading || countdown > 0}
-                                    className="text-brand-dark font-black hover:underline underline-offset-4 disabled:opacity-50"
-                                >
-                                    {countdown > 0 ? `Resend Code (${countdown}s)` : 'Resend Code'}
-                                </button>
-                            </p>
+                        {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center mb-4">{error}</div>}
 
-                            <button type="submit" disabled={loading} className="btn-primary w-full h-14 md:h-16 text-xs md:text-sm whitespace-nowrap px-6">
-                                {loading ? 'Processing Application...' : 'Finish Application'}
-                            </button>
-                            <button type="button" onClick={prevStep} className="w-full text-[10px] font-black uppercase tracking-widest text-accent-brown/30 hover:text-accent-brown transition-colors">Go Back</button>
+                        <div className="space-y-8">
+                             <p className="text-xs font-black text-accent-brown/30 uppercase tracking-[0.2em] ml-6 italic">No code? <button type="button" onClick={handleSendOtp} disabled={countdown > 0} className="text-brand-dark font-black hover:text-accent-brown">{countdown > 0 ? `Wait ${countdown}s` : 'Resend'}</button></p>
+                             <div className="flex gap-4">
+                                <button type="button" onClick={prevStep} className="flex-1 px-8 py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] text-accent-brown/30 italic">Review</button>
+                                <button type="button" onClick={handleRegister} disabled={loading} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all italic flex items-center justify-center gap-4 group">
+                                    {loading ? 'Finalizing...' : 'Join Fleet'}
+                                    {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />}
+                                </button>
+                             </div>
                         </div>
                     </motion.div>
                 );
@@ -694,76 +716,72 @@ const RiderRegister = () => {
     };
 
     const stepLabels = [
-        'Personal Information',
-        'Vehicle Documents',
-        'Clearances & Requirements',
-        'Email Verification',
+        'Personal Identity',
+        'Vehicle Assets',
+        'Compliance Gate',
+        'Authorization',
     ];
 
     if (isPending) return <PendingApproval email={email} vehicleType={vehicleType} />;
 
     return (
-        <div className="min-h-screen bg-accent-cream flex items-center justify-center p-4 xs:p-6 select-none relative py-12">
-            <motion.div
-                initial={{ opacity: 0, scale: 0.97 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="max-w-6xl w-full grid md:grid-cols-2 bg-white rounded-[2.5rem] shadow-2xl shadow-brand/10 border border-brand/5 overflow-hidden relative z-10"
-            >
-                {/* Left Hero */}
-                <div className="hidden md:flex flex-col justify-between p-14 bg-accent-peach/30 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-brand/5" />
-                    <div className="relative z-10">
-                        <Link to="/for-riders" className="flex items-center gap-3 mb-10 hover:scale-105 transition-transform w-fit">
-                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center p-2 shadow-sm border border-brand/20">
-                                <Logo className="w-full h-full text-brand-dark" />
+        <div className="h-screen bg-white flex font-brand select-none overflow-hidden">
+            {/* Left Column: Full Screen Hero */}
+            <div className="hidden lg:block w-1/2 h-full relative overflow-hidden group">
+                <div className="absolute inset-0 z-0">
+                    <img src={loginHero} alt="Rider Operations" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-accent-brown via-accent-brown/40 to-transparent opacity-90 transition-opacity" />
+                    <div className="absolute inset-0 bg-black/20" />
+                </div>
+                <div className="relative z-10 flex flex-col h-full justify-between p-24">
+                    <div className="space-y-12">
+                         <Link to="/for-riders" className="inline-flex items-center gap-4 group/back">
+                            <div className="w-14 h-14 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20 group-hover/back:bg-brand-dark transition-all text-white">
+                                <Bike className="w-8 h-8" />
                             </div>
-                            <span className="text-xl font-black tracking-tighter text-accent-brown">Hi-Vet Riders</span>
+                            <span className="text-3xl font-black text-white tracking-widest uppercase italic">Hi-Vet Riders</span>
                         </Link>
-                        <div className="space-y-4 max-w-xs">
-                            <h1 className="text-4xl font-black text-accent-brown leading-tight">
-                                Professional <br /><span className="text-brand-dark">Rider Registration</span>
-                            </h1>
-                            <p className="text-accent-brown/60 font-medium leading-relaxed text-sm">
-                                Join our fleet of professional delivery riders. Complete your requirements to start delivering care to pet parents.
-                            </p>
+                        <div className="space-y-8 max-w-lg">
+                            <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Fleet Command</div>
+                            <h1 className="text-7xl font-black text-white leading-[0.8] tracking-tighter uppercase">Rider <br /><span className="text-brand-dark italic font-outfit">Operations.</span></h1>
+                            <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Join the elite courier network delivering professional veterinary care across the region.</p>
                         </div>
                     </div>
+                    
+                    <div className="bg-white/10 backdrop-blur-xl px-10 py-5 rounded-full border border-white/10 w-fit">
+                        <p className="text-[11px] font-black text-white uppercase tracking-[0.5em] italic">Rider Registration Stage {step} / 4</p>
+                    </div>
+                </div>
+            </div>
 
-                    {/* Step List */}
-                    <div className="relative z-10 space-y-2">
-                        {stepLabels.map((label, i) => (
-                            <div key={i} className={`flex items-center gap-3 transition-all ${step === i + 1 ? 'opacity-100' : step > i + 1 ? 'opacity-50' : 'opacity-30'}`}>
-                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 transition-all ${step === i + 1 ? 'bg-brand-dark text-white shadow-md' : step > i + 1 ? 'bg-green-500 text-white' : 'bg-accent-brown/10 text-accent-brown/40'}`}>
-                                    {step > i + 1 ? '✓' : i + 1}
-                                </div>
-                                <span className={`text-[10px] font-black uppercase tracking-widest ${step === i + 1 ? 'text-accent-brown' : 'text-accent-brown/40'}`}>{label}</span>
+            {/* Right Column: Dynamic Form */}
+            <div className="w-full lg:w-1/2 h-full flex flex-col bg-white overflow-hidden relative">
+                <div className="flex-1 flex flex-col justify-center px-6 sm:px-12 md:px-20 lg:px-24">
+                    <div className="w-full max-w-xl mx-auto flex flex-col justify-center">
+                        <div className="mb-8 flex items-center justify-between">
+                            <div className="flex gap-4">
+                                {[1, 2, 3, 4].map(i => (
+                                    <div key={i} className={`h-1.5 rounded-full transition-all duration-700 ${step >= i ? 'w-10 bg-brand-dark shadow-[0_0_20px_rgba(242,107,33,0.4)]' : 'w-3 bg-accent-brown/10'}`} />
+                                ))}
                             </div>
-                        ))}
+                            <Link to="/login/rider" className="text-[10px] font-black text-brand-dark uppercase tracking-[0.3em] border-b-4 border-brand-dark/10 pb-1 italic hover:text-accent-brown transition-all">Rider Login Instead</Link>
+                        </div>
+
+                        <form onSubmit={handleSubmit}>
+                            <AnimatePresence mode="wait">
+                                {renderStep()}
+                            </AnimatePresence>
+                        </form>
                     </div>
                 </div>
 
-                <div className="p-6 xs:p-10 md:p-14 flex flex-col justify-center overflow-y-auto max-h-screen">
-                    <div className="mb-8 flex items-center justify-between">
-                        <div className="flex gap-1.5">
-                            {[1, 2, 3, 4].map(i => (
-                                <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${step > i - 1 ? 'bg-brand-dark' : 'bg-accent-brown/10'} ${step === i ? 'w-8' : 'w-3'}`} />
-                            ))}
-                        </div>
-                        <Link to="/login/rider" className="text-[10px] font-black text-brand-dark hover:text-brand transition-colors uppercase tracking-[0.2em] border-b-2 border-brand/20 pb-0.5">Rider Login</Link>
-                    </div>
-
-                    <form onSubmit={handleSubmit}>
-                        <AnimatePresence mode="wait">{renderStep()}</AnimatePresence>
-                    </form>
-
-                    <div className="mt-12 text-center">
-                        <Link to="/for-riders" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-accent-brown/30 hover:text-accent-brown transition-colors group">
-                            <Bike className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
-                            Back to Landing
-                        </Link>
-                    </div>
+                <div className="p-12 border-t border-accent-brown/5 flex justify-center">
+                    <Link to="/for-riders" className="inline-flex items-center gap-4 text-[10px] font-black uppercase tracking-[0.4em] text-accent-brown/30 hover:text-brand-dark transition-all group italic">
+                        <ChevronLeft className="w-4 h-4 group-hover:-translate-x-2 transition-transform" />
+                        Back to Landing
+                    </Link>
                 </div>
-            </motion.div>
+            </div>
         </div>
     );
 };

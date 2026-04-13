@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ShoppingCart, PawPrint } from 'lucide-react';
+import { ShoppingCart, PawPrint, ArrowRight, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import foodImg from '../assets/food_bag.png';
 import accessoriesImg from '../assets/cat_accessories.png';
@@ -7,73 +7,89 @@ import vitaminsImg from '../assets/dog_vitamins.png';
 
 export const CatalogPreview = () => {
     const categories = [
-        { name: 'Food', count: '120+ Items', color: 'bg-[#f4a261]', image: foodImg, arch: true },
-        { name: 'Accessories', count: '85+ Items', color: 'bg-[#e76f51]', image: accessoriesImg, arch: true },
-        { name: 'Vitamins', count: '45+ Items', color: 'bg-[#f8a84a]', image: vitaminsImg, arch: true },
+        { name: 'Gourmet Nutrition', count: '120+ ESSENTIALS', image: foodImg, tag: 'Vitality' },
+        { name: 'Elite Accessories', count: '85+ PREMIUM', image: accessoriesImg, tag: 'Lifestyle' },
+        { name: 'Clinical Vitamins', count: '45+ RECOVERY', image: vitaminsImg, tag: 'Wellness' },
     ];
 
     return (
-        <section className="py-32 bg-white relative overflow-hidden" id="catalog">
-            <div className="container mx-auto px-4 relative z-10">
-                <div className="text-center max-w-3xl mx-auto mb-20 space-y-6">
-                    <span className="text-brand font-black uppercase tracking-[0.3em] text-xs">Our Collections</span>
-                    <h2 className="text-5xl md:text-7xl font-black text-accent-brown leading-tight">
-                        Quality Meets <br />
-                        <span className="text-brand-dark italic">Happy Tails</span>
-                    </h2>
-                    <p className="text-xl text-accent-brown/60 font-medium leading-relaxed">
-                        Every product is hand-picked to ensure the highest standards for your beloved companions.
+        <section className="py-24 sm:py-32 bg-white relative overflow-hidden" id="catalog">
+            <div className="container mx-auto px-6 relative z-10">
+                <div className="flex flex-col md:flex-row md:items-end justify-between mb-20 gap-8">
+                    <div className="max-w-3xl space-y-6">
+                        <div className="inline-flex items-center gap-3 text-brand-dark uppercase tracking-[0.5em] text-[10px] font-black">
+                            <div className="w-8 h-[2px] bg-brand-dark" />
+                            Curated Selection
+                        </div>
+                        <h2 className="text-5xl sm:text-6xl md:text-7xl font-black text-accent-brown leading-[0.9] tracking-tighter uppercase">
+                            Clinical Grade <br />
+                            <span className="text-brand-dark italic font-outfit">Supreme Provisions.</span>
+                        </h2>
+                    </div>
+                    <p className="text-xl text-accent-brown/50 font-medium max-w-sm leading-relaxed">
+                        Every product in our inventory undergoes rigorous verification to meet the high standards of veterinary excellence and pet comfort.
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-12 lg:gap-20">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12">
                     {categories.map((c, i) => (
                         <motion.div
                             key={i}
-                            initial={{ opacity: 0, y: 50 }}
+                            initial={{ opacity: 0, y: 30 }}
                             whileInView={{ opacity: 1, y: 0 }}
-                            transition={{ delay: i * 0.2, duration: 0.8 }}
-                            className="group flex flex-col items-center"
+                            transition={{ delay: i * 0.1, duration: 0.6 }}
+                            className="group"
                         >
-                            <Link to={`/catalog?type=${c.name}`} className="arch-card w-full shadow-2xl shadow-accent-brown/5 overflow-hidden block">
+                            <Link to={`/catalog?type=${c.name}`} className="relative block aspect-[4/5] rounded-[3.5rem] overflow-hidden bg-[#F0F0F0] shadow-sm group-hover:shadow-2xl transition-all duration-700">
                                 <img
                                     src={c.image}
                                     alt={c.name}
-                                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+                                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-[1.5s] ease-out"
                                 />
 
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-10">
-                                    <div className="w-full py-4 bg-white rounded-full font-black text-xs uppercase tracking-widest text-accent-brown transform translate-y-4 group-hover:translate-y-0 transition-all text-center">
-                                        Explored {c.name}
+                                {/* Interactive Overlay */}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-12">
+                                    <div className="translate-y-8 group-hover:translate-y-0 transition-transform duration-500 space-y-4 text-white">
+                                        <div className="inline-flex items-center gap-2 text-brand-dark font-black uppercase tracking-[0.3em] text-[10px]">
+                                            <ExternalLink className="w-3 h-3" />
+                                            Live Catalog
+                                        </div>
+                                        <p className="text-white/70 font-medium italic">Discover professional {c.name.toLowerCase()} curated for performance.</p>
                                     </div>
                                 </div>
-
-                                <PawPrint className="paw-print bottom-4 right-4 text-white/40 opacity-100" />
+                                
+                                <div className="absolute top-8 left-8">
+                                    <span className="bg-white/90 backdrop-blur-md text-accent-brown px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl">
+                                        {c.tag}
+                                    </span>
+                                </div>
                             </Link>
 
-                            <div className="text-center mt-10 space-y-3">
-                                <h3 className="text-4xl font-black text-accent-brown group-hover:text-brand-dark transition-colors">{c.name}</h3>
-                                <p className="text-accent-brown/40 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2">
-                                    <span className="w-1 h-1 bg-brand rounded-full" />
-                                    {c.count}
-                                </p>
+                            <div className="mt-8 space-y-2 group-hover:translate-x-2 transition-transform duration-500">
+                                <h3 className="text-3xl font-black text-accent-brown group-hover:text-brand transition-colors uppercase tracking-tighter">{c.name}</h3>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-[1px] bg-brand/30" />
+                                    <p className="text-accent-brown/40 font-black uppercase tracking-[0.2em] text-[10px]">
+                                        {c.count}
+                                    </p>
+                                </div>
                             </div>
                         </motion.div>
                     ))}
                 </div>
 
-                {/* Additional Call to Action */}
-                <div className="mt-24 text-center">
-                    <Link to="/catalog" className="bg-accent-peach text-accent-brown px-12 py-5 rounded-full font-black hover:bg-brand-light transition-all inline-flex items-center gap-4 mx-auto border-2 border-brand/10 uppercase tracking-widest text-sm shadow-xl shadow-accent-brown/5">
-                        <ShoppingCart className="w-5 h-5" />
-                        Full Catalog (500+ Items)
+                <div className="mt-20 flex justify-center">
+                    <Link to="/catalog" className="group flex items-center gap-6 bg-accent-brown text-white pl-10 pr-4 py-4 rounded-full font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl hover:bg-brand-dark transition-all transform hover:-translate-y-1">
+                        Explore Full Inventory
+                        <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center group-hover:translate-x-1 transition-transform">
+                            <ArrowRight className="w-5 h-5" />
+                        </div>
                     </Link>
                 </div>
             </div>
 
-            {/* Background Paw Prints */}
-            <PawPrint className="paw-print top-[10%] left-[-2%] w-32 h-32 rotate-12" />
-            <PawPrint className="paw-print bottom-[5%] right-[-2%] w-40 h-40 -rotate-12" />
+            {/* Background Paw Element */}
+            <PawPrint className="absolute right-[-5%] top-[10%] w-64 h-64 text-accent-brown/5 rotate-[45deg] pointer-events-none" />
         </section>
     );
 };

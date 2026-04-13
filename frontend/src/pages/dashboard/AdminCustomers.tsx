@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Filter, Mail, Shield, User, Store, MoreVertical, Bike, Loader2 } from 'lucide-react';
+import { Search, Filter, Mail, Shield, User, Store, MoreVertical, Bike, Loader2, Trash2, ShieldCheck } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 
@@ -10,6 +10,10 @@ const AdminCustomers = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState('All Users');
+    const [actionMenu, setActionMenu] = useState<{ id: string | null; x: number; y: number }>({ id: null, x: 0, y: 0 });
+    const [confirmModal, setConfirmModal] = useState<{ show: boolean, type: 'delete' | 'suspend', user: any | null }>({ show: false, type: 'delete', user: null });
+    const [currentPage, setCurrentPage] = useState(1);
+    const usersPerPage = 5;
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -38,9 +42,10 @@ const AdminCustomers = () => {
 
     const getRoleIcon = (role: string) => {
         switch (role) {
-            case 'Super Admin': return <Shield className="w-4 h-4" />;
+            case 'Super Admin': 
+            case 'System Admin': return <Shield className="w-4 h-4" />;
             case 'Partner': return <Store className="w-4 h-4" />;
-            case 'Owner': return <User className="w-4 h-4" />;
+            case 'Customer': return <User className="w-4 h-4" />;
             case 'Rider': return <Bike className="w-4 h-4" />;
             default: return <User className="w-4 h-4" />;
         }
@@ -48,11 +53,51 @@ const AdminCustomers = () => {
 
     const getRoleStyle = (role: string) => {
         switch (role) {
-            case 'Super Admin': return 'bg-red-100 text-red-700 border-red-200';
-            case 'Partner': return 'bg-blue-100 text-blue-700 border-blue-200';
-            case 'Owner': return 'bg-gray-100 text-gray-700 border-gray-200';
-            case 'Rider': return 'bg-orange-100 text-orange-700 border-orange-200';
+            case 'Super Admin':
+            case 'System Admin': return 'bg-red-50 text-red-700 border-red-100';
+            case 'Partner': return 'bg-blue-50 text-blue-700 border-blue-100';
+            case 'Customer': return 'bg-accent-peach/20 text-accent-brown border-accent-brown/5';
+            case 'Rider': return 'bg-orange-50 text-orange-700 border-orange-100';
             default: return 'bg-gray-100 text-gray-700 border-gray-200';
+        }
+    };
+
+    const handleDelete = async (userRecord: any) => {
+        const token = localStorage.getItem('hivet_token');
+        try {
+            const res = await fetch(`http://localhost:8000/api/admin/users/${userRecord.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                setUsers(prev => prev.filter(u => u.id !== userRecord.id));
+                setActionMenu({ id: null, x: 0, y: 0 });
+                setConfirmModal({ show: false, type: 'delete', user: null });
+            }
+        } catch (err) {
+            console.error('Delete failed:', err);
+        }
+    };
+
+    const handleSuspend = async (userRecord: any) => {
+        const token = localStorage.getItem('hivet_token');
+        try {
+            const res = await fetch(`http://localhost:8000/api/admin/users/${userRecord.id}/suspend`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                // Refresh list
+                const refreshed = await fetch('http://localhost:8000/api/admin/users', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await refreshed.json();
+                setUsers(data.users);
+                setActionMenu({ id: null, x: 0, y: 0 });
+                setConfirmModal({ show: false, type: 'suspend', user: null });
+            }
+        } catch (err) {
+            console.error('Suspend failed:', err);
         }
     };
 
@@ -61,12 +106,15 @@ const AdminCustomers = () => {
                              u.email.toLowerCase().includes(searchTerm.toLowerCase());
         
         if (activeTab === 'All Users') return matchesSearch;
-        if (activeTab === 'Admins') return matchesSearch && u.role === 'Super Admin';
+        if (activeTab === 'Admins') return matchesSearch && (u.role === 'Super Admin' || u.role === 'System Admin');
         if (activeTab === 'Partners') return matchesSearch && u.role === 'Partner';
-        if (activeTab === 'Owners') return matchesSearch && u.role === 'Owner';
+        if (activeTab === 'Customers') return matchesSearch && u.role === 'Customer';
         if (activeTab === 'Riders') return matchesSearch && u.role === 'Rider';
         return matchesSearch;
     });
+
+    const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+    const paginatedUsers = filteredUsers.slice((currentPage - 1) * usersPerPage, currentPage * usersPerPage);
 
     return (
         <DashboardLayout title="Global Users">
@@ -91,10 +139,13 @@ const AdminCustomers = () => {
                     </div>
 
                     <div className="flex flex-wrap justify-center md:items-center gap-2 w-full md:w-auto pb-2 md:pb-0">
-                        {['All Users', 'Admins', 'Partners', 'Owners', 'Riders'].map((tab) => (
+                        {['All Users', 'Admins', 'Partners', 'Customers', 'Riders'].map((tab) => (
                             <button 
                                 key={tab} 
-                                onClick={() => setActiveTab(tab)}
+                                onClick={() => {
+                                    setActiveTab(tab);
+                                    setCurrentPage(1);
+                                }}
                                 className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap w-[calc(50%-0.35rem)] md:w-auto shrink-0 ${activeTab === tab ? 'bg-brand text-white shadow-md shadow-brand/20' : 'text-accent-brown/50 hover:bg-accent-peach/30 hover:text-accent-brown'}`}
                             >
                                 {tab}
@@ -113,28 +164,27 @@ const AdminCustomers = () => {
                                     <th className="px-6 py-5 whitespace-nowrap">User Info</th>
                                     <th className="px-6 py-5 whitespace-nowrap">Role</th>
                                     <th className="px-6 py-5 whitespace-nowrap">Status</th>
-                                    <th className="px-6 py-5 whitespace-nowrap">Last Active</th>
                                     <th className="px-6 py-5 whitespace-nowrap text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {loading ? (
                                     <tr>
-                                        <td colSpan={5} className="py-20 text-center">
+                                        <td colSpan={4} className="py-20 text-center">
                                             <div className="flex flex-col items-center gap-4">
                                                 <Loader2 className="w-10 h-10 text-brand animate-spin" />
                                                 <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest">Accessing platform directory...</p>
                                             </div>
                                         </td>
                                     </tr>
-                                ) : filteredUsers.length === 0 ? (
+                                ) : paginatedUsers.length === 0 ? (
                                     <tr>
-                                        <td colSpan={5} className="py-20 text-center">
+                                        <td colSpan={4} className="py-20 text-center">
                                             <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest">No users found</p>
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredUsers.map((u, i) => (
+                                    paginatedUsers.map((u, i) => (
                                         <motion.tr
                                             key={u.id}
                                             initial={{ opacity: 0, y: 10 }}
@@ -171,11 +221,19 @@ const AdminCustomers = () => {
                                                     {u.status}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <span className="font-medium text-xs text-accent-brown/70">{u.lastActive}</span>
-                                            </td>
                                             <td className="px-6 py-4 text-right">
-                                                <button className="w-8 h-8 rounded-lg flex items-center justify-center text-accent-brown/40 hover:bg-white hover:text-brand-dark hover:shadow-sm transition-all ml-auto">
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                        setActionMenu({ 
+                                                            id: u.id === actionMenu.id ? null : u.id, 
+                                                            x: rect.left - 160, 
+                                                            y: rect.top + window.scrollY 
+                                                        });
+                                                    }}
+                                                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ml-auto ${actionMenu.id === u.id ? 'bg-brand text-white' : 'text-accent-brown/40 hover:bg-white hover:text-brand-dark hover:shadow-sm'}`}
+                                                >
                                                     <MoreVertical className="w-4 h-4" />
                                                 </button>
                                             </td>
@@ -193,12 +251,12 @@ const AdminCustomers = () => {
                                 <Loader2 className="w-10 h-10 text-brand animate-spin mx-auto mb-4" />
                                 <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest">Accessing platform directory...</p>
                             </div>
-                        ) : filteredUsers.length === 0 ? (
+                        ) : paginatedUsers.length === 0 ? (
                             <div className="py-20 text-center">
                                 <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest">No users found</p>
                             </div>
                         ) : (
-                            filteredUsers.map((u, i) => (
+                            paginatedUsers.map((u, i) => (
                                 <motion.div
                                     key={u.id}
                                     initial={{ opacity: 0, x: -10 }}
@@ -242,10 +300,6 @@ const AdminCustomers = () => {
                                                  {u.status}
                                              </span>
                                          </div>
-                                        <div className="space-y-1 col-span-2 border-t border-accent-brown/5 pt-3">
-                                            <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest">Last Activity</p>
-                                            <p className="text-xs font-bold text-accent-brown/70">{u.lastActive}</p>
-                                        </div>
                                     </div>
                                 </motion.div>
                             ))
@@ -254,17 +308,145 @@ const AdminCustomers = () => {
                     {/* Pagination Footer */}
                     {!loading && (
                         <div className="p-4 border-t border-accent-brown/5 flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest max-w-[150px] truncate">Showing {filteredUsers.length} of {users.length} users</span>
-                            <div className="flex gap-2">
-                                <button className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:bg-accent-peach/30 transition-colors" disabled>Prev</button>
-                                <button className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-brand/10 text-brand-dark">1</button>
-                                <button className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-accent-brown/60 hover:bg-accent-peach/30 transition-colors">2</button>
-                                <button className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-brand-dark hover:bg-brand/10 transition-colors">Next</button>
-                            </div>
+                            <span className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest max-w-[150px] truncate">
+                                Showing {paginatedUsers.length === 0 ? 0 : (currentPage - 1) * usersPerPage + 1}–{Math.min(currentPage * usersPerPage, filteredUsers.length)} of {filteredUsers.length} users
+                            </span>
+                            {totalPages > 1 && (
+                                <div className="flex gap-1.5 items-center">
+                                    <button 
+                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                        className="px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:bg-accent-peach/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                    >
+                                        Prev
+                                    </button>
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                        .filter(p => p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1))
+                                        .map((p, idx, arr) => {
+                                            const prev = arr[idx - 1];
+                                            const showEllipsis = prev && p - prev > 1;
+                                            return (
+                                                <span key={p} className="flex items-center gap-1.5">
+                                                    {showEllipsis && <span className="text-[10px] text-accent-brown/30 font-bold">…</span>}
+                                                    <button
+                                                        onClick={() => setCurrentPage(p)}
+                                                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${currentPage === p ? 'bg-brand/10 text-brand-dark' : 'text-accent-brown/60 hover:bg-accent-peach/30'}`}
+                                                    >
+                                                        {p}
+                                                    </button>
+                                                </span>
+                                            );
+                                        })}
+                                    <button 
+                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-brand-dark hover:bg-brand/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* Floating Action Menu */}
+            {actionMenu.id && (
+                <div 
+                    className="fixed inset-0 z-[300]" 
+                    onClick={() => setActionMenu({ id: null, x: 0, y: 0 })}
+                >
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                        style={{ left: actionMenu.x, top: actionMenu.y + 40 }}
+                        className="absolute w-48 bg-white rounded-2xl shadow-2xl border border-accent-brown/5 p-2 overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button 
+                            onClick={() => {
+                                const user = users.find(u => u.id === actionMenu.id);
+                                if (user) navigator.clipboard.writeText(user.email);
+                                setActionMenu({ id: null, x: 0, y: 0 });
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-accent-brown/60 hover:bg-accent-peach/20 hover:text-brand-dark rounded-xl transition-all text-left"
+                        >
+                            <Mail className="w-3.5 h-3.5" />
+                            Copy Email
+                        </button>
+                        <button 
+                            onClick={() => {
+                                const targetUser = users.find(u => u.id === actionMenu.id);
+                                if (targetUser) setConfirmModal({ show: true, type: 'suspend', user: targetUser });
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-accent-brown/60 hover:bg-accent-peach/20 hover:text-brand-dark rounded-xl transition-all text-left group"
+                        >
+                            <Shield className="w-3.5 h-3.5 text-accent-brown/40 group-hover:text-amber-600" />
+                            Suspend User
+                        </button>
+
+                        <div className="h-px bg-accent-brown/5 my-1" />
+
+                        <button 
+                            onClick={() => {
+                                const targetUser = users.find(u => u.id === actionMenu.id);
+                                if (targetUser) setConfirmModal({ show: true, type: 'delete', user: targetUser });
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-50 rounded-xl transition-all text-left group"
+                        >
+                            <Trash2 className="w-3.5 h-3.5 text-red-300 group-hover:text-red-500" />
+                            Delete Account
+                        </button>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* Custom Confirmation Modal */}
+            {confirmModal.show && (
+                <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="absolute inset-0 bg-accent-brown/20 backdrop-blur-sm"
+                        onClick={() => setConfirmModal({ show: false, type: 'delete', user: null })}
+                    />
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        className="relative bg-white rounded-[2.5rem] shadow-2xl p-8 w-full max-w-md border border-white"
+                    >
+                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${confirmModal.type === 'delete' ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-500'}`}>
+                            {confirmModal.type === 'delete' ? <Trash2 className="w-8 h-8" /> : <ShieldCheck className="w-8 h-8" />}
+                        </div>
+                        
+                        <h3 className="text-xl font-black text-accent-brown leading-tight mb-2 uppercase tracking-tight">
+                            {confirmModal.type === 'delete' ? 'Delete User Account?' : 'Update User Status?'}
+                        </h3>
+                        <p className="text-sm font-medium text-accent-brown/60 mb-8">
+                            {confirmModal.type === 'delete' 
+                                ? `You are about to permanently remove user ${confirmModal.user?.id}. This action cannot be undone.` 
+                                : `Do you want to toggle the suspension status for user ${confirmModal.user?.id}?`}
+                        </p>
+
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={() => setConfirmModal({ show: false, type: 'delete', user: null })}
+                                className="flex-1 py-4 rounded-2xl text-xs font-black uppercase tracking-widest text-accent-brown/40 hover:bg-accent-peach/20 transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={() => confirmModal.user && (confirmModal.type === 'delete' ? handleDelete(confirmModal.user) : handleSuspend(confirmModal.user))}
+                                className={`flex-1 py-4 rounded-2xl text-xs font-black uppercase tracking-widest text-white shadow-lg transition-all ${confirmModal.type === 'delete' ? 'bg-red-500 shadow-red-200 hover:bg-red-600' : 'bg-amber-500 shadow-amber-200 hover:bg-amber-600'}`}
+                            >
+                                {confirmModal.type === 'delete' ? 'Delete Now' : 'Confirm'}
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
         </DashboardLayout>
     );
 };

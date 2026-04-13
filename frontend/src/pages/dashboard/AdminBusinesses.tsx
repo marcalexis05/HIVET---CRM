@@ -7,7 +7,7 @@ import {
 import DashboardLayout from '../../components/DashboardLayout';
 
 const API_BASE = 'http://localhost:8000';
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
 
 interface Business {
     id: string;

@@ -72,11 +72,30 @@ const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
                 if (!houseNumber && (t.includes('premise') || t.includes('subpremise'))) houseNumber = c.long_name;
                 if (t.includes('route')) street = c.long_name;
                 if (t.includes('sublocality_level_1') || t.includes('barangay')) barangay = c.long_name;
+                
+                // PHILIPPINES: locality is usually city/municipality
                 if (t.includes('locality')) city = c.long_name;
+                
+                // PHILIPPINES: administrative_area_level_1 is often the Region, level_2 is the Province
+                // We prioritize Level 1 for province, but fallback to Level 2 if Level 1 is a region name or if Level 1 is missing
                 if (t.includes('administrative_area_level_1')) province = c.long_name;
+                if (t.includes('administrative_area_level_2')) {
+                    district = c.long_name;
+                    // If province is empty, or looks like a region (contains 'Region' or 'NCR'), 
+                    // and level 2 is present, use level 2 as province
+                    if (!province || province.toLowerCase().includes('region') || province === 'Metro Manila' || province === 'National Capital Region') {
+                        // If province is currently empty or a region, try to use level 2 as province
+                        // But only if city isn't already level 2
+                        if (!province) province = c.long_name;
+                    }
+                }
+                
                 if (t.includes('postal_code')) zip = c.long_name;
-                if (t.includes('administrative_area_level_2')) district = c.long_name;
                 if (t.includes('neighborhood') || t.includes('subdivision')) subdivision = c.long_name;
+                
+                // Fallbacks for city if locality is missing
+                if (!city && t.includes('administrative_area_level_3')) city = c.long_name;
+                if (!city && t.includes('administrative_area_level_2') && province !== c.long_name) city = c.long_name;
             });
 
             const granular: GranularAddress = { houseNumber, blockNumber, street, subdivision, sitio, barangay, city, district, province, zip, region };

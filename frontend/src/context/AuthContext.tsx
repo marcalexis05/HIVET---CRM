@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 type Role = 'super_admin' | 'system_admin' | 'customer' | 'business' | 'rider' | null;
 
 interface AuthUser {
+    id?: number;
     email: string;
     role: Role;
     name: string;
@@ -16,6 +17,9 @@ interface AuthUser {
     birthday?: string;
     avatar?: string;
     token?: string;
+    vehicle_type?: string;
+    clinic_name?: string;
+    clinic_phone?: string;
 }
 
 interface AuthContextType {
@@ -50,6 +54,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 let role = payload.role as Role;
                 if ((payload.role as string) === 'user') role = 'customer';
                 setUser({
+                    id: payload.id as number | undefined,
                     email: payload.email as string,
                     role: role,
                     name: payload.name as string,
@@ -61,6 +66,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     gender: payload.gender as string | undefined,
                     birthday: payload.birthday as string | undefined,
                     avatar: payload.avatar as string | undefined,
+                    vehicle_type: payload.vehicle_type as string | undefined,
+                    clinic_name: payload.clinic_name as string | undefined,
+                    clinic_phone: payload.clinic_phone as string | undefined,
                     token: stored,
                 });
             } else {
@@ -81,6 +89,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         let role = (payload.role as Role) ?? 'customer';
         if ((payload.role as string) === 'user') role = 'customer';
         setUser({
+            id: payload.id as number | undefined,
             email: payload.email as string,
             role: role,
             name: payload.name as string,
@@ -92,6 +101,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             gender: payload.gender as string | undefined,
             birthday: payload.birthday as string | undefined,
             avatar: payload.avatar as string | undefined,
+            vehicle_type: payload.vehicle_type as string | undefined,
+            clinic_name: payload.clinic_name as string | undefined,
+            clinic_phone: payload.clinic_phone as string | undefined,
             token,
         });
     };

@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-    User, Lock, Bell, Trash2, Check, Loader2, Eye, EyeOff, 
+import {
+    User, Lock, Bell, Trash2, Loader2, Eye, EyeOff,
     AlertTriangle, CheckCircle, MapPin, Plus, Edit2, Trash,
-    Store, ShieldCheck 
+    Store, ShieldCheck, X, Truck, Bike
 } from 'lucide-react';
-import { Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -14,6 +13,7 @@ import { CustomDatePicker } from '../../components/CustomDatePicker';
 import { CustomDropdown } from '../../components/CustomDropdown';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPickerModal from '../../components/MapPickerModal';
+import ModernModal from '../../components/ModernModal';
 
 type Section = 'profile' | 'addresses' | 'password' | 'notifications' | 'danger';
 
@@ -25,14 +25,32 @@ const NAV: { id: Section; label: string; icon: React.ElementType }[] = [
     { id: 'danger', label: 'Danger Zone', icon: Trash2 },
 ];
 
+const calculateAge = (birthday: string) => {
+    if (!birthday) return '';
+    try {
+        const birthDate = new Date(birthday);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const month = today.getMonth() - birthDate.getMonth();
+        if (month < 0 || (month === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return age >= 0 ? age.toString() : '0';
+    } catch (e) { return ''; }
+};
+
+const getNavLinks = (role: string) => {
+    return NAV.filter(n => {
+        return true;
+    });
+};
+
 const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
     <button onClick={onChange}
         className={`relative w-12 h-6 rounded-full transition-all duration-300 ${checked ? 'bg-brand-dark' : 'bg-accent-peach/60'}`}>
         <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300 ${checked ? 'translate-x-6' : ''}`} />
     </button>
 );
-
-
 
 const AccountSettings = () => {
     const { user, logout, loginWithToken } = useAuth();
@@ -46,17 +64,20 @@ const AccountSettings = () => {
     const [suffix, setSuffix] = useState(user?.suffix ?? '');
     const [email, setEmail] = useState(user?.email ?? '');
     const [phone, setPhone] = useState(user?.phone ?? '');
+    const [vehicleType, setVehicleType] = useState(user?.vehicle_type ?? '');
     const [gender, setGender] = useState(user?.gender ?? '');
     const [birthday, setBirthday] = useState(user?.birthday ?? '');
+    const [ownerBirthday, setOwnerBirthday] = useState('');
+    const [ownerGender, setOwnerGender] = useState('');
     const [savingProfile, setSavingProfile] = useState(false);
-    
+
     // Business specific
     const [clinicName, setClinicName] = useState('');
     const [clinicPhone, setClinicPhone] = useState('');
     const [ownerFullName, setOwnerFullName] = useState('');
     const [loyaltyPointsPerPeso, setLoyaltyPointsPerPeso] = useState(10.0);
     const [loyaltyPointsPerReservation, setLoyaltyPointsPerReservation] = useState(50);
-    
+
     // Primary Clinic Address (Granular)
     const [clinicHouseNumber, setClinicHouseNumber] = useState('');
     const [clinicBlockNumber, setClinicBlockNumber] = useState('');
@@ -71,7 +92,7 @@ const AccountSettings = () => {
     const [clinicRegion, setClinicRegion] = useState('');
     const [clinicLat, setClinicLat] = useState<number | null>(null);
     const [clinicLng, setClinicLng] = useState<number | null>(null);
-    
+
     // Addresses
     interface Address {
         id: number;
@@ -81,7 +102,7 @@ const AccountSettings = () => {
         phone: string;
         address_line1: string;
         address_line2: string;
-        
+
         house_number: string;
         block_number: string;
         street: string;
@@ -102,15 +123,17 @@ const AccountSettings = () => {
     }
     const [addresses, setAddresses] = useState<Address[]>([]);
     const isBusiness = user?.role === 'business';
+    const isRider = user?.role === 'rider';
     const [loadingAddresses, setLoadingAddresses] = useState(false);
     const [showAddrModal, setShowAddrModal] = useState(false);
     const [editingAddr, setEditingAddr] = useState<Address | null>(null);
+    const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [addrForm, setAddrForm] = useState({
         full_name: '',
         phone: '',
         address_line1: '',
         address_line2: '',
-        
+
         house_number: '',
         block_number: '',
         street: '',
@@ -130,7 +153,12 @@ const AccountSettings = () => {
         delivery_notes: ''
     });
     const [showAllBranches, setShowAllBranches] = useState(false);
-    const [confirmModal, setConfirmModal] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
+    const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'info' | 'success' | 'error' | 'confirm' | 'danger'; onConfirm?: () => void }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'info'
+    });
     const [isGoogleUser, setIsGoogleUser] = useState(false);
     const [hasPassword, setHasPassword] = useState(true);
 
@@ -139,17 +167,17 @@ const AccountSettings = () => {
             setAddrForm(prev => ({
                 ...prev,
                 address_line1: _full,
-                house_number: granular.houseNumber,
-                block_number: granular.blockNumber,
-                street: granular.street,
-                subdivision: granular.subdivision,
-                sitio: granular.sitio,
-                barangay: granular.barangay,
-                city: granular.city,
-                district: granular.district,
-                province: granular.province,
-                zip_code: granular.zip,
-                region: granular.region,
+                house_number: granular.houseNumber || '',
+                block_number: granular.blockNumber || '',
+                street: granular.street || '',
+                subdivision: granular.subdivision || '',
+                sitio: granular.sitio || '',
+                barangay: granular.barangay || '',
+                city: granular.city || '',
+                district: granular.district || '',
+                province: granular.province || '',
+                zip_code: granular.zip || '',
+                region: granular.region || '',
                 lat: geometry?.lat ?? prev.lat,
                 lng: geometry?.lng ?? prev.lng
             }));
@@ -198,90 +226,53 @@ const AccountSettings = () => {
         }));
     };
 
-    const handleClinicAddressComponents = (_full: string, components: any[], geometry?: { lat: number, lng: number }, granular?: any) => {
-        if (granular) {
-            setClinicHouseNumber(granular.houseNumber);
-            setClinicBlockNumber(granular.blockNumber);
-            setClinicStreet(granular.street);
-            setClinicSubdivision(granular.subdivision);
-            setClinicSitio(granular.sitio);
-            setClinicBarangay(granular.barangay);
-            setClinicCity(granular.city);
-            setClinicDistrict(granular.district);
-            setClinicProvince(granular.province);
-            setClinicZip(granular.zip);
-            setClinicRegion(granular.region);
-            if (geometry) {
-                setClinicLat(geometry.lat);
-                setClinicLng(geometry.lng);
-            }
-            return;
-        }
-
-        let houseNum = '';
-        let street = '';
-        let barangay = '';
-        let city = '';
-        let province = '';
-        let zip = '';
-        let region = 'Philippines';
-        let district = '';
-        let subdivision = '';
-
-        components.forEach(c => {
-            const types = c.types;
-            if (types.includes('street_number')) houseNum = c.long_name;
-            if (types.includes('premise') || types.includes('subpremise')) {
-                if (!houseNum) houseNum = c.long_name;
-            }
-            if (types.includes('route')) street = c.long_name;
-            if (types.includes('sublocality_level_1') || types.includes('barangay')) barangay = c.long_name;
-            if (types.includes('locality')) city = c.long_name;
-            if (types.includes('administrative_area_level_1')) province = c.long_name;
-            if (types.includes('postal_code')) zip = c.long_name;
-            if (types.includes('administrative_area_level_2')) district = c.long_name;
-            if (types.includes('neighborhood') || types.includes('subdivision')) subdivision = c.long_name;
-        });
-
-        setClinicHouseNumber(houseNum);
-        setClinicStreet(street);
-        setClinicBarangay(barangay);
-        setClinicCity(city);
-        setClinicProvince(province);
-        setClinicZip(zip);
-        setClinicDistrict(district);
-        setClinicSubdivision(subdivision);
-        setClinicRegion(region);
-        if (geometry) {
-            setClinicLat(geometry.lat);
-            setClinicLng(geometry.lng);
-        }
-    };
 
     const showConfirm = (title: string, message: string, onConfirm: () => void) => {
-        setConfirmModal({ open: true, title, message, onConfirm });
+        setModal({ isOpen: true, title, message, type: 'confirm', onConfirm });
     };
 
-    // Fetch fresh data from DB on mount
     useEffect(() => {
         const fetchProfile = async () => {
             if (!user?.token) return;
             if (user.role !== 'customer' && user.role !== 'business' && user.role !== 'rider') return;
-            
+
             try {
                 const res = await fetch('http://localhost:8000/api/auth/me', {
                     headers: { 'Authorization': `Bearer ${user.token}` }
                 });
                 if (res.ok) {
                     const data = await res.json();
+
+                    // Helper to split name if individual parts are missing
+                    const populateNames = (f: string, m: string, l: string, fullName: string) => {
+                        if (f) setFirstName(f);
+                        if (m) setMiddleName(m);
+                        if (l) setLastName(l);
+
+                        if (!f && !l && fullName) {
+                            const parts = fullName.trim().split(/\s+/);
+                            if (parts.length === 1) setFirstName(parts[0]);
+                            else if (parts.length === 2) {
+                                setFirstName(parts[0]);
+                                setLastName(parts[1]);
+                            } else if (parts.length >= 3) {
+                                setFirstName(parts[0]);
+                                setMiddleName(parts[1]);
+                                setLastName(parts.slice(2).join(' '));
+                            }
+                        }
+                    };
+
                     if (user.role === 'business') {
                         setClinicName(data.clinic_name || '');
                         setClinicPhone(data.clinic_phone || '');
-                        setOwnerFullName(data.owner_full_name || '');
+                        setOwnerFullName(data.owner_full_name || data.name || '');
                         setEmail(data.email || '');
                         setLoyaltyPointsPerPeso(data.loyalty_points_per_peso ?? 10.0);
                         setLoyaltyPointsPerReservation(data.loyalty_points_per_reservation ?? 50);
-                        
+                        setOwnerBirthday(data.owner_birthday || '');
+                        setOwnerGender(data.owner_gender || '');
+
                         setClinicHouseNumber(data.clinic_house_number || '');
                         setClinicBlockNumber(data.clinic_block_number || '');
                         setClinicStreet(data.clinic_street || '');
@@ -295,19 +286,13 @@ const AccountSettings = () => {
                         setClinicRegion(data.clinic_region || '');
                         setClinicLat(data.clinic_lat || null);
                         setClinicLng(data.clinic_lng || null);
-                    } else if (user.role === 'rider') {
-                        setFirstName(data.first_name || '');
-                        setLastName(data.last_name || '');
-                        setSuffix(data.suffix || '');
-                        setEmail(data.email || '');
-                        setPhone(data.phone || '');
+
                     } else {
-                        setFirstName(data.first_name || '');
-                        setMiddleName(data.middle_name || '');
-                        setLastName(data.last_name || '');
+                        populateNames(data.first_name, data.middle_name, data.last_name, data.name || data.full_name);
                         setSuffix(data.suffix || '');
                         setEmail(data.email || '');
                         setPhone(data.phone || '');
+                        setVehicleType(data.vehicle_type || '');
                         setGender(data.gender || '');
                         setBirthday(data.birthday || '');
                     }
@@ -331,7 +316,6 @@ const AccountSettings = () => {
             });
             if (res.ok) {
                 const data = await res.json();
-                // Normalize data structure
                 if (isBusiness) {
                     const normalized = data.map((b: any) => ({
                         id: b.id,
@@ -376,7 +360,7 @@ const AccountSettings = () => {
                         label: a.label || 'Home',
                         delivery_notes: a.delivery_notes || ''
                     }));
-                    setAddresses(normalized);
+                    setAddresses(normalized.sort((a: any, b: any) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0)));
                 }
             }
         } catch (err) {
@@ -387,21 +371,16 @@ const AccountSettings = () => {
     };
 
     useEffect(() => {
-        if (section === 'addresses') fetchAddresses();
-    }, [section, user?.token]);
+        if (section === 'addresses' || (section === 'profile' && isRider)) fetchAddresses();
+    }, [section, isRider]);
 
-    // Password
     const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
-    const [showPw, setShowPw] = useState(false);
+    const [showPw, setShowPw] = useState<{ [key: string]: boolean }>({});
     const [showMapPicker, setShowMapPicker] = useState(false);
-    const [pickerMode, setPickerMode] = useState<'main' | 'branch'>('branch');
     const [savingPw, setSavingPw] = useState(false);
     const [pwError, setPwError] = useState('');
 
-    // Notifications
     const [notifs, setNotifs] = useState({ orderUpdates: true, loyaltyAlerts: true, newsletter: false, gmailNotifications: false });
-
-    // Toast & Modals
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [showGooglePwModal, setShowGooglePwModal] = useState(false);
 
@@ -410,11 +389,92 @@ const AccountSettings = () => {
         setTimeout(() => setToast(null), 3000);
     };
 
-    // Delete confirm
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [newEmail, setNewEmail] = useState('');
+    const [emailOtp, setEmailOtp] = useState('');
+    const [otpSent, setOtpSent] = useState(false);
+    const [sendingOtp, setSendingOtp] = useState(false);
+    const [verifyingEmail, setVerifyingEmail] = useState(false);
+
+    const handleRequestEmailChange = async () => {
+        if (!newEmail || !newEmail.includes('@')) {
+            showToast('Please enter a valid email address.', 'error');
+            return;
+        }
+        setSendingOtp(true);
+        try {
+            const res = await fetch('http://localhost:8000/api/auth/request-email-change', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user?.token}`
+                },
+                body: JSON.stringify({ new_email: newEmail })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setOtpSent(true);
+                showToast('Verification code sent to your new email.');
+            } else {
+                showToast(data.detail || 'Failed to send verification code.', 'error');
+            }
+        } catch (err) {
+            showToast('Error requesting email change.', 'error');
+        } finally {
+            setSendingOtp(false);
+        }
+    };
+
+    const handleVerifyEmailChange = async () => {
+        if (emailOtp.length !== 6) {
+            showToast('Please enter the 6-digit verification code.', 'error');
+            return;
+        }
+        setVerifyingEmail(true);
+        try {
+            const res = await fetch('http://localhost:8000/api/auth/verify-email-change', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user?.token}`
+                },
+                body: JSON.stringify({ new_email: newEmail, otp: emailOtp })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                if (data.token) loginWithToken(data.token);
+                setEmail(newEmail);
+                setShowEmailModal(false);
+                setNewEmail('');
+                setEmailOtp('');
+                setOtpSent(false);
+                showToast('Email updated successfully!');
+            } else {
+                showToast(data.detail || 'Invalid verification code.', 'error');
+            }
+        } catch (err) {
+            showToast('Error verifying email change.', 'error');
+        } finally {
+            setVerifyingEmail(false);
+        }
+    };
+
     const [deleteConfirm, setDeleteConfirm] = useState('');
 
     const handleSaveProfile = async () => {
         if (!user?.token) return;
+        // AGE VALIDATION (18+)
+        const checkBirthday = isBusiness ? ownerBirthday : birthday;
+        if (!checkBirthday) {
+            showToast('Birthdate is required.', 'error');
+            return;
+        }
+        const age = parseInt(calculateAge(checkBirthday));
+        if (isNaN(age) || age < 18) {
+            showToast('You must be at least 18 years old to use this platform.', 'error');
+            return;
+        }
+
         setSavingProfile(true);
         try {
             const res = await fetch('http://localhost:8000/api/customer/profile', {
@@ -423,13 +483,14 @@ const AccountSettings = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${user.token}`
                 },
-                body: JSON.stringify(user?.role === 'business' ? {
+                body: JSON.stringify(isBusiness ? {
                     clinic_name: clinicName || null,
                     clinic_phone: clinicPhone || null,
-                    first_name: ownerFullName || null, // Map to first_name for owner
-                    email: email || null,
+                    first_name: ownerFullName || null,
                     loyalty_points_per_peso: parseFloat(loyaltyPointsPerPeso.toString()),
                     loyalty_points_per_reservation: parseInt(loyaltyPointsPerReservation.toString()),
+                    owner_birthday: ownerBirthday || null,
+                    owner_gender: ownerGender || null,
                     clinic_house_number: clinicHouseNumber || null,
                     clinic_block_number: clinicBlockNumber || null,
                     clinic_street: clinicStreet || null,
@@ -443,18 +504,21 @@ const AccountSettings = () => {
                     clinic_region: clinicRegion || null,
                     clinic_lat: clinicLat,
                     clinic_lng: clinicLng,
-                } : user?.role === 'rider' ? {
+                    phone: phone || null
+                } : isRider ? {
                     first_name: firstName || null,
+                    middle_name: middleName || null,
                     last_name: lastName || null,
                     suffix: suffix || null,
-                    email: email || null,
                     phone: phone || null,
+                    vehicle_type: vehicleType || null,
+                    birthday: birthday || null,
+                    gender: gender || null,
                 } : {
                     first_name: firstName || null,
                     middle_name: middleName || null,
                     last_name: lastName || null,
                     suffix: suffix || null,
-                    email: email || null,
                     phone: phone || null,
                     gender: gender || null,
                     birthday: birthday || null,
@@ -462,9 +526,7 @@ const AccountSettings = () => {
             });
             if (res.ok) {
                 const data = await res.json();
-                if (data.token) {
-                    loginWithToken(data.token);
-                }
+                if (data.token) loginWithToken(data.token);
                 showToast('Profile updated successfully!');
             } else {
                 const errorData = await res.json().catch(() => ({}));
@@ -516,19 +578,52 @@ const AccountSettings = () => {
         }
     };
 
-    const handleDelete = () => {
+    const handleDelete = async () => {
         if (deleteConfirm !== 'DELETE') return;
-        logout();
-        navigate('/');
+        setModal({
+            isOpen: true,
+            title: 'Deactivate Account',
+            message: 'Are you sure you want to deactivate your account? This will permanently archive your products and personal data.',
+            type: 'danger',
+            onConfirm: async () => {
+                try {
+                    const res = await fetch('http://localhost:8000/api/account', {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${user?.token}` }
+                    });
+                    if (res.ok) {
+                        logout();
+                        navigate('/');
+                    } else {
+                        const err = await res.json();
+                        showToast(err.detail || 'Failed to deactivate account.', 'error');
+                    }
+                } catch (error) {
+                    showToast('Network error while deactivating account.', 'error');
+                }
+                setModal(m => ({ ...m, isOpen: false }));
+            }
+        });
     };
+
+    const isAnyModalOpen = showAddrModal || !!editingAddr || showMapPicker || isDatePickerOpen || showEmailModal || showGooglePwModal || modal.isOpen;
+
+    // Manage body scroll
+    useEffect(() => {
+        if (isAnyModalOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'auto';
+        }
+        return () => { document.body.style.overflow = 'auto'; };
+    }, [isAnyModalOpen]);
 
     const initials = (isBusiness ? (clinicName || user?.name || 'C') : (user?.name || user?.email || 'U')).slice(0, 2).toUpperCase();
 
     return (
-        <DashboardLayout title="Account Settings">
-            <div className="max-w-4xl mx-auto space-y-8">
+        <DashboardLayout title="">
+            <div className={`w-full max-w-[1440px] mx-auto space-y-8 pb-20 ${isAnyModalOpen ? 'opacity-30 blur-2xl pointer-events-none' : 'opacity-100'}`}>
 
-                {/* Toast */}
                 <AnimatePresence>
                     {toast && (
                         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
@@ -539,65 +634,129 @@ const AccountSettings = () => {
                     )}
                 </AnimatePresence>
 
-                {/* Profile Header */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-                    className="bg-brand-dark rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 text-white flex flex-col sm:flex-row items-center gap-4 sm:gap-6 relative overflow-hidden text-center sm:text-left">
-                    {user?.avatar && !isBusiness ? (
-                        <img
-                            src={user.avatar}
-                            alt={user.name}
-                            className="w-20 h-20 rounded-full object-cover ring-4 ring-white/20 shrink-0 z-10"
-                        />
-                    ) : (
-                        <div className="w-20 h-20 rounded-full bg-brand text-brand-dark flex items-center justify-center font-black text-2xl shrink-0 z-10">
-                            {initials}
-                        </div>
-                    )}
-                    <div className="z-10">
-                        <h2 className="text-2xl font-black tracking-tight">{user?.name ?? 'customer'}</h2>
-                        <p className="text-white/50 font-medium text-sm">{user?.email}</p>
-                    </div>
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-brand/10 rounded-full blur-[60px]" />
-                </motion.div>
+                <div className="relative bg-brand-dark rounded-[2.5rem] p-8 lg:p-12 overflow-hidden shadow-2xl border border-white/5">
+                    {/* Background Decorative Elements */}
+                    <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand/10 rounded-full blur-[120px] -mr-32 -mt-32" />
+                    <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-accent-peach/5 rounded-full blur-[80px] -ml-20 -mb-20" />
 
-                {/* Tab nav + Content */}
-                <div className="flex flex-col lg:flex-row gap-6">
-                    {/* Sidebar nav / Tab Bar */}
-                    <div className="lg:w-64 shrink-0">
-                        <div className="bg-white rounded-[2rem] p-2 sm:p-4 shadow-xl shadow-accent-brown/5 border border-white flex lg:flex-col overflow-x-auto no-scrollbar lg:overflow-visible gap-1 sm:gap-2">
-                                    {NAV.map(n => {
-                                        let label = n.label;
-                                        if (isBusiness) {
-                                            if (n.id === 'profile') label = 'Clinic Profile';
-                                            if (n.id === 'addresses') label = 'Clinic Locations';
-                                        }
-                                        return (
-                                            <button key={n.id} onClick={() => {
+                    <div className="relative z-10 flex flex-col md:flex-row items-center md:items-end gap-8">
+                        {/* Avatar Hub */}
+                        <div className="relative">
+                            <div className="w-32 h-32 rounded-full bg-white/10 text-white flex items-center justify-center font-black text-4xl shadow-2xl relative z-10 border-4 border-white/20 backdrop-blur-xl transition-all hover:scale-105 duration-500 overflow-hidden">
+                                {user?.avatar ? (
+                                    <img src={user?.avatar} alt={user?.name || 'User Profile'} className="w-full h-full object-cover" />
+                                ) : (
+                                    initials
+                                )}
+                            </div>
+                            <div className="absolute -bottom-1 -right-1 bg-green-500 w-7 h-7 rounded-full border-[3px] border-brand-dark flex items-center justify-center shadow-lg shadow-black/10 transition-transform hover:scale-110 z-20">
+                                <CheckCircle className="w-3.5 h-3.5 text-white stroke-[3]" />
+                            </div>
+                        </div>
+
+                        {/* User Primary Info */}
+                        <div className="flex-1 text-center md:text-left space-y-2">
+                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/20 backdrop-blur-md mb-2">
+                                {isRider && <Truck className="w-3.5 h-3.5 text-white" />}
+                                {isBusiness && <Store className="w-3.5 h-3.5 text-white" />}
+                                <span className="text-[10px] font-black uppercase tracking-widest text-white">
+                                    {isRider ? 'Certified Rider' : isBusiness ? 'Partner Business' : 'Verified Member'}
+                                </span>
+                                <div className="w-2 h-2 rounded-full bg-white animate-pulse ml-1" />
+                            </div>
+
+                            <h2 className="text-4xl lg:text-5xl font-black text-white tracking-tighter leading-tight">
+                                {user?.name ?? 'Account'}
+                            </h2>
+
+                            <div className="flex flex-wrap justify-center md:justify-start items-center gap-6 pt-2">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-white">
+                                        <Bell className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[8px] font-black text-white/50 uppercase tracking-[0.2em]">Contact Email</p>
+                                        <p className="text-sm font-bold text-white tracking-tight">{user?.email}</p>
+                                    </div>
+                                </div>
+                                <div className="w-px h-10 bg-white/10 hidden sm:block" />
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-white">
+                                        <User className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[8px] font-black text-white/50 uppercase tracking-[0.2em]">Account Status</p>
+                                        <p className="text-sm font-black text-white uppercase tracking-widest">Active</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Action Hub - Streamlined */}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    {/* Navigation Sidebar */}
+                    <div className="lg:col-span-3 space-y-6">
+                        <div className="bg-white rounded-[2rem] p-3 border border-accent-brown/5 shadow-xl shadow-brand-dark/5">
+                            <div className="p-4 mb-2">
+                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/30">Management Hub</h4>
+                            </div>
+                            <div className="space-y-1.5">
+                                {getNavLinks(user?.role || '').map(n => {
+                                    let label = n.label;
+                                    if (isBusiness) {
+                                        if (n.id === 'profile') label = 'Clinic Profile';
+                                        if (n.id === 'addresses') label = 'Clinic Locations';
+                                    } else if (isRider) {
+                                        if (n.id === 'profile') label = 'Rider Profile';
+                                    }
+                                    const isActive = section === n.id;
+                                    return (
+                                        <button key={n.id} onClick={() => {
+                                            if (n.id === 'password' && isGoogleUser && !hasPassword && !isRider) {
+                                                setShowGooglePwModal(true);
+                                            } else {
                                                 setSection(n.id);
-                                                if (n.id === 'password' && isGoogleUser && !hasPassword) {
-                                                    setShowGooglePwModal(true);
-                                                }
-                                            }}
-                                                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] sm:text-xs font-black transition-all whitespace-nowrap lg:whitespace-normal group ${section === n.id ? 'bg-brand-dark text-white' : 'text-accent-brown/50 hover:bg-accent-peach/30 hover:text-accent-brown'} ${n.id === 'danger' ? 'lg:mt-4 lg:border-t lg:border-accent-brown/5 lg:pt-4 text-red-400 hover:bg-red-50 hover:text-red-500' : ''}`}>
-                                                <n.icon className={`w-4 h-4 shrink-0 transition-transform ${section === n.id ? 'scale-110' : 'group-hover:scale-110'}`} /> 
-                                                <span>{label}</span>
-                                            </button>
-                                        );
-                                    })}
+                                            }
+                                        }}
+                                            className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all group ${isActive ? 'bg-brand-dark text-white shadow-2xl shadow-brand-dark/20' : 'text-accent-brown/70 hover:bg-brand/5 hover:text-accent-brown'}`}>
+                                            <div className="flex items-center gap-4">
+                                                <div className={`p-2 rounded-xl transition-colors ${isActive ? 'bg-white/10' : 'bg-brand/5 group-hover:bg-brand/10 group-hover:text-brand-dark'}`}>
+                                                    <n.icon className={`w-4 h-4 transition-transform ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
+                                                </div>
+                                                <span className="text-[11px] font-black uppercase tracking-widest">{label}</span>
+                                            </div>
+                                            {isActive && <div className="w-1.5 h-1.5 rounded-full bg-white shadow-sm" />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Secure Connection Block Removed */}
                         </div>
+
+                        {section === 'danger' ? null : (
+                            <button
+                                onClick={() => setSection('danger')}
+                                className="w-full flex items-center gap-4 px-8 py-5 rounded-3xl bg-red-50 text-red-500 border border-red-100 hover:bg-red-500 hover:text-white transition-all shadow-lg shadow-red-500/5 group"
+                            >
+                                <Trash2 className="w-4 h-4 transition-transform group-hover:rotate-12" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Terminate Account</span>
+                            </button>
+                        )}
                     </div>
 
-                    {/* Panel */}
                     <motion.div key={section} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-                        className="flex-1 bg-white rounded-3xl sm:rounded-[2rem] p-5 sm:p-8 shadow-xl shadow-accent-brown/5 border border-white">
+                        className="lg:col-span-9 bg-white rounded-[2.5rem] p-8 lg:p-12 shadow-2xl shadow-brand-dark/5 border border-white">
 
                         {section === 'profile' && (
                             <div>
-                                <h3 className="text-xl font-black text-accent-brown tracking-tight mb-6">{isBusiness ? 'Clinic Information' : 'Profile Information'}</h3>
+                                <h3 className="text-xl font-black text-accent-brown tracking-tight mb-6">{isBusiness ? 'Clinic Information' : isRider ? 'Rider Information' : 'Profile Information'}</h3>
                                 <div className="space-y-5">
                                     {isBusiness ? (
                                         <>
-                                            {/* Clinic Name & Phone */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Clinic Name</label>
@@ -605,55 +764,95 @@ const AccountSettings = () => {
                                                         className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
                                                 </div>
                                                 <div>
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Clinic Phone</label>
-                                                    <input type="tel" value={clinicPhone} onChange={e => setClinicPhone(e.target.value)} placeholder="09XX XXX XXXX"
-                                                        className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Clinic Phone <span className="text-accent-brown">*</span></label>
+                                                    <div className="relative group">
+                                                        <span className="absolute left-5 top-1/2 -translate-y-1/2 text-sm font-black text-accent-brown/30 tracking-tight transition-colors group-focus-within:text-accent-brown">+63</span>
+                                                        <input
+                                                            type="tel"
+                                                            value={clinicPhone}
+                                                            maxLength={10}
+                                                            onChange={e => {
+                                                                let val = e.target.value.replace(/\D/g, '');
+                                                                if (val.startsWith('0')) val = val.substring(1);
+                                                                if (val.length > 0 && !val.startsWith('9')) val = '';
+                                                                setClinicPhone(val.slice(0, 10));
+                                                            }}
+                                                            placeholder="9XX XXX XXXX"
+                                                            className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 pl-14 pr-4 sm:pr-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                                    </div>
                                                 </div>
                                             </div>
-                                            {/* Owner Name */}
                                             <div>
                                                 <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Owner Full Name</label>
                                                 <input type="text" value={ownerFullName} onChange={e => setOwnerFullName(e.target.value)} placeholder="Juan Dela Cruz"
                                                     className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
                                             </div>
 
-
-
-                                            {/* Loyalty Settings */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-accent-brown/5">
-
+                                            <div className="grid grid-cols-2 gap-4">
                                                 <div>
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Registered Email</label>
+                                                    <CustomDatePicker
+                                                        label="Birthdate"
+                                                        value={ownerBirthday}
+                                                        onChange={setOwnerBirthday}
+                                                        onModalOpenChange={setIsDatePickerOpen}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Age <span className="text-accent-brown text-[8px] normal-case tracking-normal font-bold">Auto-fill</span></label>
+                                                    <input type="text" value={calculateAge(ownerBirthday)} readOnly
+                                                        className="w-full bg-accent-peach/5 border-2 border-transparent rounded-2xl py-3 sm:py-4 px-4 text-sm font-black text-accent-brown/50 outline-none transition-all cursor-default" />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <CustomDropdown
+                                                    label="Sex"
+                                                    value={ownerGender}
+                                                    onChange={setOwnerGender}
+                                                    options={[
+                                                        { label: 'Male', value: 'Male' },
+                                                        { label: 'Female', value: 'Female' },
+                                                        { label: 'Other', value: 'Other' },
+                                                        { label: 'Rather not say', value: 'Rather not say' },
+                                                    ]}
+                                                />
+                                            </div>
+
+
+                                            <div className="pt-4 border-t border-accent-brown/5">
+                                                <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Registered Email</label>
+                                                <div className="relative group">
                                                     <input type="email" value={email} readOnly
-                                                        className="w-full bg-accent-peach/10 border-2 border-transparent rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown/50 outline-none cursor-not-allowed" />
+                                                        className="w-full bg-accent-peach/20 border-2 border-transparent rounded-2xl py-3 sm:py-4 pl-4 sm:pl-5 pr-24 text-sm font-bold text-accent-brown/50 outline-none transition-all cursor-default" />
+                                                    <button onClick={() => { setShowEmailModal(true); setNewEmail(email); }}
+                                                        className="absolute right-5 top-1/2 -translate-y-1/2 text-[9px] font-black text-accent-brown uppercase tracking-widest hover:text-black transition-colors">
+                                                        Verify
+                                                    </button>
                                                 </div>
                                             </div>
                                         </>
                                     ) : (
                                         <>
-                                            {/* First & Last Name */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">First Name <span className="text-brand-dark">*</span></label>
-                                                    <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Juan"
-                                                        className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                <div className="md:col-span-1">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">First Name <span className="text-red-500">*</span></label>
+                                                    <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Enter First Name"
+                                                        className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 px-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/20" />
                                                 </div>
-                                                <div>
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Last Name <span className="text-brand-dark">*</span></label>
-                                                    <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Dela Cruz"
-                                                        className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                                <div className="md:col-span-1">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">Middle Name <span className="text-accent-brown/30 text-[8px] normal-case tracking-normal font-bold">Optional</span></label>
+                                                    <input type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} placeholder="Enter Middle Name"
+                                                        className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 px-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/20" />
+                                                </div>
+                                                <div className="md:col-span-1">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">Surname <span className="text-red-500">*</span></label>
+                                                    <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Enter Surname"
+                                                        className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 px-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/20" />
                                                 </div>
                                             </div>
-                                            {/* Middle Name & Suffix */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                {user?.role !== 'rider' && (
-                                                    <div>
-                                                        <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Middle Name <span className="text-accent-brown/30 text-[9px] normal-case tracking-normal font-bold italic">Optional</span></label>
-                                                        <input type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} placeholder="Santos"
-                                                            className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
-                                                    </div>
-                                                )}
-                                                <div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6">
+                                                <div className="md:col-span-1">
                                                     <CustomDropdown
                                                         label="Suffix"
                                                         isOptional={true}
@@ -669,57 +868,128 @@ const AccountSettings = () => {
                                                         ]}
                                                     />
                                                 </div>
-                                            </div>
-                                            {/* Email & Phone */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Email Address</label>
-                                                    <input type="email" value={email} readOnly
-                                                        className="w-full bg-accent-peach/10 border-2 border-transparent rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown/50 outline-none cursor-not-allowed" />
+                                                <div className="md:col-span-1">
+                                                    <CustomDropdown
+                                                        label="Sex"
+                                                        value={gender}
+                                                        onChange={setGender}
+                                                        options={[
+                                                            { label: 'Male', value: 'Male' },
+                                                            { label: 'Female', value: 'Female' },
+                                                            { label: 'Other', value: 'Other' },
+                                                            { label: 'Prefer not to say', value: 'Prefer not to say' },
+                                                        ]}
+                                                    />
                                                 </div>
-                                                <div>
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Contact Number</label>
-                                                    <div className="relative">
-                                                        <span className="absolute left-5 top-1/2 -translate-y-1/2 text-sm font-bold text-accent-brown/50">+63</span>
-                                                        <input type="tel" value={phone.replace(/^\+63/, '')} onChange={e => {
-                                                            const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                                            setPhone(val ? `+63${val}` : '');
-                                                        }} placeholder="912 345 6789"
-                                                            className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 pl-14 pr-4 sm:pr-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                                <div className="md:col-span-1">
+                                                    <CustomDatePicker
+                                                        label="Date of Birth"
+                                                        isRequired={true}
+                                                        value={birthday}
+                                                        onChange={setBirthday}
+                                                        onModalOpenChange={setIsDatePickerOpen}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-accent-brown/5">
+                                                <div className="space-y-6">
+                                                    <div>
+                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">Contact Number <span className="text-red-500">*</span></label>
+                                                        <div className="relative group">
+                                                            <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-2 border-r border-accent-brown/10 pr-3 transition-colors group-focus-within:border-brand/30">
+                                                                <span className="text-xs font-black text-accent-brown/50 group-focus-within:text-accent-brown">+63</span>
+                                                            </div>
+                                                            <input
+                                                                type="tel"
+                                                                value={phone.replace(/^\+63/, '')}
+                                                                maxLength={10}
+                                                                onChange={e => {
+                                                                    let val = e.target.value.replace(/\D/g, '');
+                                                                    if (val.startsWith('0')) val = val.substring(1);
+                                                                    if (val.length > 0 && !val.startsWith('9')) val = '';
+                                                                    setPhone(val ? `+63${val}` : '');
+                                                                }}
+                                                                placeholder="9XX XXX XXXX"
+                                                                className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 pl-20 pr-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30 tabular-nums" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-6">
+                                                    <div>
+                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">Email Address</label>
+                                                        <div className="relative group">
+                                                            <input type="email" value={email} readOnly
+                                                                className="w-full bg-[#FAF9F6] border-2 border-transparent rounded-[1.25rem] py-4 pl-6 pr-24 text-sm font-black text-accent-brown/80 outline-none transition-all cursor-not-allowed tabular-nums" />
+                                                            <button onClick={() => { setShowEmailModal(true); setNewEmail(email); }}
+                                                                className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] font-black text-accent-brown uppercase tracking-widest hover:text-brand-dark transition-colors bg-brand-dark/10 px-3 py-1.5 rounded-lg">
+                                                                Update
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                            {/* Gender & Birthday */}
-                                            {user?.role !== 'rider' && (
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                    <div>
-                                                        <CustomDropdown
-                                                            label="Gender"
-                                                            value={gender}
-                                                            onChange={setGender}
-                                                            options={[
-                                                                { label: 'Male', value: 'Male' },
-                                                                { label: 'Female', value: 'Female' },
-                                                                { label: 'Other', value: 'Other' },
-                                                                { label: 'Rather not say', value: 'Rather not say' },
-                                                            ]}
-                                                            placeholder="Select Gender"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <CustomDatePicker
-                                                            label="Birthday"
-                                                            value={birthday}
-                                                            onChange={setBirthday}
-                                                        />
+
+                                            {isRider && (
+                                                <div className="pt-6">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">Vehicle Assignment <span className="text-brand-dark text-[8px] normal-case tracking-normal font-bold uppercase transition-all ml-2">Verified Status</span></label>
+                                                    <div className="relative group">
+                                                        <span className="absolute left-6 top-1/2 -translate-y-1/2 text-brand-dark transition-colors">
+                                                            <Bike className="w-5 h-5" />
+                                                        </span>
+                                                        <input type="text" value={vehicleType} readOnly
+                                                            className="w-full bg-[#FAF9F6] border-2 border-transparent rounded-[1.25rem] py-4 pl-16 pr-6 text-sm font-black text-accent-brown/80 outline-none transition-all cursor-not-allowed uppercase tracking-widest" />
+                                                        <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                            <span className="text-[9px] font-black text-green-500 uppercase tracking-widest">Active</span>
+                                                            <CheckCircle className="w-4 h-4 text-green-500" />
+                                                        </div>
                                                     </div>
                                                 </div>
                                             )}
+
+                                            {isRider && (
+                                                <div className="grid grid-cols-1 gap-6 pt-6 mb-4">
+                                                    <div>
+                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">Residential Address <span className="text-accent-brown/30 text-[8px] normal-case tracking-normal font-bold">Registration Address</span></label>
+                                                        <div className="relative group">
+                                                            <div className="w-full bg-[#FAF9F6] border-2 border-transparent rounded-[1.25rem] py-4 pl-16 pr-24 text-sm font-black text-accent-brown flex items-center min-h-[58px]">
+                                                                <span className="absolute left-6 top-1/2 -translate-y-1/2 text-brand-dark">
+                                                                    <MapPin className="w-5 h-5" />
+                                                                </span>
+                                                                <span className="truncate pr-4">
+                                                                    {addresses.find(a => a.is_default)?.address_line1 || addresses[0]?.address_line1 || 'No address registered'}
+                                                                </span>
+                                                                <button
+                                                                    onClick={() => setSection('addresses')}
+                                                                    className="absolute right-4 top-1/2 -translate-y-1/2 bg-brand-dark/10 text-brand-dark px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-brand-dark hover:text-white transition-all active:scale-95 shadow-sm"
+                                                                >
+                                                                    Change
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="pt-8 border-t border-accent-brown/5 flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-500">
+                                                        <ShieldCheck className="w-5 h-5" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown">Profile Verified</p>
+                                                        <p className="text-[9px] font-bold text-accent-brown/30 mt-0.5">Your identity has been successfully validated by the system.</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-xs font-black text-accent-brown/20 tabular-nums">
+                                                    Age Verified: {calculateAge(birthday)}
+                                                </div>
+                                            </div>
                                         </>
                                     )}
                                     <button onClick={handleSaveProfile} disabled={savingProfile}
-                                        className="mt-2 flex items-center gap-2 bg-brand-dark text-white px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors disabled:opacity-50">
-                                        {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Save Changes
+                                        className="mt-6 flex items-center gap-2 bg-brand-dark text-white px-10 py-5 rounded-[1.5rem] font-black text-[11px] uppercase tracking-[0.2em] hover:bg-accent-brown transition-all disabled:opacity-50 shadow-2xl shadow-brand-dark/20 active:scale-95">
+                                        {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} Save Changes
                                     </button>
                                 </div>
                             </div>
@@ -736,7 +1006,7 @@ const AccountSettings = () => {
                                         onClick={() => {
                                             setEditingAddr(null);
                                             setAddrForm({
-                                                full_name: user?.name || '',
+                                                full_name: clinicName || user?.name || '',
                                                 phone: user?.phone || '',
                                                 address_line1: '',
                                                 address_line2: '',
@@ -753,7 +1023,7 @@ const AccountSettings = () => {
                                                 region: '',
                                                 lat: null,
                                                 lng: null,
-                                                label: 'Home',
+                                                label: isBusiness ? 'Branch' : 'Home',
                                                 is_default: false,
                                                 delivery_notes: ''
                                             });
@@ -780,7 +1050,7 @@ const AccountSettings = () => {
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 gap-4">
-                                        {(isBusiness && !showAllBranches ? addresses.slice(0, 1) : addresses).map(addr => (
+                                        {(!showAllBranches ? addresses.slice(0, 1) : addresses).map(addr => (
                                             <div key={addr.id} className="group relative bg-white border border-accent-peach/10 rounded-3xl p-6 sm:p-8 transition-all hover:border-brand/30 hover:shadow-2xl hover:shadow-brand/5 overflow-hidden">
                                                 <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
                                                     <button
@@ -811,7 +1081,7 @@ const AccountSettings = () => {
                                                             });
                                                             setShowAddrModal(true);
                                                         }}
-                                                        className="w-10 h-10 bg-accent-peach/5 rounded-xl flex items-center justify-center text-accent-brown/40 hover:bg-brand/10 hover:text-brand-dark transition-all"
+                                                        className="w-10 h-10 bg-accent-peach/5 rounded-xl flex items-center justify-center text-accent-brown/40 hover:bg-brand/10 hover:text-accent-brown transition-all"
                                                         title="Edit"
                                                     >
                                                         <Edit2 className="w-4 h-4" />
@@ -830,7 +1100,7 @@ const AccountSettings = () => {
                                                                         method: 'DELETE',
                                                                         headers: { 'Authorization': `Bearer ${user?.token}` }
                                                                     });
-                                                                    if (res.ok) { fetchAddresses(); setConfirmModal(null); }
+                                                                    if (res.ok) { fetchAddresses(); setModal(m => ({ ...m, isOpen: false })); }
                                                                 }
                                                             );
                                                         }}
@@ -850,7 +1120,7 @@ const AccountSettings = () => {
                                                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                                                         <div className="flex items-center gap-3">
                                                             <span className="text-xl font-black text-accent-brown tracking-tighter">{addr.full_name}</span>
-                                                            <div className="w-px h-4 bg-accent-brown/10 hidden sm:block" />
+                                                            <div className="w-px h-4 bg-brand-dark/10 hidden sm:block" />
                                                             <span className="font-bold text-accent-brown/40 tabular-nums">{addr.phone}</span>
                                                         </div>
                                                         <div className="flex items-center gap-2">
@@ -884,7 +1154,7 @@ const AccountSettings = () => {
                                                                 });
                                                                 if (res.ok) fetchAddresses();
                                                             }}
-                                                            className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/30 hover:text-brand-dark transition-colors flex items-center gap-2 group/btn"
+                                                            className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/30 hover:text-accent-brown transition-colors flex items-center gap-2 group/btn"
                                                         >
                                                             <div className="w-4 h-4 rounded-full border-2 border-accent-brown/10 group-hover/btn:border-brand/50 transition-colors" />
                                                             Set as Default
@@ -894,12 +1164,12 @@ const AccountSettings = () => {
                                             </div>
                                         ))}
 
-                                        {isBusiness && addresses.length > 1 && (
-                                            <button 
+                                        {addresses.length > 1 && (
+                                            <button
                                                 onClick={() => setShowAllBranches(!showAllBranches)}
                                                 className="w-full py-4 mt-2 border-2 border-dashed border-accent-peach/20 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown/30 hover:text-brand hover:border-brand/30 transition-all flex items-center justify-center gap-2"
                                             >
-                                                {showAllBranches ? 'Hide other branches' : 'See more branches'}
+                                                {showAllBranches ? (isBusiness ? 'Hide other branches' : 'Hide other addresses') : (isBusiness ? 'See more branches' : 'See more addresses')}
                                                 <motion.span animate={{ rotate: showAllBranches ? 180 : 0 }}>
                                                     <Plus className="w-3 h-3" />
                                                 </motion.span>
@@ -912,13 +1182,13 @@ const AccountSettings = () => {
 
                         {section === 'password' && (
                             <div>
-                                <h3 className="text-xl font-black text-accent-brown tracking-tight mb-6">Change Password</h3>
+                                <h3 className="text-2xl font-black text-accent-brown tracking-tighter mb-8">Change Password</h3>
                                 {pwError && (
                                     <div className="bg-red-50 border border-red-100 text-red-500 rounded-xl px-4 py-3 text-sm font-bold mb-5 flex items-center gap-2">
                                         <AlertTriangle className="w-4 h-4 shrink-0" /> {pwError}
                                     </div>
                                 )}
-                                <div className="space-y-5">
+                                <div className="space-y-6">
                                     {[
                                         { label: 'Current Password', key: 'current' as const },
                                         { label: 'New Password', key: 'next' as const },
@@ -927,27 +1197,25 @@ const AccountSettings = () => {
                                         .filter(f => !(!hasPassword && f.key === 'current'))
                                         .map(f => (
                                             <div key={f.key}>
-                                                <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">{f.label}</label>
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 block mb-3 pl-1">{f.label}</label>
                                                 <div className="relative">
-                                                    <input type={showPw ? 'text' : 'password'} value={pw[f.key]} onChange={e => setPw(p => ({ ...p, [f.key]: e.target.value }))}
+                                                    <input type={showPw[f.key] ? 'text' : 'password'} value={pw[f.key]} onChange={e => setPw(p => ({ ...p, [f.key]: e.target.value }))}
                                                         placeholder="••••••••"
-                                                        className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 pl-5 pr-12 text-sm font-bold text-accent-brown outline-none transition-all placeholder:text-accent-brown/20" />
-                                                    {f.key === 'next' && (
-                                                        <button type="button" onClick={() => setShowPw(!showPw)}
-                                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-accent-brown/30 hover:text-brand-dark transition-colors">
-                                                            {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                                        </button>
-                                                    )}
+                                                        className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-2xl py-4 pl-6 pr-12 text-sm font-black text-accent-brown outline-none transition-all placeholder:text-accent-brown/20" />
+                                                    <button type="button" onClick={() => setShowPw(prev => ({ ...prev, [f.key]: !prev[f.key] }))}
+                                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-accent-brown/30 hover:text-accent-brown transition-colors">
+                                                        {showPw[f.key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                                    </button>
                                                 </div>
                                                 {f.key === 'next' && pw.next && (
-                                                    <div className="mt-2">
+                                                    <div className="mt-3">
                                                         <PasswordStrength password={pw.next} />
                                                     </div>
                                                 )}
                                             </div>
                                         ))}
                                     <button onClick={handleSavePassword} disabled={savingPw}
-                                        className="flex items-center gap-2 bg-brand-dark text-white px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors disabled:opacity-50">
+                                        className="mt-4 flex items-center gap-2 bg-brand-dark text-white px-10 py-5 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] hover:bg-accent-brown transition-all disabled:opacity-50 shadow-xl shadow-brand-dark/10 active:scale-95">
                                         {savingPw ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />} Update Password
                                     </button>
                                 </div>
@@ -958,24 +1226,34 @@ const AccountSettings = () => {
                             <div>
                                 <h3 className="text-xl font-black text-accent-brown tracking-tight mb-6">Notification Preferences</h3>
                                 <div className="space-y-2">
-                                    {([
+                                    {(isRider ? [
+                                        { key: 'orderUpdates', label: 'Delivery Requests', sub: 'New jobs and customer location updates' },
+                                        { key: 'loyaltyAlerts', label: 'Earnings & Payouts', sub: 'Weekly summaries and bonus notifications' },
+                                        { key: 'newsletter', label: 'Rider Community', sub: 'Safety tips, area alerts, and platform events' },
+                                        { key: 'gmailNotifications', label: 'Gmail Notifications', sub: 'Email alerts for critical account updates' },
+                                    ] : isBusiness ? [
+                                        { key: 'orderUpdates', label: 'Business Alerts', sub: 'New reservations and clinic inquiries' },
+                                        { key: 'loyaltyAlerts', label: 'Loyalty Management', sub: 'Point redemptions and tier updates' },
+                                        { key: 'newsletter', label: 'B2B News', sub: 'Market insights and business growth opportunities' },
+                                        { key: 'gmailNotifications', label: 'Gmail Notifications', sub: 'Email alerts for critical business updates' },
+                                    ] : [
                                         { key: 'orderUpdates', label: 'Order Updates', sub: 'Status changes for your orders and reservations' },
                                         { key: 'loyaltyAlerts', label: 'Loyalty Alerts', sub: 'Points earned, tier upgrades, and reward availability' },
                                         { key: 'newsletter', label: 'Promotions', sub: 'Special offers, seasonal deals, and new product launches' },
                                         { key: 'gmailNotifications', label: 'Gmail Notifications', sub: 'Email notifications for time-sensitive updates' },
-                                    ] as const).map(n => (
+                                    ]).map(n => (
                                         <div key={n.key} className="flex items-center justify-between py-4 border-b border-accent-brown/5 last:border-0">
                                             <div>
                                                 <p className="font-black text-accent-brown text-sm">{n.label}</p>
                                                 <p className="text-xs text-accent-brown/40 font-medium mt-0.5">{n.sub}</p>
                                             </div>
-                                            <Toggle checked={notifs[n.key]} onChange={() => setNotifs(p => ({ ...p, [n.key]: !p[n.key] }))} />
+                                            <Toggle checked={notifs[n.key as keyof typeof notifs]} onChange={() => setNotifs(p => ({ ...p, [n.key]: !p[n.key as keyof typeof notifs] }))} />
                                         </div>
                                     ))}
                                 </div>
                                 <button onClick={() => showToast('Notification preferences saved!')}
                                     className="mt-6 flex items-center gap-2 bg-brand-dark text-white px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors">
-                                    <Check className="w-4 h-4" /> Save Preferences
+                                    <CheckCircle className="w-4 h-4" /> Save Preferences
                                 </button>
                             </div>
                         )}
@@ -1007,196 +1285,177 @@ const AccountSettings = () => {
 
                     </motion.div>
                 </div>
+            </div>
 
-                {/* Google Password Modal */}
-                <AnimatePresence>
-                    {showGooglePwModal && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
+            <AnimatePresence>
+                {showGooglePwModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-black/40 backdrop-blur-md"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="relative bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl overflow-hidden"
+                        >
+                            <div className="absolute top-0 left-0 w-full h-2 bg-brand-dark" />
+                            <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center text-accent-brown mb-6">
+                                <Lock className="w-8 h-8" />
+                            </div>
+                            <h3 className="text-2xl font-black text-accent-brown tracking-tighter mb-2">Google Login User</h3>
+                            <p className="text-sm font-medium text-accent-brown/60 mb-8 leading-relaxed">
+                                Since you logged in using your Google account, you don't have a separate password for Hi-Vet CRM.
+                                Your account security is managed directly by Google.
+                            </p>
+                            <button
                                 onClick={() => setShowGooglePwModal(false)}
-                                className="absolute inset-0 bg-accent-brown/40 backdrop-blur-sm"
-                            />
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.95 }}
-                                className="relative bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl overflow-hidden"
+                                className="w-full bg-brand-dark text-white px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors"
                             >
-                                <div className="absolute top-0 left-0 w-full h-2 bg-brand-dark" />
-                                <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center text-brand-dark mb-6">
-                                    <Lock className="w-8 h-8" />
-                                </div>
-                                <h3 className="text-2xl font-black text-accent-brown tracking-tighter mb-2">Google Login User</h3>
-                                <p className="text-sm font-medium text-accent-brown/60 mb-8 leading-relaxed">
-                                    Since you logged in using your Google account, you don't have a separate password for Hi-Vet CRM.
-                                    Your account security is managed directly by Google.
-                                </p>
-                                <button
-                                    onClick={() => setShowGooglePwModal(false)}
-                                    className="w-full bg-brand-dark text-white px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors"
-                                >
-                                    Understood
-                                </button>
-                            </motion.div>
-                        </div>
-                    )}
-                </AnimatePresence>
+                                Understood
+                            </button>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
-                {/* Address Modal */}
-                <AnimatePresence>
-                    {showAddrModal && (
-                        <div className="fixed inset-0 z-[110] flex items-center justify-center px-4">
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                onClick={() => setShowAddrModal(false)} className="absolute inset-0 bg-accent-brown/60 backdrop-blur-md" />
-                            <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                                className="relative bg-[#FAFAFA] rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden border border-white">
-                                <div className="p-8 sm:p-10">
-                                    <div className="flex items-center justify-between mb-8">
-                                        <div>
-                                            <h3 className="text-2xl font-black text-accent-brown tracking-tighter">{editingAddr ? (isBusiness ? 'Edit Location' : 'Edit Address') : (isBusiness ? 'New Branch' : 'New Address')}</h3>
-                                            <p className="text-xs font-bold text-accent-brown/30 uppercase tracking-widest mt-1">{isBusiness ? 'Branch Details' : 'Delivery Details'}</p>
+            <AnimatePresence>
+                {showAddrModal && (
+                    <div className="fixed inset-0 z-[110] flex items-start justify-center px-4 pt-20 sm:pt-32 overflow-y-auto pb-10">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            onClick={() => setShowAddrModal(false)} className="absolute inset-0 bg-black/40 backdrop-blur-md" />
+                        <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                            className="relative bg-[#FAFAFA] rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden border border-white">
+                            <div className="p-8 sm:p-10">
+                                <div className="flex items-center justify-between mb-8">
+                                    <div>
+                                        <h3 className="text-2xl font-black text-accent-brown tracking-tighter">{editingAddr ? (isBusiness ? 'Edit Location' : 'Edit Address') : (isBusiness ? 'New Branch' : 'New Address')}</h3>
+                                        <p className="text-xs font-bold text-accent-brown/30 uppercase tracking-widest mt-1">{isBusiness ? 'Branch Details' : 'Delivery Details'}</p>
+                                    </div>
+                                    <button onClick={() => setShowAddrModal(false)} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-accent-brown/30 hover:text-accent-brown transition-all shadow-sm">
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1 custom-scrollbar">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">{isBusiness ? 'Branch/Clinic Name' : 'Contact Name'}</label>
+                                            <input type="text" value={addrForm.full_name} onChange={e => setAddrForm({ ...addrForm, full_name: e.target.value })} placeholder={isBusiness ? "e.g. Main Branch" : "Full Name"}
+                                                className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm" />
                                         </div>
-                                        <button onClick={() => setShowAddrModal(false)} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-accent-brown/30 hover:text-brand-dark transition-all shadow-sm">
-                                            <Trash2 className="w-5 h-5" />
-                                        </button>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Phone Number</label>
+                                            <input type="tel" value={addrForm.phone} onChange={e => setAddrForm({ ...addrForm, phone: e.target.value })} placeholder="09XX XXX XXXX"
+                                                className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm" />
+                                        </div>
                                     </div>
 
-                                    <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1 custom-scrollbar">
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">{isBusiness ? 'Clinic Name' : 'Contact Name'}</label>
-                                                {isBusiness ? (
-                                                    <div className="w-full bg-accent-peach/5 border-2 border-dashed border-accent-brown/10 rounded-2xl py-4 px-5 flex items-center gap-2 cursor-not-allowed">
-                                                        <span className="text-sm font-bold text-accent-brown/60">{clinicName || 'Clinic'}</span>
-                                                        <span className="ml-auto text-[8px] font-black uppercase tracking-widest text-accent-brown/20">read only</span>
-                                                    </div>
-                                                ) : (
-                                                    <input type="text" value={addrForm.full_name} onChange={e => setAddrForm({ ...addrForm, full_name: e.target.value })} placeholder="Full Name"
-                                                        className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm" />
-                                                )}
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Phone Number</label>
-                                                <input type="tel" value={addrForm.phone} onChange={e => setAddrForm({ ...addrForm, phone: e.target.value })} placeholder="09XX XXX XXXX"
-                                                    className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm" />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1 flex items-center gap-2">
-                                                <MapPin className="w-3 h-3" /> Mark Landmark & Enter Detailed Address
-                                            </label>
-                                            <AddressAutocomplete 
-                                                onAddressSelect={(full, components, geometry, granular) => {
-                                                    handleAddressComponents(full, components, geometry, granular);
-                                                }}
-                                                defaultValue={addrForm.address_line1}
-                                                initialLocation={addrForm.lat && addrForm.lng ? { lat: addrForm.lat, lng: addrForm.lng } : undefined}
-                                                initialGranular={{
-                                                    houseNumber: addrForm.house_number,
-                                                    blockNumber: addrForm.block_number,
-                                                    street: addrForm.street,
-                                                    subdivision: addrForm.subdivision,
-                                                    sitio: addrForm.sitio,
-                                                    barangay: addrForm.barangay,
-                                                    city: addrForm.city,
-                                                    district: addrForm.district,
-                                                    province: addrForm.province,
-                                                    zip: addrForm.zip_code,
-                                                    region: addrForm.region
-                                                }}
-                                                placeholder="Search or pick on map..."
-                                                className="!py-4 !rounded-2xl shadow-xl border-2 border-transparent focus:border-brand/30"
-                                            />
-                                            <p className="text-[9px] font-bold text-accent-brown/30 uppercase tracking-widest pl-1 italic">Note: Searching will auto-fill basic location. Click the pin to edit granular details manually.</p>
-                                        </div>
-
-                                        {/* Display of current address (Confirming what was entered in map) */}
-                                        <div className="p-6 bg-accent-peach/5 rounded-[2rem] border border-accent-peach/10 space-y-4">
-                                             <div className="space-y-1">
-                                                <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Precise Address Confirmation</p>
-                                                <p className="text-xs font-bold text-accent-brown leading-relaxed capitalize">
-                                                    {[addrForm.house_number, addrForm.block_number, addrForm.street, addrForm.subdivision, addrForm.sitio, addrForm.barangay, addrForm.city, addrForm.province, addrForm.zip_code].filter(Boolean).join(' ')}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {/* Delivery Notes / Landmark Instructions */}
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Delivery Notes / Landmark Instructions</label>
-                                            <textarea 
-                                                value={addrForm.delivery_notes}
-                                                onChange={e => setAddrForm({ ...addrForm, delivery_notes: e.target.value })}
-                                                placeholder="e.g. Near the blue gate, or across the red store..."
-                                                className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm min-h-[100px] resize-none"
-                                            />
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4 pt-2">
-                                            {(isBusiness ? ['Main', 'Branch'] : ['Home', 'Work']).map(l => (
-                                                <button key={l} onClick={() => setAddrForm({ ...addrForm, label: l })}
-                                                    className={`py-4 rounded-2xl text-xs font-black uppercase tracking-widest border-2 transition-all ${addrForm.label === l ? 'border-brand bg-brand/5 text-brand-dark shadow-lg shadow-brand/5' : 'border-transparent bg-white text-accent-brown/30 hover:bg-accent-peach/10'}`}>
-                                                    {l}
-                                                </button>
-                                            ))}
-                                        </div>
-
-                                        <label className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-accent-peach/10 cursor-pointer group">
-                                            <input type="checkbox" checked={addrForm.is_default} onChange={e => setAddrForm({ ...addrForm, is_default: e.target.checked })} className="hidden" />
-                                            <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${addrForm.is_default ? 'bg-brand border-brand text-brand-dark' : 'border-accent-brown/10 group-hover:border-brand/30'}`}>
-                                                {addrForm.is_default && <Check className="w-4 h-4" />}
-                                            </div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown">{isBusiness ? 'Set as Main Branch' : 'Set as Default Address'}</span>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1 flex items-center gap-2">
+                                            <MapPin className="w-3 h-3" /> Mark Landmark & Enter Detailed Address
                                         </label>
+                                        <AddressAutocomplete
+                                            onAddressSelect={(full, components, geometry, granular) => {
+                                                handleAddressComponents(full, components, geometry, granular);
+                                            }}
+                                            defaultValue={addrForm.address_line1}
+                                            initialLocation={addrForm.lat && addrForm.lng ? { lat: addrForm.lat, lng: addrForm.lng } : undefined}
+                                            initialGranular={{
+                                                houseNumber: addrForm.house_number,
+                                                blockNumber: addrForm.block_number,
+                                                street: addrForm.street,
+                                                subdivision: addrForm.subdivision,
+                                                sitio: addrForm.sitio,
+                                                barangay: addrForm.barangay,
+                                                city: addrForm.city,
+                                                district: addrForm.district,
+                                                province: addrForm.province,
+                                                zip: addrForm.zip_code,
+                                                region: addrForm.region
+                                            }}
+                                            placeholder="Search or pick on map..."
+                                            className="!py-4 !rounded-2xl shadow-xl border-2 border-transparent focus:border-brand/30"
+                                        />
+                                        <p className="text-[9px] font-bold text-accent-brown/30 uppercase tracking-widest pl-1 italic">Note: Searching will auto-fill basic location. Click the pin to edit granular details manually.</p>
+                                    </div>
 
-                                        <button
-                                            onClick={async () => {
-                                                if (!addrForm.full_name || !addrForm.phone || !addrForm.barangay || !addrForm.city) {
-                                                    showToast('Contact and basic location details (Barangay, City) are required.', 'error');
-                                                    return;
-                                                }
-                                                
-                                                // Construct readable address lines for legacy fields
-                                                const line1 = [addrForm.house_number, addrForm.block_number, addrForm.street, addrForm.subdivision].filter(Boolean).join(' ');
-                                                const line2 = [addrForm.barangay, addrForm.city, addrForm.province, addrForm.zip_code].filter(Boolean).join(', ');
+                                    <div className="p-6 bg-accent-peach/5 rounded-[2rem] border border-accent-peach/10 space-y-4">
+                                        <div className="space-y-1">
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Precise Address Confirmation</p>
+                                            <p className="text-xs font-bold text-accent-brown leading-relaxed capitalize">
+                                                {[addrForm.house_number, addrForm.block_number, addrForm.street, addrForm.subdivision, addrForm.sitio, addrForm.barangay, addrForm.city, addrForm.province, addrForm.zip_code].filter(Boolean).join(' ')}
+                                            </p>
+                                        </div>
+                                    </div>
 
-                                                const body = isBusiness ? {
-                                                    name: addrForm.full_name,
-                                                    phone: addrForm.phone,
-                                                    address_line1: line1,
-                                                    address_line2: line2,
-                                                    house_number: addrForm.house_number,
-                                                    block_number: addrForm.block_number,
-                                                    street: addrForm.street,
-                                                    subdivision: addrForm.subdivision,
-                                                    sitio: addrForm.sitio,
-                                                    barangay: addrForm.barangay,
-                                                    city: addrForm.city,
-                                                    district: addrForm.district,
-                                                    province: addrForm.province,
-                                                    zip_code: addrForm.zip_code,
-                                                    region: addrForm.region,
-                                                    lat: addrForm.lat,
-                                                    lng: addrForm.lng,
-                                                    is_main: addrForm.is_default
-                                                } : {
-                                                    ...addrForm,
-                                                    address_line1: line1,
-                                                    address_line2: line2
-                                                };
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Delivery Notes / Landmark Instructions</label>
+                                        <textarea
+                                            value={addrForm.delivery_notes}
+                                            onChange={e => setAddrForm({ ...addrForm, delivery_notes: e.target.value })}
+                                            placeholder="e.g. Near the blue gate, or across the red store..."
+                                            className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm min-h-[100px] resize-none"
+                                        />
+                                    </div>
 
-                                                const baseUrl = isBusiness ? 'http://localhost:8000/api/business/branches' : 'http://localhost:8000/api/customer/addresses';
-                                                const url = editingAddr ? `${baseUrl}/${editingAddr.id}` : baseUrl;
-                                                
+                                    <div className="grid grid-cols-2 gap-4 pt-2">
+                                        {(isBusiness ? ['Branch'] : ['Home', 'Work']).map(l => (
+                                            <button key={l} onClick={() => setAddrForm({ ...addrForm, label: l })}
+                                                className={`py-4 rounded-2xl text-xs font-black uppercase tracking-widest border-2 transition-all ${addrForm.label === l ? 'border-brand bg-brand/5 text-accent-brown shadow-lg shadow-brand/5' : 'border-transparent bg-white text-accent-brown/30 hover:bg-accent-peach/10'}`}>
+                                                {l}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <button
+                                        onClick={async () => {
+                                            if (!addrForm.full_name || !addrForm.phone || !addrForm.barangay || !addrForm.city) {
+                                                showToast('Contact and basic location details (Barangay, City) are required.', 'error');
+                                                return;
+                                            }
+
+                                            const line1 = [addrForm.house_number, addrForm.block_number, addrForm.street, addrForm.subdivision].filter(Boolean).join(' ');
+                                            const line2 = [addrForm.barangay, addrForm.city, addrForm.province, addrForm.zip_code].filter(Boolean).join(', ');
+
+                                            const body = isBusiness ? {
+                                                name: addrForm.full_name,
+                                                phone: addrForm.phone,
+                                                address_line1: line1,
+                                                address_line2: line2,
+                                                house_number: addrForm.house_number,
+                                                block_number: addrForm.block_number,
+                                                street: addrForm.street,
+                                                subdivision: addrForm.subdivision,
+                                                sitio: addrForm.sitio,
+                                                barangay: addrForm.barangay,
+                                                city: addrForm.city,
+                                                district: addrForm.district,
+                                                province: addrForm.province,
+                                                zip_code: addrForm.zip_code,
+                                                region: addrForm.region,
+                                                lat: addrForm.lat,
+                                                lng: addrForm.lng,
+                                                is_main: addrForm.is_default
+                                            } : {
+                                                ...addrForm,
+                                                address_line1: line1,
+                                                address_line2: line2
+                                            };
+
+                                            const baseUrl = isBusiness ? 'http://localhost:8000/api/business/branches' : 'http://localhost:8000/api/customer/addresses';
+                                            const url = editingAddr ? `${baseUrl}/${editingAddr.id}` : baseUrl;
+
+                                            try {
                                                 const res = await fetch(url, {
                                                     method: editingAddr ? 'PUT' : 'POST',
                                                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user?.token}` },
                                                     body: JSON.stringify(body)
                                                 });
-                                                 if (res.ok) {
+                                                if (res.ok) {
                                                     fetchAddresses();
                                                     setShowAddrModal(false);
                                                     showToast(`${isBusiness ? 'Branch' : 'Address'} ${editingAddr ? 'updated' : 'saved'} successfully!`);
@@ -1204,58 +1463,97 @@ const AccountSettings = () => {
                                                     const errorData = await res.json().catch(() => ({}));
                                                     showToast(errorData.detail || 'Failed to sync details.', 'error');
                                                 }
-                                            }}
-                                            className="w-full bg-brand-dark text-white py-5 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-black transition-all shadow-xl shadow-brand-dark/10"
-                                        >
-                                            {editingAddr ? (isBusiness ? 'Update Branch' : 'Update Address') : (isBusiness ? 'Save Branch' : 'Save Address')}
-                                        </button>
-                                    </div>
+                                            } catch (err) {
+                                                showToast('An error occurred during synchronization.', 'error');
+                                            }
+                                        }}
+                                        className="w-full bg-brand-dark text-white py-5 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-black transition-all shadow-xl shadow-brand-dark/10"
+                                    >
+                                        {editingAddr ? (isBusiness ? 'Update Branch' : 'Update Address') : (isBusiness ? 'Save Branch' : 'Save Address')}
+                                    </button>
                                 </div>
-                            </motion.div>
-                        </div>
-                    )}
-                </AnimatePresence>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
-            </div>
 
-            {/* ── Custom Confirm Modal ── */}
+
+            <MapPickerModal
+                isOpen={showMapPicker}
+                onClose={() => setShowMapPicker(false)}
+                initialLocation={addrForm.lat && addrForm.lng ? { lat: addrForm.lat, lng: addrForm.lng } : undefined}
+                onSelection={(_address, lat, lng, _components, granular) => {
+                    setAddrForm(prev => ({
+                        ...prev,
+                        lat,
+                        lng,
+                        address_line1: _address,
+                        house_number: granular.houseNumber || '',
+                        block_number: granular.blockNumber || '',
+                        street: granular.street || '',
+                        subdivision: granular.subdivision || '',
+                        sitio: granular.sitio || '',
+                        barangay: granular.barangay || '',
+                        city: granular.city || '',
+                        district: granular.district || '',
+                        province: granular.province || '',
+                        zip_code: granular.zip || '',
+                        region: granular.region || ''
+                    }));
+                }}
+            />
+
             <AnimatePresence>
-                {confirmModal?.open && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-                        onClick={() => setConfirmModal(null)}
-                    >
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                            onClick={e => e.stopPropagation()}
-                            className="bg-white rounded-[2rem] shadow-2xl shadow-black/20 p-8 max-w-sm w-full flex flex-col items-center gap-6"
-                        >
-                            <div className="w-16 h-16 rounded-[1.25rem] bg-red-50 flex items-center justify-center">
-                                <AlertTriangle className="w-8 h-8 text-red-500" />
-                            </div>
-                            <div className="text-center space-y-2">
-                                <h3 className="font-black text-accent-brown text-lg tracking-tight">{confirmModal.title}</h3>
-                                <p className="text-sm font-medium text-accent-brown/50 leading-relaxed">{confirmModal.message}</p>
-                            </div>
-                            <div className="flex gap-3 w-full">
-                                <button
-                                    onClick={() => setConfirmModal(null)}
-                                    className="flex-1 py-4 bg-accent-peach/10 text-accent-brown font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-accent-peach/20 transition-all"
-                                >
+                {showEmailModal && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md">
+                        <motion.div initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            className="bg-white rounded-[2.5rem] w-full max-w-md p-8 sm:p-10 shadow-2xl relative overflow-hidden">
 
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-brand/5 rounded-full -mr-16 -mt-16" />
+
+                            <h3 className="text-2xl font-black text-accent-brown tracking-tighter mb-2 relative">Change Email</h3>
+                            <p className="text-xs font-bold text-accent-brown/40 uppercase tracking-widest mb-8 relative">Verify your new email address</p>
+
+                            <div className="space-y-6 relative">
+                                {!otpSent ? (
+                                    <>
+                                        <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">New Email Address</label>
+                                            <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="new-email@example.com"
+                                                className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all" />
+                                        </div>
+                                        <button onClick={handleRequestEmailChange} disabled={sendingOtp}
+                                            className="w-full bg-brand-dark text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-xl shadow-brand/10">
+                                            {sendingOtp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />} Send Verification Code
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">New Email</label>
+                                            <div className="bg-accent-peach/10 py-3 px-5 rounded-2xl text-xs font-bold text-accent-brown/50 border-2 border-dashed border-accent-peach/30">{newEmail}</div>
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Verification Code</label>
+                                            <input type="text" maxLength={6} value={emailOtp} onChange={e => setEmailOtp(e.target.value.replace(/\D/g, ''))} placeholder="000000"
+                                                className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 px-5 text-center text-2xl font-black tracking-[1em] text-accent-brown outline-none transition-all" />
+                                        </div>
+                                        <button onClick={handleVerifyEmailChange} disabled={verifyingEmail}
+                                            className="w-full bg-brand-dark text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-xl shadow-brand/10">
+                                            {verifyingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} Verify & Update Email
+                                        </button>
+                                        <button onClick={() => setOtpSent(false)} className="w-full text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-accent-brown transition-colors">
+                                            Use a different email
+                                        </button>
+                                    </>
+                                )}
+
+                                <button onClick={() => { setShowEmailModal(false); setOtpSent(false); setNewEmail(''); setEmailOtp(''); }}
+                                    className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-accent-brown/30 hover:bg-accent-peach/10 transition-all border-2 border-accent-peach/20 hover:border-transparent">
                                     Cancel
-                                </button>
-                                <button
-                                    onClick={confirmModal.onConfirm}
-                                    className="flex-1 py-4 bg-red-500 text-white font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
-                                >
-                                    Remove
                                 </button>
                             </div>
                         </motion.div>
@@ -1263,46 +1561,14 @@ const AccountSettings = () => {
                 )}
             </AnimatePresence>
 
-            <MapPickerModal
-                isOpen={showMapPicker}
-                onClose={() => setShowMapPicker(false)}
-                initialLocation={(pickerMode === 'main' ? (clinicLat && clinicLng ? { lat: clinicLat, lng: clinicLng } : undefined) : (addrForm.lat && addrForm.lng ? { lat: addrForm.lat, lng: addrForm.lng } : undefined))}
-                onSelection={(_address, lat, lng, _components, granular) => {
-                    if (pickerMode === 'main') {
-                        setClinicLat(lat);
-                        setClinicLng(lng);
-                        setClinicHouseNumber(granular.houseNumber || '');
-                        setClinicBlockNumber(granular.blockNumber || '');
-                        setClinicStreet(granular.street || '');
-                        setClinicSubdivision(granular.subdivision || '');
-                        setClinicSitio(granular.sitio || '');
-                        setClinicBarangay(granular.barangay || '');
-                        setClinicCity(granular.city || '');
-                        setClinicDistrict(granular.district || '');
-                        setClinicProvince(granular.province || '');
-                        setClinicZip(granular.zip || '');
-                        setClinicRegion(granular.region || '');
-                    } else {
-                        setAddrForm(prev => ({
-                            ...prev,
-                            lat,
-                            lng,
-                            house_number: granular.houseNumber,
-                            block_number: granular.blockNumber,
-                            street: granular.street,
-                            subdivision: granular.subdivision,
-                            sitio: granular.sitio,
-                            barangay: granular.barangay,
-                            city: granular.city,
-                            district: granular.district,
-                            province: granular.province,
-                            zip_code: granular.zip,
-                            region: granular.region
-                        }));
-                    }
-                }}
+            <ModernModal
+                isOpen={modal.isOpen}
+                onClose={() => setModal(m => ({ ...m, isOpen: false }))}
+                onConfirm={modal.onConfirm}
+                title={modal.title}
+                message={modal.message}
+                type={modal.type}
             />
-
         </DashboardLayout>
     );
 };

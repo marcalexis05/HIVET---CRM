@@ -1,85 +1,90 @@
 import { motion } from 'framer-motion';
-import { CheckCircle, ArrowRight, AlertTriangle } from 'lucide-react';
+import { CheckCircle, ArrowRight, ShoppingBag, Truck, Target } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const steps = [
-    { n: '01', title: 'Choose a Product', desc: 'Browse our retail catalog and select what you need.' },
-    { n: '02', title: 'Place Your Order', desc: 'Browse real-time availability and lock in a slot.' },
-    { n: '03', title: 'Track & Receive', desc: "We handle everything — you'll get live status updates." },
+    { n: '01', title: 'Inventory Selection', desc: 'Secure high-grade supplies from our verified clinical inventory.', icon: ShoppingBag },
+    { n: '02', title: 'Sync & Verify', desc: 'Real-time availability locking with your preferred fulfillment center.', icon: Target },
+    { n: '03', title: 'Precision Delivery', desc: "Active transit tracking for surgical precision in timing.", icon: Truck },
 ];
 
 export function ReservationsSection() {
     return (
-        <section id="orders" className="py-20 md:py-32">
-            <div className="container mx-auto px-4 xs:px-6 sm:px-8">
-                {/* Section Header */}
-                <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.6 }}
-                    className="max-w-2xl mb-20"
-                >
-                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-brand-dark mb-3 xs:mb-4 block">
-                        Orders
-                    </span>
-                    <h2 className="text-4xl xs:text-5xl md:text-6xl font-black text-accent-brown tracking-tighter leading-none mb-4 xs:mb-6">
-                        Order what your<br />pet needs.
-                    </h2>
-                    <p className="text-accent-brown/60 text-base xs:text-lg font-medium leading-relaxed">
-                        Browse our retail catalog and place your order in minutes. Track your order status every step of the way.
+        <section id="orders" className="py-24 sm:py-32 bg-white overflow-hidden">
+            <div className="container mx-auto px-6">
+                <div className="flex flex-col lg:flex-row lg:items-end justify-between mb-20 gap-8">
+                    <motion.div
+                        initial={{ opacity: 0, x: -30 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ duration: 0.8 }}
+                        className="max-w-2xl"
+                    >
+                        <div className="inline-flex items-center gap-3 text-brand-dark uppercase tracking-[0.5em] text-[10px] font-black mb-6">
+                            <div className="w-8 h-[2px] bg-brand-dark" />
+                            Logistics Standard
+                        </div>
+                        <h2 className="text-5xl sm:text-6xl md:text-7xl font-black text-accent-brown tracking-tighter leading-[0.9] uppercase">
+                            Engineered for <br />
+                            <span className="text-brand-dark italic font-outfit">Active Response.</span>
+                        </h2>
+                    </motion.div>
+                    <p className="text-xl text-accent-brown/50 font-medium max-w-sm leading-relaxed">
+                        A high-performance procurement infrastructure designed to eliminate wait times and ensure supply chain integrity.
                     </p>
-                </motion.div>
+                </div>
 
 
-                {/* How It Works */}
                 <motion.div
-                    initial={{ opacity: 0, y: 30 }}
+                    initial={{ opacity: 0, y: 50 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    transition={{ duration: 0.6 }}
-                    className="bg-accent-brown rounded-[2.5rem] xs:rounded-[3rem] p-6 xs:p-10 md:p-16 text-white"
+                    transition={{ duration: 0.8 }}
+                    className="bg-accent-brown rounded-[4rem] p-12 lg:p-20 text-white relative overflow-hidden shadow-2xl shadow-accent-brown/30"
                 >
-                    <div className="flex flex-col md:flex-row gap-12 items-start">
-                        <div className="md:w-1/3 shrink-0">
-                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-brand mb-3 xs:mb-4 block">How It Works</span>
-                            <h3 className="text-3xl xs:text-4xl font-black tracking-tighter leading-none mb-4 xs:mb-6">
-                                Three steps<br />to your order.
-                            </h3>
+                    {/* Background Decorative Pattern */}
+                    <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
+                        <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+                    </div>
+
+                    <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
+                        <div className="lg:col-span-4 space-y-8">
+                            <div className="space-y-4">
+                                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-brand translate-y-2 block">Protocol</span>
+                                <h3 className="text-4xl xs:text-5xl font-black tracking-tighter leading-none uppercase">
+                                    The Trinity<br />of Trust.
+                                </h3>
+                            </div>
                             <Link
                                 to="/login"
-                                className="inline-flex items-center justify-center gap-2 bg-brand text-white px-6 xs:px-8 py-3.5 xs:py-4 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-white hover:text-brand-dark transition-colors w-full sm:w-auto shadow-lg shadow-brand/20"
+                                className="group inline-flex items-center gap-6 bg-brand-dark text-white px-10 py-5 rounded-full font-black text-[11px] uppercase tracking-widest hover:bg-white hover:text-accent-brown transition-all shadow-xl shadow-brand/20"
                             >
-                                Shop Now <ArrowRight className="w-4 h-4" />
+                                Start Procurement 
+                                <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
                             </Link>
                         </div>
-                        <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-8">
+
+                        <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-3 gap-10">
                             {steps.map((step) => (
-                                <div key={step.n} className="relative">
-                                    <span className="text-7xl font-black text-white/5 leading-none block mb-4 -ml-1">{step.n}</span>
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <CheckCircle className="w-4 h-4 text-brand shrink-0" />
-                                        <h4 className="font-black text-white text-lg tracking-tight">{step.title}</h4>
+                                <div key={step.n} className="space-y-6 relative group">
+                                    <div className="flex items-center justify-between">
+                                        <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-brand-dark group-hover:text-white transition-all duration-500">
+                                            <step.icon className="w-6 h-6" />
+                                        </div>
+                                        <span className="text-6xl font-black text-white/5 leading-none transition-colors group-hover:text-brand-dark/10">{step.n}</span>
                                     </div>
-                                    <p className="text-white/50 text-sm font-medium leading-relaxed">{step.desc}</p>
+                                    <div className="space-y-3">
+                                        <h4 className="font-black text-white text-xl tracking-tight uppercase">{step.title}</h4>
+                                        <p className="text-white/40 text-sm font-medium leading-relaxed italic">"{step.desc}"</p>
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    {/* Service Exclusions */}
-                    <div className="mt-8 xs:mt-10 pt-6 xs:pt-8 border-t border-white/10 flex flex-col sm:flex-row items-start sm:items-center gap-3 xs:gap-4">
-                        <div className="flex items-center gap-2 shrink-0">
-                            <AlertTriangle className="w-4 h-4 text-brand shrink-0" />
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand">Service Exclusions</span>
-                        </div>
-                        <p className="text-white/40 text-[10px] xs:text-xs font-medium leading-relaxed">
-                            The platform is focused on <span className="text-white/70 font-bold">retail and order fulfillment</span>; it strictly excludes
-                            <span className="text-white/70 font-bold"> veterinary medical services</span> (clinical consultations, treatments, or surgeries).
-                        </p>
-                    </div>
                 </motion.div>
             </div>
         </section>
     );
 }
+

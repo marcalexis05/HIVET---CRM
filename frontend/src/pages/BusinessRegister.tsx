@@ -1,16 +1,31 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Phone, Mail, Lock, ArrowRight, ArrowLeft,
+    Mail, Lock, ArrowRight, ChevronLeft,
     ShieldCheck, MailCheck, Building2, Eye, EyeOff,
-    FileCheck, Landmark, User, MapPin, Upload, X, FileText, CheckCircle2, Clock
+    FileCheck, Landmark, User, MapPin, Upload, X, CheckCircle2, Clock
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Logo } from '../components/Logo';
 import { PasswordStrength } from '../components/PasswordStrength';
 import { CustomDropdown } from '../components/CustomDropdown';
+import { CustomDatePicker } from '../components/CustomDatePicker';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { useAuth } from '../context/AuthContext';
+import loginHero from '../assets/login_hero_landscape.png';
+
+const calculateAge = (birthday: string) => {
+    if (!birthday) return '';
+    try {
+        const birthDate = new Date(birthday);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const month = today.getMonth() - birthDate.getMonth();
+        if (month < 0 || (month === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return age >= 0 ? age.toString() : '0';
+    } catch (e) { return ''; }
+};
 
 // ─── File Upload Input Component ──────────────────────────────────────────────
 const FileUploadField = ({
@@ -22,36 +37,40 @@ const FileUploadField = ({
     const ref = useRef<HTMLInputElement>(null);
     return (
         <div className="space-y-2">
-            <div className="flex items-center justify-between pl-3">
-                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em]">
+            <div className="flex items-center justify-between pl-6">
+                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] italic">
                     {label} {required && <span className="text-brand-dark">*</span>}
                 </label>
-                {!required && <span className="text-[9px] font-bold text-accent-brown/30 italic">Optional</span>}
+                {!required && <span className="text-[9px] font-black text-accent-brown/20 italic uppercase tracking-widest">Optional</span>}
             </div>
             {value ? (
-                <div className="flex items-center gap-3 bg-green-50 border-2 border-green-200 rounded-[1.5rem] px-4 py-3">
-                    <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+                <div className="flex items-center gap-4 bg-green-50 border border-green-100 rounded-[2rem] px-6 py-4 shadow-sm">
+                    <CheckCircle2 className="w-6 h-6 text-green-500 shrink-0" />
                     <div className="flex-1 min-w-0">
-                        <p className="text-xs font-black text-green-700 truncate">{value.name}</p>
-                        <p className="text-[9px] text-green-500 font-bold">{(value.size / 1024).toFixed(1)} KB</p>
+                        <p className="text-xs font-black text-green-700 truncate italic">{value.name}</p>
+                        <p className="text-[9px] text-green-500 font-bold uppercase tracking-widest">{(value.size / 1024).toFixed(1)} KB</p>
                     </div>
-                    <button type="button" onClick={() => onChange(null)} className="w-6 h-6 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-200 transition-colors shrink-0">
-                        <X className="w-3 h-3" />
+                    <button type="button" onClick={() => onChange(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-200 transition-colors shrink-0">
+                        <X className="w-4 h-4" />
                     </button>
                 </div>
             ) : (
                 <button
                     type="button"
                     onClick={() => ref.current?.click()}
-                    className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-accent-brown/20 hover:border-brand/40 hover:bg-accent-peach/10 rounded-[1.5rem] py-5 px-4 transition-all group"
+                    className="w-full flex flex-col items-center justify-center gap-3 ring-1 ring-brand-dark/5 hover:ring-brand-dark/30 bg-[#F7F6F2] hover:bg-white rounded-[2.5rem] py-8 px-6 transition-all group shadow-inner"
                 >
-                    <Upload className="w-5 h-5 text-accent-brown/30 group-hover:text-brand-dark transition-colors" />
-                    <span className="text-[10px] font-black text-accent-brown/40 group-hover:text-accent-brown transition-colors uppercase tracking-widest">Click to Upload</span>
-                    <span className="text-[9px] text-accent-brown/30 font-medium">PDF, JPG, or PNG · Max 5MB</span>
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                        <Upload className="w-6 h-6 text-accent-brown/20 group-hover:text-brand-dark transition-colors" />
+                    </div>
+                    <div className="text-center">
+                        <span className="block text-[10px] font-black text-accent-brown uppercase tracking-[0.3em] group-hover:text-brand-dark transition-colors italic">Initialize Upload</span>
+                        <span className="block text-[9px] text-accent-brown/30 font-bold uppercase tracking-widest mt-1 italic">PDF, JPG, or PNG · Max 5MB</span>
+                    </div>
                 </button>
             )}
             <input ref={ref} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => onChange(e.target.files?.[0] || null)} />
-            {hint && <p className="text-[9px] text-accent-brown/40 font-medium pl-3">{hint}</p>}
+            {hint && <p className="text-[9px] font-black text-accent-brown/20 uppercase tracking-widest pl-8 italic leading-relaxed">{hint}</p>}
         </div>
     );
 };
@@ -91,6 +110,8 @@ const BusinessRegister = () => {
     const [ownerLandmark, setOwnerLandmark] = useState('');
     const [ownerIdDocument, setOwnerIdDocument] = useState<File | null>(null);
     const [ownerPhone, setOwnerPhone] = useState('');
+    const [ownerBirthday, setOwnerBirthday] = useState('');
+    const [ownerGender, setOwnerGender] = useState('');
 
     // Step 3 — Clinic Location
     const [clinicHouseNumber, setClinicHouseNumber] = useState('');
@@ -162,14 +183,16 @@ const BusinessRegister = () => {
             }
             setStep(2);
         } else if (step === 2) {
-            if (!ownerFirstName || !ownerLastName) return setError('Owner full name is required.');
+            if (!ownerFirstName || !ownerLastName || !ownerBirthday || !ownerGender) return setError('Owner full name, birthdate, and sex are required.');
             if (!ownerHomeAddress) return setError('Owner home address is required.');
             if (ownerPhone.length !== 10 || !ownerPhone.startsWith('9')) {
                 return setError('Please enter a valid 10-digit personal contact number starting with 9.');
             }
             setStep(3);
         } else if (step === 3) {
-            if (!clinicCity || !clinicProvince) return setError('City and province are required. Please select a location from the map or search bar.');
+            // Remove strict city/province check. Allow progression if some location data is present.
+            const hasLocation = clinicLat || clinicCity || clinicProvince || clinicBarangay || clinicStreet;
+            if (!hasLocation) return setError('Please select a clinic location from the map or search bar.');
             setStep(4);
         } else if (step === 4) {
             if (!baiNumber || !baiDocument) return setError('BAI Animal Welfare Registration number and document are required.');
@@ -248,6 +271,8 @@ const BusinessRegister = () => {
                     last_name: ownerLastName,
                     suffix: ownerSuffix,
                     phone: ownerPhone,
+                    birthday: ownerBirthday,
+                    gender: ownerGender,
                     role: 'business',
                     // Clinic Info
                     clinic_name: clinicName,
@@ -345,8 +370,17 @@ const BusinessRegister = () => {
             if (types.includes('locality')) city = c.long_name;
             if (types.includes('administrative_area_level_1')) province = c.long_name;
             if (types.includes('postal_code')) zip = c.long_name;
-            if (types.includes('administrative_area_level_2')) district = c.long_name;
+            if (types.includes('administrative_area_level_2')) {
+                district = c.long_name;
+                if (!province || province.toLowerCase().includes('region') || province === 'Metro Manila' || province === 'National Capital Region') {
+                    if (!province) province = c.long_name;
+                }
+            }
             if (types.includes('neighborhood') || types.includes('subdivision')) subdivision = c.long_name;
+            
+            // Fallbacks
+            if (!city && types.includes('administrative_area_level_3')) city = c.long_name;
+            if (!city && types.includes('administrative_area_level_2') && province !== c.long_name) city = c.long_name;
         });
 
         if (houseNum) setClinicHouseNumber(houseNum);
@@ -372,27 +406,24 @@ const BusinessRegister = () => {
                 return (
                     <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                         <div className="space-y-1">
-                            <h3 className="text-xl font-black text-accent-brown tracking-tighter">Clinic Information</h3>
-                            <p className="text-xs text-accent-brown/50 font-medium italic">Tell us about your veterinary practice.</p>
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Clinic Information</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">Tell us about your veterinary practice.</p>
                         </div>
-                        {error && <div className="bg-red-50 text-red-500 p-3 rounded-xl text-sm font-bold border border-red-100">{error}</div>}
+                        {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
                         <div className="space-y-4">
                             {/* Clinic Name */}
                             <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Clinic Name <span className="text-brand-dark">*</span></label>
-                                <div className="relative">
-                                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                    <input type="text" value={clinicName} onChange={e => setClinicName(e.target.value)} placeholder="Hi-Vet Veterinary Clinic" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-4 pl-11 pr-4 text-accent-brown font-semibold outline-none transition-all text-sm" />
+                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Clinic Name <span className="text-brand-dark">*</span></label>
+                                <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                    <Building2 className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
+                                    <input type="text" value={clinicName} onChange={e => setClinicName(e.target.value)} placeholder="Hi-Vet Veterinary Clinic" className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" />
                                 </div>
                             </div>
                             {/* Phone */}
                             <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Phone / Contact Number <span className="text-brand-dark">*</span></label>
-                                <div className="relative flex items-center bg-accent-peach/20 border-2 border-transparent focus-within:border-brand/30 focus-within:bg-white rounded-[2rem] transition-all overflow-hidden">
-                                    <div className="flex items-center gap-2 pl-5 pr-3 shrink-0 text-accent-brown font-black text-sm border-r border-accent-brown/10">
-                                        <Phone className="w-4 h-4 text-accent-brown/30" />
-                                        <span>+63</span>
-                                    </div>
+                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Clinic Phone / Contact <span className="text-brand-dark">*</span></label>
+                                <div className="relative flex items-center bg-[#F7F6F2] ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl overflow-hidden transition-all shadow-inner">
+                                    <div className="pl-8 pr-5 py-5 text-accent-brown font-black border-r border-accent-brown/10 text-base opacity-20 transition-opacity group-focus-within:opacity-100">+63</div>
                                     <input 
                                         type="tel" 
                                         value={phone} 
@@ -404,13 +435,13 @@ const BusinessRegister = () => {
                                             setPhone(val.slice(0, 10));
                                         }} 
                                         placeholder="9XX XXX XXXX" 
-                                        className="flex-1 bg-transparent py-4 pl-4 pr-6 text-accent-brown font-semibold outline-none text-sm" 
+                                        className="flex-1 bg-transparent py-5 px-8 text-accent-brown font-bold text-base outline-none" 
                                     />
                                 </div>
                             </div>
                         </div>
-                        <button type="button" onClick={nextStep} className="btn-primary w-full group flex items-center justify-center gap-3 h-14 text-xs">
-                            Continue to Address Validation <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                        <button type="button" onClick={nextStep} className="bg-brand-dark text-white w-full py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] flex items-center justify-center gap-4 hover:shadow-2xl transition-all group shadow-xl italic">
+                            Validate Clinic Identity <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
                         </button>
                     </motion.div>
                 );
@@ -418,34 +449,36 @@ const BusinessRegister = () => {
             // ── Step 2: Owner Profile ──────────────────────────────────────────
             case 2:
                 return (
-                    <motion.div key="s2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+                    <motion.div key="s2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
                         <div className="space-y-1">
-                            <h3 className="text-xl font-black text-accent-brown tracking-tighter">Clinic Owner Profile</h3>
-                            <p className="text-xs text-accent-brown/50 font-medium italic">Personal information of the clinic owner.</p>
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Owner Identity</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">Identify the primary clinic representative.</p>
                         </div>
-                        {error && <div className="bg-red-50 text-red-500 p-3 rounded-xl text-sm font-bold border border-red-100">{error}</div>}
-                        <div className="space-y-4">
+                        {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
+                        <div className="space-y-4 max-h-[55vh] overflow-y-auto px-1 custom-scrollbar pb-2">
                             {/* Full Name */}
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-2 gap-4">
                                 <div className="group space-y-2">
-                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">First Name <span className="text-brand-dark">*</span></label>
-                                    <div className="relative">
-                                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                        <input type="text" value={ownerFirstName} onChange={e => setOwnerFirstName(e.target.value)} placeholder="Maria" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[1.5rem] py-3 pl-9 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm" />
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">First Name <span className="text-brand-dark">*</span></label>
+                                    <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                        <User className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
+                                        <input type="text" value={ownerFirstName} onChange={e => setOwnerFirstName(e.target.value)} placeholder="Juan" className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" />
                                     </div>
                                 </div>
                                 <div className="group space-y-2">
-                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Last Name <span className="text-brand-dark">*</span></label>
-                                    <div className="relative">
-                                        <input type="text" value={ownerLastName} onChange={e => setOwnerLastName(e.target.value)} placeholder="Santos" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[1.5rem] py-3 pl-4 pr-3 text-accent-brown font-semibold outline-none transition-all text-sm" />
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Last Name <span className="text-brand-dark">*</span></label>
+                                    <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                        <input type="text" value={ownerLastName} onChange={e => setOwnerLastName(e.target.value)} placeholder="Dela Cruz" className="w-full bg-transparent py-5 px-8 text-accent-brown font-bold text-base outline-none" />
                                     </div>
                                 </div>
                             </div>
-                            {/* Middle Name & Suffix */}
-                            <div className="grid grid-cols-2 gap-3">
+                            
+                            <div className="grid grid-cols-2 gap-4">
                                 <div className="group space-y-2">
-                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Middle Name <span className="text-accent-brown/30 text-[9px] normal-case tracking-normal font-bold italic">Optional</span></label>
-                                    <input type="text" value={ownerMiddleName} onChange={e => setOwnerMiddleName(e.target.value)} placeholder="Reyes" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[1.5rem] py-3 px-4 text-accent-brown font-semibold outline-none transition-all text-sm" />
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Middle Name <span className="text-[11px] lowercase opacity-50 font-bold italic not-uppercase tracking-normal">(Optional)</span></label>
+                                    <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                        <input type="text" value={ownerMiddleName} onChange={e => setOwnerMiddleName(e.target.value)} placeholder="Optional" className="w-full bg-transparent py-5 px-8 text-accent-brown font-bold text-base outline-none" />
+                                    </div>
                                 </div>
                                 <CustomDropdown
                                     label="Suffix"
@@ -457,17 +490,65 @@ const BusinessRegister = () => {
                                         { label: 'Jr.', value: 'Jr.' },
                                         { label: 'Sr.', value: 'Sr.' },
                                         { label: 'II', value: 'II' },
-                                        { label: 'III', value: 'III' },
-                                        { label: 'IV', value: 'IV' }
+                                        { label: 'III', value: 'III' }
                                     ]}
                                     placeholder="None"
                                 />
                             </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="group space-y-2">
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Personal Phone <span className="text-brand-dark">*</span></label>
+                                    <div className="relative flex items-center bg-[#F7F6F2] ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl overflow-hidden transition-all shadow-inner">
+                                        <div className="pl-6 pr-4 py-5 text-accent-brown font-black border-r border-accent-brown/10 text-sm opacity-20 transition-opacity group-focus-within:opacity-100">+63</div>
+                                        <input 
+                                            type="tel" 
+                                            value={ownerPhone} 
+                                            maxLength={10}
+                                            onChange={e => {
+                                                let val = e.target.value.replace(/\D/g, '');
+                                                if (val.startsWith('0')) val = val.substring(1);
+                                                if (val.length > 0 && !val.startsWith('9')) val = '';
+                                                setOwnerPhone(val.slice(0, 10));
+                                            }} 
+                                            placeholder="9XX XXX XXXX" 
+                                            className="flex-1 bg-transparent py-5 px-6 text-accent-brown font-bold text-base outline-none" 
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <CustomDropdown
+                                        label="Sex / Gender"
+                                        value={ownerGender}
+                                        onChange={setOwnerGender}
+                                        options={[
+                                            { label: 'Male', value: 'Male' },
+                                            { label: 'Female', value: 'Female' },
+                                            { label: 'Other', value: 'Other' },
+                                            { label: 'Rather not say', value: 'Rather not say' }
+                                        ]}
+                                        placeholder="Select"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <CustomDatePicker
+                                    label="Birthdate"
+                                    value={ownerBirthday}
+                                    onChange={setOwnerBirthday}
+                                />
+                                <div className="group space-y-2">
+                                    <label className="text-[11px] font-black uppercase tracking-widest text-accent-brown/40 block ml-1 italic">Calculated Age</label>
+                                    <div className="w-full bg-[#F7F6F2] py-5 px-8 rounded-3xl text-accent-brown font-black text-xl italic opacity-50 ring-1 ring-brand-dark/5">{calculateAge(ownerBirthday) || '--'}</div>
+                                </div>
+                            </div>
+
                             {/* Home Address */}
                             <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Home Address <span className="text-brand-dark">*</span></label>
-                                <div className="relative">
-                                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark z-10 transition-colors" />
+                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Residential Address <span className="text-brand-dark">*</span></label>
+                                <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                    <MapPin className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark z-10 transition-colors" />
                                     <AddressAutocomplete
                                         onAddressSelect={(_addr, _components, geometry, granular) => {
                                             if (granular) {
@@ -505,49 +586,26 @@ const BusinessRegister = () => {
                                         }}
                                         initialLocation={ownerLat && ownerLng ? { lat: ownerLat, lng: ownerLng } : undefined}
                                         placeholder="123 Rizal St., Quezon City"
-                                        className="pl-11"
+                                        className="!pl-16 !bg-transparent !border-0 !shadow-none !rounded-3xl !py-5 text-base font-bold text-accent-brown"
                                     />
                                 </div>
-                                {ownerHomeAddress && (
-                                    <p className="text-[10px] font-semibold text-accent-brown/50 pl-3 leading-relaxed">
-                                        📍 {ownerLandmark || ownerHomeAddress}
-                                    </p>
-                                )}
                             </div>
+                            
                             {/* Government ID Upload */}
                             <FileUploadField
-                                label="Government-Issued ID"
+                                label="Official Government ID"
                                 required
-                                hint="Upload a clear photo or scan of any valid government ID (PhilSys, Passport, Driver's License, etc.)."
+                                hint="Upload a clear scan of a valid government ID (Passport, License, etc.)"
                                 value={ownerIdDocument}
                                 onChange={setOwnerIdDocument}
                             />
-                            {/* Personal Contact */}
-                            <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Personal Contact Number <span className="text-brand-dark">*</span></label>
-                                <div className="relative flex items-center bg-accent-peach/20 border-2 border-transparent focus-within:border-brand/30 focus-within:bg-white rounded-[2rem] transition-all overflow-hidden">
-                                    <div className="flex items-center gap-2 pl-5 pr-3 shrink-0 text-accent-brown font-black text-sm border-r border-accent-brown/10">
-                                        <Phone className="w-4 h-4 text-accent-brown/30" /><span>+63</span>
-                                    </div>
-                                    <input 
-                                        type="tel" 
-                                        value={ownerPhone} 
-                                        maxLength={10}
-                                        onChange={e => {
-                                            let val = e.target.value.replace(/\D/g, '');
-                                            if (val.startsWith('0')) val = val.substring(1);
-                                            if (val.length > 0 && !val.startsWith('9')) val = '';
-                                            setOwnerPhone(val.slice(0, 10));
-                                        }} 
-                                        placeholder="9XX XXX XXXX" 
-                                        className="flex-1 bg-transparent py-4 pl-4 pr-6 text-accent-brown font-semibold outline-none text-sm" 
-                                    />
-                                </div>
-                            </div>
                         </div>
-                        <div className="flex gap-3">
-                            <button type="button" onClick={prevStep} className="flex-1 py-4 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>
-                            <button type="button" onClick={nextStep} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs">Continue <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></button>
+                        <div className="flex gap-4 pt-2">
+                            <button type="button" onClick={prevStep} className="flex-1 px-10 py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] text-accent-brown/30 hover:text-brand-dark transition-all group italic flex items-center justify-center gap-3">
+                                <ChevronLeft className="w-5 h-5 group-hover:-translate-x-2 transition-transform" />
+                                Back
+                            </button>
+                            <button type="button" onClick={nextStep} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4">Next Stage <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" /></button>
                         </div>
                     </motion.div>
                 );
@@ -555,23 +613,23 @@ const BusinessRegister = () => {
             // ── Step 3: Clinic Location ────────────────────────────────────────
             case 3:
                 return (
-                    <motion.div key="s3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+                    <motion.div key="s3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                         <div className="space-y-1">
-                            <h3 className="text-xl font-black text-accent-brown tracking-tighter">Clinic Location</h3>
-                            <p className="text-xs text-accent-brown/50 font-medium italic">Physical address of your veterinary clinic.</p>
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Clinic Location</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">Physical address of your veterinary practice.</p>
                         </div>
-                        {error && <div className="bg-red-50 text-red-500 p-3 rounded-xl text-sm font-bold border border-red-100">{error}</div>}
-                        <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1 custom-scrollbar">
+                        {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
+                        <div className="space-y-4 max-h-[50vh] overflow-y-auto px-1 custom-scrollbar pr-4">
                             <div className="group space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3">Precise Clinic Location <span className="text-brand-dark">*</span></label>
-                                    <span className="text-[9px] font-bold text-brand-dark/40 uppercase tracking-widest italic flex items-center gap-1">
-                                        <div className="w-1 h-1 rounded-full bg-brand-dark animate-pulse" />
-                                        Mark Landmark on Map
+                                <div className="flex items-center justify-between pl-6">
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] italic">Precise Hub Location <span className="text-brand-dark">*</span></label>
+                                    <span className="text-[9px] font-black text-brand-dark/40 uppercase tracking-widest italic flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-brand-dark animate-pulse" />
+                                        Pinpoint on Map
                                     </span>
                                 </div>
-                                <div className="relative">
-                                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark z-10 transition-colors" />
+                                <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-[2.5rem] transition-all shadow-inner bg-[#F7F6F2] overflow-hidden">
+                                    <MapPin className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark z-10 transition-colors" />
                                     <AddressAutocomplete 
                                         onAddressSelect={(full, components, geometry, granular) => {
                                             handleAddressComponents(full, components, geometry, granular);
@@ -591,27 +649,31 @@ const BusinessRegister = () => {
                                             zip: clinicZip,
                                             region: clinicRegion
                                         }}
-                                        placeholder="Search or pick on map..."
-                                        className="!py-4 !rounded-2xl shadow-xl border-2 border-transparent focus:border-brand/30 bg-accent-peach/5 pl-11"
+                                        placeholder="Search or designate waypoint..."
+                                        className="!py-6 !bg-transparent !border-0 !shadow-none !rounded-[2.5rem] !pl-16 text-base font-bold text-accent-brown pr-4"
                                     />
                                 </div>
-                                <p className="text-[9px] font-bold text-accent-brown/30 uppercase tracking-widest pl-3 italic">Click the PIN icon to manually enter details like House No., Barangay, etc.</p>
+                                <p className="text-[9px] font-black text-accent-brown/20 uppercase tracking-widest pl-8 italic leading-relaxed">Designate exact clinic entrance. Use the PIN icon to manually override details if necessary.</p>
                             </div>
 
                             {/* Precise Address Confirmation */}
-                            <div className="p-6 bg-accent-peach/5 rounded-[2rem] border border-accent-peach/10 space-y-3">
-                                <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Current Clinic Address</p>
-                                <div className="space-y-1">
-                                    <p className="text-sm font-bold text-accent-brown leading-relaxed capitalize">
+                            <div className="p-8 bg-accent-peach/5 rounded-[2.5rem] border border-accent-peach/10 space-y-3 relative overflow-hidden group/addr">
+                                <div className="absolute top-0 right-0 p-6 opacity-5 group-hover/addr:opacity-20 transition-opacity"><Building2 className="w-16 h-16" /></div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Validated Hub Address</p>
+                                <div className="space-y-2 relative z-10">
+                                    <p className="text-lg font-black text-accent-brown leading-tight capitalize">
                                         {[clinicHouseNumber, clinicBlockNumber, clinicStreet, clinicSubdivision, clinicSitio, clinicBarangay, clinicCity, clinicProvince, clinicZip].filter(Boolean).join(' ')}
                                     </p>
-                                    {!clinicCity && <p className="text-[9px] font-black text-red-400 uppercase tracking-widest italic">Location not yet finalized</p>}
+                                    {!clinicCity && <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-50 text-red-500 rounded-full text-[9px] font-black uppercase tracking-widest italic border border-red-100">Location Incomplete</div>}
                                 </div>
                             </div>
                         </div>
-                        <div className="flex gap-3">
-                            <button type="button" onClick={prevStep} className="flex-1 py-4 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>
-                            <button type="button" onClick={nextStep} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs">Continue <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></button>
+                        <div className="flex gap-4 pt-2">
+                             <button type="button" onClick={prevStep} className="flex-1 px-10 py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] text-accent-brown/30 hover:text-brand-dark transition-all group italic flex items-center justify-center gap-3">
+                                <ChevronLeft className="w-5 h-5 group-hover:-translate-x-2 transition-transform" />
+                                Back
+                            </button>
+                            <button type="button" onClick={nextStep} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4">Next Stage <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" /></button>
                         </div>
                     </motion.div>
                 );
@@ -619,52 +681,61 @@ const BusinessRegister = () => {
             // ── Step 4: Regulatory Compliance ─────────────────────────────────
             case 4:
                 return (
-                    <motion.div key="s4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+                    <motion.div key="s4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                         <div className="space-y-1">
-                            <h3 className="text-xl font-black text-accent-brown tracking-tighter">Regulatory Compliance</h3>
-                            <p className="text-xs text-accent-brown/50 font-medium italic">Required documents for professional clinical operation in the Philippines.</p>
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Compliance</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">Required documentation for professional clinical operation.</p>
                         </div>
-                        {error && <div className="bg-red-50 text-red-500 p-3 rounded-xl text-sm font-bold border border-red-100">{error}</div>}
+                        {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
 
-                        {/* BAI Section */}
-                        <div className="space-y-3 p-4 bg-accent-peach/10 rounded-2xl border border-accent-brown/5">
-                            <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 bg-brand/10 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
-                                    <FileCheck className="w-4 h-4 text-brand-dark" />
+                        <div className="space-y-6 max-h-[50vh] overflow-y-auto px-1 custom-scrollbar pr-4 pb-2">
+                            {/* BAI Section */}
+                            <div className="space-y-4 p-6 bg-accent-peach/5 rounded-[2.5rem] border border-accent-brown/5">
+                                <div className="flex items-start gap-4">
+                                    <div className="w-10 h-10 bg-brand-dark/10 rounded-2xl flex items-center justify-center shrink-0">
+                                        <FileCheck className="w-5 h-5 text-brand-dark" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-black text-accent-brown uppercase tracking-tighter">BAI Welfare Registry <span className="text-brand-dark">*</span></p>
+                                        <p className="text-[9px] text-accent-brown/40 font-bold uppercase tracking-widest leading-relaxed mt-1 italic">Mandatory registration with the Bureau of Animal Industry.</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="text-xs font-black text-accent-brown">BAI Animal Welfare Registration <span className="text-brand-dark">*</span></p>
-                                    <p className="text-[9px] text-accent-brown/50 font-medium mt-0.5">Mandatory registration with the Bureau of Animal Industry for all veterinary clinics.</p>
+                                <div className="group space-y-2">
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Registration Number <span className="text-brand-dark">*</span></label>
+                                    <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                        <input type="text" value={baiNumber} onChange={e => setBaiNumber(e.target.value)} placeholder="BAI-REG-2024-XXXXX" className="w-full bg-transparent py-4 px-8 text-accent-brown font-bold text-base outline-none" />
+                                    </div>
                                 </div>
+                                <FileUploadField label="BAI Registration Document" required value={baiDocument} onChange={setBaiDocument} hint="Upload official BAI registration certificate." />
                             </div>
-                            <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-1">Registration Number <span className="text-brand-dark">*</span></label>
-                                <input type="text" value={baiNumber} onChange={e => setBaiNumber(e.target.value)} placeholder="BAI-REG-2024-XXXXX" className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-[1.5rem] py-3 px-4 text-accent-brown font-semibold outline-none transition-all text-sm" />
+
+                            {/* Mayor's Permit Section */}
+                            <div className="space-y-4 p-6 bg-accent-peach/5 rounded-[2.5rem] border border-accent-brown/5">
+                                <div className="flex items-start gap-4">
+                                    <div className="w-10 h-10 bg-brand-dark/10 rounded-2xl flex items-center justify-center shrink-0">
+                                        <Landmark className="w-5 h-5 text-brand-dark" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-black text-accent-brown uppercase tracking-tighter">Mayor's Operations Permit <span className="text-brand-dark">*</span></p>
+                                        <p className="text-[9px] text-accent-brown/40 font-bold uppercase tracking-widest leading-relaxed mt-1 italic">Validated permit to legally operate business within municipality.</p>
+                                    </div>
+                                </div>
+                                <div className="group space-y-2">
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Permit Number <span className="text-brand-dark">*</span></label>
+                                    <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                        <input type="text" value={mayorsPermit} onChange={e => setMayorsPermit(e.target.value)} placeholder="Permit No. 2024-XXXXXX" className="w-full bg-transparent py-4 px-8 text-accent-brown font-bold text-base outline-none" />
+                                    </div>
+                                </div>
+                                <FileUploadField label="Mayor's Permit Document" required value={mayorsDocument} onChange={setMayorsDocument} hint="Upload scanned copy of current Mayor's Business Permit." />
                             </div>
-                            <FileUploadField label="BAI Registration Document" required value={baiDocument} onChange={setBaiDocument} hint="Upload your official BAI registration certificate." />
                         </div>
 
-                        {/* Mayor's Permit Section */}
-                        <div className="space-y-3 p-4 bg-accent-peach/10 rounded-2xl border border-accent-brown/5">
-                            <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 bg-brand/10 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
-                                    <Landmark className="w-4 h-4 text-brand-dark" />
-                                </div>
-                                <div>
-                                    <p className="text-xs font-black text-accent-brown">Mayor's Business Permit <span className="text-brand-dark">*</span></p>
-                                    <p className="text-[9px] text-accent-brown/50 font-medium mt-0.5">Validated permit to legally operate a business within the city or municipality.</p>
-                                </div>
-                            </div>
-                            <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-1">Permit Number <span className="text-brand-dark">*</span></label>
-                                <input type="text" value={mayorsPermit} onChange={e => setMayorsPermit(e.target.value)} placeholder="Permit No. 2024-XXXXXX" className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-[1.5rem] py-3 px-4 text-accent-brown font-semibold outline-none transition-all text-sm" />
-                            </div>
-                            <FileUploadField label="Mayor's Permit Document" required value={mayorsDocument} onChange={setMayorsDocument} hint="Upload a scanned copy of your current Mayor's Business Permit." />
-                        </div>
-
-                        <div className="flex gap-3">
-                            <button type="button" onClick={prevStep} className="flex-1 py-4 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>
-                            <button type="button" onClick={nextStep} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs">Continue <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></button>
+                        <div className="flex gap-4 pt-2">
+                            <button type="button" onClick={prevStep} className="flex-1 px-10 py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] text-accent-brown/30 hover:text-brand-dark transition-all group italic flex items-center justify-center gap-3">
+                                <ChevronLeft className="w-5 h-5 group-hover:-translate-x-2 transition-transform" />
+                                Back
+                            </button>
+                            <button type="button" onClick={nextStep} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4">Next Stage <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" /></button>
                         </div>
                     </motion.div>
                 );
@@ -672,56 +743,51 @@ const BusinessRegister = () => {
             // ── Step 5: Account Credentials ───────────────────────────────────
             case 5:
                 return (
-                    <motion.div key="s5" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+                    <motion.div key="s5" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
                         <div className="space-y-1">
-                            <h3 className="text-xl font-black text-accent-brown tracking-tighter">Account Credentials</h3>
-                            <p className="text-xs text-accent-brown/50 font-medium italic">Secure access for your business portal.</p>
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none italic">Security</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">Secure access for your partner portal.</p>
                         </div>
-                        {error && <div className="bg-red-50 text-red-500 p-3 rounded-xl text-sm font-bold border border-red-100">{error}</div>}
+                        {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
                         <div className="space-y-4">
                             <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Business Email Address <span className="text-brand-dark">*</span></label>
-                                <div className="relative">
-                                    <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@happy-paws.com" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-5 pl-14 pr-6 text-accent-brown font-semibold outline-none transition-all" />
+                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Partner Identity <span className="text-brand-dark">*</span></label>
+                                <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                    <Mail className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
+                                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@happy-paws.com" className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" />
                                 </div>
                             </div>
                             <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Password <span className="text-brand-dark">*</span></label>
-                                <div className="relative">
-                                    <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                    <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-5 pl-14 pr-14 text-accent-brown font-semibold outline-none transition-all" />
-                                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-accent-brown/30 hover:text-brand-dark transition-colors">
+                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Security Secret <span className="text-brand-dark">*</span></label>
+                                <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                    <Lock className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
+                                    <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full bg-transparent py-5 pl-16 pr-14 text-accent-brown font-bold text-base outline-none" />
+                                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-7 top-1/2 -translate-y-1/2 text-accent-brown/20 hover:text-brand-dark transition-colors">
                                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                     </button>
                                 </div>
-                                {password && <div className="px-4"><PasswordStrength password={password} /></div>}
+                                {password && <div className="px-6"><PasswordStrength password={password} /></div>}
                             </div>
                             <div className="group space-y-2">
-                                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-4">Confirm Password <span className="text-brand-dark">*</span></label>
-                                <div className="relative">
-                                    <ShieldCheck className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                    <input type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••" className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-[2rem] py-5 pl-14 pr-14 text-accent-brown font-semibold outline-none transition-all" />
-                                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-accent-brown/30 hover:text-brand-dark transition-colors">
+                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Confirm Secret <span className="text-brand-dark">*</span></label>
+                                <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                    <ShieldCheck className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
+                                    <input type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••" className="w-full bg-transparent py-5 pl-16 pr-14 text-accent-brown font-bold text-base outline-none" />
+                                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-7 top-1/2 -translate-y-1/2 text-accent-brown/20 hover:text-brand-dark transition-colors">
                                         {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                     </button>
                                 </div>
-                                {confirmPassword && password !== confirmPassword && <p className="text-red-500 text-xs font-bold pl-4">Passwords do not match</p>}
+                                {confirmPassword && password !== confirmPassword && <p className="text-red-500 text-[10px] font-black uppercase tracking-widest pl-6 mt-1 italic leading-none">Credentials do not match</p>}
                             </div>
                         </div>
-                        <div className="flex gap-3">
-                            <button type="button" onClick={prevStep} className="flex-1 py-4 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</button>
-                            <button type="submit" disabled={loading} className="btn-primary flex-[2] group flex items-center justify-center gap-2 h-14 text-xs disabled:opacity-50">
-                                {loading ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                        <span>Sending Code...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        Verify Email <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                                    </>
-                                )}
+                        <div className="flex gap-4 pt-2">
+                            <button type="button" onClick={prevStep} className="flex-1 px-10 py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] text-accent-brown/30 hover:text-brand-dark transition-all group italic flex items-center justify-center gap-3">
+                                <ChevronLeft className="w-5 h-5 group-hover:-translate-x-2 transition-transform" />
+                                Back
+                            </button>
+                            <button type="submit" disabled={loading} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic disabled:opacity-50 flex items-center justify-center gap-4">
+                                {loading ? 'Authorizing...' : 'Initialize Portal'} 
+                                {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />}
                             </button>
                         </div>
                     </motion.div>
@@ -730,47 +796,27 @@ const BusinessRegister = () => {
             // ── Step 6: OTP ───────────────────────────────────────────────────
             case 6:
                 return (
-                    <motion.div key="s6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
-                        <div className="space-y-4">
-                            <div className="w-14 h-14 bg-brand/10 text-brand-dark rounded-full flex items-center justify-center">
-                                <MailCheck className="w-7 h-7" />
-                            </div>
+                    <motion.div key="s6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-12">
+                         <div className="space-y-4">
+                            <div className="w-20 h-20 bg-brand/10 text-brand-dark rounded-3xl flex items-center justify-center"><MailCheck className="w-10 h-10" /></div>
                             <div className="space-y-2">
-                                <h3 className="text-xl font-black text-accent-brown tracking-tighter">Email Verification</h3>
-                                <p className="text-xs text-accent-brown/50 font-medium italic">
-                                    We've sent a 6-digit code to <br />
-                                    <span className="text-accent-brown font-bold not-italic">{email}</span>
-                                </p>
+                                <h3 className="text-3xl font-black text-accent-brown tracking-tighter uppercase leading-none italic">Verification</h3>
+                                <p className="text-sm text-accent-brown/40 font-medium italic leading-relaxed">Sent 6-digit code to <span className="text-accent-brown font-bold not-italic">{email}</span></p>
                             </div>
                         </div>
-                        {error && <div className="bg-red-50 text-red-500 text-sm font-bold p-4 rounded-2xl text-center">{error}</div>}
-                        <div className="flex justify-between gap-2">
+                        <div className="flex justify-between gap-3">
                             {otp.map((digit, idx) => (
-                                <input key={idx} id={`otp-${idx}`} type="text" maxLength={1} value={digit}
-                                    onChange={e => handleOtpChange(idx, e.target.value)}
-                                    onKeyDown={e => handleKeyDown(idx, e)}
-                                    onPaste={handlePaste}
-                                    className="w-10 xs:w-12 md:w-14 h-14 xs:h-16 text-center text-2xl font-black text-brand-dark bg-accent-peach/20 border-2 border-brand-dark focus:border-brand-dark focus:bg-white rounded-2xl outline-none transition-all"
-                                />
+                                <input key={idx} id={`otp-${idx}`} type="text" maxLength={1} value={digit} onChange={(e) => handleOtpChange(idx, e.target.value)} onKeyDown={(e) => handleKeyDown(idx, e)} onPaste={handlePaste} className="w-12 h-16 sm:w-16 sm:h-20 text-center text-3xl font-black text-brand-dark bg-[#F7F6F2] rounded-3xl outline-none transition-all ring-1 ring-brand-dark/5 focus:ring-brand-dark/30 shadow-inner" />
                             ))}
                         </div>
-                        <div className="space-y-5">
-                            <p className="text-xs font-bold text-accent-brown/40 ml-1">
-                                No code yet?{' '}
-                                <button
-                                    type="button"
-                                    onClick={handleSendOtp}
-                                    disabled={loading || countdown > 0}
-                                    className="text-brand-dark hover:underline underline-offset-4 disabled:opacity-50"
-                                >
-                                    {countdown > 0 ? `Resend Code (${countdown}s)` : 'Resend Code'}
-                                </button>
-                            </p>
-                            <div className="flex gap-3">
-                                <button onClick={prevStep} disabled={loading} className="flex-1 py-4 rounded-full font-black text-accent-brown/40 hover:text-accent-brown hover:bg-black/5 transition-all uppercase tracking-widest text-[10px] disabled:opacity-50">Review</button>
-                                <button onClick={handleRegister} disabled={loading} className="btn-primary flex-[2] h-14 text-xs disabled:opacity-50 flex items-center justify-center gap-2">
-                                    <FileText className="w-4 h-4" />
-                                    {loading ? 'Submitting...' : 'Complete Registration'}
+                        {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-2 px-4 rounded-xl border border-red-100 italic text-center mb-4">{error}</div>}
+                        <div className="space-y-8">
+                            <p className="text-xs font-black text-accent-brown/30 uppercase tracking-[0.2em] ml-6 italic">No code? <button type="button" onClick={handleSendOtp} disabled={countdown > 0} className="text-brand-dark font-black hover:text-accent-brown">{countdown > 0 ? `Wait ${countdown}s` : 'Resend'}</button></p>
+                            <div className="flex gap-4">
+                                <button type="button" onClick={prevStep} className="flex-1 px-8 py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] text-accent-brown/30 italic">Review</button>
+                                <button type="button" onClick={handleRegister} disabled={loading} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all italic flex items-center justify-center gap-4 group">
+                                    {loading ? 'Finalizing...' : 'Initialize Portal'}
+                                    {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />}
                                 </button>
                             </div>
                         </div>
@@ -784,137 +830,114 @@ const BusinessRegister = () => {
     // ─── Pending Approval Screen ─────────────────────────────────────────────────
     if (pendingApproval) {
         return (
-            <div className="min-h-screen bg-accent-cream flex items-center justify-center p-6 select-none">
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                    className="max-w-lg w-full bg-white rounded-[2.5rem] shadow-2xl shadow-brand/10 border border-brand/5 overflow-hidden"
-                >
-                    <div className="bg-gradient-to-br from-accent-peach to-brand/10 px-10 py-10 text-center flex flex-col items-center gap-4 border-b border-brand/5">
-                        <div className="w-20 h-20 bg-white rounded-[1.5rem] shadow-lg shadow-brand/20 flex items-center justify-center">
-                            <Logo className="w-10 h-10" />
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-black text-brand-dark uppercase tracking-[0.3em] mb-1">Hi-Vet Partners</p>
-                            <h1 className="text-2xl font-black text-accent-brown tracking-tight">Application Under Review</h1>
-                            <p className="text-xs text-accent-brown/50 font-medium mt-1">Your clinic registration has been submitted successfully.</p>
+            <div className="h-screen bg-white flex font-brand select-none overflow-hidden">
+                <div className="hidden lg:block w-1/2 h-full relative overflow-hidden group">
+                    <div className="absolute inset-0 z-0">
+                        <img src={loginHero} alt="Clinic Operations" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-accent-brown via-accent-brown/40 to-transparent opacity-90 transition-opacity" />
+                        <div className="absolute inset-0 bg-black/20" />
+                    </div>
+                    <div className="relative z-10 flex flex-col h-full justify-between p-24">
+                        <div className="space-y-12">
+                            <Link to="/" className="inline-flex items-center gap-4 group/back">
+                                <div className="w-14 h-14 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20 group-hover/back:bg-brand-dark transition-all text-white">
+                                    <Building2 className="w-8 h-8" />
+                                </div>
+                                <span className="text-3xl font-black text-white tracking-widest uppercase italic">Hi-Vet Partners</span>
+                            </Link>
+                            <div className="space-y-8 max-w-lg">
+                                <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Clinic Command</div>
+                                <h1 className="text-7xl font-black text-white leading-[0.8] tracking-tighter uppercase">Partner <br /><span className="text-brand-dark italic font-outfit">Operations.</span></h1>
+                                <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Access your patient CRM, real-time inventory, and business intelligence dashboard.</p>
+                            </div>
                         </div>
                     </div>
-                    <div className="px-10 py-8 space-y-6">
-                        <div className="flex items-start gap-4 p-4 bg-orange-50 border border-orange-100 rounded-2xl">
-                            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
-                                <Clock className="w-5 h-5 text-orange-600" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-black text-orange-700">Pending Compliance Verification</p>
-                                <p className="text-xs text-orange-600/70 font-medium mt-0.5">Our team is reviewing your submitted documents. This typically takes <strong>1–3 business days</strong>.</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 p-4 bg-accent-peach/20 rounded-2xl">
-                            <Mail className="w-4 h-4 text-brand-dark shrink-0" />
-                            <div>
-                                <p className="text-[9px] font-black text-accent-brown/40 uppercase tracking-widest">Confirmation Sent To</p>
-                                <p className="text-sm font-black text-accent-brown">{registeredEmail}</p>
-                            </div>
+                </div>
+
+                <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center bg-white p-6 sm:p-10 relative overflow-hidden">
+                    <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-md text-center space-y-8">
+                        <div className="w-24 h-24 bg-brand/10 text-brand-dark rounded-[3rem] flex items-center justify-center mx-auto shadow-xl shadow-brand/5">
+                            <Clock className="w-12 h-12 animate-pulse" />
                         </div>
                         <div className="space-y-3">
-                            <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest">What Happens Next</p>
-                            {[
-                                { icon: <ShieldCheck className="w-4 h-4" />, label: 'Document Verification', desc: "Admin reviews your BAI, Mayor's Permit & Government ID", done: true },
-                                { icon: <MailCheck className="w-4 h-4" />, label: 'Approval Notification', desc: "You'll receive an email once your account is approved", done: false },
-                                { icon: <Building2 className="w-4 h-4" />, label: 'Platform Access Granted', desc: 'Log in and start managing your clinic on Hi-Vet', done: false },
-                            ].map((item, i) => (
-                                <div key={i} className={`flex items-start gap-3 p-3 rounded-xl ${item.done ? 'bg-green-50 border border-green-100' : 'bg-accent-peach/10 border border-accent-brown/5'}`}>
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${item.done ? 'bg-green-100 text-green-600' : 'bg-accent-peach/30 text-accent-brown/40'}`}>{item.icon}</div>
-                                    <div className="flex-1">
-                                        <p className={`text-xs font-black ${item.done ? 'text-green-700' : 'text-accent-brown/60'}`}>{item.label}</p>
-                                        <p className="text-[10px] text-accent-brown/40 font-medium">{item.desc}</p>
-                                    </div>
-                                    {item.done && <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0 mt-1" />}
-                                </div>
-                            ))}
+                            <h2 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Under Review</h2>
+                            <p className="text-sm text-accent-brown/50 font-medium italic">Application submitted for <span className="text-accent-brown font-bold not-italic font-outfit">{registeredEmail}</span></p>
                         </div>
-                        <div className="flex flex-col gap-3 pt-2">
-                            <Link to="/login/business" className="btn-primary w-full flex items-center justify-center gap-2 py-4 rounded-[1.5rem] text-xs font-black uppercase tracking-widest">
-                                <ArrowRight className="w-4 h-4" /> Go to Partner Login
-                            </Link>
-                            <Link to="/" className="text-center text-[10px] text-accent-brown/40 font-black uppercase tracking-widest hover:text-accent-brown transition-colors py-2">
-                                Return to Homepage
-                            </Link>
+                        <div className="bg-accent-peach/10 p-8 rounded-[2.5rem] border border-accent-brown/5 text-left space-y-6">
+                            <div className="flex gap-4">
+                                <div className="w-6 h-6 rounded-full bg-brand-dark text-white flex items-center justify-center text-[10px] font-black shrink-0">1</div>
+                                <p className="text-xs text-accent-brown/70 italic leading-relaxed">Our compliance team will verify your <span className="font-bold text-accent-brown">BAI Registration</span> and <span className="font-bold text-accent-brown">Mayor's Permit</span> within 24-48 business hours.</p>
+                            </div>
+                            <div className="flex gap-4 opacity-50">
+                                <div className="w-6 h-6 rounded-full bg-brand-dark/20 text-accent-brown/40 flex items-center justify-center text-[10px] font-black shrink-0">2</div>
+                                <p className="text-xs text-accent-brown/40 italic leading-relaxed">Once approved, you will receive an activation email with your clinic portal access link.</p>
+                            </div>
                         </div>
-                    </div>
-                </motion.div>
+                        <button onClick={() => navigate('/for-clinics')} className="bg-brand-dark text-white w-full py-5 rounded-full font-black text-[10px] uppercase tracking-[0.5em] shadow-xl shadow-brand-dark/20 hover:shadow-brand-dark/40 transition-all italic">Return to Landing</button>
+                    </motion.div>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-accent-cream flex items-center justify-center p-4 xs:p-6 select-none relative py-12">
-            <motion.div
-                initial={{ opacity: 0, scale: 0.97 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="max-w-6xl w-full grid md:grid-cols-2 bg-white rounded-[2.5rem] shadow-2xl shadow-brand/10 border border-brand/5 overflow-hidden relative z-10"
-            >
-                {/* Left Hero */}
-                <div className="hidden md:flex flex-col justify-between p-14 bg-accent-peach/30 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-brand/5" />
-                    <div className="relative z-10">
-                        <Link to="/for-clinics" className="flex items-center gap-3 mb-10 hover:scale-105 transition-transform w-fit">
-                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center p-2 shadow-sm border border-brand/20">
-                                <Logo className="w-full h-full text-brand-dark" />
+        <div className="h-screen bg-white flex font-brand select-none overflow-hidden">
+            {/* Left Column: Full Screen Hero */}
+            <div className="hidden lg:block w-1/2 h-full relative overflow-hidden group">
+                <div className="absolute inset-0 z-0">
+                    <img src={loginHero} alt="Clinic Operations" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-accent-brown via-accent-brown/40 to-transparent opacity-90 transition-opacity" />
+                    <div className="absolute inset-0 bg-black/20" />
+                </div>
+                <div className="relative z-10 flex flex-col h-full justify-between p-24">
+                    <div className="space-y-12">
+                        <Link to="/for-clinics" className="inline-flex items-center gap-4 group/back">
+                            <div className="w-14 h-14 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20 group-hover/back:bg-brand-dark transition-all text-white">
+                                <Building2 className="w-8 h-8" />
                             </div>
-                            <span className="text-xl font-black tracking-tighter text-accent-brown">Hi-Vet Partners</span>
+                            <span className="text-3xl font-black text-white tracking-widest uppercase italic">Hi-Vet Partners</span>
                         </Link>
-                        <div className="space-y-4 max-w-xs">
-                            <h1 className="text-4xl font-black text-accent-brown leading-tight">
-                                Professional <br /><span className="text-brand-dark">Clinic Registration</span>
-                            </h1>
-                            <p className="text-accent-brown/60 font-medium leading-relaxed text-sm">
-                                Join our network of verified veterinary clinics. Complete your regulatory compliance to get full platform access.
-                            </p>
+                        <div className="space-y-8 max-w-lg">
+                            <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Clinic Command</div>
+                            <h1 className="text-7xl font-black text-white leading-[0.8] tracking-tighter uppercase">Partner <br /><span className="text-brand-dark italic font-outfit">Operations.</span></h1>
+                            <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Access your patient CRM, real-time inventory, and business intelligence dashboard.</p>
                         </div>
                     </div>
-
-                    {/* Step List */}
-                    <div className="relative z-10 space-y-2">
-                        {stepLabels.map((label, i) => (
-                            <div key={i} className={`flex items-center gap-3 transition-all ${step === i + 1 ? 'opacity-100' : step > i + 1 ? 'opacity-50' : 'opacity-30'}`}>
-                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 transition-all ${step === i + 1 ? 'bg-brand-dark text-white shadow-md' : step > i + 1 ? 'bg-green-500 text-white' : 'bg-accent-brown/10 text-accent-brown/40'}`}>
-                                    {step > i + 1 ? '✓' : i + 1}
-                                </div>
-                                <span className={`text-[10px] font-black uppercase tracking-widest ${step === i + 1 ? 'text-accent-brown' : 'text-accent-brown/40'}`}>{label}</span>
-                            </div>
-                        ))}
+                    <div className="bg-white/10 backdrop-blur-xl px-10 py-5 rounded-full border border-white/10 w-fit">
+                        <p className="text-[11px] font-black text-white uppercase tracking-[0.5em] italic">Clinic Registration Stage {step} / {TOTAL_STEPS}</p>
                     </div>
                 </div>
+            </div>
 
-                {/* Right Form */}
-                <div className="p-6 xs:p-10 md:p-14 flex flex-col justify-center overflow-y-auto max-h-screen">
+            {/* Right Column: Full Screen Form */}
+            <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center bg-white p-6 sm:p-10 relative overflow-hidden">
+                <div className="lg:hidden absolute top-8 left-12">
+                    <div className="w-12 h-12 bg-brand-dark rounded-2xl flex items-center justify-center text-white shadow-lg">
+                        <Building2 className="w-7 h-7" />
+                    </div>
+                </div>
+                <div className="w-full max-w-lg flex flex-col justify-center">
                     <div className="mb-8 flex items-center justify-between">
-                        <div className="flex gap-1.5">
-                            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-                                <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${step > i ? 'bg-brand-dark' : 'bg-accent-brown/10'} ${step === i + 1 ? 'w-8' : 'w-3'}`} />
-                            ))}
+                        <div className="flex gap-4">
+                            {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className={`h-1.5 rounded-full transition-all duration-700 ${step >= i ? 'w-10 bg-brand-dark shadow-[0_0_20px_rgba(242,107,33,0.4)]' : 'w-3 bg-accent-brown/10'}`} />)}
                         </div>
-                        <Link to="/login/business" className="text-[10px] font-black text-brand-dark hover:text-brand transition-colors uppercase tracking-[0.2em] border-b-2 border-brand/20 pb-0.5">
-                            Partner Login
-                        </Link>
+                        <Link to="/login/business" className="text-[10px] font-black text-brand-dark uppercase tracking-[0.3em] border-b-4 border-brand-dark/10 pb-1 italic hover:text-accent-brown transition-all">Partner Login Instead</Link>
                     </div>
 
-                    <form onSubmit={handleSubmit}>
+                    <form onSubmit={handleSubmit} className="overflow-y-visible">
                         <AnimatePresence mode="wait">
                             {renderStep()}
                         </AnimatePresence>
                     </form>
 
-                    <div className="mt-10 text-center">
-                        <Link to="/for-clinics" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-accent-brown/30 hover:text-accent-brown transition-colors group">
-                            <Building2 className="w-3 h-3 group-hover:-translate-y-0.5 transition-transform" /> Back to Landing
+                    <div className="mt-8 text-center pt-6 border-t border-accent-brown/5">
+                        <Link to="/for-clinics" className="inline-flex items-center gap-4 text-[10px] font-black uppercase tracking-[0.4em] text-accent-brown/30 hover:text-brand-dark transition-all group italic">
+                            <ChevronLeft className="w-4 h-4 group-hover:-translate-x-2 transition-transform" />
+                            Return
                         </Link>
                     </div>
                 </div>
-            </motion.div>
+            </div>
         </div>
     );
 };

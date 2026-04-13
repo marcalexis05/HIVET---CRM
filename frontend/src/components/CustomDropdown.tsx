@@ -53,28 +53,28 @@ export const CustomDropdown = ({
     return (
         <div className={`relative w-full ${className}`} ref={ref}>
             {label && (
-                <label className="text-[10px] font-black text-accent-brown/40 uppercase tracking-[0.2em] pl-3 mb-2 block">
+                <label className="text-[12px] font-black uppercase tracking-[0.3em] text-accent-brown/70 block mb-5 ml-2 italic">
                     {label} 
-                    {isRequired && <span className="text-brand-dark ml-1">*</span>}
+                    {isRequired && <span className="text-brand ml-1">*</span>}
                     {isOptional && (
-                        <span className="text-accent-brown/30 text-[9px] normal-case tracking-normal font-bold italic ml-1">Optional</span>
+                        <span className="text-accent-brown/20 text-[9px] normal-case tracking-normal font-bold italic ml-1">(Optional)</span>
                     )}
                 </label>
             ) }
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full bg-accent-peach/20 border-2 transition-all rounded-[2rem] py-4 px-5 text-sm font-semibold text-accent-brown flex items-center justify-between outline-none group ${
+                className={`w-full bg-[#FAFAFA] border-2 transition-all rounded-[2rem] py-5 px-8 text-base font-bold text-accent-brown flex items-center justify-between outline-none group ${
                     isOpen 
-                        ? 'border-brand/30 bg-white shadow-lg shadow-brand/5 ring-4 ring-brand/5' 
-                        : 'border-transparent hover:bg-accent-peach/30'
+                        ? 'border-brand/40 bg-white shadow-2xl shadow-brand/5 ring-4 ring-brand/5' 
+                        : 'border-brand/5 hover:border-brand/20 hover:bg-white'
                 }`}
             >
-                <div className="flex items-center gap-3">
-                    {icon && <span className="text-accent-brown/30 group-focus-within:text-brand-dark transition-colors">{icon}</span>}
-                    <span className={!value ? 'text-accent-brown/40' : ''}>{getLabel(value)}</span>
+                <div className="flex items-center gap-4">
+                    {icon && <span className={`transition-colors ${isOpen ? 'text-brand' : 'text-accent-brown/20'}`}>{icon}</span>}
+                    <span className={`italic tracking-tight ${!value ? 'text-accent-brown/20' : ''}`}>{getLabel(value)}</span>
                 </div>
-                <ChevronDown className={`w-4 h-4 text-accent-brown/30 transition-transform duration-300 ${isOpen ? 'rotate-180 text-brand-dark' : ''}`} />
+                <ChevronDown className={`w-5 h-5 text-accent-brown/20 transition-transform duration-500 ${isOpen ? 'rotate-180 text-brand' : 'group-hover:text-accent-brown/40'}`} />
             </button>
             <AnimatePresence>
                 {isOpen && (
@@ -83,7 +83,7 @@ export const CustomDropdown = ({
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
                         transition={{ duration: 0.2, ease: "easeOut" }}
-                        className="absolute top-full mt-2 left-0 w-full bg-white rounded-3xl shadow-2xl border border-accent-peach/10 overflow-hidden z-[110] py-2 max-h-[300px] overflow-y-auto no-scrollbar ring-1 ring-black/5"
+                        className="absolute top-full mt-2 left-0 w-full bg-white rounded-3xl shadow-2xl border border-accent-peach/10 overflow-hidden z-[3000000] py-2 max-h-[300px] overflow-y-auto no-scrollbar ring-1 ring-black/5"
                     >
                         {options.map((opt, index) => {
                             const optLabel = typeof opt === 'object' ? opt.label : opt;

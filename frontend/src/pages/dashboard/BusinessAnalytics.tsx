@@ -4,7 +4,7 @@ import { TrendingUp, Users, ShoppingBag, Award, ArrowUp, ArrowDown, LayoutGrid, 
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { Loader2 } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, BarChart, Bar } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, BarChart, Bar, LineChart, Line, Legend } from 'recharts';
 import BranchSelector from '../../components/BranchSelector';
 
 const ICON_MAP: Record<string, any> = { TrendingUp, Users, ShoppingBag, Award, LayoutGrid, Package };
@@ -25,6 +25,8 @@ const BusinessAnalytics = () => {
     const [retentionRate, setRetentionRate] = useState(0);
     const [retentionChange, setRetentionChange] = useState('');
     const [distributionData, setDistributionData] = useState<any[]>([]);
+    const [allBranchesTrend, setAllBranchesTrend] = useState<any[]>([]);
+    const [comparisonData, setComparisonData] = useState<any[]>([]);
 
     const [revenueType, setRevenueType] = useState('all');
 
@@ -52,6 +54,8 @@ const BusinessAnalytics = () => {
             setRetentionRate(data.retention_rate || 0);
             setRetentionChange(data.retention_change || '');
             setDistributionData(data.distribution_data || []);
+            setAllBranchesTrend(data.all_branches_trend || []);
+            setComparisonData(data.comparison_data || []);
         } catch (err) {
             console.error('Error fetching analytics:', err);
         } finally {
@@ -83,31 +87,158 @@ const BusinessAnalytics = () => {
                     {user?.token && <BranchSelector token={user.token} onBranchChange={setBranchId} currentBranchId={branchId} allowAllBranches={true} />}
                 </div>
 
-                {/* KPI row */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                    {loading ? (
-                        [1, 2, 3, 4].map(i => (
-                            <div key={i} className="bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/5 border border-white h-32 animate-pulse" />
-                        ))
-                    ) : kpiList.map((k, i) => {
-                        const Icon = ICON_MAP[k.icon] || TrendingUp;
-                        return (
-                            <motion.div key={k.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
-                                className="bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/5 border border-white flex flex-col gap-4 group hover:shadow-2xl hover:shadow-accent-brown/10 transition-all border-accent-brown/0 hover:border-accent-brown/5">
-                                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${k.color} shadow-lg shadow-current/10 transition-transform group-hover:scale-110`}>
-                                    <Icon className="w-5 h-5" />
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-3xl font-black text-accent-brown tracking-tighter leading-none mb-1">{k.value}</p>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">{k.label}</p>
-                                    <div className={`flex items-center gap-1 mt-1 text-[10px] font-black ${k.up ? 'text-green-600' : 'text-red-500'}`}>
-                                        {k.up ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />} {k.change}
-                                    </div>
-                                </div>
-                            </motion.div>
-                        );
-                    })}
-                </div>
+                {/* Monthly Comparison Chart - Current vs Previous */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+                    className="bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/5 border border-white relative overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+                        <div>
+                            <h3 className="text-lg font-black text-accent-brown tracking-tight">Monthly Comparison</h3>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mt-1">Current vs Previous Period</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-brand-dark" />
+                                <span className="text-[9px] font-black text-accent-brown/60 uppercase">Current</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-accent-peach" />
+                                <span className="text-[9px] font-black text-accent-brown/60 uppercase">Previous</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="h-[200px] w-full">
+                        {loading ? (
+                            <div className="h-full flex flex-col items-center justify-center opacity-20">
+                                <Loader2 className="w-6 h-6 animate-spin mb-2" />
+                                <p className="text-[10px] font-black uppercase tracking-widest">Loading...</p>
+                            </div>
+                        ) : comparisonData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={comparisonData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAE0D5" opacity={0.3} />
+                                    <XAxis 
+                                        dataKey="name" 
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#8D6E63', fontSize: 10, fontWeight: 800 }}
+                                        dy={10}
+                                    />
+                                    <YAxis 
+                                        hide={true}
+                                        domain={['dataMin', 'auto']}
+                                    />
+                                    <Tooltip 
+                                        content={({ active, payload }) => {
+                                            if (active && payload && payload.length) {
+                                                return (
+                                                    <div className="bg-white/90 backdrop-blur-md p-3 rounded-xl border-2 border-accent-brown/5 shadow-xl">
+                                                        <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest mb-2">
+                                                            {payload[0].payload.name}
+                                                        </p>
+                                                        <div className="space-y-1">
+                                                            {payload.map((entry: any, idx: number) => (
+                                                                <div key={idx} className="flex items-center justify-between gap-4">
+                                                                    <div className="flex items-center gap-1">
+                                                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                                                        <span className="text-[9px] font-bold text-accent-brown/60">{entry.dataKey === 'value' ? 'Current' : 'Previous'}</span>
+                                                                    </div>
+                                                                    <span className="text-sm font-black text-accent-brown">₱{entry.value?.toLocaleString()}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        }}
+                                    />
+                                    <Line 
+                                        type="monotone" 
+                                        dataKey="value" 
+                                        stroke="#FB8500" 
+                                        strokeWidth={3}
+                                        dot={{ r: 4, fill: '#FB8500' }}
+                                        activeDot={{ r: 6 }}
+                                    />
+                                    <Line 
+                                        type="monotone" 
+                                        dataKey="previous" 
+                                        stroke="#8D6E63" 
+                                        strokeWidth={2}
+                                        strokeDasharray="5 5"
+                                        dot={{ r: 3, fill: '#8D6E63' }}
+                                        activeDot={{ r: 5 }}
+                                    />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center opacity-20">
+                                <BarChart2 className="w-6 h-6 mb-2" />
+                                <p className="text-[10px] font-black uppercase tracking-widest">No Data</p>
+                            </div>
+                        )}
+                    </div>
+                </motion.div>
+
+                {/* All Branches Comparison Chart - April 2026 */}
+                {!branchId && allBranchesTrend.length > 0 && (
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+                        className="bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/5 border border-white relative overflow-hidden">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+                            <div>
+                                <h3 className="text-lg font-black text-accent-brown tracking-tight">All Branches Comparison</h3>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mt-1">April 2026 Format</p>
+                            </div>
+                        </div>
+                        <div className="h-[280px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={allBranchesTrend} margin={{ top: 10, right: 30, left: 20, bottom: 10 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAE0D5" opacity={0.3} />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#8D6E63', fontSize: 10, fontWeight: 800 }} dy={10} />
+                                    <YAxis hide={false} axisLine={false} tickLine={false} tick={{ fill: '#8D6E63', fontSize: 9, fontWeight: 600 }} tickFormatter={(v) => `₱${(v/1000).toFixed(0)}k`} />
+                                    <Tooltip 
+                                        content={({ active, payload, label }) => {
+                                            if (active && payload && payload.length) {
+                                                return (
+                                                    <div className="bg-white/95 backdrop-blur-md p-4 rounded-xl border-2 border-accent-brown/5 shadow-xl">
+                                                        <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest mb-2">{label}</p>
+                                                        {payload.map((entry: any, idx: number) => (
+                                                            <div key={idx} className="flex items-center justify-between gap-4 text-xs">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                                                    <span className="font-bold text-accent-brown">{entry.dataKey}</span>
+                                                                </div>
+                                                                <span className="font-black text-accent-brown">₱{entry.value?.toLocaleString()}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        }}
+                                    />
+                                    <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ paddingBottom: 10 }} />
+                                    {(() => {
+                                        const colors = ["#FB8500", "#219EBC", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444", "#EC4899", "#06B6D4"];
+                                        const firstEntry = allBranchesTrend[0] || {};
+                                        const branchKeys = Object.keys(firstEntry).filter(k => k !== "name");
+                                        return branchKeys.map((key, idx) => (
+                                            <Line 
+                                                key={key}
+                                                type="monotone" 
+                                                dataKey={key} 
+                                                stroke={colors[idx % colors.length]} 
+                                                strokeWidth={2} 
+                                                dot={{ r: 4 }} 
+                                                activeDot={{ r: 6 }} 
+                                            />
+                                        ));
+                                    })()}
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </motion.div>
+                )}
 
                 <div className="grid lg:grid-cols-3 gap-8">
                     {/* Revenue Trend - tall chart */}

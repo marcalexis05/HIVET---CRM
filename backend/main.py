@@ -32,7 +32,7 @@ from dotenv import load_dotenv
 from jose import JWTError, jwt
 from passlib.hash import pbkdf2_sha256
 
-from sqlalchemy import create_engine, Column, String, Text, DateTime, text, Integer, Boolean, Float, ForeignKey, func, inspect, or_
+from sqlalchemy import create_engine, Column, String, Text, DateTime, text, Integer, Boolean, Float, ForeignKey, func, inspect, or_, and_
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from dateutil.relativedelta import relativedelta
 
@@ -142,6 +142,11 @@ class Customer(Base):
     referral_code  = Column(String, unique=True, nullable=True)
     last_active = Column(DateTime, nullable=True)
     is_deleted  = Column(Boolean, default=False)
+    # Notification preferences
+    notif_order_updates = Column(Boolean, default=True)
+    notif_loyalty_alerts = Column(Boolean, default=True)
+    notif_promotions = Column(Boolean, default=False)
+    notif_gmail = Column(Boolean, default=False)
     created_at  = Column(DateTime, default=datetime.utcnow)
 
 class SuperAdminUser(Base):
@@ -219,6 +224,11 @@ class RiderProfile(Base):
     home_lng          = Column(Float, nullable=True)
     last_active   = Column(DateTime, nullable=True)
     is_deleted    = Column(Boolean, default=False)
+    # Notification preferences
+    notif_order_updates = Column(Boolean, default=True)
+    notif_loyalty_alerts = Column(Boolean, default=True)
+    notif_newsletter = Column(Boolean, default=False)
+    notif_gmail = Column(Boolean, default=False)
     created_at    = Column(DateTime, default=datetime.utcnow)
 
 
@@ -269,6 +279,11 @@ class BusinessProfile(Base):
     
     last_active           = Column(DateTime, nullable=True)
     is_deleted            = Column(Boolean, default=False)
+    # Notification preferences
+    notif_order_updates = Column(Boolean, default=True)
+    notif_loyalty_alerts = Column(Boolean, default=True)
+    notif_newsletter = Column(Boolean, default=False)
+    notif_gmail = Column(Boolean, default=False)
     created_at            = Column(DateTime, default=datetime.utcnow)
 
 class BranchInventory(Base):
@@ -701,6 +716,16 @@ def get_db():
 # ---------------------------------------------------------------------------
 # JWT helpers
 # ---------------------------------------------------------------------------
+
+def generate_referral_code(length: int = 8) -> str:
+    """Generate a unique referral code with uppercase letters and numbers."""
+    chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    while True:
+        code = ''.join(random.choices(chars, k=length))
+        existing = SessionLocal().query(Customer).filter(Customer.referral_code == code).first()
+        if not existing:
+            return code
+
 def create_access_token(data: dict) -> str:
     payload = data.copy()
     payload["exp"] = datetime.utcnow() + timedelta(days=TOKEN_EXPIRE_DAYS)
@@ -1229,10 +1254,12 @@ class BusinessAnalyticsData(BaseModel):
     revenue_trend: RevenueTrendData
     top_products: List[TopItemAnalytics]
     top_services: List[TopItemAnalytics]
-    branch_performance: List[dict] # Replaces loyalty_redemptions
+    branch_performance: List[dict]
     retention_rate: int = 0
     retention_change: str = ""
     distribution_data: List[dict] = []
+    comparison_data: List[dict] = []
+    all_branches_trend: List[dict] = []
 
 @app.delete("/api/account")
 async def delete_account(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
@@ -1334,8 +1361,16 @@ async def get_business_orders(
         
         customer_name = customer.first_name + " " + customer.last_name if customer.first_name and customer.last_name else customer.name or "Guest"
         
+        # Generate HV-style reference ID: HV-2026-000001-8963
+        year = order.created_at.year
+        order_suffix = str(order.created_at.timestamp()).split('.')[0][-4:]
+        order_id_num = int(order.id)
+        padded_id = "{:06d}".format(order_id_num)
+        hv_ref = f"HV-{year}-{padded_id}-{order_suffix}"
+        
         orders_response.append({
-            "id": f"ORD-{order.id}-{order_item.id}", # Make it unique per item
+            "id": hv_ref, # HV-style reference ID
+            "order_id": order_id_num, # Original order ID for API calls
             "customer": customer_name,
             "email": customer.email,
             "product": order_item.product_name,
@@ -2327,6 +2362,7 @@ async def register_customer(body: RegisterRequest, db: Session = Depends(get_db)
         db.add(main_branch)
         db.commit()
     else:
+        new_referral_code = generate_referral_code()
         new_user = Customer(
             email=body.email,
             password_hash=pwd_hash,
@@ -2339,11 +2375,20 @@ async def register_customer(body: RegisterRequest, db: Session = Depends(get_db)
             gender=body.gender,
             birthday=body.birthday,
             role=body.role,
+            referral_code=new_referral_code,
+            loyalty_points=100,
             picture=f"https://api.dicebear.com/7.x/avataaars/svg?seed={body.email}"
         )
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
+        
+        db.add(LoyaltyHistory(
+            customer_id=new_user.id,
+            description="Welcome Bonus: Account Created",
+            points=100
+        ))
+        db.commit()
         
         if body.role == "rider":
             # Bicycle riders do not need a license or vehicle CR/OR — force null
@@ -2372,12 +2417,6 @@ async def register_customer(body: RegisterRequest, db: Session = Depends(get_db)
                 db.add(LoyaltyHistory(
                     customer_id=referrer.id,
                     description=f"Referral Bonus: Invited {full_name}",
-                    points=500
-                ))
-                new_user.loyalty_points += 500
-                db.add(LoyaltyHistory(
-                    customer_id=new_user.id,
-                    description=f"Referral Bonus: Joined via {referrer.name or 'friend'}",
                     points=500
                 ))
                 db.commit()
@@ -2411,7 +2450,7 @@ async def register_customer(body: RegisterRequest, db: Session = Depends(get_db)
     if body.email in OTP_STORE:
         del OTP_STORE[body.email]
         
-    return {"message": "Registration successful", "token": token}
+    return {"message": "Registration successful", "token": token, "referral_code": new_user.referral_code}
 
 # ─── File Upload Endpoint ────────────────────────────────────────────────────
 
@@ -2787,7 +2826,7 @@ async def get_business_reviews(
 
 # ─── Reservation Endpoints ────────────────────────────────────────────────────
 
-def _reservation_to_dict(r: Reservation, customer_name: Optional[str] = None) -> dict:
+def _reservation_to_dict(r: Reservation, customer_name: Optional[str] = None, customer_address: Optional[str] = None) -> dict:
     return {
         "id": r.tracking_id or f"RV-{r.id:04d}",
         "tracking_id": r.tracking_id or f"RV-{r.id:04d}",
@@ -2805,6 +2844,7 @@ def _reservation_to_dict(r: Reservation, customer_name: Optional[str] = None) ->
         "paymongo_session_id": getattr(r, 'paymongo_session_id', None),
         "location": r.location or "",
         "notes": r.notes or "",
+        "customer_address": customer_address or "No address provided",
         "total": r.total_amount,
         "total_amount": r.total_amount,
         "created_at": r.created_at.isoformat() if r.created_at else None,
@@ -2979,12 +3019,28 @@ async def get_reservations(
     role = current_user.get("role")
     user_id = int(current_user["sub"])
     if role == "business":
-        query = db.query(Reservation, Customer.name).join(Customer, Reservation.customer_id == Customer.id).filter(Reservation.business_id == user_id)
+        # Join with Customer for name and CustomerAddress (default) for location details
+        query = db.query(Reservation, Customer.name, CustomerAddress)\
+            .join(Customer, Reservation.customer_id == Customer.id)\
+            .outerjoin(CustomerAddress, and_(Reservation.customer_id == CustomerAddress.customer_id, CustomerAddress.is_default == True))\
+            .filter(Reservation.business_id == user_id)
+            
         if branch_id:
             query = query.filter(Reservation.branch_id == branch_id)
+            
         results = []
-        for r, name in query.order_by(Reservation.created_at.desc()).all():
-            results.append(_reservation_to_dict(r, customer_name=name))
+        for r, name, addr_obj in query.order_by(Reservation.created_at.desc()).all():
+            addr_str = "No address provided"
+            if addr_obj:
+                parts = [
+                    f"{addr_obj.house_number or ''} {addr_obj.block_number or ''} {addr_obj.street or ''}".strip(),
+                    addr_obj.barangay,
+                    addr_obj.city,
+                    addr_obj.province
+                ]
+                addr_str = ", ".join([p for p in parts if p and p.strip()])
+            
+            results.append(_reservation_to_dict(r, customer_name=name, customer_address=addr_str))
         return {"reservations": results}
     else:
         items = db.query(Reservation).filter(Reservation.customer_id == user_id).order_by(Reservation.created_at.desc()).all()
@@ -4080,16 +4136,28 @@ async def get_business_dashboard_stats(
     
     biz_id = int(current_user["sub"])
     
+    # Identify Main Branch for attributing "None" and "orphan" items
+    all_branches = db.query(BusinessBranch).filter(BusinessBranch.business_id == biz_id).all()
+    main_branch = next((b for b in all_branches if b.is_main), None)
+    main_branch_id = main_branch.id if main_branch else (all_branches[0].id if all_branches else None)
+    other_branch_ids = [b.id for b in all_branches if b.id != main_branch_id]
+    
     # 1. Product Orders count (Successful) 
     order_q = db.query(Order).join(OrderItem, Order.id == OrderItem.order_id).join(Product, OrderItem.product_id == Product.id).filter(Product.business_id == biz_id, Order.status.notin_(["Cancelled", "Pending"]))
     if branch_id:
-        order_q = order_q.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
+        if branch_id == main_branch_id:
+            order_q = order_q.filter(or_(Order.branch_id.notin_(other_branch_ids), Order.branch_id == None))
+        else:
+            order_q = order_q.filter(Order.branch_id == branch_id)
     product_orders_count = order_q.distinct().count()
     
     # 2. Service Appointments count (Successful)
     res_q = db.query(Reservation).filter(Reservation.business_id == biz_id, Reservation.status.in_(["Completed", "Confirmed"]))
     if branch_id:
-        res_q = res_q.filter(Reservation.branch_id == branch_id)
+        if branch_id == main_branch_id:
+            res_q = res_q.filter(or_(Reservation.branch_id.notin_(other_branch_ids), Reservation.branch_id == None))
+        else:
+            res_q = res_q.filter(Reservation.branch_id == branch_id)
     service_appointments_count = res_q.count()
     
     # 3. Revenue calculation
@@ -4100,23 +4168,35 @@ async def get_business_dashboard_stats(
     # Product revenue (Current vs Previous)
     curr_prod_q = db.query(OrderItem).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= month_start, Order.status.notin_(["Cancelled", "Pending"]))
     if branch_id:
-        curr_prod_q = curr_prod_q.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
+        if branch_id == main_branch_id:
+            curr_prod_q = curr_prod_q.filter(or_(Order.branch_id.notin_(other_branch_ids), Order.branch_id == None))
+        else:
+            curr_prod_q = curr_prod_q.filter(Order.branch_id == branch_id)
     monthly_prod_rev = sum(item.price * item.quantity for item in curr_prod_q.all())
     
     prev_prod_q = db.query(OrderItem).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= last_month_start, Order.created_at < month_start, Order.status.notin_(["Cancelled", "Pending"]))
     if branch_id:
-        prev_prod_q = prev_prod_q.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
+        if branch_id == main_branch_id:
+            prev_prod_q = prev_prod_q.filter(or_(Order.branch_id.notin_(other_branch_ids), Order.branch_id == None))
+        else:
+            prev_prod_q = prev_prod_q.filter(Order.branch_id == branch_id)
     prev_monthly_prod_rev = sum(item.price * item.quantity for item in prev_prod_q.all())
     
     # Service revenue (Current vs Previous)
     curr_serv_q = db.query(Reservation).filter(Reservation.business_id == biz_id, Reservation.created_at >= month_start, Reservation.status.in_(["Completed", "Confirmed"]))
     if branch_id:
-        curr_serv_q = curr_serv_q.filter(Reservation.branch_id == branch_id)
+        if branch_id == main_branch_id:
+            curr_serv_q = curr_serv_q.filter(or_(Reservation.branch_id.notin_(other_branch_ids), Reservation.branch_id == None))
+        else:
+            curr_serv_q = curr_serv_q.filter(Reservation.branch_id == branch_id)
     monthly_service_rev = sum(res.total_amount for res in curr_serv_q.all())
     
     prev_serv_q = db.query(Reservation).filter(Reservation.business_id == biz_id, Reservation.created_at >= last_month_start, Reservation.created_at < month_start, Reservation.status.in_(["Completed", "Confirmed"]))
     if branch_id:
-        prev_serv_q = prev_serv_q.filter(Reservation.branch_id == branch_id)
+        if branch_id == main_branch_id:
+            prev_serv_q = prev_serv_q.filter(or_(Reservation.branch_id.notin_(other_branch_ids), Reservation.branch_id == None))
+        else:
+            prev_serv_q = prev_serv_q.filter(Reservation.branch_id == branch_id)
     prev_monthly_service_rev = sum(res.total_amount for res in prev_serv_q.all())
     
     # Totals
@@ -4133,7 +4213,10 @@ async def get_business_dashboard_stats(
     # Orders change
     prev_orders_q = db.query(Order).join(OrderItem, Order.id == OrderItem.order_id).join(Product, Product.id == OrderItem.product_id).filter(Product.business_id == biz_id, Order.created_at >= last_month_start, Order.created_at < month_start, Order.status.notin_(["Cancelled", "Pending"]))
     if branch_id:
-        prev_orders_q = prev_orders_q.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
+        if branch_id == main_branch_id:
+            prev_orders_q = prev_orders_q.filter(or_(Order.branch_id.notin_(other_branch_ids), Order.branch_id == None))
+        else:
+            prev_orders_q = prev_orders_q.filter(Order.branch_id == branch_id)
     prev_orders = prev_orders_q.distinct().count()
     
     if prev_orders > 0:
@@ -4169,9 +4252,17 @@ async def get_business_recent_orders(
     biz_id = int(current_user["sub"])
     
     # Get recent orders containing items from this business
+    all_branches = db.query(BusinessBranch).filter(BusinessBranch.business_id == biz_id).all()
+    main_branch = next((b for b in all_branches if b.is_main), None)
+    main_branch_id = main_branch.id if main_branch else (all_branches[0].id if all_branches else None)
+    other_branch_ids = [b.id for b in all_branches if b.id != main_branch_id]
+    
     query = db.query(OrderItem, Order, Customer).join(Order, Order.id == OrderItem.order_id).join(Product, Product.id == OrderItem.product_id).join(Customer, Customer.id == Order.customer_id).filter(Product.business_id == biz_id)
     if branch_id:
-        query = query.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
+        if branch_id == main_branch_id:
+            query = query.filter(or_(Order.branch_id.notin_(other_branch_ids), Order.branch_id == None))
+        else:
+            query = query.filter(Order.branch_id == branch_id)
     
     recent_order_items = query.order_by(Order.created_at.desc()).limit(10).all()
     
@@ -4179,8 +4270,17 @@ async def get_business_recent_orders(
     seen_orders = set()
     for item, order, customer in recent_order_items:
         if order.id not in seen_orders and len(results) < 5:
+            # Generate HV-style reference ID: HV-2026-000001-8963
+            year = order.created_at.year
+            order_suffix = str(order.created_at.timestamp()).split('.')[0][-4:]
+            # Ensure we get a proper integer value
+            order_id_num = int(order.id)
+            padded_id = "{:06d}".format(order_id_num)
+            hv_ref = f"HV-{year}-{padded_id}-{order_suffix}"
+            
             results.append({
-                "id": f"ORD-{order.id:04d}",
+                "id": hv_ref,
+                "order_id": order_id_num,
                 "customer": customer.name or f"{customer.first_name} {customer.last_name}",
                 "product": item.product_name,
                 "total": f"₱{order.total_amount:,}",
@@ -4196,6 +4296,8 @@ async def get_business_analytics(
     period: str = Query("6m", pattern="^(7d|30d|6m|1y)$"),
     data_type: str = Query("all", pattern="^(all|products|services)$"),
     branch_id: Optional[int] = None,
+    date1: Optional[str] = None,
+    date2: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -4206,8 +4308,21 @@ async def get_business_analytics(
     now = datetime.utcnow()
     month_start = datetime(now.year, now.month, 1)
     
-    # 1. Establish Cutoff Date
-    if period == '7d':
+    # Identify Main Branch and Other Branches for catch-all logic
+    all_branches = db.query(BusinessBranch).filter(BusinessBranch.business_id == biz_id).all()
+    main_branch = next((b for b in all_branches if b.is_main), None)
+    main_branch_id = main_branch.id if main_branch else (all_branches[0].id if all_branches else None)
+    other_branch_ids = [b.id for b in all_branches if b.id != main_branch_id]
+    
+    # 1. Establish Cutoff Date - prioritize dual date comparison
+    use_dual_date = date1 and date2
+    
+    if use_dual_date:
+        date1_dt = datetime.strptime(date1, "%Y-%m-%d")
+        date2_dt = datetime.strptime(date2, "%Y-%m-%d")
+        cutoff_date = now - relativedelta(months=1)
+        period = "dual_date"
+    elif period == '7d':
         cutoff_date = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
     elif period == '30d':
         cutoff_date = (now - timedelta(days=29)).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -4225,7 +4340,10 @@ async def get_business_analytics(
             Order.status.notin_(["Cancelled", "Pending"])
         )
         if branch_id: 
-            op_query = op_query.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
+            if branch_id == main_branch_id:
+                op_query = op_query.filter(or_(Order.branch_id.notin_(other_branch_ids), Order.branch_id == None))
+            else:
+                op_query = op_query.filter(Order.branch_id == branch_id)
         p_items = op_query.all()
         
         # Fetch Reservations
@@ -4235,7 +4353,10 @@ async def get_business_analytics(
             Reservation.status.in_(["Completed", "Confirmed"])
         )
         if branch_id: 
-            rs_query = rs_query.filter(Reservation.branch_id == branch_id)
+            if branch_id == main_branch_id:
+                rs_query = rs_query.filter(or_(Reservation.branch_id.notin_(other_branch_ids), Reservation.branch_id == None))
+            else:
+                rs_query = rs_query.filter(Reservation.branch_id == branch_id)
         s_items = rs_query.all()
         
         return p_items, s_items
@@ -4353,13 +4474,145 @@ async def get_business_analytics(
     if not top_services:
         top_services = [{"name": "No services yet", "sold": 0, "revenue": "₱0", "pct": 0, "delta": 0}]
 
-    # 7. Distribution (Products vs Services)
+# 7. Distribution (Products vs Services)
     distribution_data = [
-        {"name": "Products", "value": len(p_data), "color": "#FB8500"},
-        {"name": "Services", "value": len(s_data), "color": "#219EBC"}
+        {"name": "Product Revenue", "value": len(p_data), "color": "#FB8500"},
+        {"name": "Services Revenue", "value": len(s_data), "color": "#219EBC"}
     ]
 
-    # 8. Branch Performance (Consolidated & Accurate)
+    # 8. Date vs Date Comparison
+    comparison_data = []
+    
+    if use_dual_date:
+        date1_start = date1_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        date1_end = date1_dt + timedelta(days=1)
+        date2_start = date2_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        date2_end = date2_dt + timedelta(days=1)
+        
+        val1 = 0
+        if data_type in ['all', 'products']:
+            val1 += sum((item[0].price or 0) * (item[0].quantity or 0) for item in p_data if date1_start <= item[1].created_at < date1_end)
+        if data_type in ['all', 'services']:
+            val1 += sum(res.total_amount or 0 for res in s_data if date1_start <= res.created_at < date1_end and res.status == "Completed")
+        
+        val2 = 0
+        if data_type in ['all', 'products']:
+            val2 += sum((item[0].price or 0) * (item[0].quantity or 0) for item in p_data if date2_start <= item[1].created_at < date2_end)
+        if data_type in ['all', 'services']:
+            val2 += sum(res.total_amount or 0 for res in s_data if date2_start <= res.created_at < date2_end and res.status == "Completed")
+        
+        comparison_data = [
+            {"name": date1_dt.strftime("%B %d, %Y"), "value": int(val1)},
+            {"name": date2_dt.strftime("%B %d, %Y"), "value": int(val2)}
+        ]
+            
+    elif period == 'custom':
+        days_count = (end_datetime - cutoff_date).days
+        prev_cutoff = cutoff_date - timedelta(days=days_count)
+        prev_end_datetime = cutoff_date
+        prev_p_data, prev_s_data = await fetch_analytics_data(prev_cutoff)
+        
+        curr_days = (end_datetime - cutoff_date).days
+        interval_days = max(1, curr_days // 6)
+        
+        for i in range(5, -1, -1):
+            interval_start = cutoff_date + timedelta(days=i * interval_days)
+            interval_end = min(end_datetime, interval_start + timedelta(days=interval_days))
+            
+            prev_interval_start = prev_cutoff + timedelta(days=i * interval_days)
+            prev_interval_end = min(prev_end_datetime, prev_interval_start + timedelta(days=interval_days))
+            
+            curr_val = 0
+            if data_type in ['all', 'products']:
+                curr_val += sum((item[0].price or 0) * (item[0].quantity or 0) for item in p_data if interval_start <= item[1].created_at < interval_end)
+            if data_type in ['all', 'services']:
+                curr_val += sum(res.total_amount or 0 for res in s_data if interval_start <= res.created_at < interval_end and res.status == "Completed")
+            
+            prev_val = 0
+            if data_type in ['all', 'products']:
+                prev_val += sum((item[0].price or 0) * (item[0].quantity or 0) for item in prev_p_data if prev_interval_start <= item[1].created_at < prev_interval_end)
+            if data_type in ['all', 'services']:
+                prev_val += sum(res.total_amount or 0 for res in prev_s_data if prev_interval_start <= res.created_at < prev_interval_end and res.status == "Completed")
+            
+            comparison_data.append({"name": interval_start.strftime("%b %d"), "value": int(curr_val), "previous": int(prev_val)})
+            
+    elif period == '7d':
+        prev_cutoff = (cutoff_date - timedelta(days=7))
+        prev_p_data, prev_s_data = await fetch_analytics_data(prev_cutoff)
+        
+        for i in range(6, -1, -1):
+            d = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+            d_end = d + timedelta(days=1)
+            
+            prev_d = d - timedelta(days=7)
+            prev_d_end = prev_d + timedelta(days=1)
+            
+            curr_val = 0
+            if data_type in ['all', 'products']:
+                curr_val += sum((item[0].price or 0) * (item[0].quantity or 0) for item in p_data if d <= item[1].created_at < d_end)
+            if data_type in ['all', 'services']:
+                curr_val += sum(res.total_amount or 0 for res in s_data if d <= res.created_at < d_end and res.status == "Completed")
+            
+            prev_val = 0
+            if data_type in ['all', 'products']:
+                prev_val += sum((item[0].price or 0) * (item[0].quantity or 0) for item in prev_p_data if prev_d <= item[1].created_at < prev_d_end)
+            if data_type in ['all', 'services']:
+                prev_val += sum(res.total_amount or 0 for res in prev_s_data if prev_d <= res.created_at < prev_d_end and res.status == "Completed")
+            
+            comparison_data.append({"name": d.strftime("%a"), "value": int(curr_val), "previous": int(prev_val)})
+            
+    elif period == '30d':
+        prev_cutoff = (cutoff_date - timedelta(days=30))
+        prev_p_data, prev_s_data = await fetch_analytics_data(prev_cutoff)
+        
+        for i in range(29, -1, -5):
+            d = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+            d_end = d + timedelta(days=5)
+            
+            prev_d = d - timedelta(days=30)
+            prev_d_end = prev_d + timedelta(days=5)
+            
+            curr_val = 0
+            if data_type in ['all', 'products']:
+                curr_val += sum((item[0].price or 0) * (item[0].quantity or 0) for item in p_data if d <= item[1].created_at < d_end)
+            if data_type in ['all', 'services']:
+                curr_val += sum(res.total_amount or 0 for res in s_data if d <= res.created_at < d_end and res.status == "Completed")
+            
+            prev_val = 0
+            if data_type in ['all', 'products']:
+                prev_val += sum((item[0].price or 0) * (item[0].quantity or 0) for item in prev_p_data if prev_d <= item[1].created_at < prev_d_end)
+            if data_type in ['all', 'services']:
+                prev_val += sum(res.total_amount or 0 for res in prev_s_data if prev_d <= res.created_at < prev_d_end and res.status == "Completed")
+            
+            comparison_data.append({"name": d.strftime("%b %d"), "value": int(curr_val), "previous": int(prev_val)})
+            
+    else:  # 6m or 1y
+        prev_month_start = month_start - relativedelta(months=count) if period == '6m' else month_start - relativedelta(months=12)
+        prev_cutoff = prev_month_start
+        prev_p_data, prev_s_data = await fetch_analytics_data(prev_cutoff)
+        
+        for i in range(count - 1, -1, -1):
+            d = month_start - relativedelta(months=i)
+            d_end = d + relativedelta(months=1)
+            
+            prev_d = d - relativedelta(months=count)
+            prev_d_end = prev_d + relativedelta(months=1)
+            
+            curr_val = 0
+            if data_type in ['all', 'products']:
+                curr_val += sum((item[0].price or 0) * (item[0].quantity or 0) for item in p_data if d <= item[1].created_at < d_end)
+            if data_type in ['all', 'services']:
+                curr_val += sum(res.total_amount or 0 for res in s_data if d <= res.created_at < d_end and res.status == "Completed")
+            
+            prev_val = 0
+            if data_type in ['all', 'products']:
+                prev_val += sum((item[0].price or 0) * (item[0].quantity or 0) for item in prev_p_data if prev_d <= item[1].created_at < prev_d_end)
+            if data_type in ['all', 'services']:
+                prev_val += sum(res.total_amount or 0 for res in prev_s_data if prev_d <= res.created_at < prev_d_end and res.status == "Completed")
+            
+            comparison_data.append({"name": d.strftime("%Y-%m"), "value": int(curr_val), "previous": int(prev_val)})
+
+    # 9. Branch Performance (Consolidated & Accurate)
     branches = db.query(BusinessBranch).filter(BusinessBranch.business_id == biz_id).all()
     biz_profile = db.query(BusinessProfile).filter(BusinessProfile.id == biz_id).first()
     biz_name = biz_profile.clinic_name if biz_profile else "Clinic"
@@ -4417,7 +4670,10 @@ async def get_business_analytics(
         Order.status.notin_(["Cancelled", "Pending"])
     )
     if branch_id:
-        r_query = r_query.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
+        if branch_id == main_branch_id:
+            r_query = r_query.filter(or_(Order.branch_id.notin_(other_branch_ids), Order.branch_id == None))
+        else:
+            r_query = r_query.filter(Order.branch_id == branch_id)
     
     biz_cust_ids = [c[0] for c in r_query.distinct().all()]
     total_cust = len(biz_cust_ids)
@@ -4425,6 +4681,67 @@ async def get_business_analytics(
     repeat_cust = r_query.group_by(Order.customer_id).having(func.count(Order.id) >= 2).count() if total_cust > 0 else 0
     retention_rate = int((repeat_cust / total_cust * 100)) if total_cust > 0 else 0
 
+    # 10. All Branches Trend (Multi-line chart for April 2026)
+    all_branches_trend = []
+    
+    if branch_name_map and (period == '6m' or period == '1y'):
+        month_count = 6 if period == '6m' else 12
+        april_2026_start = datetime(2026, 4, 1)
+        april_2026_end = datetime(2026, 5, 1)
+        
+        branch_intervals = {}
+        for bid in branch_name_map.keys():
+            intervals_list = []
+            for i in range(month_count - 1, -1, -1):
+                d = april_2026_start - relativedelta(months=i)
+                intervals_list.append((d, d + relativedelta(months=1), d.strftime("%b %Y")))
+            branch_intervals[bid] = intervals_list
+        
+        for bid, intervals in branch_intervals.items():
+            branch_name = f"Branch {bid}" if bid == main_branch_id else branch_name_map.get(bid, f"Branch #{bid}")
+            short_name = branch_name.split(" - ")[-1][:15] if " - " in branch_name else branch_name[:15]
+            
+            for start, end, label in intervals:
+                p_val = 0
+                s_val = 0
+                
+                op_branch = db.query(OrderItem, Order).join(Order, Order.id == OrderItem.order_id).join(Product, Product.id == OrderItem.product_id).filter(
+                    Product.business_id == biz_id,
+                    Order.created_at >= start,
+                    Order.created_at < end,
+                    Order.status.notin_(["Cancelled", "Pending"])
+                )
+                if bid == main_branch_id:
+                    op_branch = op_branch.filter(or_(Order.branch_id == None, Order.branch_id.notin_(other_branch_ids)))
+                else:
+                    op_branch = op_branch.filter(Order.branch_id == bid)
+                op_items = op_branch.all()
+                p_val = sum((item[0].price or 0) * (item[0].quantity or 0) for item in op_items)
+                
+                rs_branch = db.query(Reservation).filter(
+                    Reservation.business_id == biz_id,
+                    Reservation.created_at >= start,
+                    Reservation.created_at < end,
+                    Reservation.status == "Completed"
+                )
+                if bid == main_branch_id:
+                    rs_branch = rs_branch.filter(or_(Reservation.branch_id == None, Reservation.branch_id.notin_(other_branch_ids)))
+                else:
+                    rs_branch = rs_branch.filter(Reservation.branch_id == bid)
+                rs_items = rs_branch.all()
+                s_val = sum(res.total_amount or 0 for res in rs_items)
+                
+                total_val = p_val + s_val
+                total_val = max(0, total_val)
+                
+                existing = next((b for b in all_branches_trend if b.get("name") == label), None)
+                if existing:
+                    existing[short_name] = int(total_val)
+                else:
+                    new_entry = {"name": label}
+                    new_entry[short_name] = int(total_val)
+                    all_branches_trend.append(new_entry)
+    
     return {
         "kpis": kpis,
         "revenue_trend": {"chartData": revenue_trend_data},
@@ -4433,7 +4750,9 @@ async def get_business_analytics(
         "branch_performance": branch_performance,
         "retention_rate": retention_rate,
         "retention_change": "↑ Stable performance" if retention_rate > 0 else "0% change",
-        "distribution_data": distribution_data
+        "distribution_data": distribution_data,
+        "comparison_data": comparison_data,
+        "all_branches_trend": all_branches_trend
     }
 
 # ─── Admin Compliance Endpoints ───────────────────────────────────────────────
@@ -5146,6 +5465,10 @@ async def get_me(request: Request, db: Session = Depends(get_db)):
             "compliance_status": user.compliance_status,
             "owner_birthday": user.owner_birthday,
             "owner_gender": user.owner_gender,
+            "notif_order_updates": user.notif_order_updates,
+            "notif_loyalty_alerts": user.notif_loyalty_alerts,
+            "notif_newsletter": user.notif_newsletter,
+            "notif_gmail": user.notif_gmail,
         })
     elif role == "rider":
         res.update({
@@ -5158,7 +5481,11 @@ async def get_me(request: Request, db: Session = Depends(get_db)):
             "birthday": user.birthday,
             "gender": user.gender,
             "vehicle_type": user.vehicle_type,
-            "picture": user.picture
+            "picture": user.picture,
+            "notif_order_updates": user.notif_order_updates,
+            "notif_loyalty_alerts": user.notif_loyalty_alerts,
+            "notif_newsletter": user.notif_newsletter,
+            "notif_gmail": user.notif_gmail,
         })
     else:
         res.update({
@@ -5172,6 +5499,10 @@ async def get_me(request: Request, db: Session = Depends(get_db)):
             "birthday": user.birthday,
             "picture": user.picture,
             "google_id": user.google_id,
+            "notif_order_updates": user.notif_order_updates,
+            "notif_loyalty_alerts": user.notif_loyalty_alerts,
+            "notif_promotions": user.notif_promotions,
+            "notif_gmail": user.notif_gmail,
         })
     return res
 
@@ -5464,6 +5795,58 @@ async def get_customer_dashboard_stats(request: Request, db: Session = Depends(g
         Notification.is_read == False
     ).count()
 
+    # 4. Clinic Checkup - Get most recent confirmed/upcoming reservation
+    clinic_checkup = None
+    active_reservation = db.query(Reservation).filter(
+        Reservation.customer_id == customer_id,
+        Reservation.status.in_(["Pending", "Confirmed", "Ready for Pickup"]),
+        Reservation.date >= datetime.now().strftime("%Y-%m-%d")
+    ).order_by(Reservation.date.asc()).first()
+    
+    if active_reservation:
+        clinic_name = "Partner Clinic"
+        if active_reservation.business_id:
+            business = db.query(BusinessProfile).filter(BusinessProfile.id == active_reservation.business_id).first()
+            if business:
+                clinic_name = business.clinic_name or "Partner Clinic"
+        
+        clinic_checkup = {
+            "pet_name": active_reservation.pet_name,
+            "service": active_reservation.service,
+            "clinic_name": clinic_name,
+            "date": active_reservation.date,
+            "time": active_reservation.time,
+            "status": active_reservation.status
+        }
+
+    # 5. Member Insights (Dynamic)
+    now = datetime.utcnow()
+    month_start = datetime(now.year, now.month, 1)
+    
+    # Savings from discounts
+    month_discounts = db.query(func.sum(Order.discount_amount)).filter(
+        Order.customer_id == customer_id,
+        Order.status.in_(["Completed", "Delivered"]),
+        Order.created_at >= month_start
+    ).scalar() or 0
+    
+    # Points redeemed
+    month_points_redeemed = db.query(func.sum(LoyaltyHistory.points)).filter(
+        LoyaltyHistory.customer_id == customer_id,
+        LoyaltyHistory.points < 0,
+        LoyaltyHistory.created_at >= month_start
+    ).scalar() or 0
+    
+    points_savings = abs(month_points_redeemed)
+    total_savings = month_discounts + points_savings
+    
+    if total_savings > 0:
+        insight_msg = f"You've saved ₱{total_savings:,} this month using your loyalty points and member-only promos."
+    elif customer.loyalty_points > 0:
+        insight_msg = f"You have {customer.loyalty_points:,} points ready to be redeemed for exclusive rewards."
+    else:
+        insight_msg = "Start shopping to earn loyalty points and unlock exclusive member-only promos."
+
     return {
         "loyalty": {
             "points": customer.loyalty_points,
@@ -5482,7 +5865,9 @@ async def get_customer_dashboard_stats(request: Request, db: Session = Depends(g
             "desc": n.description,
             "created_at": str(n.created_at)
         } for n in unread_notifs],
-        "unread_count": unread_count
+        "unread_count": unread_count,
+        "insight": insight_msg,
+        "clinic_checkup": clinic_checkup
     }
 
 class PasswordUpdate(BaseModel):
@@ -5536,7 +5921,107 @@ async def update_password(body: PasswordUpdate, request: Request, db: Session = 
     return {"message": "Password updated", "token": token}
 
 # ---------------------------------------------------------------------------
-# Routes â€“ Addresses
+# Routes – Notification Preferences
+# ---------------------------------------------------------------------------
+class NotificationPreferences(BaseModel):
+    notif_order_updates: Optional[bool] = None
+    notif_loyalty_alerts: Optional[bool] = None
+    notif_promotions: Optional[bool] = None
+    notif_newsletter: Optional[bool] = None
+    notif_gmail: Optional[bool] = None
+
+@app.put("/api/customer/notifications")
+async def update_customer_notifications(body: NotificationPreferences, request: Request, db: Session = Depends(get_db)):
+    """Update customer notification preferences."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    try:
+        payload = decode_token(auth_header.split(" ", 1)[1])
+        customer_id = int(payload["sub"])
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    if body.notif_order_updates is not None:
+        customer.notif_order_updates = body.notif_order_updates
+    if body.notif_loyalty_alerts is not None:
+        customer.notif_loyalty_alerts = body.notif_loyalty_alerts
+    if body.notif_promotions is not None:
+        customer.notif_promotions = body.notif_promotions
+    if body.notif_gmail is not None:
+        customer.notif_gmail = body.notif_gmail
+    
+    db.commit()
+    db.refresh(customer)
+    
+    return {"message": "Notification preferences updated", "notif_order_updates": customer.notif_order_updates, "notif_loyalty_alerts": customer.notif_loyalty_alerts, "notif_promotions": customer.notif_promotions, "notif_gmail": customer.notif_gmail}
+
+@app.put("/api/business/notifications")
+async def update_business_notifications(body: NotificationPreferences, request: Request, db: Session = Depends(get_db)):
+    """Update business notification preferences."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    try:
+        payload = decode_token(auth_header.split(" ", 1)[1])
+        business_id = int(payload["sub"])
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    business = db.query(BusinessProfile).filter(BusinessProfile.id == business_id).first()
+    if not business:
+        raise HTTPException(status_code=404, detail="Business not found")
+    
+    if body.notif_order_updates is not None:
+        business.notif_order_updates = body.notif_order_updates
+    if body.notif_loyalty_alerts is not None:
+        business.notif_loyalty_alerts = body.notif_loyalty_alerts
+    if body.notif_newsletter is not None:
+        business.notif_newsletter = body.notif_newsletter
+    if body.notif_gmail is not None:
+        business.notif_gmail = body.notif_gmail
+    
+    db.commit()
+    db.refresh(business)
+    
+    return {"message": "Notification preferences updated", "notif_order_updates": business.notif_order_updates, "notif_loyalty_alerts": business.notif_loyalty_alerts, "notif_newsletter": business.notif_newsletter, "notif_gmail": business.notif_gmail}
+
+@app.put("/api/rider/notifications")
+async def update_rider_notifications(body: NotificationPreferences, request: Request, db: Session = Depends(get_db)):
+    """Update rider notification preferences."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    try:
+        payload = decode_token(auth_header.split(" ", 1)[1])
+        rider_id = int(payload["sub"])
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    rider = db.query(RiderProfile).filter(RiderProfile.id == rider_id).first()
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+    
+    if body.notif_order_updates is not None:
+        rider.notif_order_updates = body.notif_order_updates
+    if body.notif_loyalty_alerts is not None:
+        rider.notif_loyalty_alerts = body.notif_loyalty_alerts
+    if body.notif_newsletter is not None:
+        rider.notif_newsletter = body.notif_newsletter
+    if body.notif_gmail is not None:
+        rider.notif_gmail = body.notif_gmail
+    
+    db.commit()
+    db.refresh(rider)
+    
+    return {"message": "Notification preferences updated", "notif_order_updates": rider.notif_order_updates, "notif_loyalty_alerts": rider.notif_loyalty_alerts, "notif_newsletter": rider.notif_newsletter, "notif_gmail": rider.notif_gmail}
+
+# ---------------------------------------------------------------------------
+# Routes – Addresses
 # ---------------------------------------------------------------------------
 @app.get("/api/customer/addresses")
 async def get_addresses(request: Request, db: Session = Depends(get_db)):

@@ -127,6 +127,7 @@ const AccountSettings = () => {
     const [loadingAddresses, setLoadingAddresses] = useState(false);
     const [showAddrModal, setShowAddrModal] = useState(false);
     const [editingAddr, setEditingAddr] = useState<Address | null>(null);
+    const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [addrForm, setAddrForm] = useState({
         full_name: '',
         phone: '',
@@ -605,11 +606,23 @@ const AccountSettings = () => {
         });
     };
 
+    const isAnyModalOpen = showAddrModal || !!editingAddr || showMapPicker || isDatePickerOpen || showEmailModal || showGooglePwModal || modal.isOpen;
+
+    // Manage body scroll
+    useEffect(() => {
+        if (isAnyModalOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'auto';
+        }
+        return () => { document.body.style.overflow = 'auto'; };
+    }, [isAnyModalOpen]);
+
     const initials = (isBusiness ? (clinicName || user?.name || 'C') : (user?.name || user?.email || 'U')).slice(0, 2).toUpperCase();
 
     return (
-        <DashboardLayout title="Account Settings">
-            <div className="w-full max-w-[1440px] mx-auto space-y-8 pb-20">
+        <DashboardLayout title="">
+            <div className={`w-full max-w-[1440px] mx-auto space-y-8 pb-20 ${isAnyModalOpen ? 'opacity-30 blur-2xl pointer-events-none' : 'opacity-100'}`}>
 
                 <AnimatePresence>
                     {toast && (
@@ -621,12 +634,11 @@ const AccountSettings = () => {
                     )}
                 </AnimatePresence>
 
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                    className="relative bg-brand-dark rounded-[2.5rem] p-8 lg:p-12 overflow-hidden shadow-2xl border border-white/5">
+                <div className="relative bg-brand-dark rounded-[2.5rem] p-8 lg:p-12 overflow-hidden shadow-2xl border border-white/5">
                     {/* Background Decorative Elements */}
                     <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand/10 rounded-full blur-[120px] -mr-32 -mt-32" />
                     <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-accent-peach/5 rounded-full blur-[80px] -ml-20 -mb-20" />
-                    
+
                     <div className="relative z-10 flex flex-col md:flex-row items-center md:items-end gap-8">
                         {/* Avatar Hub */}
                         <div className="relative">
@@ -652,11 +664,11 @@ const AccountSettings = () => {
                                 </span>
                                 <div className="w-2 h-2 rounded-full bg-white animate-pulse ml-1" />
                             </div>
-                            
+
                             <h2 className="text-4xl lg:text-5xl font-black text-white tracking-tighter leading-tight">
                                 {user?.name ?? 'Account'}
                             </h2>
-                            
+
                             <div className="flex flex-wrap justify-center md:justify-start items-center gap-6 pt-2">
                                 <div className="flex items-center gap-2.5">
                                     <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-white">
@@ -681,11 +693,8 @@ const AccountSettings = () => {
                         </div>
 
                         {/* Action Hub - Streamlined */}
-                        <div className="hidden lg:flex items-center gap-3 self-center">
-                            {/* Trust Score Removed as per request */}
-                        </div>
                     </div>
-                </motion.div>
+                </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                     {/* Navigation Sidebar */}
@@ -729,7 +738,7 @@ const AccountSettings = () => {
                         </div>
 
                         {section === 'danger' ? null : (
-                            <button 
+                            <button
                                 onClick={() => setSection('danger')}
                                 className="w-full flex items-center gap-4 px-8 py-5 rounded-3xl bg-red-50 text-red-500 border border-red-100 hover:bg-red-500 hover:text-white transition-all shadow-lg shadow-red-500/5 group"
                             >
@@ -785,6 +794,7 @@ const AccountSettings = () => {
                                                         label="Birthdate"
                                                         value={ownerBirthday}
                                                         onChange={setOwnerBirthday}
+                                                        onModalOpenChange={setIsDatePickerOpen}
                                                     />
                                                 </div>
                                                 <div>
@@ -825,7 +835,7 @@ const AccountSettings = () => {
                                         <>
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                                 <div className="md:col-span-1">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">First Name <span className="text-brand-dark">*</span></label>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">First Name <span className="text-red-500">*</span></label>
                                                     <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Enter First Name"
                                                         className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 px-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/20" />
                                                 </div>
@@ -835,7 +845,7 @@ const AccountSettings = () => {
                                                         className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 px-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/20" />
                                                 </div>
                                                 <div className="md:col-span-1">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">Surname <span className="text-brand-dark">*</span></label>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">Surname <span className="text-red-500">*</span></label>
                                                     <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Enter Surname"
                                                         className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 px-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/20" />
                                                 </div>
@@ -877,12 +887,14 @@ const AccountSettings = () => {
                                                         isRequired={true}
                                                         value={birthday}
                                                         onChange={setBirthday}
+                                                        onModalOpenChange={setIsDatePickerOpen}
                                                     />
                                                 </div>
-                                            </div>                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-accent-brown/5">
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-accent-brown/5">
                                                 <div className="space-y-6">
                                                     <div>
-                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/60 block mb-3 pl-1">Contact Number <span className="text-accent-brown">*</span></label>
+                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">Contact Number <span className="text-red-500">*</span></label>
                                                         <div className="relative group">
                                                             <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-2 border-r border-accent-brown/10 pr-3 transition-colors group-focus-within:border-brand/30">
                                                                 <span className="text-xs font-black text-accent-brown/50 group-focus-within:text-accent-brown">+63</span>
@@ -905,7 +917,7 @@ const AccountSettings = () => {
 
                                                 <div className="space-y-6">
                                                     <div>
-                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/60 block mb-3 pl-1">Email Address</label>
+                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">Email Address</label>
                                                         <div className="relative group">
                                                             <input type="email" value={email} readOnly
                                                                 className="w-full bg-[#FAF9F6] border-2 border-transparent rounded-[1.25rem] py-4 pl-6 pr-24 text-sm font-black text-accent-brown/80 outline-none transition-all cursor-not-allowed tabular-nums" />
@@ -1273,199 +1285,200 @@ const AccountSettings = () => {
 
                     </motion.div>
                 </div>
-
-                <AnimatePresence>
-                    {showGooglePwModal && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="absolute inset-0 bg-black/40 backdrop-blur-md"
-                            />
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.95 }}
-                                className="relative bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl overflow-hidden"
-                            >
-                                <div className="absolute top-0 left-0 w-full h-2 bg-brand-dark" />
-                                <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center text-accent-brown mb-6">
-                                    <Lock className="w-8 h-8" />
-                                </div>
-                                <h3 className="text-2xl font-black text-accent-brown tracking-tighter mb-2">Google Login User</h3>
-                                <p className="text-sm font-medium text-accent-brown/60 mb-8 leading-relaxed">
-                                    Since you logged in using your Google account, you don't have a separate password for Hi-Vet CRM.
-                                    Your account security is managed directly by Google.
-                                </p>
-                                <button
-                                    onClick={() => setShowGooglePwModal(false)}
-                                    className="w-full bg-brand-dark text-white px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors"
-                                >
-                                    Understood
-                                </button>
-                            </motion.div>
-                        </div>
-                    )}
-                </AnimatePresence>
-
-                <AnimatePresence>
-                    {showAddrModal && (
-                        <div className="fixed inset-0 z-[110] flex items-start justify-center px-4 pt-20 sm:pt-32 overflow-y-auto pb-10">
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                onClick={() => setShowAddrModal(false)} className="absolute inset-0 bg-black/40 backdrop-blur-md" />
-                            <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                                className="relative bg-[#FAFAFA] rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden border border-white">
-                                <div className="p-8 sm:p-10">
-                                    <div className="flex items-center justify-between mb-8">
-                                        <div>
-                                            <h3 className="text-2xl font-black text-accent-brown tracking-tighter">{editingAddr ? (isBusiness ? 'Edit Location' : 'Edit Address') : (isBusiness ? 'New Branch' : 'New Address')}</h3>
-                                            <p className="text-xs font-bold text-accent-brown/30 uppercase tracking-widest mt-1">{isBusiness ? 'Branch Details' : 'Delivery Details'}</p>
-                                        </div>
-                                        <button onClick={() => setShowAddrModal(false)} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-accent-brown/30 hover:text-accent-brown transition-all shadow-sm">
-                                            <X className="w-5 h-5" />
-                                        </button>
-                                    </div>
-
-                                    <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1 custom-scrollbar">
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">{isBusiness ? 'Branch/Clinic Name' : 'Contact Name'}</label>
-                                                <input type="text" value={addrForm.full_name} onChange={e => setAddrForm({ ...addrForm, full_name: e.target.value })} placeholder={isBusiness ? "e.g. Main Branch" : "Full Name"}
-                                                    className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm" />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Phone Number</label>
-                                                <input type="tel" value={addrForm.phone} onChange={e => setAddrForm({ ...addrForm, phone: e.target.value })} placeholder="09XX XXX XXXX"
-                                                    className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm" />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1 flex items-center gap-2">
-                                                <MapPin className="w-3 h-3" /> Mark Landmark & Enter Detailed Address
-                                            </label>
-                                            <AddressAutocomplete
-                                                onAddressSelect={(full, components, geometry, granular) => {
-                                                    handleAddressComponents(full, components, geometry, granular);
-                                                }}
-                                                defaultValue={addrForm.address_line1}
-                                                initialLocation={addrForm.lat && addrForm.lng ? { lat: addrForm.lat, lng: addrForm.lng } : undefined}
-                                                initialGranular={{
-                                                    houseNumber: addrForm.house_number,
-                                                    blockNumber: addrForm.block_number,
-                                                    street: addrForm.street,
-                                                    subdivision: addrForm.subdivision,
-                                                    sitio: addrForm.sitio,
-                                                    barangay: addrForm.barangay,
-                                                    city: addrForm.city,
-                                                    district: addrForm.district,
-                                                    province: addrForm.province,
-                                                    zip: addrForm.zip_code,
-                                                    region: addrForm.region
-                                                }}
-                                                placeholder="Search or pick on map..."
-                                                className="!py-4 !rounded-2xl shadow-xl border-2 border-transparent focus:border-brand/30"
-                                            />
-                                            <p className="text-[9px] font-bold text-accent-brown/30 uppercase tracking-widest pl-1 italic">Note: Searching will auto-fill basic location. Click the pin to edit granular details manually.</p>
-                                        </div>
-
-                                        <div className="p-6 bg-accent-peach/5 rounded-[2rem] border border-accent-peach/10 space-y-4">
-                                            <div className="space-y-1">
-                                                <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Precise Address Confirmation</p>
-                                                <p className="text-xs font-bold text-accent-brown leading-relaxed capitalize">
-                                                    {[addrForm.house_number, addrForm.block_number, addrForm.street, addrForm.subdivision, addrForm.sitio, addrForm.barangay, addrForm.city, addrForm.province, addrForm.zip_code].filter(Boolean).join(' ')}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Delivery Notes / Landmark Instructions</label>
-                                            <textarea
-                                                value={addrForm.delivery_notes}
-                                                onChange={e => setAddrForm({ ...addrForm, delivery_notes: e.target.value })}
-                                                placeholder="e.g. Near the blue gate, or across the red store..."
-                                                className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm min-h-[100px] resize-none"
-                                            />
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4 pt-2">
-                                            {(isBusiness ? ['Branch'] : ['Home', 'Work']).map(l => (
-                                                <button key={l} onClick={() => setAddrForm({ ...addrForm, label: l })}
-                                                    className={`py-4 rounded-2xl text-xs font-black uppercase tracking-widest border-2 transition-all ${addrForm.label === l ? 'border-brand bg-brand/5 text-accent-brown shadow-lg shadow-brand/5' : 'border-transparent bg-white text-accent-brown/30 hover:bg-accent-peach/10'}`}>
-                                                    {l}
-                                                </button>
-                                            ))}
-                                        </div>
-
-                                        <button
-                                            onClick={async () => {
-                                                if (!addrForm.full_name || !addrForm.phone || !addrForm.barangay || !addrForm.city) {
-                                                    showToast('Contact and basic location details (Barangay, City) are required.', 'error');
-                                                    return;
-                                                }
-
-                                                const line1 = [addrForm.house_number, addrForm.block_number, addrForm.street, addrForm.subdivision].filter(Boolean).join(' ');
-                                                const line2 = [addrForm.barangay, addrForm.city, addrForm.province, addrForm.zip_code].filter(Boolean).join(', ');
-
-                                                const body = isBusiness ? {
-                                                    name: addrForm.full_name,
-                                                    phone: addrForm.phone,
-                                                    address_line1: line1,
-                                                    address_line2: line2,
-                                                    house_number: addrForm.house_number,
-                                                    block_number: addrForm.block_number,
-                                                    street: addrForm.street,
-                                                    subdivision: addrForm.subdivision,
-                                                    sitio: addrForm.sitio,
-                                                    barangay: addrForm.barangay,
-                                                    city: addrForm.city,
-                                                    district: addrForm.district,
-                                                    province: addrForm.province,
-                                                    zip_code: addrForm.zip_code,
-                                                    region: addrForm.region,
-                                                    lat: addrForm.lat,
-                                                    lng: addrForm.lng,
-                                                    is_main: addrForm.is_default
-                                                } : {
-                                                    ...addrForm,
-                                                    address_line1: line1,
-                                                    address_line2: line2
-                                                };
-
-                                                const baseUrl = isBusiness ? 'http://localhost:8000/api/business/branches' : 'http://localhost:8000/api/customer/addresses';
-                                                const url = editingAddr ? `${baseUrl}/${editingAddr.id}` : baseUrl;
-
-                                                try {
-                                                    const res = await fetch(url, {
-                                                        method: editingAddr ? 'PUT' : 'POST',
-                                                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user?.token}` },
-                                                        body: JSON.stringify(body)
-                                                    });
-                                                    if (res.ok) {
-                                                        fetchAddresses();
-                                                        setShowAddrModal(false);
-                                                        showToast(`${isBusiness ? 'Branch' : 'Address'} ${editingAddr ? 'updated' : 'saved'} successfully!`);
-                                                    } else {
-                                                        const errorData = await res.json().catch(() => ({}));
-                                                        showToast(errorData.detail || 'Failed to sync details.', 'error');
-                                                    }
-                                                } catch (err) {
-                                                    showToast('An error occurred during synchronization.', 'error');
-                                                }
-                                            }}
-                                            className="w-full bg-brand-dark text-white py-5 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-black transition-all shadow-xl shadow-brand-dark/10"
-                                        >
-                                            {editingAddr ? (isBusiness ? 'Update Branch' : 'Update Address') : (isBusiness ? 'Save Branch' : 'Save Address')}
-                                        </button>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        </div>
-                    )}
-                </AnimatePresence>
-
             </div>
+
+            <AnimatePresence>
+                {showGooglePwModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-black/40 backdrop-blur-md"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="relative bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl overflow-hidden"
+                        >
+                            <div className="absolute top-0 left-0 w-full h-2 bg-brand-dark" />
+                            <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center text-accent-brown mb-6">
+                                <Lock className="w-8 h-8" />
+                            </div>
+                            <h3 className="text-2xl font-black text-accent-brown tracking-tighter mb-2">Google Login User</h3>
+                            <p className="text-sm font-medium text-accent-brown/60 mb-8 leading-relaxed">
+                                Since you logged in using your Google account, you don't have a separate password for Hi-Vet CRM.
+                                Your account security is managed directly by Google.
+                            </p>
+                            <button
+                                onClick={() => setShowGooglePwModal(false)}
+                                className="w-full bg-brand-dark text-white px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors"
+                            >
+                                Understood
+                            </button>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {showAddrModal && (
+                    <div className="fixed inset-0 z-[110] flex items-start justify-center px-4 pt-20 sm:pt-32 overflow-y-auto pb-10">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            onClick={() => setShowAddrModal(false)} className="absolute inset-0 bg-black/40 backdrop-blur-md" />
+                        <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                            className="relative bg-[#FAFAFA] rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden border border-white">
+                            <div className="p-8 sm:p-10">
+                                <div className="flex items-center justify-between mb-8">
+                                    <div>
+                                        <h3 className="text-2xl font-black text-accent-brown tracking-tighter">{editingAddr ? (isBusiness ? 'Edit Location' : 'Edit Address') : (isBusiness ? 'New Branch' : 'New Address')}</h3>
+                                        <p className="text-xs font-bold text-accent-brown/30 uppercase tracking-widest mt-1">{isBusiness ? 'Branch Details' : 'Delivery Details'}</p>
+                                    </div>
+                                    <button onClick={() => setShowAddrModal(false)} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-accent-brown/30 hover:text-accent-brown transition-all shadow-sm">
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1 custom-scrollbar">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">{isBusiness ? 'Branch/Clinic Name' : 'Contact Name'}</label>
+                                            <input type="text" value={addrForm.full_name} onChange={e => setAddrForm({ ...addrForm, full_name: e.target.value })} placeholder={isBusiness ? "e.g. Main Branch" : "Full Name"}
+                                                className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Phone Number</label>
+                                            <input type="tel" value={addrForm.phone} onChange={e => setAddrForm({ ...addrForm, phone: e.target.value })} placeholder="09XX XXX XXXX"
+                                                className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm" />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1 flex items-center gap-2">
+                                            <MapPin className="w-3 h-3" /> Mark Landmark & Enter Detailed Address
+                                        </label>
+                                        <AddressAutocomplete
+                                            onAddressSelect={(full, components, geometry, granular) => {
+                                                handleAddressComponents(full, components, geometry, granular);
+                                            }}
+                                            defaultValue={addrForm.address_line1}
+                                            initialLocation={addrForm.lat && addrForm.lng ? { lat: addrForm.lat, lng: addrForm.lng } : undefined}
+                                            initialGranular={{
+                                                houseNumber: addrForm.house_number,
+                                                blockNumber: addrForm.block_number,
+                                                street: addrForm.street,
+                                                subdivision: addrForm.subdivision,
+                                                sitio: addrForm.sitio,
+                                                barangay: addrForm.barangay,
+                                                city: addrForm.city,
+                                                district: addrForm.district,
+                                                province: addrForm.province,
+                                                zip: addrForm.zip_code,
+                                                region: addrForm.region
+                                            }}
+                                            placeholder="Search or pick on map..."
+                                            className="!py-4 !rounded-2xl shadow-xl border-2 border-transparent focus:border-brand/30"
+                                        />
+                                        <p className="text-[9px] font-bold text-accent-brown/30 uppercase tracking-widest pl-1 italic">Note: Searching will auto-fill basic location. Click the pin to edit granular details manually.</p>
+                                    </div>
+
+                                    <div className="p-6 bg-accent-peach/5 rounded-[2rem] border border-accent-peach/10 space-y-4">
+                                        <div className="space-y-1">
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Precise Address Confirmation</p>
+                                            <p className="text-xs font-bold text-accent-brown leading-relaxed capitalize">
+                                                {[addrForm.house_number, addrForm.block_number, addrForm.street, addrForm.subdivision, addrForm.sitio, addrForm.barangay, addrForm.city, addrForm.province, addrForm.zip_code].filter(Boolean).join(' ')}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Delivery Notes / Landmark Instructions</label>
+                                        <textarea
+                                            value={addrForm.delivery_notes}
+                                            onChange={e => setAddrForm({ ...addrForm, delivery_notes: e.target.value })}
+                                            placeholder="e.g. Near the blue gate, or across the red store..."
+                                            className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm min-h-[100px] resize-none"
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 pt-2">
+                                        {(isBusiness ? ['Branch'] : ['Home', 'Work']).map(l => (
+                                            <button key={l} onClick={() => setAddrForm({ ...addrForm, label: l })}
+                                                className={`py-4 rounded-2xl text-xs font-black uppercase tracking-widest border-2 transition-all ${addrForm.label === l ? 'border-brand bg-brand/5 text-accent-brown shadow-lg shadow-brand/5' : 'border-transparent bg-white text-accent-brown/30 hover:bg-accent-peach/10'}`}>
+                                                {l}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <button
+                                        onClick={async () => {
+                                            if (!addrForm.full_name || !addrForm.phone || !addrForm.barangay || !addrForm.city) {
+                                                showToast('Contact and basic location details (Barangay, City) are required.', 'error');
+                                                return;
+                                            }
+
+                                            const line1 = [addrForm.house_number, addrForm.block_number, addrForm.street, addrForm.subdivision].filter(Boolean).join(' ');
+                                            const line2 = [addrForm.barangay, addrForm.city, addrForm.province, addrForm.zip_code].filter(Boolean).join(', ');
+
+                                            const body = isBusiness ? {
+                                                name: addrForm.full_name,
+                                                phone: addrForm.phone,
+                                                address_line1: line1,
+                                                address_line2: line2,
+                                                house_number: addrForm.house_number,
+                                                block_number: addrForm.block_number,
+                                                street: addrForm.street,
+                                                subdivision: addrForm.subdivision,
+                                                sitio: addrForm.sitio,
+                                                barangay: addrForm.barangay,
+                                                city: addrForm.city,
+                                                district: addrForm.district,
+                                                province: addrForm.province,
+                                                zip_code: addrForm.zip_code,
+                                                region: addrForm.region,
+                                                lat: addrForm.lat,
+                                                lng: addrForm.lng,
+                                                is_main: addrForm.is_default
+                                            } : {
+                                                ...addrForm,
+                                                address_line1: line1,
+                                                address_line2: line2
+                                            };
+
+                                            const baseUrl = isBusiness ? 'http://localhost:8000/api/business/branches' : 'http://localhost:8000/api/customer/addresses';
+                                            const url = editingAddr ? `${baseUrl}/${editingAddr.id}` : baseUrl;
+
+                                            try {
+                                                const res = await fetch(url, {
+                                                    method: editingAddr ? 'PUT' : 'POST',
+                                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${user?.token}` },
+                                                    body: JSON.stringify(body)
+                                                });
+                                                if (res.ok) {
+                                                    fetchAddresses();
+                                                    setShowAddrModal(false);
+                                                    showToast(`${isBusiness ? 'Branch' : 'Address'} ${editingAddr ? 'updated' : 'saved'} successfully!`);
+                                                } else {
+                                                    const errorData = await res.json().catch(() => ({}));
+                                                    showToast(errorData.detail || 'Failed to sync details.', 'error');
+                                                }
+                                            } catch (err) {
+                                                showToast('An error occurred during synchronization.', 'error');
+                                            }
+                                        }}
+                                        className="w-full bg-brand-dark text-white py-5 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-black transition-all shadow-xl shadow-brand-dark/10"
+                                    >
+                                        {editingAddr ? (isBusiness ? 'Update Branch' : 'Update Address') : (isBusiness ? 'Save Branch' : 'Save Address')}
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+
 
             <MapPickerModal
                 isOpen={showMapPicker}
@@ -1473,22 +1486,22 @@ const AccountSettings = () => {
                 initialLocation={addrForm.lat && addrForm.lng ? { lat: addrForm.lat, lng: addrForm.lng } : undefined}
                 onSelection={(_address, lat, lng, _components, granular) => {
                     setAddrForm(prev => ({
-                            ...prev,
-                            lat,
-                            lng,
-                            address_line1: _address,
-                            house_number: granular.houseNumber || '',
-                            block_number: granular.blockNumber || '',
-                            street: granular.street || '',
-                            subdivision: granular.subdivision || '',
-                            sitio: granular.sitio || '',
-                            barangay: granular.barangay || '',
-                            city: granular.city || '',
-                            district: granular.district || '',
-                            province: granular.province || '',
-                            zip_code: granular.zip || '',
-                            region: granular.region || ''
-                        }));
+                        ...prev,
+                        lat,
+                        lng,
+                        address_line1: _address,
+                        house_number: granular.houseNumber || '',
+                        block_number: granular.blockNumber || '',
+                        street: granular.street || '',
+                        subdivision: granular.subdivision || '',
+                        sitio: granular.sitio || '',
+                        barangay: granular.barangay || '',
+                        city: granular.city || '',
+                        district: granular.district || '',
+                        province: granular.province || '',
+                        zip_code: granular.zip || '',
+                        region: granular.region || ''
+                    }));
                 }}
             />
 

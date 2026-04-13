@@ -112,31 +112,31 @@ const BusinessLogin = () => {
                                     <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic transition-colors group-focus-within:text-brand-dark">Partner Identity <span className="text-brand-dark">*</span></label>
                                     <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                         <Mail className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                        <input 
-                                            type="email" 
-                                            value={email} 
-                                            onChange={e => setEmail(e.target.value)} 
-                                            placeholder="clinic@example.com" 
-                                            className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" 
-                                            required 
+                                        <input
+                                            type="email"
+                                            value={email}
+                                            onChange={e => setEmail(e.target.value)}
+                                            placeholder="clinic@example.com"
+                                            className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none"
+                                            required
                                         />
                                     </div>
                                 </div>
 
                                 <div className="group space-y-2">
                                     <div className="flex justify-between items-center pr-6">
-                                        <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic transition-colors group-focus-within:text-brand-dark">Partner Secret <span className="text-brand-dark">*</span></label>
+                                        <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic transition-colors group-focus-within:text-brand-dark">Password <span className="text-brand-dark">*</span></label>
                                         <Link to="/forgot-password?role=business" className="text-[10px] font-black text-brand-dark/40 hover:text-brand-dark uppercase tracking-widest transition-colors italic">Reset Password?</Link>
                                     </div>
                                     <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                         <Lock className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                        <input 
-                                            type={showPassword ? "text" : "password"} 
-                                            value={password} 
-                                            onChange={e => setPassword(e.target.value)} 
-                                            placeholder="••••••••" 
-                                            className="w-full bg-transparent py-5 pl-16 pr-14 text-accent-brown font-bold text-base outline-none" 
-                                            required 
+                                        <input
+                                            type={showPassword ? "text" : "password"}
+                                            value={password}
+                                            onChange={e => setPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="w-full bg-transparent py-5 pl-16 pr-14 text-accent-brown font-bold text-base outline-none"
+                                            required
                                         />
                                         <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-7 top-1/2 -translate-y-1/2 text-accent-brown/20 hover:text-brand-dark transition-colors">
                                             {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -148,7 +148,7 @@ const BusinessLogin = () => {
                             {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
 
                             <button type="submit" disabled={loading} className="bg-brand-dark text-white w-full py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] flex items-center justify-center gap-4 hover:shadow-2xl transition-all group shadow-xl">
-                                {loading ? 'Authorizing Access...' : 'Enter Dashboard'} 
+                                {loading ? 'Authorizing Access...' : 'Enter Dashboard'}
                                 {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />}
                             </button>
                         </motion.div>

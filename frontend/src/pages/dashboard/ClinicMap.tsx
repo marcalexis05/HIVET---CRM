@@ -1,8 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { APIProvider, Map, AdvancedMarker, InfoWindow, useMap } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import DashboardLayout from '../../components/DashboardLayout';
-import { Building, Loader2, AlertCircle, Eye, Store, User, X, Truck } from 'lucide-react';
+import {
+    Building, Loader2, AlertCircle, Eye, Store,
+    User, X, Truck, Search, Navigation2,
+    MapPin, Phone, Clock, ChevronRight,
+    Filter, LayoutGrid, List
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -45,6 +50,7 @@ const calculateDist = (lat1: number, lng1: number, lat2: number, lng2: number) =
     return `${d.toFixed(1)}km`;
 };
 
+// Component for rendering directions on the map
 const DirectionsLine = ({ userLat, userLng, clinicLat, clinicLng }: { userLat: number | null, userLng: number | null, clinicLat: number, clinicLng: number }) => {
     const map = useMap();
     useEffect(() => {
@@ -56,8 +62,8 @@ const DirectionsLine = ({ userLat, userLng, clinicLat, clinicLng }: { userLat: n
             suppressMarkers: true,
             preserveViewport: true,
             polylineOptions: {
-                strokeColor: '#F58634',
-                strokeWeight: 4,
+                strokeColor: '#ff6b00',
+                strokeWeight: 5,
                 strokeOpacity: 0.8
             }
         });
@@ -90,54 +96,50 @@ export default function ClinicMap() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedBranch, setSelectedBranch] = useState<{ clinicName: string; branch: Branch } | null>(null);
-    const [routeBranch, setRouteBranch] = useState<{ clinicName: string; branch: Branch } | null>(null); // Track active route destination
     const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
-    const [activeMarker, setActiveMarker] = useState<'branch' | 'user' | null>(null);
     const [showDirections, setShowDirections] = useState(false);
-
     const [showStreetView, setShowStreetView] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [activeTab, setActiveTab] = useState<'all' | 'nearby'>('all');
+
+    // Pan / Pov tracking for Street View Mini-Map
     const [panoPosition, setPanoPosition] = useState<{ lat: number, lng: number } | null>(null);
     const [panoPov, setPanoPov] = useState<{ heading: number, pitch: number }>({ heading: 0, pitch: 0 });
     const streetViewInstance = useRef<google.maps.StreetViewPanorama | null>(null);
 
-    // Initial center point (Metro Manila)
+    // Default center (Manila)
     const [mapCenter, setMapCenter] = useState({ lat: 14.5995, lng: 120.9842 });
 
     useEffect(() => {
-        const fetchLayoutData = async () => {
+        const fetchData = async () => {
             try {
-                // Fetch clinics
                 const res = await fetch(`${API}/api/clinics`);
                 if (!res.ok) throw new Error('Failed to fetch clinics');
                 const data = await res.json();
                 setClinics(data.clinics || []);
 
-                // Try fetching user address if token exists to set default map position
                 if (user?.token) {
-                    const authRes = await fetch(`${API}/api/customer/addresses`, {
+                    const addrRes = await fetch(`${API}/api/customer/addresses`, {
                         headers: { Authorization: `Bearer ${user.token}` }
                     });
-                    if (authRes.ok) {
-                        const addrData = await authRes.json();
+                    if (addrRes.ok) {
+                        const addrData = await addrRes.json();
                         const addresses = addrData.addresses || [];
                         const def = addresses.find((a: any) => a.is_default) || addresses[0];
-
                         if (def && def.lat !== null && def.lng !== null) {
                             const pos = { lat: def.lat, lng: def.lng };
                             setUserLocation(pos);
                             setMapCenter(pos);
-                            setActiveMarker('user'); // Show their location info window by default
                         }
                     }
                 }
-            } catch (err: unknown) {
-                const msg = err instanceof Error ? err.message : 'Could not load map data.';
-                setError(msg);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'Could not load data.');
             } finally {
                 setLoading(false);
             }
         };
-        fetchLayoutData();
+        fetchData();
     }, [user?.token]);
 
     const allBranches = clinics.flatMap(clinic =>
@@ -147,439 +149,460 @@ export default function ClinicMap() {
         }))
     );
 
-    const [searchQuery, setSearchQuery] = useState('');
-    const filteredBranches = allBranches.filter(item => 
-        item.clinicName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        item.branch.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        item.branch.address_line1.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filteredBranches = allBranches.filter(item => {
+        const matchesSearch = item.clinicName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item.branch.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item.branch.address_line1.toLowerCase().includes(searchQuery.toLowerCase());
+
+        if (activeTab === 'nearby' && userLocation && item.branch.lat && item.branch.lng) {
+            const distStr = calculateDist(userLocation.lat, userLocation.lng, item.branch.lat, item.branch.lng);
+            const distKm = parseFloat(distStr);
+            return matchesSearch && distKm < 10; // Only show within 10km for 'nearby'
+        }
+        return matchesSearch;
+    });
+
+    const handleBranchSelect = (item: { clinicName: string; branch: Branch }) => {
+        setSelectedBranch(item);
+        if (item.branch.lat && item.branch.lng) {
+            setMapCenter({ lat: item.branch.lat, lng: item.branch.lng });
+        }
+        setShowDirections(false);
+    };
+
+    // Helper component to handle camera movements imperatively
+    const CameraHandler = ({ center }: { center: { lat: number, lng: number } }) => {
+        const map = useMap();
+        useEffect(() => {
+            if (map && center) {
+                map.panTo(center);
+            }
+        }, [map, center]);
+        return null;
+    };
+
+    if (loading) {
+        return (
+            <DashboardLayout title="">
+                <div className="flex flex-col items-center justify-center min-h-[600px] gap-4">
+                    <motion.div
+                        animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                        className="w-16 h-16 bg-brand/10 rounded-full flex items-center justify-center"
+                    >
+                        <MapPin className="text-brand w-8 h-8" />
+                    </motion.div>
+                    <p className="font-black text-[10px] uppercase tracking-[0.2em] text-accent-brown/30">Locating Network Clinics...</p>
+                </div>
+            </DashboardLayout>
+        );
+    }
 
     return (
-        <DashboardLayout title="Clinic Map">
-            <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-280px)] min-h-[700px]">
+        <APIProvider apiKey={MAPS_API_KEY}>
+            <DashboardLayout title="" hideHeader={false}>
+                <div className="space-y-6 max-w-[1920px] mx-auto h-[calc(100vh-180px)] min-h-[700px]">
 
-                {loading && (
-                    <div className="flex-1 flex items-center justify-center bg-white rounded-[2rem] border border-white shadow-xl shadow-accent-brown/5">
-                        <Loader2 className="w-8 h-8 text-brand animate-spin" />
-                    </div>
-                )}
+                    <div className="flex flex-col lg:flex-row gap-6 h-full">
 
-                {!loading && error && (
-                    <div className="bg-red-50 border border-red-200 rounded-2xl p-6 flex flex-col items-center justify-center h-full text-center text-red-600 shadow-xl shadow-accent-brown/5">
-                        <AlertCircle className="w-12 h-12 mb-4 opacity-50" />
-                        <h3 className="font-black text-xl mb-2 tracking-tight">Oops, something went wrong</h3>
-                        <p className="font-medium text-sm text-red-500/80">{error}</p>
-                    </div>
-                )}
-
-                {!loading && !error && (
-                    <>
-                        {/* Sidebar */}
-                        <motion.div 
-                            initial={{ opacity: 0, x: -20 }}
+                        {/* 1. Discovery Panel Sidebar */}
+                        <motion.div
+                            initial={{ opacity: 0, x: -30 }}
                             animate={{ opacity: 1, x: 0 }}
-                            className="w-full lg:w-96 flex flex-col bg-white rounded-[2rem] border border-accent-brown/5 shadow-xl shadow-accent-brown/5 overflow-hidden"
+                            className="w-full lg:w-[450px] flex flex-col bg-white rounded-[2.5rem] border border-white shadow-2xl shadow-accent-brown/5 overflow-hidden"
                         >
-                            <div className="p-6 border-b border-accent-brown/5 bg-accent-peach/5">
-                                <h3 className="text-sm font-black text-accent-brown uppercase tracking-widest flex items-center gap-2 mb-4">
-                                    <Building className="w-4 h-4 text-brand" /> Network Branches
-                                </h3>
+                            {/* Header Section */}
+                            <div className="p-8 space-y-6 bg-accent-peach/5 border-b border-accent-brown/5">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h2 className="text-2xl font-black text-accent-brown tracking-tighter">Clinic Network</h2>
+                                        <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-[0.2em]">Discover Branches Nearby</p>
+                                    </div>
+                                    <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center">
+                                        <Filter className="w-5 h-5 text-accent-brown/40" />
+                                    </div>
+                                </div>
+
+                                {/* Search Bar */}
                                 <div className="relative">
-                                    <input 
+                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/30" />
+                                    <input
                                         type="text"
-                                        placeholder="Search by name or location..."
+                                        placeholder="Search by name, clinic or street..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="w-full px-5 py-3 rounded-xl bg-white border border-accent-brown/10 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-brand/20 transition-all"
+                                        className="w-full pl-12 pr-6 py-4 rounded-2xl bg-white border border-accent-brown/5 text-xs font-bold text-accent-brown focus:outline-none focus:ring-4 focus:ring-brand/5 transition-all shadow-sm"
                                     />
+                                </div>
+
+                                {/* Tabs */}
+                                <div className="flex gap-2 p-1 bg-white border border-accent-brown/5 rounded-xl shadow-sm">
+                                    <button
+                                        onClick={() => setActiveTab('all')}
+                                        className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'all' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-accent-brown/40 hover:text-brand'}`}
+                                    >
+                                        All Clinics
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('nearby')}
+                                        className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'nearby' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-accent-brown/40 hover:text-brand'}`}
+                                    >
+                                        Nearby Me
+                                    </button>
                                 </div>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-3">
+                            {/* List Content */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar">
                                 {filteredBranches.length === 0 ? (
-                                    <div className="text-center py-10">
-                                        <Store className="w-10 h-10 text-accent-brown/10 mx-auto mb-3" />
-                                        <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-widest">No branches found</p>
+                                    <div className="py-20 text-center space-y-4 opacity-30 px-10">
+                                        <Store size={64} className="mx-auto" strokeWidth={1} />
+                                        <p className="text-sm font-black uppercase tracking-widest">No matching branches found in our network.</p>
                                     </div>
                                 ) : (
-                                    filteredBranches.map((item, idx) => (
-                                        <motion.button
-                                            key={`${item.branch.id}-${idx}`}
-                                            whileHover={{ scale: 1.02 }}
-                                            whileTap={{ scale: 0.98 }}
-                                            onClick={() => {
-                                                setSelectedBranch(item);
-                                                setActiveMarker('branch');
-                                                setMapCenter({ lat: item.branch.lat!, lng: item.branch.lng! });
-                                            }}
-                                            className={`w-full text-left p-4 rounded-2xl border-2 transition-all group relative ${
-                                                selectedBranch?.branch.id === item.branch.id 
-                                                ? 'border-brand bg-brand/5 shadow-lg shadow-brand/5' 
-                                                : 'border-accent-brown/5 hover:border-brand/20 hover:bg-accent-peach/5'
-                                            }`}
+                                    filteredBranches.map((item) => (
+                                        <motion.div
+                                            key={item.branch.id}
+                                            whileHover={{ y: -4 }}
+                                            onClick={() => handleBranchSelect(item)}
+                                            className={`p-5 rounded-[1.5rem] border-2 cursor-pointer transition-all relative overflow-hidden group ${selectedBranch?.branch.id === item.branch.id
+                                                    ? 'bg-brand border-brand shadow-xl shadow-brand/20'
+                                                    : 'bg-white border-accent-brown/5 hover:border-brand/30 hover:shadow-lg'
+                                                }`}
                                         >
-                                            {selectedBranch?.branch.id === item.branch.id && (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedBranch(null);
-                                                        setActiveMarker(null);
-                                                    }}
-                                                    className="absolute -top-2 -right-2 w-6 h-6 bg-brand-dark text-white rounded-full flex items-center justify-center shadow-lg hover:bg-black transition-colors z-10"
-                                                >
-                                                    <X className="w-3 h-3" />
-                                                </button>
-                                            )}
-                                            <div className="flex items-start gap-4">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                                                    selectedBranch?.branch.id === item.branch.id ? 'bg-brand text-white' : 'bg-accent-peach/20 text-brand'
-                                                }`}>
-                                                    <Store className="w-5 h-5" />
+                                            {/* Distance Badge */}
+                                            {userLocation && item.branch.lat && item.branch.lng && (
+                                                <div className={`absolute top-5 right-5 px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-tighter ${selectedBranch?.branch.id === item.branch.id ? 'bg-white/20 text-white' : 'bg-brand/10 text-brand'
+                                                    }`}>
+                                                    {calculateDist(userLocation.lat, userLocation.lng, item.branch.lat, item.branch.lng)} away
                                                 </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <h4 className="font-black text-accent-brown text-xs truncate group-hover:text-brand transition-colors">{item.clinicName}</h4>
-                                                    <p className="text-[10px] font-bold text-accent-brown/50 uppercase tracking-widest mt-0.5 truncate">{item.branch.name}</p>
-                                                    
-                                                    <div className="flex flex-col gap-1 mt-3">
-                                                        <p className="text-[10px] font-medium text-accent-brown/60 leading-tight">
-                                                            {item.branch.address_line1}
-                                                        </p>
-                                                        {item.branch.lat && item.branch.lng && userLocation && (
-                                                            <div className="flex items-center justify-between mt-3">
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <Truck className="w-3 h-3 text-brand/50" />
-                                                                    <span className="text-[9px] font-black text-brand-dark uppercase tracking-widest">
-                                                                        {calculateDist(userLocation.lat, userLocation.lng, item.branch.lat, item.branch.lng)}
-                                                                    </span>
-                                                                </div>
-                                                                
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        if (routeBranch?.branch.id === item.branch.id && showDirections) {
-                                                                            setShowDirections(false);
-                                                                            setRouteBranch(null);
-                                                                        } else {
-                                                                            setRouteBranch(item);
-                                                                            setSelectedBranch(item);
-                                                                            setActiveMarker('branch');
-                                                                            setMapCenter({ lat: item.branch.lat!, lng: item.branch.lng! });
-                                                                            setShowDirections(true);
-                                                                        }
-                                                                    }}
-                                                                    className={`px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${
-                                                                        routeBranch?.branch.id === item.branch.id && showDirections
-                                                                        ? 'bg-brand text-white'
-                                                                        : 'bg-accent-peach/20 text-brand-dark hover:bg-brand hover:text-white'
-                                                                    }`}
-                                                                >
-                                                                    {routeBranch?.branch.id === item.branch.id && showDirections ? 'Hide Route' : 'View Directions'}
-                                                                </button>
-                                                            </div>
-                                                        )}
+                                            )}
+
+                                            <div className="flex gap-4">
+                                                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${selectedBranch?.branch.id === item.branch.id ? 'bg-white/10 text-white' : 'bg-accent-peach/20 text-brand'
+                                                    }`}>
+                                                    <Store className="w-5.5 h-5.5" />
+                                                </div>
+                                                <div className="min-w-0 pr-10">
+                                                    <h4 className={`text-sm font-black truncate ${selectedBranch?.branch.id === item.branch.id ? 'text-white' : 'text-accent-brown group-hover:text-brand'}`}>
+                                                        {item.clinicName}
+                                                    </h4>
+                                                    <p className={`text-[9px] font-bold uppercase tracking-widest mt-0.5 ${selectedBranch?.branch.id === item.branch.id ? 'text-white/60' : 'text-accent-brown/40'}`}>
+                                                        {item.branch.name}
+                                                    </p>
+                                                    <div className={`flex items-center gap-1.5 mt-3 text-[9px] font-medium ${selectedBranch?.branch.id === item.branch.id ? 'text-white/80' : 'text-accent-brown/60'}`}>
+                                                        <MapPin size={10} className="shrink-0" />
+                                                        <span className="truncate">{item.branch.address_line1}</span>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </motion.button>
+
+                                            {/* Expanded Options when selected */}
+                                            <AnimatePresence>
+                                                {selectedBranch?.branch.id === item.branch.id && (
+                                                    <motion.div
+                                                        initial={{ height: 0, opacity: 0 }}
+                                                        animate={{ height: 'auto', opacity: 1 }}
+                                                        exit={{ height: 0, opacity: 0 }}
+                                                        className="mt-6 pt-6 border-t border-white/10 flex gap-3"
+                                                    >
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setShowDirections(true); }}
+                                                            className="flex-1 py-3 bg-white text-brand rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:brightness-110 flex items-center justify-center gap-2"
+                                                        >
+                                                            <Navigation2 size={12} /> Get Route
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setShowStreetView(true); }}
+                                                            className="flex-1 py-3 bg-white/10 border border-white/20 text-white rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-white/20 flex items-center justify-center gap-2"
+                                                        >
+                                                            <Eye size={12} /> Street View
+                                                        </button>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </motion.div>
                                     ))
                                 )}
                             </div>
                         </motion.div>
 
-                        {/* Map Area */}
+                        {/* 2. Map Canvas Area */}
                         <motion.div
                             initial={{ opacity: 0, scale: 0.98 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            className="flex-1 w-full bg-white rounded-[2rem] border border-accent-brown/5 shadow-xl shadow-accent-brown/5 overflow-hidden flex flex-col relative"
+                            className="flex-1 bg-white rounded-[2.5rem] border border-white shadow-2xl shadow-accent-brown/5 overflow-hidden relative"
                         >
-                            <div className="flex-1 w-full h-full relative">
-                                <AnimatePresence mode="wait">
-                                    {!showStreetView ? (
-                                        <motion.div
-                                            key="map-view"
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            exit={{ opacity: 0 }}
-                                            className="absolute inset-0"
+                            <AnimatePresence mode="wait">
+                                {!showStreetView ? (
+                                    <motion.div
+                                        key="map-view"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        className="h-full w-full"
+                                    >
+                                        <Map
+                                            mapId="4c730709b30c1be1"
+                                            defaultZoom={12}
+                                            defaultCenter={mapCenter}
+                                            gestureHandling={'greedy'}
+                                            disableDefaultUI={false}
+                                            mapTypeControl={false}
+                                            streetViewControl={false}
                                         >
-                                            <Map
-                                                mapId="4c730709b30c1be1"
-                                                defaultZoom={11}
-                                                center={mapCenter}
-                                                gestureHandling={'greedy'}
-                                                disableDefaultUI={false}
-                                                mapTypeControl={true}
-                                                streetViewControl={false}
-                                                fullscreenControl={false}
-                                            >
-                                                {userLocation && (
-                                                    <AdvancedMarker
-                                                        position={userLocation}
-                                                        onClick={() => setActiveMarker('user')}
+                                            <CameraHandler center={mapCenter} />
+                                            {/* User Marker */}
+                                            {userLocation && (
+                                                <AdvancedMarker position={userLocation}>
+                                                    <motion.div
+                                                        initial={{ scale: 0 }}
+                                                        animate={{ scale: 1 }}
+                                                        className="relative"
                                                     >
-                                                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-lg ring-4 ring-blue-500/20 cursor-pointer hover:scale-110 transition-transform">
-                                                            <User className="w-4 h-4" />
+                                                        <div className="w-12 h-12 bg-blue-500/20 rounded-full animate-ping absolute -inset-0" />
+                                                        <div className="relative w-10 h-10 bg-blue-500 rounded-2xl border-2 border-white shadow-2xl flex items-center justify-center text-white">
+                                                            <User size={20} />
                                                         </div>
-                                                    </AdvancedMarker>
-                                                )}
+                                                    </motion.div>
+                                                </AdvancedMarker>
+                                            )}
 
-                                                {allBranches.map((item, index) => (
-                                                    <AdvancedMarker
-                                                        key={`${item.clinicName}-${item.branch.id}-${index}`}
-                                                        position={{ lat: item.branch.lat!, lng: item.branch.lng! }}
-                                                        onClick={() => {
-                                                            setSelectedBranch(item);
-                                                            setActiveMarker('branch');
-                                                            setMapCenter({ lat: item.branch.lat!, lng: item.branch.lng! });
-                                                        }}
-                                                    >
-                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white border-2 border-white shadow-xl ring-4 cursor-pointer hover:scale-110 transition-all ${
-                                                            selectedBranch?.branch.id === item.branch.id 
-                                                            ? 'bg-brand ring-brand/40 scale-110 z-10' 
-                                                            : 'bg-brand-dark ring-brand/10'
-                                                        }`}>
-                                                            <Store className="w-5 h-5" />
-                                                        </div>
-                                                    </AdvancedMarker>
-                                                ))}
-
-                                                {activeMarker === 'user' && userLocation && (
-                                                    <InfoWindow
-                                                        position={userLocation}
-                                                        onCloseClick={() => setActiveMarker(null)}
-                                                        headerDisabled={true}
-                                                    >
-                                                        <div className="p-4 w-[280px] font-sans flex flex-col gap-3 relative">
-                                                            <button
-                                                                onClick={() => setActiveMarker(null)}
-                                                                className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
-                                                            >
-                                                                <X className="w-3.5 h-3.5" />
-                                                            </button>
-                                                            <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
-                                                                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
-                                                                    <User className="w-5 h-5 text-blue-600" />
-                                                                </div>
-                                                                <div>
-                                                                    <h3 className="text-sm font-black text-brand-dark leading-tight">My Location</h3>
-                                                                    <p className="text-[10px] font-bold text-accent-brown/50 uppercase tracking-widest mt-0.5">Your Saved Address</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex flex-col gap-2 mt-1">
-                                                                <button
-                                                                    onClick={() => setShowStreetView(true)}
-                                                                    className="w-full bg-blue-50 text-blue-600 text-[10px] font-black uppercase tracking-widest py-3 rounded-xl hover:bg-blue-500 hover:text-white transition-all flex items-center justify-center gap-2 group/svb shadow-sm"
-                                                                >
-                                                                    <Eye className="w-4 h-4 group-hover/svb:scale-110 transition-transform" />
-                                                                    Street View
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </InfoWindow>
-                                                )}
-
-                                                {activeMarker === 'branch' && selectedBranch && selectedBranch.branch.lat && selectedBranch.branch.lng && (
-                                                    <InfoWindow
-                                                        position={{ lat: selectedBranch.branch.lat, lng: selectedBranch.branch.lng }}
-                                                        onCloseClick={() => {
-                                                            setActiveMarker(null);
-                                                            setSelectedBranch(null);
-                                                        }}
-                                                        headerDisabled={true}
-                                                    >
-                                                        <div className="p-4 w-[280px] font-sans flex flex-col gap-3 relative">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setActiveMarker(null);
-                                                                    setSelectedBranch(null);
-                                                                }}
-                                                                className="absolute top-2 right-2 p-1.5 rounded-full hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
-                                                            >
-                                                                <X className="w-3.5 h-3.5" />
-                                                            </button>
-                                                            <div className="flex items-center gap-3 border-b border-gray-100 pb-3">
-                                                                <div className="w-10 h-10 bg-brand/10 rounded-xl flex items-center justify-center shrink-0">
-                                                                    <Store className="w-5 h-5 text-brand" />
-                                                                </div>
-                                                                <div>
-                                                                    <h3 className="text-sm font-black text-brand-dark leading-tight">{selectedBranch.clinicName}</h3>
-                                                                    <p className="text-[10px] font-bold text-accent-brown/50 uppercase tracking-widest mt-0.5">{selectedBranch.branch.name}</p>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="flex flex-col gap-2">
-                                                                <div className="flex gap-2">
-                                                                    <button
-                                                                        onClick={() => setShowStreetView(true)}
-                                                                        className="flex-1 bg-brand/10 text-brand-dark text-[10px] font-black uppercase tracking-widest py-3 rounded-xl hover:bg-brand hover:text-white transition-all flex items-center justify-center gap-2 group/svb shadow-sm"
-                                                                    >
-                                                                        <Eye className="w-4 h-4 group-hover/svb:scale-110 transition-transform" />
-                                                                        Street View
-                                                                    </button>
-                                                                </div>
-                                                                
-                                                                {userLocation && (
-                                                                    <div className="w-full bg-brand-dark/5 border border-brand-dark/10 p-3 rounded-xl flex items-center justify-between mt-1">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <div className="w-6 h-6 rounded-lg bg-brand-dark/10 flex items-center justify-center text-brand-dark">
-                                                                                <Truck className="w-3 h-3" />
-                                                                            </div>
-                                                                            <span className="text-[9px] font-black uppercase tracking-widest text-brand-dark/50">Distance</span>
-                                                                        </div>
-                                                                        <span className="text-xs font-black text-brand-dark">
-                                                                            {calculateDist(userLocation.lat, userLocation.lng, selectedBranch.branch.lat, selectedBranch.branch.lng)}
-                                                                        </span>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </InfoWindow>
-                                                )}
-
-                                                {routeBranch && userLocation && routeBranch.branch.lat && routeBranch.branch.lng && showDirections && (
-                                                    <DirectionsLine
-                                                        userLat={userLocation.lat}
-                                                        userLng={userLocation.lng}
-                                                        clinicLat={routeBranch.branch.lat}
-                                                        clinicLng={routeBranch.branch.lng}
-                                                    />
-                                                )}
-
-                                            </Map>
-                                        </motion.div>
-                                    ) : (
-                                        <motion.div
-                                            key="street-view"
-                                            initial={{ opacity: 0, scale: 1.1 }}
-                                            animate={{ opacity: 1, scale: 1 }}
-                                            exit={{ opacity: 0, scale: 0.95 }}
-                                            className="absolute inset-0 z-[100] flex flex-col bg-black"
-                                        >
-                                            {/* Close Button */}
-                                            <div className="absolute top-6 right-6 z-[110] flex items-center justify-end pointer-events-none">
-                                                <button
-                                                    onClick={() => {
-                                                        setShowStreetView(false);
-                                                        streetViewInstance.current = null;
-                                                    }}
-                                                    className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 flex items-center justify-center text-white hover:bg-brand hover:border-brand hover:scale-110 active:scale-95 transition-all pointer-events-auto shadow-2xl"
+                                            {/* Branch Markers */}
+                                            {allBranches.map((item) => (
+                                                <AdvancedMarker
+                                                    key={item.branch.id}
+                                                    position={{ lat: item.branch.lat!, lng: item.branch.lng! }}
+                                                    onClick={() => handleBranchSelect(item)}
                                                 >
-                                                    <X className="w-5 h-5" />
-                                                </button>
-                                            </div>
+                                                    <motion.div
+                                                        whileHover={{ scale: 1.1, y: -5 }}
+                                                        className={`relative flex flex-col items-center group`}
+                                                    >
+                                                        <div className={`w-12 h-12 rounded-[1.25rem] border-2 border-white shadow-2xl flex items-center justify-center transition-all ${selectedBranch?.branch.id === item.branch.id
+                                                                ? 'bg-brand text-white scale-125 z-50'
+                                                                : 'bg-white text-brand hover:bg-brand hover:text-white'
+                                                            }`}>
+                                                            <Store size={22} />
+                                                        </div>
+                                                        <div className={`mt-2 bg-white px-3 py-1.5 rounded-full shadow-lg border border-accent-brown/5 transition-all outline-none ${selectedBranch?.branch.id === item.branch.id ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-1'
+                                                            }`}>
+                                                            <p className="text-[9px] font-black text-accent-brown uppercase tracking-widest whitespace-nowrap">
+                                                                {item.clinicName}
+                                                            </p>
+                                                        </div>
+                                                    </motion.div>
+                                                </AdvancedMarker>
+                                            ))}
 
-                                            {/* Street View Area (70%) */}
-                                            <div className="flex-[0.7] relative">
-                                                <div
-                                                    ref={(el) => {
-                                                        if (el && !streetViewInstance.current) {
-                                                            let pos = null;
-                                                            if (activeMarker === 'user' && userLocation) {
-                                                                pos = { lat: userLocation.lat, lng: userLocation.lng };
-                                                            } else if (activeMarker === 'branch' && selectedBranch?.branch.lat && selectedBranch?.branch.lng) {
-                                                                pos = { lat: selectedBranch.branch.lat, lng: selectedBranch.branch.lng };
-                                                            }
-
-                                                            if (pos) {
-                                                                const m = window.google?.maps;
-                                                                if (m) {
-                                                                    const pano = new m.StreetViewPanorama(el, {
-                                                                        position: pos,
-                                                                        pov: { heading: 0, pitch: 0 },
-                                                                        zoom: 1,
-                                                                        addressControl: false,
-                                                                        fullscreenControl: false,
-                                                                        panControl: false,
-                                                                        enableCloseButton: false,
-                                                                    });
-
-                                                                    pano.addListener('position_changed', () => {
-                                                                        const p = pano.getPosition();
-                                                                        if (p) setPanoPosition({ lat: p.lat(), lng: p.lng() });
-                                                                    });
-
-                                                                    pano.addListener('pov_changed', () => {
-                                                                        const pov = pano.getPov();
-                                                                        setPanoPov({ heading: pov.heading, pitch: pov.pitch });
-                                                                    });
-
-                                                                    streetViewInstance.current = pano;
-                                                                    setPanoPosition(pos);
-                                                                }
-                                                            }
-                                                        }
-                                                    }}
-                                                    className="w-full h-full"
+                                            {/* Directions Layer */}
+                                            {showDirections && selectedBranch && userLocation && (
+                                                <DirectionsLine
+                                                    userLat={userLocation.lat}
+                                                    userLng={userLocation.lng}
+                                                    clinicLat={selectedBranch.branch.lat!}
+                                                    clinicLng={selectedBranch.branch.lng!}
                                                 />
-                                            </div>
+                                            )}
+                                        </Map>
 
-                                            {/* Mini-Map Widget (30%) */}
-                                            <div className="flex-[0.3] relative overflow-hidden border-t-4 border-brand/20 shadow-[0_-20px_50px_rgba(0,0,0,0.3)]">
-                                                <Map
-                                                    mapId="mini-map-sv"
-                                                    center={panoPosition || (activeMarker === 'user' && userLocation ? userLocation : (selectedBranch?.branch.lat && selectedBranch?.branch.lng ? { lat: selectedBranch.branch.lat, lng: selectedBranch.branch.lng } : mapCenter))}
-                                                    zoom={18}
-                                                    disableDefaultUI={true}
-                                                    gestureHandling={'none'}
-                                                    className="w-full h-full grayscale-[0.3] contrast-[1.2]"
+                                        {/* Floating Active Card (Mobile Friendly替代 standard InfoWindows) */}
+                                        <AnimatePresence>
+                                            {selectedBranch && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, x: -50 }}
+                                                    animate={{ opacity: 1, x: 0 }}
+                                                    exit={{ opacity: 0, x: -50 }}
+                                                    className="absolute top-8 left-8 w-[calc(100%-4rem)] max-w-sm bg-white rounded-[1.5rem] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-accent-brown/5 pointer-events-auto z-40"
                                                 >
-                                                    {panoPosition && (
-                                                        <AdvancedMarker position={panoPosition}>
-                                                            <div 
-                                                                className="w-12 h-12 flex items-center justify-center transition-transform duration-200"
-                                                                style={{ transform: `rotate(${panoPov.heading}deg)` }}
-                                                            >
-                                                                <div className="w-6 h-6 bg-blue-500 rounded-full border-[3px] border-white shadow-2xl relative">
-                                                                    {/* Directional Arrow */}
-                                                                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-b-[15px] border-b-blue-500 drop-shadow-lg" />
-                                                                </div>
+                                                    <div className="flex items-start justify-between mb-5">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-11 h-11 bg-brand/10 rounded-xl flex items-center justify-center text-brand">
+                                                                <Store size={22} />
                                                             </div>
-                                                        </AdvancedMarker>
-                                                    )}
-
-                                                    {/* User Marker on Mini-Map */}
-                                                    {activeMarker === 'user' && userLocation && (
-                                                        <AdvancedMarker position={userLocation}>
-                                                            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white border-2 border-white shadow-lg">
-                                                                <User className="w-4 h-4" />
+                                                            <div>
+                                                                <h3 className="text-lg font-black text-accent-brown tracking-tight leading-tight">{selectedBranch.clinicName}</h3>
+                                                                <p className="text-[9px] font-black text-brand uppercase tracking-widest">{selectedBranch.branch.name}</p>
                                                             </div>
-                                                        </AdvancedMarker>
-                                                    )}
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setSelectedBranch(null)}
+                                                            className="w-9 h-9 bg-accent-peach/5 text-accent-brown/30 hover:text-red-500 rounded-full flex items-center justify-center transition-colors"
+                                                        >
+                                                            <X size={18} />
+                                                        </button>
+                                                    </div>
 
-                                                    {/* Target Branch Marker */}
-                                                    {selectedBranch?.branch.lat && selectedBranch?.branch.lng && (
-                                                        <AdvancedMarker position={{ lat: selectedBranch.branch.lat, lng: selectedBranch.branch.lng }}>
-                                                            <div className="w-8 h-8 bg-brand rounded-lg flex items-center justify-center text-white border-2 border-white shadow-lg">
-                                                                <Store className="w-4 h-4" />
+                                                    <div className="grid grid-cols-2 gap-3 mb-5">
+                                                        <div className="bg-accent-peach/5 p-3.5 rounded-xl space-y-1 border border-accent-brown/5">
+                                                            <div className="flex items-center gap-2 text-[7px] font-black text-accent-brown/40 uppercase tracking-widest">
+                                                                <Phone size={9} /> Contact
                                                             </div>
-                                                        </AdvancedMarker>
-                                                    )}
+                                                            <p className="text-xs font-bold text-accent-brown truncate">{selectedBranch.branch.phone}</p>
+                                                        </div>
+                                                        <div className="bg-accent-peach/5 p-3.5 rounded-xl space-y-1 border border-accent-brown/5">
+                                                            <div className="flex items-center gap-2 text-[7px] font-black text-accent-brown/40 uppercase tracking-widest">
+                                                                <Truck size={9} /> Distance
+                                                            </div>
+                                                            <p className="text-xs font-bold text-accent-brown">
+                                                                {userLocation ? calculateDist(userLocation.lat, userLocation.lng, selectedBranch.branch.lat!, selectedBranch.branch.lng!) : '...'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
 
-                                                    {/* Directions on Mini-Map */}
-                                                    {routeBranch && userLocation && routeBranch.branch.lat && routeBranch.branch.lng && showDirections && (
-                                                        <DirectionsLine
-                                                            userLat={userLocation.lat}
-                                                            userLng={userLocation.lng}
-                                                            clinicLat={routeBranch.branch.lat}
-                                                            clinicLng={routeBranch.branch.lng}
-                                                        />
-                                                    )}
-                                                </Map>
-                                                
-                                                {/* Mini-Map Overlay Info */}
-                                                <div className="absolute bottom-4 left-4 bg-brand-dark/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/20">
-                                                    <p className="text-[8px] font-black text-white uppercase tracking-widest">Live Mini-Map</p>
+                                                    <div className="flex gap-2.5">
+                                                        <button
+                                                            onClick={() => setShowDirections(!showDirections)}
+                                                            className={`flex-1 py-3.5 rounded-lg font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg ${showDirections ? 'bg-accent-brown text-white' : 'bg-brand text-white shadow-brand/20 hover:brightness-110'}`}
+                                                        >
+                                                            <Navigation2 size={12} /> {showDirections ? 'Hide Directions' : 'Navigate Here'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setShowStreetView(true)}
+                                                            className="px-5 py-3.5 bg-white border border-accent-brown/5 text-accent-brown rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-accent-peach/5 flex items-center justify-center"
+                                                        >
+                                                            <Eye size={16} />
+                                                        </button>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+
+                                        {/* Map Overlay Controls */}
+                                        <div className="absolute top-8 right-8 flex flex-col gap-3">
+                                            <button
+                                                onClick={() => {
+                                                    if (userLocation) setMapCenter(userLocation);
+                                                }}
+                                                className="w-14 h-14 bg-white rounded-2xl shadow-xl flex items-center justify-center text-accent-brown hover:text-brand transition-all border border-accent-brown/5 group"
+                                                title="My Location"
+                                            >
+                                                <Navigation2 className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                                            </button>
+                                            <button
+                                                onClick={() => setMapCenter({ lat: 14.5995, lng: 120.9842 })}
+                                                className="w-14 h-14 bg-white rounded-2xl shadow-xl flex items-center justify-center text-accent-brown hover:text-brand transition-all border border-accent-brown/5 group"
+                                                title="Full Network View"
+                                            >
+                                                <LayoutGrid className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                                            </button>
+                                        </div>
+
+                                    </motion.div>
+                                ) : (
+                                    <motion.div
+                                        key="street-view"
+                                        initial={{ opacity: 0, scale: 1.1 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.95 }}
+                                        className="h-full w-full bg-[#0a0a0a] flex flex-col"
+                                    >
+                                        {/* Street View Top Bar */}
+                                        <div className="absolute top-8 left-8 right-8 z-[110] flex items-center justify-between pointer-events-none">
+                                            <div className="px-6 py-3 bg-brand-dark/80 backdrop-blur-md border border-white/20 rounded-2xl pointer-events-auto">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 bg-brand rounded-xl flex items-center justify-center text-white">
+                                                        <Store size={16} />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-[11px] font-black text-white leading-none mb-1">{selectedBranch?.clinicName || 'Clinic View'}</h4>
+                                                        <p className="text-[8px] font-black text-white/50 uppercase tracking-widest">{selectedBranch?.branch.name}</p>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
-                        </motion.div>
-                    </>
-                )}
+                                            <button
+                                                onClick={() => {
+                                                    setShowStreetView(false);
+                                                    streetViewInstance.current = null;
+                                                }}
+                                                className="w-14 h-14 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 flex items-center justify-center text-white hover:bg-red-500 hover:border-red-500 transition-all pointer-events-auto shadow-2xl group"
+                                            >
+                                                <X className="w-6 h-6 group-hover:rotate-90 transition-transform" />
+                                            </button>
+                                        </div>
 
-            </div>
-        </DashboardLayout>
+                                        {/* Main Pano View */}
+                                        <div className="flex-1 relative bg-black">
+                                            <div
+                                                ref={(el) => {
+                                                    if (el && !streetViewInstance.current) {
+                                                        const pos = selectedBranch?.branch.lat && selectedBranch?.branch.lng
+                                                            ? { lat: selectedBranch.branch.lat, lng: selectedBranch.branch.lng }
+                                                            : (userLocation || mapCenter);
+
+                                                        const m = window.google?.maps;
+                                                        if (m) {
+                                                            const pano = new m.StreetViewPanorama(el, {
+                                                                position: pos,
+                                                                pov: { heading: 0, pitch: 0 },
+                                                                zoom: 1,
+                                                                addressControl: false,
+                                                                fullscreenControl: false,
+                                                                panControl: true,
+                                                                enableCloseButton: false,
+                                                            });
+
+                                                            pano.addListener('position_changed', () => {
+                                                                const p = pano.getPosition();
+                                                                if (p) setPanoPosition({ lat: p.lat(), lng: p.lng() });
+                                                            });
+
+                                                            pano.addListener('pov_changed', () => {
+                                                                const pov = pano.getPov();
+                                                                setPanoPov({ heading: pov.heading, pitch: pov.pitch });
+                                                            });
+
+                                                            streetViewInstance.current = pano;
+                                                            setPanoPosition(pos);
+                                                        }
+                                                    }
+                                                }}
+                                                className="w-full h-full grayscale-[0.1]"
+                                            />
+                                        </div>
+
+                                        {/* Fixed Mini Map Overlay */}
+                                        <div className="absolute bottom-8 right-8 w-64 h-64 rounded-3xl overflow-hidden border-4 border-white/20 shadow-2xl z-[120] grayscale-[0.2]">
+                                            <Map
+                                                mapId="mini-map-sv"
+                                                center={panoPosition || mapCenter}
+                                                zoom={18}
+                                                disableDefaultUI={true}
+                                                gestureHandling={'none'}
+                                                className="w-full h-full"
+                                            >
+                                                {panoPosition && (
+                                                    <AdvancedMarker position={panoPosition}>
+                                                        <div
+                                                            className="w-12 h-12 flex items-center justify-center transition-transform duration-200"
+                                                            style={{ transform: `rotate(${panoPov.heading}deg)` }}
+                                                        >
+                                                            <div className="w-6 h-6 bg-blue-500 rounded-full border-[3px] border-white shadow-2xl relative">
+                                                                <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[12px] border-b-blue-500" />
+                                                            </div>
+                                                        </div>
+                                                    </AdvancedMarker>
+                                                )}
+
+                                                {selectedBranch?.branch.lat && selectedBranch?.branch.lng && (
+                                                    <AdvancedMarker position={{ lat: selectedBranch.branch.lat, lng: selectedBranch.branch.lng }}>
+                                                        <div className="w-8 h-8 bg-brand rounded-xl flex items-center justify-center text-white border-2 border-white shadow-lg">
+                                                            <Store size={16} />
+                                                        </div>
+                                                    </AdvancedMarker>
+                                                )}
+                                            </Map>
+                                            <div className="absolute top-3 left-3 px-2 py-1 bg-brand-dark/80 backdrop-blur rounded text-[7px] font-black text-white uppercase tracking-widest">Live Radar</div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </motion.div>
+
+                    </div>
+
+                </div>
+            </DashboardLayout>
+        </APIProvider>
     );
 }

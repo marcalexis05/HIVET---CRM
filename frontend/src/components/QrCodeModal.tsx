@@ -28,7 +28,7 @@ const QrCodeModal: React.FC<QrCodeModalProps> = ({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-accent-brown/30 backdrop-blur-xl"
+                    className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-[#FDF0D5]"
                 >
                     <motion.div
                         initial={{ scale: 0.9, opacity: 0, y: 30 }}

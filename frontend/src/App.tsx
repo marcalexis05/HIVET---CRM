@@ -35,6 +35,7 @@ import CustomerOrders from './pages/dashboard/CustomerOrdersList';
 import Checkout from './pages/dashboard/Checkout';
 import ClinicMap from './pages/dashboard/ClinicMap';
 import PaymentSuccess from './pages/dashboard/PaymentSuccess';
+import ReservationCheckout from './pages/dashboard/ReservationCheckout';
 import ReservationPaymentSuccess from './pages/dashboard/ReservationPaymentSuccess';
 import BusinessDashboard from './pages/dashboard/BusinessDashboard';
 import BusinessOrders from './pages/dashboard/BusinessOrders';
@@ -352,6 +353,14 @@ function App() {
                     element={
                       <ProtectedRoute allowedRoles={['customer']}>
                         <CustomerReservations />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/customer/reservations/checkout"
+                    element={
+                      <ProtectedRoute allowedRoles={['customer']}>
+                        <ReservationCheckout />
                       </ProtectedRoute>
                     }
                   />

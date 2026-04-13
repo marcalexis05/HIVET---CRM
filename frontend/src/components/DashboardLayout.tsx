@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { NavLink, useNavigate, Link, useLocation } from 'react-router-dom';
@@ -14,11 +14,12 @@ interface DashboardLayoutProps {
     children: ReactNode;
     title: string;
     hideHeader?: boolean;
+    hideFooter?: boolean;
     branchContext?: { id: number | null; name: string; address?: string };
     branchAction?: ReactNode;
 }
 
-const DashboardLayout = ({ children, title, hideHeader = false, branchContext, branchAction }: DashboardLayoutProps) => {
+const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = false, branchContext, branchAction }: DashboardLayoutProps) => {
     const { user, logout } = useAuth();
     const { items, totalItems, removeFromCart, updateQuantity } = useCart();
     const navigate = useNavigate();
@@ -28,6 +29,47 @@ const DashboardLayout = ({ children, title, hideHeader = false, branchContext, b
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [notifications, setNotifications] = useState<any[]>([]);
+    const itemsRef = useRef(items);
+    useEffect(() => {
+        itemsRef.current = items;
+    }, [items]);
+
+    const handleQuantityInput = (item: any, value: string) => {
+        let num = parseInt(value.replace(/[^0-9]/g, ''));
+        if (isNaN(num)) num = 1;
+        updateQuantity(item.id, num, item.variant, item.size);
+    };
+
+    // Long press logic
+    const timerRef = useRef<any>(null);
+    const intervalRef = useRef<any>(null);
+
+    const startCounter = (item: any, increment: boolean) => {
+        const initialItem = itemsRef.current.find(i => i.id === item.id && i.variant === item.variant && i.size === item.size);
+        if (!initialItem) return;
+
+        const newQty = increment ? initialItem.quantity + 1 : initialItem.quantity - 1;
+        updateQuantity(initialItem.id, newQty, initialItem.variant, initialItem.size);
+        
+        timerRef.current = setTimeout(() => {
+            let speed = 100;
+            const run = () => {
+                const currentItem = itemsRef.current.find(i => i.id === item.id && i.variant === item.variant && i.size === item.size);
+                if (currentItem) {
+                    const nextQty = increment ? currentItem.quantity + 1 : currentItem.quantity - 1;
+                    updateQuantity(item.id, nextQty, item.variant, item.size);
+                    intervalRef.current = setTimeout(run, speed);
+                    if (speed > 30) speed -= 10;
+                }
+            };
+            run();
+        }, 400);
+    };
+
+    const stopCounter = () => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        if (intervalRef.current) clearTimeout(intervalRef.current);
+    };
 
     const fetchNotifications = async () => {
         const token = localStorage.getItem('hivet_token');
@@ -142,13 +184,13 @@ const DashboardLayout = ({ children, title, hideHeader = false, branchContext, b
     ];
 
     const userLinks = [
-        { name: 'My Hub', path: '/dashboard/customer', icon: LayoutDashboard },
-        { name: 'Product Catalog', path: '/dashboard/customer/catalog', icon: ShoppingBag },
-        { name: 'My Orders', path: '/dashboard/customer/orders', icon: ShoppingBag },
-        { name: 'Reservations', path: '/dashboard/customer/reservations', icon: Calendar },
+        { name: 'Dashboard', path: '/dashboard/customer', icon: LayoutDashboard },
+        { name: 'Catalog', path: '/dashboard/customer/catalog', icon: ShoppingBag },
+        { name: 'Orders', path: '/dashboard/customer/orders', icon: ShoppingBag },
+        { name: 'Visits', path: '/dashboard/customer/reservations', icon: Calendar },
         { name: 'Clinic Map', path: '/dashboard/customer/map', icon: MapPin },
-        { name: 'Loyalty Rewards', path: '/dashboard/customer/loyalty', icon: Award },
-        { name: 'Alert Center', path: '/dashboard/customer/alerts', icon: Bell },
+        { name: 'Rewards', path: '/dashboard/customer/loyalty', icon: Award },
+        { name: 'Alerts', path: '/dashboard/customer/alerts', icon: Bell },
         { name: 'Account', path: '/dashboard/customer/account', icon: UserCircle },
     ];
 
@@ -188,32 +230,32 @@ const DashboardLayout = ({ children, title, hideHeader = false, branchContext, b
         <div className={`min-h-screen flex flex-col ${user?.role === 'rider' ? 'bg-[#FAF9F6]' : 'bg-accent-peach/20'}`}>
             {/* Top Navigation Bar */}
             {!hideHeader && (
-                <nav className="bg-white border-b border-accent-brown/5 shadow-xl shadow-accent-brown/5 fixed top-0 left-0 right-0 z-50 h-20 sm:h-24">
-                <div className="max-w-[1920px] mx-auto px-4 sm:px-6 h-full flex items-center justify-between gap-4">
+                <nav className="bg-white border-b border-accent-brown/5 shadow-xl shadow-accent-brown/5 fixed top-0 left-0 right-0 z-50 h-18 sm:h-22">
+                <div className="max-w-[1920px] mx-auto px-4 sm:px-8 h-full flex items-center justify-between gap-6">
                     {/* Brand */}
                     <MotionLink 
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         to={`/dashboard/${basePath}`} 
-                        className="flex items-center gap-2 sm:gap-3 shrink-0 transition-opacity cursor-pointer"
+                        className="flex items-center gap-2.5 sm:gap-3.5 shrink-0 transition-opacity cursor-pointer"
                     >
-                        <div className="w-9 h-9 sm:w-11 sm:h-11 bg-white rounded-xl shadow-md shadow-brand/10 flex items-center justify-center p-1 shrink-0">
+                        <div className="w-9 h-9 sm:w-11 sm:h-11 bg-white rounded-xl shadow-md shadow-brand/10 flex items-center justify-center p-1.5 shrink-0 border border-brand/5">
                             <Logo className="w-full h-full" />
                         </div>
                         <div className="flex flex-col min-w-0">
-                            <h2 className="text-base sm:text-xl lg:text-2xl font-black text-accent-brown tracking-tight leading-none truncate">{user?.clinic_name || 'Hi-Vet'}</h2>
-                            <p className="text-[10px] sm:text-[12px] lg:text-[13px] mt-0.5 sm:mt-1 font-bold text-accent-brown transition-all whitespace-nowrap">
-                                {user?.role === 'super_admin' ? 'Super Admin Portal' : 
-                                 user?.role === 'system_admin' ? 'System Admin Portal' : 
-                                 user?.role === 'business' ? 'Partner Portal' : 
-                                 user?.role === 'rider' ? 'Rider Portal' : 
-                                 'Customer Portal'}
+                            <h2 className="text-base sm:text-xl lg:text-[22px] font-black text-accent-brown tracking-tighter leading-none truncate">{user?.clinic_name || 'Hi-Vet'}</h2>
+                            <p className="text-[10px] sm:text-[11px] lg:text-[12px] mt-0.5 font-bold text-accent-brown transition-all whitespace-nowrap opacity-60 uppercase tracking-widest">
+                                {user?.role === 'super_admin' ? 'Super Admin' : 
+                                 user?.role === 'system_admin' ? 'System Admin' : 
+                                 user?.role === 'business' ? 'Partner' : 
+                                 user?.role === 'rider' ? 'Rider' : 
+                                 'Customer'}
                             </p>
                         </div>
                     </MotionLink>
 
                     {/* Desktop Navigation Links */}
-                    <div className="hidden lg:flex items-center justify-center flex-1 gap-1">
+                    <div className="hidden lg:flex items-center justify-center flex-1 gap-1 xl:gap-2">
                         {links?.map((link) => (
                             <NavLink
                                 key={link?.name}
@@ -222,26 +264,26 @@ const DashboardLayout = ({ children, title, hideHeader = false, branchContext, b
                                 className={({ isActive }) => {
                                     const hasSearch = link?.path?.includes('?') || false;
                                     const actuallyActive = hasSearch ? (location.pathname + location.search === link?.path) : isActive;
-                                    return `flex items-center gap-2 px-3 xl:px-4 py-2.5 rounded-full font-black text-[13px] xl:text-[14px] transition-all cursor-pointer ${actuallyActive
-                                        ? 'bg-brand-dark text-white shadow-lg shadow-brand-dark/20'
+                                    return `flex items-center gap-2 px-3 xl:px-4 py-2.5 rounded-full font-black text-[12px] xl:text-[13px] transition-all cursor-pointer whitespace-nowrap ${actuallyActive
+                                        ? 'bg-brand text-white shadow-lg shadow-brand/20'
                                         : 'text-accent-brown hover:text-brand hover:bg-brand/5'
                                     }`
                                 }}
                             >
-                                <link.icon className="w-4 h-4" />
-                                <span className="hidden xl:inline">{link?.name}</span>
+                                <link.icon className="w-4 h-4 shrink-0" />
+                                <span className="inline">{link?.name}</span>
                             </NavLink>
                         ))}
                     </div>
 
                     {/* Right Actions */}
-                    <div className="flex items-center gap-2 sm:gap-6 shrink-0">
+                    <div className="flex items-center gap-3 sm:gap-5 shrink-0">
                         {user?.role === 'customer' && (
                             <motion.button
                                 onClick={() => setIsCartOpen(true)}
-                                className="relative w-10 h-10 sm:w-12 sm:h-12 bg-brand-dark/5 rounded-xl sm:rounded-2xl flex items-center justify-center text-brand-dark hover:text-white hover:bg-brand hover:shadow-lg hover:shadow-brand/20 transition-all cursor-pointer"
+                                className="relative w-9 h-9 sm:w-12 sm:h-12 bg-brand-dark/5 rounded-xl sm:rounded-2xl flex items-center justify-center text-brand-dark hover:text-white hover:bg-brand hover:shadow-lg hover:shadow-brand/20 transition-all cursor-pointer"
                             >
-                                <ShoppingCart className="w-5 h-5" />
+                                <ShoppingCart className="w-4.5 h-4.5" />
                                 {totalItems > 0 && (
                                     <span className="absolute -top-1 -right-1 w-5 h-5 bg-brand-dark text-white text-[9px] font-black flex items-center justify-center rounded-full border-2 border-white">
                                         {totalItems}
@@ -249,6 +291,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, branchContext, b
                                 )}
                             </motion.button>
                         )}
+
                         {branchAction && (
                             <div className="hidden lg:block">
                                 {branchAction}
@@ -257,12 +300,11 @@ const DashboardLayout = ({ children, title, hideHeader = false, branchContext, b
                         <div className="relative">
                             <motion.button
                                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                                className={`relative w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer ${isNotificationsOpen ? 'bg-brand-dark shadow-lg shadow-brand-dark/20 text-white' : 'bg-brand-dark/5 text-brand-dark hover:text-white hover:bg-brand hover:shadow-lg hover:shadow-brand/20'
-                                    }`}
+                                className={`relative w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer ${isNotificationsOpen ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'bg-slate-100 text-accent-brown/40 hover:text-accent-brown hover:bg-slate-200'}`}
                             >
-                                <Bell className="w-5 h-5" />
-                                {unreadCount > 0 && (
-                                    <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-brand-dark rounded-full border-2 border-white"></span>
+                                <Bell className="w-4.5 h-4.5" />
+                                {notifications.filter(n => !n.read).length > 0 && (
+                                    <span className={`absolute top-2.5 right-2.5 w-2 h-2 rounded-full border-2 border-white ${isNotificationsOpen ? 'bg-white' : 'bg-rose-500 animate-pulse'}`}></span>
                                 )}
                             </motion.button>
 
@@ -279,13 +321,13 @@ const DashboardLayout = ({ children, title, hideHeader = false, branchContext, b
                                             } as any}
                                             className="fixed xs:absolute right-4 xs:right-0 top-[88px] xs:top-auto mt-2 w-[calc(100vw-2rem)] xs:w-[400px] bg-white rounded-3xl shadow-2xl border border-brand-dark/5 z-50 overflow-hidden origin-top-right"
                                         >
-                                            <div className="p-5 sm:p-6 border-b border-brand-dark/5 flex items-center justify-between bg-accent-peach/10">
+                                            <div className="p-5 sm:p-6 border-b border-accent-brown/5 flex items-center justify-between bg-accent-peach/10">
                                                 <div className="flex items-center gap-2">
-                                                    <Bell className="w-3.5 h-3.5 text-brand-dark" />
-                                                    <h3 className="font-black text-accent-brown text-sm uppercase tracking-tighter">Alert Center</h3>
+                                                    <Bell className="w-3.5 h-3.5 text-brand" />
+                                                    <h3 className="font-black text-accent-brown text-sm uppercase tracking-tighter italic">Notifications</h3>
                                                 </div>
                                                 {unreadCount > 0 && (
-                                                    <button onClick={markAllAsRead} className="text-[9px] font-black text-accent-brown uppercase tracking-widest hover:underline bg-white px-3 py-1 rounded-full shadow-sm cursor-pointer">Mark all read</button>
+                                                    <button onClick={markAllAsRead} className="text-[9px] font-black text-accent-brown uppercase tracking-widest hover:underline bg-white px-3 py-1 rounded-full shadow-sm cursor-pointer">Mark all as read</button>
                                                 )}
                                             </div>
                                             <div className="max-h-[350px] sm:max-h-[450px] overflow-y-auto no-scrollbar">
@@ -339,13 +381,13 @@ const DashboardLayout = ({ children, title, hideHeader = false, branchContext, b
                                                     ))
                                                 )}
                                             </div>
-                                            <div className="p-4 bg-accent-peach/5 text-center border-t border-brand-dark/5">
+                                            <div className="p-4 bg-accent-peach/5 text-center border-t border-accent-brown/5">
                                                 <Link
                                                     to={`/dashboard/${basePath}/alerts`}
                                                     onClick={() => setIsNotificationsOpen(false)}
                                                     className="inline-flex items-center gap-2 text-[10px] font-black text-accent-brown uppercase tracking-widest hover:gap-3 transition-all cursor-pointer"
                                                 >
-                                                    View Alert Center <Plus className="w-3 h-3 text-brand" />
+                                                    View All Notifications <Plus className="w-3 h-3 text-brand" />
                                                 </Link>
                                             </div>
                                         </motion.div>
@@ -357,16 +399,16 @@ const DashboardLayout = ({ children, title, hideHeader = false, branchContext, b
                         <div className="w-[1px] h-6 sm:h-8 bg-brand-dark/10 hidden xs:block"></div>
 
                         {/* Desktop User Info & Logout */}
-                        <div className="hidden lg:flex items-center gap-2 xl:gap-4">
+                        <div className="hidden lg:flex items-center gap-3 xl:gap-6">
                             <div className="hidden xl:flex flex-col items-end min-w-0">
-                                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-accent-brown/50 leading-none">Welcome back,</span>
-                                <span className="text-[14px] font-black text-accent-brown truncate max-w-[180px] tracking-tight">{user?.name ?? user?.email}</span>
+                                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-accent-brown/50 leading-none mb-1">Welcome back,</span>
+                                <span className="text-[14px] xl:text-[16px] font-black text-accent-brown truncate max-w-[180px] tracking-tighter">{user?.name ?? user?.email}</span>
                             </div>
                             <motion.button
                                 whileHover={{ scale: 1.1, rotate: -5 }}
                                 whileTap={{ scale: 0.9, rotate: 5 }}
                                 onClick={handleLogout}
-                                className="w-9 h-9 sm:w-11 sm:h-11 bg-red-50 text-red-500 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white hover:shadow-lg hover:shadow-red-500/20 transition-all cursor-pointer shrink-0"
+                                className="w-10 h-10 sm:w-12 sm:h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center hover:bg-red-500 hover:text-white hover:shadow-xl hover:shadow-red-500/20 transition-all cursor-pointer shrink-0"
                                 title="Log Out"
                             >
                                 <LogOut className="w-4.5 h-4.5 sm:w-5 h-5" />
@@ -386,24 +428,26 @@ const DashboardLayout = ({ children, title, hideHeader = false, branchContext, b
             )}
 
             {/* Main Content */}
-            <main className={`flex-1 flex flex-col w-full max-w-[1920px] mx-auto px-3 sm:px-8 xl:px-12 ${hideHeader ? 'pt-6' : 'pt-24 sm:pt-28 lg:pt-32'} pb-10 lg:pb-16 relative z-10 transition-all`}>
+            <main className={`flex-1 flex flex-col w-full px-2 sm:px-4 lg:px-6 ${hideHeader ? 'pt-6' : 'pt-24 sm:pt-28 lg:pt-30'} pb-10 lg:pb-16`}>
 
-                <div className="mb-8 sm:mb-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-                    <div className="flex flex-col gap-1">
-                        <h1 className={`text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-black text-accent-brown tracking-tighter leading-none ${user?.role === 'rider' ? 'tracking-[-0.02em]' : ''}`}>
-                            {title}
-                        </h1>
-                        {branchContext?.id && (
-                            <div className="flex items-center gap-1.5 text-brand-dark font-black text-[10px] uppercase tracking-widest bg-brand/10 px-3 py-1 rounded-full self-start mt-4">
-                                <MapPin className="w-3 h-3" />
-                                {branchContext?.name}
-                                {branchContext?.address && (
-                                    <span className="text-brand-dark/40 font-medium normal-case ml-1">| {branchContext?.address}</span>
-                                )}
-                            </div>
-                        )}
+                {title && (
+                    <div className="mb-8 sm:mb-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                        <div className="flex flex-col gap-1">
+                            <h1 className={`text-2xl sm:text-3xl md:text-4xl font-black text-accent-brown tracking-tighter leading-tight ${user?.role === 'rider' ? 'tracking-[-0.02em]' : ''}`}>
+                                {title}
+                            </h1>
+                            {branchContext?.id && (
+                                <div className="flex items-center gap-1.5 text-brand-dark font-black text-[10px] uppercase tracking-widest bg-brand/10 px-3 py-1 rounded-full self-start mt-4">
+                                    <MapPin className="w-3 h-3" />
+                                    {branchContext?.name}
+                                    {branchContext?.address && (
+                                        <span className="text-brand-dark/40 font-medium normal-case ml-1">| {branchContext?.address}</span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
 
                 <motion.div
                     initial={{ opacity: 0, y: 15 }}
@@ -416,7 +460,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, branchContext, b
             </main>
 
             {/* Dashboard Footer */}
-            {user?.role === 'customer' && <Footer />}
+            {user?.role === 'customer' && !hideFooter && !isCartOpen && !isNotificationsOpen && <Footer />}
 
             {/* Mobile Navigation Sidebar */}
             <AnimatePresence>
@@ -572,17 +616,31 @@ const DashboardLayout = ({ children, title, hideHeader = false, branchContext, b
                                                 )}
                                                 <div className="flex items-center justify-between mt-2">
                                                     <span className="font-black text-brand-dark">₱{item.price}</span>
-                                                    <div className="flex items-center gap-2 bg-accent-peach/20 rounded-lg p-1">
+                                                    <div className="flex items-center gap-1 bg-accent-peach/20 rounded-lg p-1">
                                                         <button
-                                                            onClick={() => updateQuantity(item.id, item.quantity - 1, item.variant, item.size)}
-                                                            className="w-6 h-6 bg-white rounded-md flex items-center justify-center text-brand-dark shadow-sm"
+                                                            onMouseDown={() => startCounter(item, false)}
+                                                            onMouseUp={stopCounter}
+                                                            onMouseLeave={stopCounter}
+                                                            onTouchStart={() => startCounter(item, false)}
+                                                            onTouchEnd={stopCounter}
+                                                            className="w-6 h-6 bg-white rounded-md flex items-center justify-center text-brand-dark shadow-sm select-none"
                                                         >
                                                             <Minus className="w-3 h-3" />
                                                         </button>
-                                                        <span className="text-xs font-black text-brand-dark w-4 text-center">{item.quantity}</span>
+                                                        <input 
+                                                            type="text"
+                                                            inputMode="numeric"
+                                                            value={item.quantity}
+                                                            onChange={(e) => handleQuantityInput(item, e.target.value)}
+                                                            className="text-[10px] font-black text-brand-dark w-6 bg-transparent text-center outline-none"
+                                                        />
                                                         <button
-                                                            onClick={() => updateQuantity(item.id, item.quantity + 1, item.variant, item.size)}
-                                                            className="w-6 h-6 bg-white rounded-md flex items-center justify-center text-brand-dark shadow-sm"
+                                                            onMouseDown={() => startCounter(item, true)}
+                                                            onMouseUp={stopCounter}
+                                                            onMouseLeave={stopCounter}
+                                                            onTouchStart={() => startCounter(item, true)}
+                                                            onTouchEnd={stopCounter}
+                                                            className="w-6 h-6 bg-white rounded-md flex items-center justify-center text-brand-dark shadow-sm select-none"
                                                         >
                                                             <Plus className="w-3 h-3" />
                                                         </button>
@@ -625,6 +683,8 @@ const DashboardLayout = ({ children, title, hideHeader = false, branchContext, b
                                         disabled={hasStockError || selectedCount === 0}
                                         onClick={() => {
                                             setIsCartOpen(false);
+                                            // Clear any old resume-payment state
+                                            localStorage.removeItem('hivet_checkout_paying_order');
                                             // Filter items to only selected ones before navigating
                                             const checkoutItems = items.filter(i => selectedItems.has(`${i.id}-${i.variant}-${i.size}`));
                                             localStorage.setItem('hivet_checkout_filtered', JSON.stringify(checkoutItems));

@@ -1654,178 +1654,144 @@ async def send_bespoke_reservation_email(to_email: str, receipt_data: dict, is_b
     <head>
         <meta charset="utf-8">
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap');
-            body {{ margin: 0; padding: 0; background-color: #F8FAFC; font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }}
+            @import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,700;0,900;1,700;1,900&display=swap');
+            body {{ margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }}
             .surface {{ padding: 60px 20px; text-align: center; }}
-            .container {{ max-width: 580px; margin: 0 auto; text-align: left; }}
+            .container {{ max-width: 450px; margin: 0 auto; text-align: left; }}
             
-            .card {{
-                background-color: #ffffff;
-                border-radius: 12px;
-                padding: 45px;
-                margin-bottom: 24px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-                border: 1px solid rgba(0,0,0,0.02);
+            .receipt-card {{
+                background-color: #FF6B00;
+                border-radius: 40px;
+                padding: 40px 32px;
+                color: #ffffff;
+                box-shadow: 0 25px 50px -12px rgba(255, 107, 0, 0.25);
+                position: relative;
+                overflow: hidden;
             }}
             
-            .header-info {{ color: #ea580c; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }}
-            .header-addr {{ color: #64748B; font-size: 13px; font-weight: 500; margin-bottom: 20px; line-height: 1.4; }}
-            .amount-container {{ display: table; width: 100%; margin-bottom: 8px; }}
-            .amount-text {{ font-size: 52px; font-weight: 900; color: #ea580c; letter-spacing: -2px; line-height: 1; }}
-            .amount-currency {{ font-size: 40px; font-weight: 700; vertical-align: top; margin-right: 2px; }}
-            .date-subtitle {{ color: #64748B; font-size: 14px; font-weight: 500; margin-bottom: 40px; }}
+            .title-area {{ display: table; width: 100%; margin-bottom: 30px; }}
+            .receipt-title {{ font-size: 24px; font-weight: 900; font-style: italic; letter-spacing: -1px; margin: 0; display: table-cell; vertical-align: middle; }}
+            .tag-icon {{ display: table-cell; text-align: right; vertical-align: middle; }}
             
-            .divider {{ height: 1px; background-color: #F1F5F9; margin: 30px 0; }}
+            .section-label {{ font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; color: rgba(255, 255, 255, 0.4); margin-bottom: 12px; display: block; }}
             
-            .text-link-group {{ margin: 25px 0; }}
-            .text-link {{ 
-                color: #64748B; 
-                text-decoration: none; 
-                font-size: 13px; 
-                font-weight: 600; 
-                margin-right: 25px; 
-                display: inline-flex; 
-                align-items: center; 
-            }}
+            .info-block {{ display: table; width: 100%; margin-bottom: 24px; }}
+            .info-icon {{ display: table-cell; width: 48px; }}
+            .info-icon-inner {{ background-color: rgba(255,255,255,0.2); width: 40px; height: 40px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); display: inline-block; }}
+            .info-text-cell {{ display: table-cell; vertical-align: middle; }}
+            .info-title {{ font-size: 10px; font-weight: 900; margin: 0 0 2px 0; color: #ffffff; letter-spacing: 0.5px; text-transform: uppercase; font-style: italic; }}
+            .info-subtitle {{ font-size: 9px; font-weight: 700; color: rgba(255, 255, 255, 0.6); margin: 0; letter-spacing: 1px; }}
             
-            .data-grid {{ width: 100%; margin-top: 25px; border-collapse: collapse; }}
-            .data-label {{ color: #64748B; font-size: 14px; font-weight: 500; padding: 8px 0; vertical-align: top; width: 50%; }}
-            .data-value {{ color: #1E293B; font-size: 14px; font-weight: 600; padding: 8px 0; text-align: right; }}
+            .procedure-row {{ display: table; width: 100%; margin-bottom: 35px; border-top: 1px solid rgba(255, 255, 255, 0.2); padding-top: 24px; }}
+            .procedure-details {{ display: table-cell; vertical-align: middle; }}
+            .procedure-price {{ display: table-cell; vertical-align: middle; text-align: right; font-size: 14px; font-weight: 900; font-variant-numeric: tabular-nums; }}
             
-            .item-header {{ color: #1E293B; font-size: 15px; font-weight: 700; margin-bottom: 4px; }}
-            .item-subheader {{ color: #64748B; font-size: 13px; font-weight: 500; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 0.5px; }}
+            .math-row {{ display: table; width: 100%; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; }}
+            .math-label {{ display: table-cell; color: rgba(255, 255, 255, 0.6); }}
+            .math-value {{ display: table-cell; text-align: right; color: #ffffff; }}
             
-            .invoice-table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-            .invoice-row-main td {{ padding: 20px 0 5px 0; border-top: 1px solid #F1F5F9; }}
-            .invoice-row-sub td {{ padding: 0 0 20px 0; }}
+            .total-section {{ border-top: 1px solid rgba(255, 255, 255, 0.2); padding-top: 30px; display: table; width: 100%; margin-bottom: 15px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); padding-bottom: 30px; }}
+            .total-info {{ display: table-cell; vertical-align: bottom; }}
+            .total-big {{ font-size: 36px; font-weight: 900; font-style: italic; letter-spacing: -2px; margin: 0; line-height: 1; }}
             
-            .invoice-label {{ font-size: 15px; font-weight: 700; color: #1E293B; }}
-            .invoice-price {{ font-size: 15px; font-weight: 700; color: #ea580c; text-align: right; }}
-            .invoice-desc {{ font-size: 13px; font-weight: 500; color: #64748B; }}
-            
-            .totals-row td {{ padding: 12px 0; border-top: 1px solid #F1F5F9; }}
-            .totals-label {{ font-size: 15px; font-weight: 700; color: #1E293B; }}
-            .totals-value {{ font-size: 15px; font-weight: 700; color: #ea580c; text-align: right; }}
-            
-            .footer-note {{ color: #94A3B8; font-size: 13px; font-weight: 500; margin-top: 30px; border-top: 1px solid #F1F5F9; padding-top: 20px; }}
-            .footer-link {{ color: #3B82F6; text-decoration: none; font-weight: 600; }}
-            
-            .voucher-pill {{ 
-                background-color: #F8FAFC; 
-                color: #1E293B; 
-                font-size: 10px; 
-                font-weight: 700; 
-                padding: 4px 8px; 
-                border-radius: 4px; 
-                border: 1px solid #E2E8F0;
-                display: inline-block;
-                margin-top: 4px;
-            }}
-            
-            .qr-container {{ 
-                margin-top: 30px; 
-                padding: 20px; 
-                background: #F8FAFC; 
-                border-radius: 12px; 
+            .qr-container {{
                 text-align: center;
-                border: 1px solid #F1F5F9;
+                background-color: #ffffff;
+                border: 2px solid #D1FAE5;
+                padding: 24px;
+                border-radius: 24px;
+                margin-top: 24px;
+                display: flex;
+                align-items: center;
             }}
-            .qr-image {{ width: 140px; height: 140px; margin-bottom: 12px; }}
-            .qr-hint {{ font-size: 11px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; }}
-
-            @media only screen and (max-width: 600px) {{
+            .qr-text {{ text-align: left; padding-left: 16px; }}
+            .qr-text-top {{ color: #065F46; font-size: 10px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 4px 0; }}
+            .qr-text-bot {{ color: #059669; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin: 0; opacity: 0.8; }}
+            .qr-image {{ width: 80px; height: 80px; }}
+            
+            @media only screen and (max-width: 500px) {{
                 .surface {{ padding: 30px 15px; }}
-                .card {{ padding: 25px; }}
-                .amount-text {{ font-size: 40px; }}
-                .text-link {{ display: block; margin-bottom: 12px; }}
+                .receipt-card {{ padding: 30px 24px; border-radius: 30px; }}
+                .total-big {{ font-size: 32px; }}
             }}
         </style>
     </head>
     <body>
         <div class="surface">
             <div class="container">
-                <!-- CARD 1: SUMMARY -->
-                <div class="card">
-                    <div class="header-info">{receipt_data.get('clinic_name', 'Hi-Vet Clinic')}</div>
-                    <div class="header-addr">{receipt_data.get('location', 'Main Branch')}</div>
-                    <div class="amount-container">
-                        <span class="amount-text">{receipt_data.get('total_amount')}</span>
+                <div class="receipt-card">
+                    <div class="title-area">
+                        <h3 class="receipt-title">Receipt Summary</h3>
                     </div>
-                    <div class="date-subtitle">Finalized on {receipt_data.get('date')}</div>
                     
-                    <div class="divider"></div>
-
-                    <table class="data-grid">
-                        <tr>
-                            <td class="data-label">Receipt number</td>
-                            <td class="data-value">{receipt_data.get('reservation_id')}</td>
-                        </tr>
-                        <tr>
-                            <td class="data-label">Customer Name</td>
-                            <td class="data-value">{receipt_data.get('customer_name')}</td>
-                        </tr>
-                        <tr>
-                            <td class="data-label">Pet Name</td>
-                            <td class="data-value">{receipt_data.get('pet_name')}</td>
-                        </tr>
-                        <tr>
-                            <td class="data-label">Payment method</td>
-                            <td class="data-value">
-                                {f"Voucher Redemption" if receipt_data.get('voucher_code') else "Electronic Settlement"}
-                            </td>
-                        </tr>
-                    </table>
-
-                    <div class="qr-container">
-                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={receipt_data.get('qr_content')}" class="qr-image" alt="Receipt QR">
-                        <div class="qr-hint">Scan to verify authenticity</div>
+                    <span class="section-label">Assigned Facility</span>
+                    <div class="info-block">
+                        <div class="info-text-cell">
+                            <h4 class="info-title">{receipt_data.get('clinic_name', 'Hi-Vet Clinic')}</h4>
+                            <p class="info-subtitle">{receipt_data.get('location', 'Main Branch')}</p>
+                        </div>
                     </div>
-                </div>
-
-                <!-- CARD 2: ITEMIZED BREAKDOWN -->
-                <div class="card">
-                    <div class="item-header">Receipt #{receipt_data.get('reservation_id')}</div>
-                    <div class="item-subheader">{receipt_data.get('date')} • {receipt_data.get('time')}</div>
                     
-                    <table class="invoice-table">
-                        <tr class="invoice-row-main">
-                            <td class="invoice-label">
-                                {receipt_data.get('service_name')}
-                                {f'<br><span class="voucher-pill">Redeemed Reward</span>' if receipt_data.get('voucher_code') else ''}
-                            </td>
-                            <td class="invoice-price">{receipt_data.get('base_price')}</td>
-                        </tr>
-                        <tr class="invoice-row-sub">
-                            <td class="invoice-desc">Quantity: 1</td>
-                            <td></td>
-                        </tr>
+                    <span class="section-label" style="margin-bottom: 12px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 24px;">Owner</span>
+                    <div class="info-block" style="margin-bottom: 24px;">
+                        <div class="info-text-cell">
+                            <h4 class="info-title">{receipt_data.get('customer_name', 'Customer')}</h4>
+                            <p class="info-subtitle">Owner of {receipt_data.get('pet_name', 'Pet')}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="procedure-row">
+                        <span class="section-label" style="margin-bottom: 12px; margin-top: -10px;">Selected Procedure</span>
+                        <div style="display: table; width: 100%;">
+                            <div class="procedure-details">
+                                <div style="display: table;">
+                                    <div class="info-text-cell">
+                                        <h4 class="info-title">{receipt_data.get('service_name')}</h4>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="procedure-price">{receipt_data.get('base_price')}</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 40px;">
+                        <div class="math-row">
+                            <div class="math-label">Subtotal</div>
+                            <div class="math-value">{receipt_data.get('base_price')}</div>
+                        </div>
                         {f'''
-                        <tr class="invoice-row-main">
-                            <td>
-                                <div class="invoice-label">Voucher: {receipt_data.get('voucher_title')}</div>
-                                <div class="invoice-desc">{receipt_data.get('voucher_type')} • {receipt_data.get('voucher_code')}</div>
-                            </td>
-                            <td style="color: #10B981; text-align: right; font-weight: 700;">{receipt_data.get('discount_amount')}</td>
-                        </tr>
-                        ''' if receipt_data.get('voucher_code') else ''}
-                        
-                        <tr class="totals-row">
-                            <td class="totals-label">Total</td>
-                            <td class="totals-value">{receipt_data.get('total_amount')}</td>
-                        </tr>
-                        <tr class="totals-row">
-                            <td class="totals-label">Amount paid</td>
-                            <td class="totals-value">{receipt_data.get('total_amount')}</td>
-                        </tr>
-                    </table>
-
-                    <div class="footer-note">
-                        Questions? Contact us at <a href="mailto:support@hi-vet.com" class="footer-link">support@hi-vet.com</a>
+                        <div class="math-row">
+                            <div class="math-label" style="color: #6ee7b7;"><span style="display:block;">Reward Applied</span><span style="font-size: 7px; color: rgba(255,255,255,0.4); display:block; margin-top: 2px;">{receipt_data.get('voucher_type', 'SERVICE')} &bull; {receipt_data.get('voucher_code')}</span></div>
+                            <div class="math-value" style="color: #6ee7b7;">{receipt_data.get('discount_amount')}</div>
+                        </div>
+                        ''' if receipt_data.get('voucher_code') else ""}
+                    </div>
+                    
+                    <div class="total-section">
+                        <div class="total-info">
+                            <span class="section-label" style="margin-bottom: 8px;">Total Settlement</span>
+                            <h2 class="total-big">{receipt_data.get('total_amount')}</h2>
+                        </div>
                     </div>
                 </div>
-
+                
+                <table style="width: 100%; margin-top: 24px; background-color: #ECFDF5; border-radius: 20px; padding: 24px; border: 2px solid #D1FAE5;">
+                    <tr>
+                        <td style="width: 80px;">
+                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data={receipt_data.get('qr_content')}" style="width: 80px; height: 80px; border-radius: 12px;" alt="Receipt QR">
+                        </td>
+                        <td style="padding-left: 20px; text-align: left; vertical-align: middle;">
+                            <h4 style="color: #065F46; font-size: 10px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 6px 0;">Encrypted Terminal</h4>
+                            <p style="color: #059669; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin: 0; opacity: 0.8;">Session data is encrypted and validated in real-time.</p>
+                        </td>
+                    </tr>
+                </table>
+                
                 <div style="text-align: center; margin-top: 30px;">
-                    <p style="font-size: 11px; font-weight: 700; color: #CBD5E1; text-transform: uppercase; letter-spacing: 2px;">
+                    <p style="font-size: 9px; font-weight: 900; color: #94A3B8; text-transform: uppercase; letter-spacing: 2px; margin: 4px 0;">
+                        REF: {receipt_data.get('reservation_id')} &bull; {receipt_data.get('date')}
+                    </p>
+                    <p style="font-size: 9px; font-weight: 900; color: #CBD5E1; text-transform: uppercase; letter-spacing: 2px; margin: 0;">
                         HI-VET &bull; INTEGRATED CLINICAL SYSTEMS &copy; 2026
                     </p>
                 </div>

@@ -1,0 +1,6 @@
+
+--- ERROR at 2026-04-14 06:50:52.614400 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?data_type=all&branch_id=6
+
+--- ERROR at 2026-04-14 06:50:52.965420 ---
+URL: http://localhost:8000/api/business/dashboard/analytics?data_type=all&branch_id=6

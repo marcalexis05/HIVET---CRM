@@ -90,14 +90,38 @@ const Checkout = () => {
     const [searchParams] = useSearchParams();
     const [payingOrder, setPayingOrder] = useState<any>(null);
 
-    // Load filtered items if they exist
+    // Consolidate initialization logic
     useEffect(() => {
-        const filtered = localStorage.getItem('hivet_checkout_filtered');
-        if (filtered) {
-            setItems(JSON.parse(filtered));
-        } else {
-            setItems(cartItems);
+        const orderJson = localStorage.getItem('hivet_checkout_paying_order');
+        const filteredJson = localStorage.getItem('hivet_checkout_filtered');
+
+        if (orderJson) {
+            // Priority 1: Resuming an existing order payment
+            try {
+                const order = JSON.parse(orderJson);
+                console.log('Checkout: Loading items from paying order', order.id);
+                if (order.items) setItems(order.items);
+                return; // Early return to prevent overwriting with cart items
+            } catch (e) {
+                console.error('Checkout: Error parsing paying order', e);
+            }
         }
+
+        if (filteredJson) {
+            // Priority 2: Filtered selection from cart drawer
+            try {
+                const filtered = JSON.parse(filteredJson);
+                console.log('Checkout: Loading filtered items from storage', filtered);
+                setItems(filtered);
+                return;
+            } catch (e) {
+                console.error('Checkout: Error parsing filtered items', e);
+            }
+        }
+
+        // Priority 3: Fallback to full cart
+        console.log('Checkout: Using standard cart items', cartItems);
+        setItems(cartItems);
     }, [cartItems]);
 
     // Derived totals for the selected items
@@ -151,11 +175,6 @@ const Checkout = () => {
                     clinic_id: order.clinic_id || null
                 }));
 
-                // Set items from order (CRITICAL for clinic filtering)
-                if (order.items) {
-                    setItems(order.items);
-                }
-
                 if (order.branch_id) {
                     // Match branch for map
                     const fetchBranch = async () => {
@@ -165,7 +184,7 @@ const Checkout = () => {
                                 const data = await res.json();
                                 setSelectedBranch(data.branch);
                                 setSelectedClinic({ id: data.branch.clinic_id, name: data.branch.clinic_name });
-                                
+
                                 // Ensure delivery info matches the fetched branch
                                 setDeliveryInfo(prev => ({
                                     ...prev,
@@ -404,10 +423,14 @@ const Checkout = () => {
         };
         fetchData();
     }, [user]);
-
     const handlePlaceOrder = async () => {
         if (fulfillmentMethod === 'delivery' && !deliveryInfo.address) {
-            alert('Please add a delivery address before placing your order.');
+            setModal({
+                isOpen: true,
+                title: 'Logistics Requirement',
+                message: 'Please define a delivery destination protocol before proceeding with order authorization.',
+                type: 'error'
+            });
             return;
         }
         if (fulfillmentMethod === 'pickup') {
@@ -416,7 +439,12 @@ const Checkout = () => {
                 return;
             }
             if (!deliveryInfo.clinic_id) {
-                alert('Please select a clinic branch for pickup.');
+                setModal({
+                    isOpen: true,
+                    title: 'Branch Specification',
+                    message: 'A valid clinic branch must be selected for pickup synchronization.',
+                    type: 'error'
+                });
                 return;
             }
         }
@@ -450,7 +478,12 @@ const Checkout = () => {
                     }
                 } else {
                     const err = await res.json();
-                    alert(err.detail || 'Failed to initiate payment.');
+                    setModal({
+                        isOpen: true,
+                        title: 'Settlement Error',
+                        message: err.detail || 'The payment gateway failed to initiate the settlement protocol. Please try again.',
+                        type: 'error'
+                    });
                 }
                 setIsPlacingOrder(false);
                 return;
@@ -493,7 +526,12 @@ const Checkout = () => {
                     }
                 } else {
                     const errData = await response.json();
-                    alert(errData.detail || 'Failed to create payment session. Please try again.');
+                    setModal({
+                        isOpen: true,
+                        title: 'Gateway Failure',
+                        message: errData.detail || 'Failed to synchronize with the payment processor. Please verify your connection.',
+                        type: 'error'
+                    });
                 }
             } else {
                 // Cash on Delivery / Pickup — direct order
@@ -514,12 +552,22 @@ const Checkout = () => {
                     }, 3000);
                 } else {
                     console.error('Failed to place order');
-                    alert('Failed to place order. Please try again.');
+                    setModal({
+                        isOpen: true,
+                        title: 'Transaction Failure',
+                        message: 'The order database could not be updated at this time. Please retry the authorization.',
+                        type: 'error'
+                    });
                 }
             }
         } catch (error) {
             console.error('Error placing order:', error);
-            alert('An unexpected error occurred. Please try again.');
+            setModal({
+                isOpen: true,
+                title: 'Critical Breach',
+                message: 'An unexpected system error occurred during transaction processing. Protocol aborted.',
+                type: 'danger'
+            });
         } finally {
             setIsPlacingOrder(false);
         }
@@ -538,40 +586,42 @@ const Checkout = () => {
 
     return (
         <DashboardLayout title="Checkout">
-            {/* Elegant Stepper */}
-            <div className="mb-12 max-w-4xl mx-auto">
-                <div className="relative flex justify-between">
+            {/* Premium Stepper */}
+            <div className="mb-16 max-w-2xl mx-auto">
+                <div className="relative flex justify-between items-center px-4">
+                    {/* Background Progress Line */}
+                    <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-accent-brown/10 -translate-y-1/2" />
+                    <div className="absolute top-1/2 left-0 right-0 h-[1px] -translate-y-1/2">
+                        <motion.div
+                            className="h-full bg-brand shadow-[0_0_15px_rgba(245,134,52,0.4)]"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${((currentStep - 1) / 2) * 100}%` }}
+                            transition={{ duration: 0.8, ease: "circOut" }}
+                        />
+                    </div>
+
                     {[
-                        { step: 1, label: 'Contact', icon: User },
-                        { step: 2, label: 'Delivery', icon: MapPin },
-                        { step: 3, label: 'Payment', icon: Wallet }
-                    ].map((s, idx, arr) => (
-                        <div key={s.step} className="flex-1 relative">
-                            {idx < arr.length - 1 && (
-                                <div className="absolute top-7 left-[calc(50%+36px)] right-[calc(-50%+36px)] h-[2px] bg-accent-brown/10 z-0">
-                                    <motion.div
-                                        className="h-full bg-brand"
-                                        initial={{ width: 0 }}
-                                        animate={{ width: currentStep > s.step ? '100%' : '0%' }}
-                                        transition={{ duration: 0.6, ease: "circOut" }}
-                                    />
-                                </div>
-                            )}
-                            <div className="relative z-10 flex flex-col items-center">
-                                <motion.button
-                                    onClick={() => currentStep > s.step && setCurrentStep(s.step)}
-                                    whileHover={currentStep > s.step ? { scale: 1.05 } : {}}
-                                    whileTap={currentStep > s.step ? { scale: 0.95 } : {}}
-                                    className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-sm ${currentStep === s.step
-                                            ? 'bg-brand text-white shadow-xl shadow-brand/20 scale-110'
-                                            : currentStep > s.step
-                                                ? 'bg-white border-2 border-brand/20 text-brand'
-                                                : 'bg-white border-2 border-accent-brown/5 text-accent-brown/20'
-                                        }`}
-                                >
-                                    <s.icon className="w-6 h-6" />
-                                </motion.button>
-                                <span className={`mt-3 text-[10px] font-black uppercase tracking-widest transition-colors duration-500 ${currentStep === s.step ? 'text-accent-brown' : 'text-accent-brown/30'}`}>
+                        { step: 1, label: 'Identity', icon: User },
+                        { step: 2, label: 'Logistics', icon: Truck },
+                        { step: 3, label: 'Settlement', icon: Wallet }
+                    ].map((s, idx) => (
+                        <div key={s.step} className="relative z-10">
+                            <motion.button
+                                onClick={() => currentStep > s.step && setCurrentStep(s.step)}
+                                whileHover={currentStep > s.step ? { scale: 1.1 } : {}}
+                                whileTap={{ scale: 0.9 }}
+                                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-700 ${currentStep === s.step
+                                        ? 'bg-brand text-white shadow-2xl shadow-brand/40 scale-125 ring-4 ring-white'
+                                        : currentStep > s.step
+                                            ? 'bg-white border-2 border-brand text-brand shadow-lg'
+                                            : 'bg-white border border-accent-brown/10 text-accent-brown/20'
+                                    }`}
+                            >
+                                <s.icon className={`transition-all duration-500 ${currentStep === s.step ? 'w-5 h-5' : 'w-4 h-4'}`} />
+                            </motion.button>
+                            <div className="absolute top-16 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                                <span className={`text-[8px] font-black uppercase tracking-[0.3em] transition-all duration-500 ${currentStep === s.step ? 'text-accent-brown opacity-100' : 'text-accent-brown/30 opacity-60'
+                                    }`}>
                                     {s.label}
                                 </span>
                             </div>
@@ -592,47 +642,89 @@ const Checkout = () => {
                                 exit={{ opacity: 0, x: 20 }}
                                 className="space-y-6"
                             >
-                                <div className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-10 shadow-sm border border-accent-brown/5">
-                                    <div className="flex items-center gap-4 mb-8">
-                                        <div className="w-12 h-12 bg-accent-peach/30 rounded-xl flex items-center justify-center text-brand-dark shrink-0">
-                                            <User className="w-6 h-6" />
+                                <div className="bg-white rounded-[2rem] p-8 sm:p-12 shadow-sm border border-gray-100 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-64 h-64 bg-gray-50/30 rounded-full -mr-32 -mt-32 blur-3xl pointer-events-none" />
+
+                                    <div className="flex items-start justify-between mb-12 relative z-10">
+                                        <div className="space-y-2">
+                                            <h3 className="text-2xl font-black text-accent-brown italic tracking-tighter leading-none">Identity Verification</h3>
+                                            <p className="text-[10px] font-bold text-gray-300 tracking-[0.2em]">Primary Consumer Information</p>
                                         </div>
-                                        <div>
-                                            <h3 className="text-xl font-black text-accent-brown">Customer Information</h3>
-                                            <p className="text-sm font-medium text-accent-brown/50">Tell us where to reach you about your order.</p>
+                                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-2xl flex items-center justify-center text-accent-brown shadow-sm">
+                                            <User className="w-5 h-5" />
                                         </div>
                                     </div>
 
-                                    <div className="space-y-6">
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Full Name</label>
-                                            <input
-                                                type="text"
-                                                value={deliveryInfo.contactName}
-                                                onChange={e => setDeliveryInfo(prev => ({ ...prev, contactName: e.target.value }))}
-                                                placeholder="Enter full name"
-                                                className="w-full bg-accent-peach/5 border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-4 outline-none text-accent-brown font-bold transition-all shadow-sm"
-                                            />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8 relative z-10">
+                                        <div className="space-y-4">
+                                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown ml-1">Full Legal Name</label>
+                                            <div className="relative group">
+                                                <input
+                                                    type="text"
+                                                    value={deliveryInfo.contactName}
+                                                    onChange={e => {
+                                                        const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                                                        setDeliveryInfo(prev => ({ ...prev, contactName: val }));
+                                                    }}
+                                                    placeholder="e.g. Marc Alexis Evangelista"
+                                                    className="w-full bg-white border-b-2 border-gray-100 focus:border-brand px-1 py-4 outline-none text-accent-brown font-black transition-all placeholder:text-gray-200 tracking-wider text-sm"
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Contact Number</label>
-                                            <input
-                                                type="tel"
-                                                value={deliveryInfo.phone}
-                                                onChange={e => setDeliveryInfo(prev => ({ ...prev, phone: e.target.value }))}
-                                                placeholder="09XX XXX XXXX"
-                                                className="w-full bg-accent-peach/5 border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-4 outline-none text-accent-brown font-bold transition-all shadow-sm"
-                                            />
+                                        <div className="space-y-4">
+                                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown ml-1">Secure Contact Number</label>
+                                            <div className="relative group">
+                                                <input
+                                                    type="tel"
+                                                    value={deliveryInfo.phone}
+                                                    onChange={e => {
+                                                        let val = e.target.value;
+                                                        const oldVal = deliveryInfo.phone || '';
+                                                        
+                                                        // Prevent letters and symbols
+                                                        val = val.replace(/[^0-9+]/g, '');
+                                                        
+                                                        // Handle deletion
+                                                        if (val.length < oldVal.length) {
+                                                            setDeliveryInfo(prev => ({ ...prev, phone: val }));
+                                                            return;
+                                                        }
+
+                                                        // Auto-formatting (only when adding)
+                                                        if (val.length > 0 && !val.startsWith('+63')) {
+                                                            if (val.startsWith('09')) val = '+63' + val.substring(1);
+                                                            else if (val.startsWith('9')) val = '+63' + val;
+                                                            else if (val.startsWith('0')) val = '+63' + val.substring(1);
+                                                            else if (val.startsWith('+')) {
+                                                                if (val.length > 1 && !val.startsWith('+63')) {
+                                                                    // Do nothing, let them type
+                                                                }
+                                                            } else {
+                                                                val = '+639' + val;
+                                                            }
+                                                        }
+
+                                                        // Maximum length for PH mobile
+                                                        if (val.length <= 13) {
+                                                            setDeliveryInfo(prev => ({ ...prev, phone: val }));
+                                                        }
+                                                    }}
+                                                    placeholder="+639XXXXXXXXX"
+                                                    className="w-full bg-white border-b-2 border-gray-100 focus:border-brand px-1 py-4 outline-none text-accent-brown font-black transition-all placeholder:text-gray-200 tracking-wider text-sm"
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="space-y-2 opacity-60">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Email Address</label>
-                                            <input
-                                                type="email"
-                                                value={user?.email || ''}
-                                                disabled
-                                                className="w-full bg-gray-50 border-2 border-accent-brown/5 rounded-xl px-4 py-4 outline-none text-accent-brown font-bold cursor-not-allowed"
-                                            />
-                                            <p className="text-[9px] font-medium text-accent-brown/40 mt-1 italic italic">Registered email address will be used for order updates.</p>
+                                        <div className="space-y-4 md:col-span-2 opacity-60 mt-4">
+                                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown ml-1">Registered Channel</label>
+                                            <div className="relative group">
+                                                <input
+                                                    type="email"
+                                                    value={user?.email || ''}
+                                                    disabled
+                                                    className="w-full bg-white border-b-2 border-gray-100 px-1 py-4 outline-none text-accent-brown font-black cursor-not-allowed tracking-wider text-sm"
+                                                />
+                                            </div>
+                                            <p className="text-[9px] font-bold text-gray-400 tracking-[0.1em] mt-2 italic">Authentication completed via registered email</p>
                                         </div>
                                     </div>
                                 </div>
@@ -641,7 +733,12 @@ const Checkout = () => {
                                     <button
                                         onClick={() => {
                                             if (!deliveryInfo.contactName || !deliveryInfo.phone) {
-                                                alert('Please provide your name and contact number.');
+                                                setModal({
+                                                    isOpen: true,
+                                                    title: 'Identity Requirement',
+                                                    message: 'Valid contact nomenclature and digits are required for logistics coordination.',
+                                                    type: 'error'
+                                                });
                                                 return;
                                             }
                                             setCurrentStep(2);
@@ -667,31 +764,35 @@ const Checkout = () => {
                             >
                                 {/* Fulfillment + Delivery/Pickup Card */}
                                 <div className="bg-white rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 md:p-10 shadow-sm border border-accent-brown/5">
-                                    {/* Toggle */}
-                                    <div className="flex gap-4 mb-8">
+                                    {/* Premium Fulfillment Toggle */}
+                                    <div className="flex gap-4 mb-10">
                                         <button
                                             onClick={() => setFulfillmentMethod('delivery')}
-                                            className={`flex-1 p-4 rounded-xl border-2 flex items-center justify-center gap-3 transition-all cursor-pointer ${fulfillmentMethod === 'delivery' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
+                                            className={`flex-1 p-6 rounded-[2rem] border-2 transition-all duration-500 relative overflow-hidden group ${fulfillmentMethod === 'delivery' ? 'border-brand bg-brand/5 shadow-xl shadow-brand/10' : 'border-gray-100 bg-gray-50/50 grayscale hover:grayscale-0 hover:border-brand/40 hover:bg-white'}`}
                                         >
-                                            <div className="flex-1 text-left relative">
-                                                <div className="flex items-center gap-2">
-                                                    <Truck className="w-5 h-5 text-brand" />
-                                                    <span className={`text-[11px] font-black uppercase tracking-widest ${fulfillmentMethod === 'delivery' ? 'text-brand' : 'text-accent-brown'}`}>
-                                                        Home Delivery
-                                                    </span>
-                                                    {isMixedCart && (
-                                                        <span className="bg-emerald-500 text-white text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Recommended</span>
-                                                    )}
+                                            <div className="relative z-10 flex flex-col items-center gap-3">
+                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${fulfillmentMethod === 'delivery' ? 'bg-brand text-white' : 'bg-gray-100 text-accent-brown/20'}`}>
+                                                    <Truck className="w-6 h-6" />
                                                 </div>
-                                                <p className="text-[10px] font-medium text-accent-brown/40">Safe and direct to your door</p>
+                                                <div className="text-center">
+                                                    <span className={`text-[10px] font-black uppercase tracking-[0.25em] block mb-1 ${fulfillmentMethod === 'delivery' ? 'text-accent-brown' : 'text-accent-brown/40'}`}>Doorstep Delivery</span>
+                                                    <p className={`text-[8px] font-bold uppercase tracking-widest ${fulfillmentMethod === 'delivery' ? 'text-brand' : 'text-accent-brown/20'}`}>Express Logistic Channel</p>
+                                                </div>
                                             </div>
                                         </button>
                                         <button
                                             onClick={() => setFulfillmentMethod('pickup')}
-                                            className={`flex-1 p-4 rounded-xl border-2 flex items-center justify-center gap-3 transition-all cursor-pointer ${fulfillmentMethod === 'pickup' ? 'border-brand bg-brand/5 text-brand-dark' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30'}`}
+                                            className={`flex-1 p-6 rounded-[2rem] border-2 transition-all duration-500 relative overflow-hidden group ${fulfillmentMethod === 'pickup' ? 'border-brand bg-brand/5 shadow-xl shadow-brand/10' : 'border-gray-100 bg-gray-50/50 grayscale hover:grayscale-0 hover:border-brand/40 hover:bg-white'}`}
                                         >
-                                            <Store className="w-5 h-5 shrink-0" />
-                                            <span className="text-xs font-black uppercase tracking-widest text-left leading-tight">Clinic<br />Pick-up</span>
+                                            <div className="relative z-10 flex flex-col items-center gap-3">
+                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${fulfillmentMethod === 'pickup' ? 'bg-brand text-white' : 'bg-gray-100 text-accent-brown/20'}`}>
+                                                    <Store className="w-6 h-6" />
+                                                </div>
+                                                <div className="text-center">
+                                                    <span className={`text-[10px] font-black uppercase tracking-[0.25em] block mb-1 ${fulfillmentMethod === 'pickup' ? 'text-accent-brown' : 'text-accent-brown/40'}`}>Direct Pickup</span>
+                                                    <p className={`text-[8px] font-bold uppercase tracking-widest ${fulfillmentMethod === 'pickup' ? 'text-brand' : 'text-accent-brown/20'}`}>Partner Clinic Settlement</p>
+                                                </div>
+                                            </div>
                                         </button>
                                     </div>
 
@@ -863,24 +964,24 @@ const Checkout = () => {
                                                                             setBranchActiveMarker(null);
                                                                             branchSvRef.current = null;
                                                                         }}
-                                                                        className={`w-full text-left p-5 rounded-2xl border-2 transition-all flex flex-col gap-1 ${isSelected ? 'border-brand bg-brand/5 shadow-md shadow-brand/10' : 'border-accent-brown/10 bg-accent-peach/5 hover:border-brand/30 hover:bg-white'}`}
+                                                                        className={`w-full text-left p-6 rounded-3xl border-2 transition-all flex items-center gap-5 ${isSelected ? 'border-brand bg-brand/5 shadow-xl shadow-brand/10' : 'border-gray-100 bg-white hover:border-brand/30 hover:shadow-lg'}`}
                                                                     >
-                                                                        <div className="flex items-center justify-between gap-3">
-                                                                            <span className="text-xs font-black text-accent-brown">
-                                                                                {c.name} — <span className="text-brand">{b.address_line1 || ''}</span>
-                                                                            </span>
-                                                                            {b.is_main ? (
-                                                                                <span className="text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">MAIN</span>
-                                                                            ) : (
-                                                                                <span className="text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 border border-blue-100">BRANCH</span>
-                                                                            )}
+                                                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border-2 transition-all ${isSelected ? 'bg-brand text-white border-brand' : 'bg-gray-50 text-accent-brown/20 border-gray-100'}`}>
+                                                                            <MapPin className="w-6 h-6" />
                                                                         </div>
-                                                                        {b.address_line2 && (
-                                                                            <div className="flex items-center gap-1.5 text-[9px] font-bold text-accent-brown/40 uppercase">
-                                                                                <MapPin className="w-2.5 h-2.5" />
-                                                                                {b.address_line2}
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <div className="flex items-center gap-2 mb-1">
+                                                                                <span className="text-[11px] font-black text-accent-brown uppercase italic tracking-tighter leading-none">{c.name}</span>
+                                                                                {b.is_main && (
+                                                                                    <span className="text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-accent-brown text-white">Central Hub</span>
+                                                                                )}
                                                                             </div>
-                                                                        )}
+                                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">{b.address_line1}</p>
+                                                                            <p className="text-[9px] font-black text-brand uppercase tracking-widest mt-1 opacity-60">Verified Logistics Branch</p>
+                                                                        </div>
+                                                                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-brand border-brand' : 'border-gray-100'}`}>
+                                                                            {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
+                                                                        </div>
                                                                     </button>
                                                                 );
                                                             }))}
@@ -1055,11 +1156,21 @@ const Checkout = () => {
                                     <button
                                         onClick={() => {
                                             if (fulfillmentMethod === 'delivery' && !deliveryInfo.address) {
-                                                alert('Please select a delivery address.');
+                                                setModal({
+                                                    isOpen: true,
+                                                    title: 'Logistics Protocol',
+                                                    message: 'A verified delivery destination is required for logistics synchronization.',
+                                                    type: 'error'
+                                                });
                                                 return;
                                             }
                                             if (fulfillmentMethod === 'pickup' && !deliveryInfo.branch_id) {
-                                                alert('Please select a pickup branch.');
+                                                setModal({
+                                                    isOpen: true,
+                                                    title: 'Branch Requirement',
+                                                    message: 'Please specify a clinic branch for pickup protocol alignment.',
+                                                    type: 'error'
+                                                });
                                                 return;
                                             }
                                             setCurrentStep(3);
@@ -1095,65 +1206,37 @@ const Checkout = () => {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        {/* GCash */}
-                                        <button
-                                            onClick={() => setSelectedPayment('gcash')}
-                                            className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer relative overflow-hidden group ${selectedPayment === 'gcash' ? 'border-[#0057E7] bg-[#0057E7]/5 text-blue-700 shadow-md' : 'border-accent-brown/10 text-accent-brown/40 hover:border-[#0057E7]/30 hover:bg-white'}`}
-                                        >
-                                            <div className="w-12 h-12 rounded-xl bg-[#0057E7] flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
-                                                <Smartphone className="w-6 h-6 text-white" />
-                                            </div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-center">GCash</span>
-                                            {selectedPayment === 'gcash' && (
-                                                <div className="absolute top-2 right-2">
-                                                    <CheckCircle className="w-4 h-4 text-[#0057E7]" />
-                                                </div>
-                                            )}
-                                        </button>
-
-                                        {/* Maya */}
-                                        <button
-                                            onClick={() => setSelectedPayment('maya')}
-                                            className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer relative overflow-hidden group ${selectedPayment === 'maya' ? 'border-[#00D100] bg-[#00D100]/5 text-green-700 shadow-md' : 'border-accent-brown/10 text-accent-brown/40 hover:border-[#00D100]/30 hover:bg-white'}`}
-                                        >
-                                            <div className="w-12 h-12 rounded-xl bg-[#00D100] flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
-                                                <Smartphone className="w-6 h-6 text-white" />
-                                            </div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-center">Maya</span>
-                                            {selectedPayment === 'maya' && (
-                                                <div className="absolute top-2 right-2">
-                                                    <CheckCircle className="w-4 h-4 text-[#00D100]" />
-                                                </div>
-                                            )}
-                                        </button>
-
-                                        {/* QRPh via PayMongo */}
-                                        <button
-                                            onClick={() => setSelectedPayment('qrph')}
-                                            className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer relative overflow-hidden group ${selectedPayment === 'qrph' ? 'border-[#ea580c] bg-[#ea580c]/5 text-brand-dark shadow-md' : 'border-accent-brown/10 text-accent-brown/40 hover:border-[#ea580c]/30 hover:bg-white'}`}
-                                        >
-                                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#0038A8] via-[#CE1126] to-[#FCD116] flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
-                                                <QrCode className="w-6 h-6 text-white" />
-                                            </div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-center">QRPh</span>
-                                            {selectedPayment === 'qrph' && (
-                                                <div className="absolute top-2 right-2">
-                                                    <CheckCircle className="w-4 h-4 text-[#ea580c]" />
-                                                </div>
-                                            )}
-                                        </button>
-
-                                        {/* Cash */}
-                                        <button
-                                            onClick={() => setSelectedPayment('cash')}
-                                            className={`p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer ${selectedPayment === 'cash' ? 'border-brand bg-brand/5 text-brand-dark shadow-md' : 'border-accent-brown/10 text-accent-brown/40 hover:border-brand/30 hover:bg-white'}`}
-                                        >
-                                            <Banknote className="w-12 h-12 shrink-0 text-amber-600 transition-transform" />
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-center leading-tight">
-                                                {fulfillmentMethod === 'delivery' ? 'COD' : 'COP'}
-                                            </span>
-                                        </button>
+                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                        {[
+                                            { id: 'qrph', label: 'QRPh', icon: QrCode, color: 'text-brand', bg: 'bg-brand/5', border: 'border-brand', active: 'shadow-brand/20' },
+                                            { id: 'gcash', label: 'GCash', icon: Smartphone, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', active: 'shadow-blue-500/20' },
+                                            { id: 'maya', label: 'Maya', icon: Smartphone, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', active: 'shadow-emerald-500/20' },
+                                            { id: 'cash', label: fulfillmentMethod === 'delivery' ? 'COD' : 'COP', icon: Banknote, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', active: 'shadow-amber-500/20' }
+                                        ].map((method) => {
+                                            const isActive = selectedPayment === method.id;
+                                            return (
+                                                <button
+                                                    key={method.id}
+                                                    onClick={() => setSelectedPayment(method.id as any)}
+                                                    className={`p-6 rounded-3xl border-2 transition-all duration-500 relative group overflow-hidden ${isActive ? `${method.border} ${method.bg} shadow-2xl ${method.active}` : 'border-gray-100 bg-white hover:border-brand/40 grayscale hover:grayscale-0'}`}
+                                                >
+                                                    <div className="flex flex-col items-center gap-4 relative z-10">
+                                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${isActive ? 'bg-white shadow-lg' : 'bg-gray-50'}`}>
+                                                            <method.icon className={`w-6 h-6 ${method.color}`} />
+                                                        </div>
+                                                        <div className="text-center">
+                                                            <span className={`text-[10px] font-black uppercase tracking-[0.2em] block mb-0.5 ${isActive ? 'text-accent-brown' : 'text-gray-300'}`}>{method.label}</span>
+                                                            <p className={`text-[7px] font-bold uppercase tracking-widest ${isActive ? 'text-brand opacity-100' : 'opacity-0'}`}>Encrypted Channel</p>
+                                                        </div>
+                                                    </div>
+                                                    {isActive && (
+                                                        <div className="absolute top-2 right-2">
+                                                            <CheckCircle className={`w-4 h-4 ${method.color}`} />
+                                                        </div>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
 
                                     {selectedPayment === 'qrph' && (
@@ -1273,85 +1356,113 @@ const Checkout = () => {
                     </AnimatePresence>
                 </div>
 
-                {/* Right Column: Order Summary */}
+                {/* Right Column: High-Density Order Summary (Vibrant Orange) */}
                 <div className="lg:col-span-4">
-                    <div className="bg-brand-dark rounded-3xl sm:rounded-[2rem] p-6 sm:p-8 text-white sticky top-28 sm:top-32 lg:top-36">
-                        <h3 className="text-xl font-black mb-6">Order Summary</h3>
+                    <div className="bg-brand rounded-[2.5rem] p-8 text-white sticky top-32 shadow-2xl border border-white/20 overflow-hidden">
+                        {/* Aesthetic Background Detail */}
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
 
-                        <div className="space-y-4 mb-6">
-                            {items.map((item) => (
-                                <div key={`${item.id}-${item.variant}-${item.size}`} className="flex gap-4">
-                                    <div className="w-16 h-16 bg-white/10 rounded-xl p-2 shrink-0">
-                                        <img src={item.image} alt={item.name} className="w-full h-full object-contain drop-shadow-md" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h4 className="font-bold text-sm truncate">{item.name}</h4>
-                                        <p className="text-xs text-white/50">{item.variant} • {item.size}</p>
-                                        <div className="flex justify-between items-center mt-1">
-                                            <span className="text-[10px] font-black text-brand tracking-widest">QTY: {item.quantity}</span>
-                                            <span className="font-bold text-sm">₱{(Number(item.price) * item.quantity).toFixed(2)}</span>
+                        <div className="relative z-10">
+                            <div className="flex items-center justify-between mb-8">
+                                <h3 className="text-2xl font-black italic tracking-tighter text-white">Receipt Summary</h3>
+                                <Tag className="w-5 h-5 text-white/50" />
+                            </div>
+
+                            <div className="space-y-5 mb-10 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+                                {items.map((item) => (
+                                    <div key={`${item.id}-${item.variant}-${item.size}`} className="flex gap-4 group">
+                                        <div className="w-16 h-16 bg-white/20 rounded-2xl p-2 shrink-0 border border-white/10 transition-all group-hover:bg-white/30">
+                                            <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
+                                        </div>
+                                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                            <h4 className="font-black text-[10px] tracking-wider truncate mb-0.5 text-white">{item.name}</h4>
+                                            <p className="text-[9px] font-bold text-white/60 tracking-widest">{item.variant} | {item.size}</p>
+                                            <div className="flex justify-between items-center mt-2">
+                                                <span className="text-[10px] font-black text-white tracking-[0.2em]">x{item.quantity}</span>
+                                                <span className="font-black text-xs tabular-nums text-white">₱{(Number(item.price) * item.quantity).toLocaleString()}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
 
-                        <div className="space-y-3 pt-6 border-t border-white/10 text-sm mb-6">
-                            <div className="flex justify-between text-white/60">
-                                <span>Subtotal ({totalItems} items)</span>
-                                <span>₱{totalAmount.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-white/60">
-                                <span>Shipping Fees</span>
-                                <span>{shippingFee > 0 ? `₱${shippingFee.toFixed(2)}` : 'FREE'}</span>
-                            </div>
-                            {appliedVoucher && (
-                                <div className="flex justify-between text-brand font-bold">
-                                    <span>Discount ({appliedVoucher.title})</span>
-                                    <span>-₱{discount.toFixed(2)}</span>
-                                </div>
-                            )}
-                            {!appliedVoucher && (
+                            <div className="space-y-4 pt-8 border-t border-white/20 text-[10px] font-black uppercase tracking-[0.2em] mb-10">
                                 <div className="flex justify-between text-white/60">
-                                    <span>Discount</span>
-                                    <span className="text-brand">-₱0.00</span>
+                                    <span>Subtotal</span>
+                                    <span className="text-white">₱{totalAmount.toLocaleString()}</span>
                                 </div>
-                            )}
-                        </div>
+                                <div className="flex justify-between text-white/60">
+                                    <span>Logistics Fee</span>
+                                    <span className="text-white font-black italic">FREE</span>
+                                </div>
+                                {appliedVoucher && (
+                                    <div className="flex justify-between text-white">
+                                        <span>Reward Applied</span>
+                                        <span>-₱{discount.toLocaleString()}</span>
+                                    </div>
+                                )}
+                            </div>
 
-                        <div className="flex justify-between items-center py-6 border-t border-white/10 mb-6 sm:mb-8">
-                            <span className="text-sm font-black uppercase tracking-widest">Total</span>
-                            <span className="text-2xl sm:text-3xl font-black tracking-tighter">₱{grandTotal.toFixed(2)}</span>
-                        </div>
+                            <div className="flex justify-between items-end mb-10 border-b border-white/20 pb-8">
+                                <div>
+                                    <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.3em] mb-1">Total Settlement</p>
+                                    <h2 className="text-4xl font-black tracking-tighter italic text-white leading-none">₱{grandTotal.toLocaleString()}</h2>
+                                </div>
+                            </div>
 
-                        <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => {
-                                if (currentStep === 1) {
-                                    if (!deliveryInfo.contactName || !deliveryInfo.phone) return alert('Please provide contact details.');
-                                    setCurrentStep(2);
-                                } else if (currentStep === 2) {
-                                    if (fulfillmentMethod === 'delivery' && !deliveryInfo.address) return alert('Please select a delivery address.');
-                                    if (fulfillmentMethod === 'pickup' && !deliveryInfo.branch_id) return alert('Please select a pickup branch.');
-                                    setCurrentStep(3);
-                                } else {
-                                    handlePlaceOrder();
-                                }
-                            }}
-                            disabled={isPlacingOrder || items.length === 0}
-                            className="bg-brand text-white w-full py-4 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-white hover:text-brand-dark hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                            {isPlacingOrder ? (
-                                <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
-                            ) : (
-                                currentStep < 3 ? 'Next Step' : (selectedPayment === 'cash' ? 'Place Order Now' : 'Proceed to Payment')
-                            )}
-                        </motion.button>
-
-                        <div className="mt-6 flex items-center justify-center gap-2 text-white/40 text-[9px] font-black uppercase tracking-widest">
-                            <ShieldCheck className="w-4 h-4" />
-                            <span>Secure SSL Checkout</span>
+                            <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => {
+                                    if (currentStep === 1) {
+                                        if (!deliveryInfo.contactName || !deliveryInfo.phone) {
+                                            setModal({
+                                                isOpen: true,
+                                                title: 'Identity Missing',
+                                                message: 'Authorization requires valid contact details.',
+                                                type: 'error'
+                                            });
+                                            return;
+                                        }
+                                        setCurrentStep(2);
+                                    } else if (currentStep === 2) {
+                                        if (fulfillmentMethod === 'delivery' && !deliveryInfo.address) {
+                                            setModal({
+                                                isOpen: true,
+                                                title: 'Logistics Error',
+                                                message: 'Delivery protocol requires a verified address.',
+                                                type: 'error'
+                                            });
+                                            return;
+                                        }
+                                        if (fulfillmentMethod === 'pickup' && !deliveryInfo.branch_id) {
+                                            setModal({
+                                                isOpen: true,
+                                                title: 'Logistics Error',
+                                                message: 'Pickup protocol requires a selected branch.',
+                                                type: 'error'
+                                            });
+                                            return;
+                                        }
+                                        setCurrentStep(3);
+                                    } else {
+                                        handlePlaceOrder();
+                                    }
+                                }}
+                                disabled={isPlacingOrder || items.length === 0}
+                                className="w-full py-5 bg-white text-brand rounded-2xl font-black uppercase tracking-[0.25em] text-[11px] hover:bg-black hover:text-white transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-3 disabled:opacity-50 transition-all duration-500"
+                            >
+                                {isPlacingOrder ? (
+                                    <><Loader2 className="w-5 h-5 animate-spin" /> Finalizing Transact</>
+                                ) : (
+                                    <>
+                                        {currentStep < 3 ? 'Proceed Next' : 'Authorize Payment'}
+                                        <div className="w-6 h-6 bg-brand/10 rounded-lg flex items-center justify-center">
+                                            <CheckCircle className="w-3 h-3" />
+                                        </div>
+                                    </>
+                                )}
+                            </motion.button>
                         </div>
                     </div>
                 </div>
@@ -1553,7 +1664,7 @@ const Checkout = () => {
                 onClose={() => setShowQrModal(false)}
                 qrData={qrData}
                 amount={totalAmount + shippingFee - (appliedVoucher?.discount || 0)}
-                reference={`HV-2026-${(user?.id || 0).toString().padStart(6, '0')}-${Date.now().toString().slice(-4)}`}
+                reference={`HV-2026-${(user?.id || 0).toString().padStart(6, '0')}`}
                 status={qrStatus}
             />
         </DashboardLayout>

@@ -96,7 +96,7 @@ const CustomerAlerts = () => {
     };
 
     return (
-        <DashboardLayout title="Alert Center">
+        <DashboardLayout title="">
             <div className="max-w-3xl mx-auto space-y-6">
 
                 {/* Filter + Actions bar */}
@@ -109,8 +109,8 @@ const CustomerAlerts = () => {
                                 onClick={() => setFilter(f)}
                                 className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer border ${
                                     filter === f
-                                        ? 'bg-accent-brown text-white border-accent-brown shadow-md shadow-accent-brown/20'
-                                        : 'bg-white border-accent-brown/15 text-accent-brown/50 hover:border-accent-brown/30 hover:text-accent-brown'
+                                        ? 'bg-brand text-white border-brand shadow-md shadow-brand/20'
+                                        : 'bg-white border-accent-brown/15 text-accent-brown/50 hover:border-brand/30 hover:text-brand'
                                 }`}
                             >
                                 {f === 'all' ? `All (${notifications.length})` : `Unread (${unreadCount})`}

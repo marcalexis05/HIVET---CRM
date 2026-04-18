@@ -5,9 +5,10 @@ import {
     Navigation as NavIcon,
     AlertCircle, ChevronRight, Power, Bell,
     MapPin, Phone, CheckCircle2, Loader2,
-    Store, X, Check, Wallet, ArrowLeft, ArrowRight
+    Store, X, Check, Wallet, ArrowLeft, ArrowRight, ShieldCheck,
+    MessageSquare, MessageCircle
 } from 'lucide-react';
-import { APIProvider, Map, AdvancedMarker, InfoWindow } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, AdvancedMarker, InfoWindow, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import RiderBottomNav from '../../components/RiderBottomNav';
@@ -32,6 +33,78 @@ const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 
     </motion.div>
 );
 
+const CommModal = ({ isOpen, phone, name, onClose }: { isOpen: boolean, phone: string, name: string, onClose: () => void }) => (
+    <AnimatePresence>
+        {isOpen && (
+            <>
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200]" />
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[201] bg-white rounded-[3rem] p-8 w-[90%] max-w-sm shadow-2xl">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="font-black text-accent-brown uppercase tracking-widest">Contact {name}</h3>
+                        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full"><X size={20} /></button>
+                    </div>
+                    <div className="space-y-3">
+                        <a href={`tel:${phone}`} className="flex items-center gap-4 p-4 bg-brand-dark text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-black transition-all">
+                            <Phone size={20} /> Call Directly
+                        </a>
+                        <a href={`sms:${phone}`} className="flex items-center gap-4 p-4 bg-gray-100 text-accent-brown rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-200 transition-all">
+                            <MessageCircle size={20} /> Send SMS
+                        </a>
+                        <a href={`https://wa.me/${phone.replace(/^0/, '63')}`} target="_blank" rel="noreferrer" className="flex items-center gap-4 p-4 bg-green-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-green-700 transition-all">
+                            <MessageSquare size={20} /> WhatsApp
+                        </a>
+                    </div>
+                </motion.div>
+            </>
+        )}
+    </AnimatePresence>
+);
+
+// Sub-component for Directions
+const Directions = ({ origin, destination, onRouteUpdate }: { 
+    origin: google.maps.LatLngLiteral, 
+    destination: google.maps.LatLngLiteral,
+    onRouteUpdate: (dist: string, dur: string) => void 
+}) => {
+    const map = useMap();
+    const routesLibrary = useMapsLibrary('routes');
+    const [directionsService, setDirectionsService] = useState<google.maps.DirectionsService>();
+    const [directionsRenderer, setDirectionsRenderer] = useState<google.maps.DirectionsRenderer>();
+
+    useEffect(() => {
+        if (!routesLibrary || !map) return;
+        setDirectionsService(new routesLibrary.DirectionsService());
+        setDirectionsRenderer(new routesLibrary.DirectionsRenderer({ 
+            map,
+            suppressMarkers: true,
+            polylineOptions: {
+                strokeColor: "#FB8500",
+                strokeOpacity: 0.8,
+                strokeWeight: 6
+            }
+        }));
+    }, [routesLibrary, map]);
+
+    useEffect(() => {
+        if (!directionsService || !directionsRenderer) return;
+
+        directionsService.route({
+            origin,
+            destination,
+            travelMode: google.maps.TravelMode.DRIVING,
+            optimizeWaypoints: true
+        }).then(response => {
+            directionsRenderer.setDirections(response);
+            const route = response.routes[0].legs[0];
+            onRouteUpdate(route.distance?.text || '0 km', route.duration?.text || '0 min');
+        }).catch(err => console.error("Directions error:", err));
+
+        return () => directionsRenderer.setDirections({ routes: [] } as any);
+    }, [directionsService, directionsRenderer, origin, destination]);
+
+    return null;
+};
+
 const RiderDashboard = () => {
     const navigate = useNavigate();
     const [isOnline, setIsOnline] = useState(false);
@@ -42,9 +115,18 @@ const RiderDashboard = () => {
     const [activeOrder, setActiveOrder] = useState<any>(null);
     const [riderLocation, setRiderLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+    const [pinModal, setPinModal] = useState<{ isOpen: boolean; status: string; deliveryId: number | null }>({
+        isOpen: false,
+        status: '',
+        deliveryId: null
+    });
+    const [commModal, setCommModal] = useState<{ isOpen: boolean, phone: string, name: string }>({ isOpen: false, phone: '', name: '' });
+    const [pinValue, setPinValue] = useState('');
     const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
     const [selectedMarker, setSelectedMarker] = useState<'clinic' | 'customer' | null>(null);
     const [unreadAlerts, setUnreadAlerts] = useState<any[]>([]);
+    const [routeInfo, setRouteInfo] = useState<{ distance: string; duration: string } | null>(null);
+    const [activeRoute, setActiveRoute] = useState<{ origin: google.maps.LatLngLiteral; dest: google.maps.LatLngLiteral } | null>(null);
 
     const showToast = (message: string, type: 'success' | 'error' = 'success') => {
         setToast({ message, type });
@@ -56,7 +138,6 @@ const RiderDashboard = () => {
         if (!token) return;
 
         try {
-            // Fetch Profile
             const profRes = await fetch(`${API}/api/rider/profile`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -65,7 +146,6 @@ const RiderDashboard = () => {
                 setIsOnline(profData.is_online);
             }
 
-            // Fetch Earnings
             const earnRes = await fetch(`${API}/api/rider/earnings`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -78,16 +158,14 @@ const RiderDashboard = () => {
                 });
             }
 
-            // Fetch Available Orders
-            const orderRes = await fetch(`${API}/api/rider/available-orders`, {
+            const taskRes = await fetch(`${API}/api/rider/available-tasks`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (orderRes.ok) {
-                const orderData = await orderRes.json();
-                setAvailableOrders(orderData.orders || []);
+            if (taskRes.ok) {
+                const taskData = await taskRes.json();
+                setAvailableOrders(taskData.tasks || []);
             }
 
-            // Fetch Active Order
             const activeRes = await fetch(`${API}/api/rider/active-order`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -96,7 +174,6 @@ const RiderDashboard = () => {
                 setActiveOrder(activeData.order);
             }
 
-            // Fetch Alerts
             const alertRes = await fetch(`${API}/api/notifications`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -113,11 +190,10 @@ const RiderDashboard = () => {
         fetchData();
         const interval = setInterval(() => {
             fetchData();
-        }, 5000); // Polling every 5s for snappy updates
+        }, 5000);
         return () => clearInterval(interval);
-    }, [isOnline]); // Refresh whenever status changes or every 5s
+    }, [isOnline]);
 
-    // Geolocation Tracking
     useEffect(() => {
         if (!isOnline) return;
 
@@ -133,9 +209,8 @@ const RiderDashboard = () => {
                         lng: Number(pos.coords.longitude) 
                     };
                     setRiderLocation(newLoc);
-                    // Update backend location
                     const token = localStorage.getItem('hivet_token');
-                    fetch('http://localhost:8000/api/rider/location', {
+                    fetch(`${API}/api/rider/location`, {
                         method: 'PATCH',
                         headers: {
                             'Authorization': `Bearer ${token}`,
@@ -181,34 +256,77 @@ const RiderDashboard = () => {
         }
     };
 
-    const acceptOrder = async (orderId: number) => {
+    const acceptOrder = async (deliveryId: number) => {
         const token = localStorage.getItem('hivet_token');
         try {
-            const res = await fetch(`${API}/api/rider/orders/${orderId}/accept`, {
+            const res = await fetch(`${API}/api/rider/tasks/${deliveryId}/accept`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
-                showToast("Order accepted! Head to pickup store.", "success");
+                showToast("Manifest accepted! Head to extraction point.", "success");
                 fetchData();
             } else {
-                showToast("Failed to accept order. It may have been claimed.", "error");
+                const err = await res.json();
+                showToast(err.detail || "Failed to accept task.", "error");
             }
         } catch (err) {
             showToast("Network error.", "error");
         }
     };
 
-    const updateOrderStatus = async (orderId: number, status: string) => {
+    const handlePinSubmit = async () => {
+        const idToUpdate = pinModal.deliveryId || activeOrder?.delivery_id || activeOrder?.id;
+        if (!idToUpdate || !pinValue) {
+            showToast("Critical: Mission data missing. Please refresh.", "error");
+            return;
+        }
+        setIsUpdatingStatus(true);
         const token = localStorage.getItem('hivet_token');
         try {
-            const res = await fetch(`${API}/api/rider/orders/${orderId}/status`, {
+            const res = await fetch(`${API}/api/rider/deliveries/${idToUpdate}/status`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ status })
+                body: JSON.stringify({ 
+                    new_status: pinModal.status,
+                    pin: pinValue
+                })
+            });
+
+            if (res.ok) {
+                showToast(`Logistics updated: ${pinModal.status}`, "success");
+                setPinModal({ isOpen: false, status: '', deliveryId: null });
+                setPinValue('');
+                fetchData();
+            } else {
+                const err = await res.json();
+                showToast(err.detail || "Invalid Serial Number. Check the product packaging.", "error");
+            }
+        } catch (err) {
+            showToast("Network error.", "error");
+        } finally {
+            setIsUpdatingStatus(false);
+        }
+    };
+
+    const updateOrderStatus = async (deliveryId: number, status: string) => {
+        if (status === 'Picked Up') {
+            setPinModal({ isOpen: true, status, deliveryId });
+            return;
+        }
+
+        const token = localStorage.getItem('hivet_token');
+        try {
+            const res = await fetch(`${API}/api/rider/deliveries/${deliveryId}/status`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ new_status: status })
             });
             if (res.ok) {
                 showToast(`Status updated to ${status}`, "success");
@@ -223,8 +341,8 @@ const RiderDashboard = () => {
 
     return (
         <DashboardLayout title="Rider Dashboard">
+            <CommModal {...commModal} onClose={() => setCommModal({ ...commModal, isOpen: false })} />
             <div className="space-y-10 pb-32">
-                {/* Tactical Control Bar - Redefined Command Layout */}
                 <div className={`relative overflow-hidden rounded-[4rem] p-10 sm:p-14 text-white shadow-2xl transition-all duration-700 group ${isOnline ? 'bg-brand-dark' : 'bg-brand-dark/40'}`}>
                     <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/10 rounded-full -mr-[250px] -mt-[250px] blur-[120px] group-hover:bg-white/20 transition-all duration-1000" />
                     
@@ -254,7 +372,6 @@ const RiderDashboard = () => {
                     </div>
                 </div>
 
-                {/* Announcement Hub - High Visibility System Alerts */}
                 <div className="space-y-6">
                     <div className="flex items-end justify-between px-4">
                         <div className="space-y-1">
@@ -334,18 +451,16 @@ const RiderDashboard = () => {
                             </div>
 
                             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                                {/* Map Interface - Tactical HUD */}
                                 <div className="lg:col-span-8 bg-white rounded-[3.5rem] overflow-hidden shadow-2xl border border-accent-brown/5 min-h-[550px] relative group/map">
                                     <APIProvider apiKey={MAPS_API_KEY} libraries={['marker', 'places']}>
                                         <Map
                                             mapId={MAP_ID}
-                                            center={riderLocation ? { lat: Number(riderLocation.lat), lng: Number(riderLocation.lng) } : (activeOrder?.clinic ? { lat: Number(activeOrder.clinic.lat), lng: Number(activeOrder.clinic.lng) } : { lat: 14.5995, lng: 120.9842 })}
+                                            defaultCenter={riderLocation ? { lat: Number(riderLocation.lat), lng: Number(riderLocation.lng) } : (activeOrder?.clinic ? { lat: Number(activeOrder.clinic.lat), lng: Number(activeOrder.clinic.lng) } : { lat: 14.5995, lng: 120.9842 })}
                                             defaultZoom={15}
                                             className="w-full h-full grayscale-[0.2] contrast-[1.1]"
                                             disableDefaultUI={true}
                                             gestureHandling="greedy"
                                         >
-                                        {/* Rider - Moving Asset */}
                                         {riderLocation && (
                                             <AdvancedMarker position={{ lat: Number(riderLocation.lat), lng: Number(riderLocation.lng) }}>
                                                 <div className="bg-brand-dark text-white p-3 rounded-2xl shadow-2xl border-2 border-white scale-110 animate-bounce">
@@ -354,7 +469,6 @@ const RiderDashboard = () => {
                                             </AdvancedMarker>
                                         )}
 
-                                        {/* Pickup - Extraction Point */}
                                         {activeOrder.clinic && activeOrder.clinic.lat && (
                                             <>
                                                 <AdvancedMarker
@@ -392,14 +506,30 @@ const RiderDashboard = () => {
                                                             <p className="text-[10px] text-accent-brown/60 font-medium leading-relaxed">
                                                                 {activeOrder.clinic.address}
                                                             </p>
+                                                            <p className="text-[10px] font-black text-brand-dark uppercase tracking-[0.1em]">
+                                                                Clinic Number: {activeOrder.clinic.phone || 'N/A'}
+                                                            </p>
                                                             <button
                                                                 onClick={() => {
-                                                                    const dest = `${activeOrder.clinic.lat},${activeOrder.clinic.lng}`;
-                                                                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}`, '_blank');
+                                                                    if (activeRoute?.dest.lat === Number(activeOrder.clinic.lat)) {
+                                                                        setActiveRoute(null);
+                                                                        setRouteInfo(null);
+                                                                        return;
+                                                                    }
+                                                                    if (riderLocation) {
+                                                                        setActiveRoute({
+                                                                            origin: riderLocation,
+                                                                            dest: { lat: Number(activeOrder.clinic.lat), lng: Number(activeOrder.clinic.lng) }
+                                                                        });
+                                                                    }
                                                                 }}
-                                                                className="w-full bg-brand-dark text-white py-3 rounded-xl font-black text-[9px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-black transition-all"
+                                                                className={`w-full py-3 rounded-xl font-black text-[9px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition-all ${activeRoute?.dest.lat === Number(activeOrder.clinic.lat) ? 'bg-accent-brown text-white' : 'bg-brand-dark text-white hover:bg-black'}`}
                                                             >
-                                                                <NavIcon size={12} /> Get Route
+                                                                {activeRoute?.dest.lat === Number(activeOrder.clinic.lat) ? (
+                                                                    <><X size={12} /> Hide Directions</>
+                                                                ) : (
+                                                                    <><NavIcon size={12} /> Get Route</>
+                                                                )}
                                                             </button>
                                                         </div>
                                                     </InfoWindow>
@@ -407,7 +537,6 @@ const RiderDashboard = () => {
                                             </>
                                         )}
 
-                                        {/* Dropoff - Target Destination */}
                                         {activeOrder.delivery_lat && (
                                             <>
                                                 <AdvancedMarker
@@ -436,73 +565,88 @@ const RiderDashboard = () => {
                                                                 <div className="w-10 h-10 bg-orange-600 text-white rounded-xl flex items-center justify-center">
                                                                     <MapPin size={18} />
                                                                 </div>
-                                                                <div>
-                                                                    <h5 className="font-black text-xs uppercase tracking-tight text-accent-brown leading-none mb-1">Customer</h5>
+                                                                 <div>
+                                                                    <h5 className="font-black text-xs uppercase tracking-tight text-accent-brown leading-none mb-1">{activeOrder.customer?.name || 'Customer'}</h5>
                                                                     <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest">Target delivery</p>
                                                                 </div>
                                                             </div>
                                                             <p className="text-[10px] text-accent-brown/60 font-medium leading-relaxed">
                                                                 {activeOrder.delivery_address}
                                                             </p>
+                                                            <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.1em]">
+                                                                Contact: {activeOrder.customer?.phone || 'N/A'}
+                                                            </p>
                                                             <button
                                                                 onClick={() => {
-                                                                    const dest = `${activeOrder.delivery_lat},${activeOrder.delivery_lng}`;
-                                                                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}`, '_blank');
+                                                                    if (activeRoute?.dest.lat === Number(activeOrder.delivery_lat)) {
+                                                                        setActiveRoute(null);
+                                                                        setRouteInfo(null);
+                                                                        return;
+                                                                    }
+                                                                    const origin = { lat: Number(activeOrder.clinic.lat), lng: Number(activeOrder.clinic.lng) };
+                                                                    const dest = { lat: Number(activeOrder.delivery_lat), lng: Number(activeOrder.delivery_lng) };
+                                                                    setActiveRoute({ origin, dest });
                                                                 }}
-                                                                className="w-full bg-orange-600 text-white py-3 rounded-xl font-black text-[9px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-orange-700 transition-all"
+                                                                className={`w-full py-3 rounded-xl font-black text-[9px] uppercase tracking-[0.2em] flex items-center justify-center gap-2 transition-all ${activeRoute?.dest.lat === Number(activeOrder.delivery_lat) ? 'bg-accent-brown text-white' : 'bg-orange-600 text-white hover:bg-orange-700 shadow-lg'}`}
                                                             >
-                                                                <NavIcon size={12} /> Get Route
+                                                                {activeRoute?.dest.lat === Number(activeOrder.delivery_lat) ? (
+                                                                    <><X size={12} /> Hide Directions</>
+                                                                ) : (
+                                                                    <><NavIcon size={12} /> Get Route</>
+                                                                )}
                                                             </button>
                                                         </div>
                                                     </InfoWindow>
                                                 )}
                                             </>
                                         )}
+                                        {activeRoute && (
+                                            <Directions 
+                                                origin={activeRoute.origin} 
+                                                destination={activeRoute.dest}
+                                                onRouteUpdate={(distance, duration) => setRouteInfo({ distance, duration })}
+                                            />
+                                        )}
                                     </Map>
 
-                                    {/* Map HUD Overlays */}
+                                    {routeInfo && (
+                                        <div className="absolute top-6 left-6 right-6 z-20 flex justify-center pointer-events-none">
+                                            <div className="inline-flex items-center gap-4 bg-brand-dark text-white p-4 rounded-3xl shadow-2xl border border-white/10 backdrop-blur-md pointer-events-auto">
+                                                <div className="w-10 h-10 bg-brand text-white rounded-xl flex items-center justify-center shadow-lg">
+                                                    <NavIcon size={18} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-black uppercase text-white/40 tracking-widest leading-none mb-1">Route Metrics</p>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-2xl font-black text-white tracking-tighter drop-shadow-md">{routeInfo.distance}</span>
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                                                        <span className="text-2xl font-black text-white drop-shadow-md">{routeInfo.duration}</span>
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    onClick={() => {
+                                                        setActiveRoute(null);
+                                                        setRouteInfo(null);
+                                                    }}
+                                                    className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-xl text-white transition-colors ml-4"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="absolute top-6 left-6 right-6 pointer-events-none">
-                                        <div className="inline-flex items-center gap-3 bg-brand-dark text-white p-4 rounded-2xl shadow-2xl border border-white/10 backdrop-blur-md">
-                                            <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                                            <p className="text-[10px] font-black uppercase tracking-widest opacity-90">Tactical Hub System Live</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="absolute bottom-10 left-10 right-10 flex flex-col sm:flex-row items-center gap-4">
-                                        <div className="bg-white/90 backdrop-blur-xl p-6 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-white flex items-center gap-6 flex-1">
-                                            <div className="w-14 h-14 bg-accent-brown/10 rounded-2xl flex items-center justify-center text-accent-brown shrink-0">
-                                                <NavIcon size={24} />
+                                        {!routeInfo && (
+                                            <div className="inline-flex items-center gap-3 bg-brand-dark text-white p-4 rounded-2xl shadow-2xl border border-white/10 backdrop-blur-md">
+                                                <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                                                <p className="text-[10px] font-black uppercase tracking-widest opacity-90">GPS Location ON</p>
                                             </div>
-                                            <div className="min-w-0">
-                                                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-accent-brown/30 mb-1">Navigation objective</p>
-                                                <p className="text-base font-black text-accent-brown leading-tight truncate">
-                                                    {activeOrder.status === 'Processing'
-                                                        ? `Extraction from ${activeOrder.clinic.name}`
-                                                        : `Zero-in on ${activeOrder.delivery_address.split(',')[0]}`}
-                                                </p>
-                                                <p className="text-[10px] text-accent-brown/40 font-bold truncate mt-1">
-                                                    {activeOrder.status === 'Processing' ? activeOrder.clinic.address : activeOrder.delivery_address}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <button
-                                            onClick={() => {
-                                                const dest = activeOrder.status === 'Processing'
-                                                    ? `${activeOrder.clinic.lat},${activeOrder.clinic.lng}`
-                                                    : `${activeOrder.delivery_lat},${activeOrder.delivery_lng}`;
-                                                window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}`, '_blank');
-                                            }}
-                                            className="bg-brand-dark text-white h-[84px] px-8 rounded-3xl shadow-2xl shadow-brand-dark/20 border-2 border-brand-dark/50 flex items-center gap-3 font-black text-xs uppercase tracking-[0.2em] whitespace-nowrap hover:bg-black transition-all group"
-                                        >
-                                            Initiate Navigation
-                                            <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                                        </button>
+                                        )}
                                     </div>
                                 </APIProvider>
                             </div>
 
-                                {/* Logistics Sidebar - Manifest Data */}
                                 <div className="lg:col-span-4 space-y-8">
                                     <div className="bg-white rounded-[3.5rem] p-10 shadow-2xl border border-accent-brown/5 relative overflow-hidden group/card">
                                         <div className="absolute top-0 right-0 w-32 h-32 bg-accent-peach/20 rounded-full -mr-16 -mt-16 group-hover/card:bg-accent-peach/30 transition-colors" />
@@ -513,7 +657,9 @@ const RiderDashboard = () => {
                                                     <Package size={28} />
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-2xl font-black text-accent-brown tracking-tighter uppercase leading-none">Job #{activeOrder?.id?.toString().slice(-4) || '0000'}</h4>
+                                                    <h4 className="text-xl font-black text-accent-brown tracking-tighter uppercase leading-none break-all max-w-[250px]">
+                                                        {activeOrder.primary_serial_number || `Job #${activeOrder?.id?.toString().slice(-4)}`}
+                                                    </h4>
                                                     <div className="flex items-center gap-2 mt-1.5">
                                                         <div className="w-2 h-2 rounded-full bg-brand-dark" />
                                                         <p className="text-[10px] font-black text-accent-brown uppercase tracking-widest">{activeOrder.status}</p>
@@ -527,12 +673,18 @@ const RiderDashboard = () => {
                                                     <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest mb-1.5">Origin Protocol</p>
                                                     <p className="text-sm font-black text-accent-brown leading-tight">{activeOrder.clinic?.name || 'Hi-Vet Site'}</p>
                                                     <p className="text-[11px] text-accent-brown/50 font-bold mt-1 leading-snug">{activeOrder.clinic?.address}</p>
+                                                    <p className="text-[10px] font-black text-brand-dark uppercase tracking-widest mt-1.5 flex items-center gap-1.5">
+                                                        <Phone size={10} /> {activeOrder.clinic?.phone || 'N/A'}
+                                                    </p>
                                                 </div>
                                                 <div className="relative">
                                                     <div className="absolute -left-[41px] top-1 w-4 h-4 rounded-full bg-brand-dark border-4 border-white shadow-md" />
                                                     <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest mb-1.5">Delivery Target</p>
-                                                    <p className="text-sm font-black text-accent-brown leading-tight">Customer Drop-off</p>
+                                                    <p className="text-sm font-black text-accent-brown leading-tight">{activeOrder.customer?.name || 'Customer Drop-off'}</p>
                                                     <p className="text-[11px] text-accent-brown/50 font-bold mt-1 leading-snug">{activeOrder.delivery_address}</p>
+                                                    <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mt-1.5 flex items-center gap-1.5">
+                                                        <Phone size={10} /> {activeOrder.customer?.phone || 'N/A'}
+                                                    </p>
                                                 </div>
                                             </div>
 
@@ -551,15 +703,15 @@ const RiderDashboard = () => {
                                             <div className="grid grid-cols-1 gap-4 pt-4">
                                                 {activeOrder.status === 'Processing' ? (
                                                     <button
-                                                        onClick={() => updateOrderStatus(activeOrder.id, 'Picked Up')}
+                                                        onClick={() => updateOrderStatus(activeOrder.delivery_id || activeOrder.id, 'Picked Up')}
                                                         className="w-full bg-brand-dark text-white py-6 rounded-3xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-2xl shadow-brand-dark/20 flex items-center justify-center gap-3 hover:bg-black"
                                                     >
-                                                        Confirm Collection
+                                                        Confirm Collection (PIN Required)
                                                         <CheckCircle2 size={18} />
                                                     </button>
                                                 ) : (
                                                     <button
-                                                        onClick={() => updateOrderStatus(activeOrder.id, 'Delivered')}
+                                                        onClick={() => updateOrderStatus(activeOrder.delivery_id || activeOrder.id, 'Delivered')}
                                                         className="w-full bg-brand-dark text-white py-6 rounded-3xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-2xl shadow-brand-dark/20 flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95"
                                                     >
                                                         Finalize Drop-off
@@ -571,15 +723,16 @@ const RiderDashboard = () => {
                                                     <button
                                                         onClick={() => {
                                                             const phone = activeOrder.contact_phone || '09123456789';
-                                                            window.open(`tel:${phone}`, '_self');
+                                                            const name = activeOrder.status === 'Processing' ? (activeOrder.clinic?.name || 'Clinic') : 'Customer';
+                                                            setCommModal({ isOpen: true, phone, name });
                                                         }}
                                                         className="flex-1 p-5 bg-white border border-accent-brown/10 text-accent-brown rounded-2xl transition-all flex items-center justify-center hover:bg-accent-brown hover:text-white"
-                                                        title="Call Support/Customer"
+                                                        title="Communications Hub"
                                                     >
-                                                        <Phone size={20} />
+                                                        <MessageSquare size={20} />
                                                     </button>
                                                     <button
-                                                        onClick={() => updateOrderStatus(activeOrder.id, activeOrder.status === 'Processing' ? 'Pending' : 'Processing')}
+                                                        onClick={() => updateOrderStatus(activeOrder.delivery_id || activeOrder.id, activeOrder.status === 'Processing' ? 'Pending' : 'Processing')}
                                                         className="flex-1 p-5 bg-red-50 text-red-500 rounded-2xl transition-all flex items-center justify-center hover:bg-red-500 hover:text-white"
                                                         title="Rollback Status"
                                                     >
@@ -733,11 +886,12 @@ const RiderDashboard = () => {
                                                                     <span className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40">Vicinity</span>
                                                                 </div>
                                                                 <div className="flex justify-between items-center">
-                                                                    <p className="text-sm font-black text-accent-brown truncate max-w-[150px] uppercase tracking-tight">{order.clinic_name || 'Hi-Vet Hub'}</p>
+                                                                    <p className="text-sm font-black text-accent-brown truncate max-w-[200px] uppercase tracking-tight">{order.clinic_name || order.pickup_name || 'Hi-Vet Hub'}</p>
                                                                     <div className="flex items-center gap-1 text-accent-brown font-black text-[10px]">
-                                                                        <NavIcon size={12} /> 0.5 KM
+                                                                        <NavIcon size={12} /> {order.distance_km || '0.5'} KM
                                                                     </div>
                                                                 </div>
+                                                                <p className="text-[10px] text-accent-brown/50 font-bold mt-1 truncate">{order.pickup_address}</p>
                                                             </div>
 
                                                             <div className="h-[2px] bg-accent-brown/5 w-full" />
@@ -753,7 +907,7 @@ const RiderDashboard = () => {
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            acceptOrder(order.id);
+                                                            acceptOrder(order.delivery_id || order.id);
                                                         }}
                                                         className="w-full bg-brand-dark text-white h-20 rounded-[1.8rem] font-black text-xs uppercase tracking-[0.3em] flex items-center justify-center gap-4 shadow-2xl hover:bg-black hover:scale-[1.02] active:scale-95 transition-all group/btn"
                                                     >
@@ -808,6 +962,69 @@ const RiderDashboard = () => {
                 </AnimatePresence>
             </div>
 
+
+            {/* PIN AUTHORIZATION MODAL */}
+            <AnimatePresence>
+                {pinModal.isOpen && (
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/40 backdrop-blur-xl"
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl relative overflow-hidden text-center"
+                        >
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-brand/5 rounded-full -mr-16 -mt-16 blur-3xl" />
+                            
+                            <div className="w-20 h-20 bg-brand-dark/10 rounded-3xl flex items-center justify-center mx-auto mb-8 text-brand-dark">
+                                <ShieldCheck className="w-10 h-10" />
+                            </div>
+
+                            <h3 className="text-2xl font-black text-accent-brown tracking-tighter mb-4 uppercase">
+                                Collection Verification
+                            </h3>
+                            <p className="text-sm font-medium text-accent-brown/50 leading-relaxed mb-8">
+                                Please enter the **Serial Number** located on the product packaging to verify this extraction.
+                            </p>
+
+                            <div className="flex justify-center gap-3 mb-10">
+                                <input
+                                    type="text"
+                                    value={pinValue}
+                                    onChange={(e) => setPinValue(e.target.value)}
+                                    autoFocus
+                                    className="w-full h-20 bg-[#FAF9F6] border-2 border-accent-brown/5 focus:border-brand-dark rounded-2xl text-center text-2xl font-black tracking-widest outline-none transition-all uppercase px-4"
+                                    placeholder="HV-SN-..."
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <button
+                                    onClick={() => {
+                                        setPinModal({ isOpen: false, status: '', deliveryId: null });
+                                        setPinValue('');
+                                    }}
+                                    className="py-5 rounded-2xl font-black text-[10px] uppercase tracking-widest text-accent-brown/40 hover:text-accent-brown transition-colors"
+                                >
+                                    Abort Operation
+                                </button>
+                                <button
+                                    onClick={handlePinSubmit}
+                                    disabled={pinValue.length < 3 || isUpdatingStatus}
+                                    className="py-5 bg-brand-dark text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black disabled:opacity-30 disabled:grayscale transition-all flex items-center justify-center gap-2"
+                                >
+                                    {isUpdatingStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verify & Sync'}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <AnimatePresence>
                 {toast && (
                     <Toast
@@ -815,6 +1032,83 @@ const RiderDashboard = () => {
                         type={toast.type}
                         onClose={() => setToast(null)}
                     />
+                )}
+            </AnimatePresence>
+
+            {/* COMMUNICATIONS HUB MODAL */}
+            <AnimatePresence>
+                {commModal.isOpen && (
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[210] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md"
+                        onClick={() => setCommModal({ ...commModal, isOpen: false })}
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.9, opacity: 0, y: 40 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 40 }}
+                            className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl relative overflow-hidden"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div className="text-center mb-8">
+                                <div className="w-16 h-16 bg-brand-dark/10 rounded-2xl flex items-center justify-center mx-auto mb-4 text-brand-dark">
+                                    <MessageSquare className="w-8 h-8" />
+                                </div>
+                                <h3 className="text-xl font-black text-accent-brown uppercase tracking-tighter">Communications Hub</h3>
+                                <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-[0.2em] mt-1">Contact: {commModal.name}</p>
+                            </div>
+
+                            <div className="space-y-3">
+                                <button 
+                                    onClick={() => window.open(`tel:${commModal.phone}`, '_self')}
+                                    className="w-full flex items-center gap-4 p-5 bg-brand-dark text-white rounded-2xl hover:bg-black transition-all group"
+                                >
+                                    <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <Phone size={18} />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-white/40 leading-none mb-1">Voice Protocol</p>
+                                        <p className="text-sm font-black uppercase">Direct Audio Call</p>
+                                    </div>
+                                </button>
+
+                                <button 
+                                    onClick={() => window.open(`sms:${commModal.phone}`, '_self')}
+                                    className="w-full flex items-center gap-4 p-5 bg-white border-2 border-accent-brown/5 text-accent-brown rounded-2xl hover:border-brand-dark transition-all group"
+                                >
+                                    <div className="w-10 h-10 rounded-xl bg-accent-brown/5 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <MessageSquare size={18} />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 leading-none mb-1">Text Protocol</p>
+                                        <p className="text-sm font-black uppercase">Standard SMS Message</p>
+                                    </div>
+                                </button>
+
+                                <button 
+                                    onClick={() => window.open(`https://wa.me/${commModal.phone.replace(/^0/, '63')}`, '_blank')}
+                                    className="w-full flex items-center gap-4 p-5 bg-green-50 text-green-700 rounded-2xl hover:bg-green-100 transition-all group border border-green-100"
+                                >
+                                    <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <MessageSquare size={18} className="text-green-600" />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-green-600/40 leading-none mb-1">Signal Protocol</p>
+                                        <p className="text-sm font-black uppercase">WhatsApp Secure</p>
+                                    </div>
+                                </button>
+                            </div>
+
+                            <button
+                                onClick={() => setCommModal({ ...commModal, isOpen: false })}
+                                className="w-full mt-6 py-4 text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown/20 hover:text-accent-brown transition-colors"
+                            >
+                                Close Hub
+                            </button>
+                        </motion.div>
+                    </motion.div>
                 )}
             </AnimatePresence>
 

@@ -122,7 +122,7 @@ const CustomerAlerts = () => {
                     <div className="flex items-center gap-3">
                         <button
                             onClick={markAllAsRead}
-                            className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-accent-brown transition-colors flex items-center gap-1.5 cursor-pointer"
+                            className="text-[10px] font-black uppercase tracking-widest text-black/40 hover:text-black transition-colors flex items-center gap-1.5 cursor-pointer"
                         >
                             <CheckCircle2 className="w-3.5 h-3.5" /> Mark all read
                         </button>
@@ -147,10 +147,10 @@ const CustomerAlerts = () => {
                                 className="py-24 text-center bg-white rounded-[2rem] border-2 border-dashed border-accent-brown/10"
                             >
                                 <div className="w-16 h-16 bg-brand-dark/5 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                    <BellOff className="w-8 h-8 text-brand-dark/20" />
+                                    <BellOff className="w-8 h-8 text-black/20" />
                                 </div>
-                                <p className="text-sm font-black text-brand-dark/30 uppercase tracking-widest">No alerts to show</p>
-                                <p className="text-xs text-brand-dark/20 font-medium mt-1">You're all caught up!</p>
+                                <p className="text-sm font-black text-black/40 uppercase tracking-widest">No alerts to show</p>
+                                <p className="text-xs text-black/30 font-medium mt-1">You're all caught up!</p>
                             </motion.div>
                         ) : (
                             filteredAlerts.map((alert, i) => {
@@ -189,8 +189,8 @@ const CustomerAlerts = () => {
                                                 <div className="flex items-center gap-2 mb-1">
                                                     <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full ${
                                                         alert.read
-                                                            ? 'bg-accent-brown/[0.08] text-accent-brown/40'
-                                                            : 'bg-brand/15 text-brand-dark'
+                                                            ? 'bg-accent-brown/[0.08] text-black/40'
+                                                            : 'bg-brand/15 text-black'
                                                     }`}>
                                                         {alert.type}
                                                     </span>
@@ -199,12 +199,12 @@ const CustomerAlerts = () => {
                                                     )}
                                                 </div>
                                                 <h3 className={`font-black tracking-tight text-base leading-snug mb-0.5 ${
-                                                    alert.read ? 'text-brand-dark/50' : 'text-brand-dark'
+                                                    alert.read ? 'text-black/50' : 'text-black'
                                                 }`}>
                                                     {alert.title}
                                                 </h3>
                                                 <p className={`text-sm font-medium leading-relaxed ${
-                                                    alert.read ? 'text-accent-brown/35' : 'text-accent-brown/65'
+                                                    alert.read ? 'text-black opacity-40' : 'text-black'
                                                 }`}>
                                                     {alert.desc}
                                                 </p>
@@ -213,7 +213,7 @@ const CustomerAlerts = () => {
 
                                         {/* Right: date + delete */}
                                         <div className="flex flex-col items-end gap-2 shrink-0">
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 whitespace-nowrap">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-black whitespace-nowrap">
                                                 {new Date(alert.created_at).toLocaleDateString(undefined, {
                                                     month: 'short', day: 'numeric', year: 'numeric'
                                                 })}

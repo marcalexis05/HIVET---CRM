@@ -8,6 +8,8 @@ import {
 import DashboardLayout from '../../components/DashboardLayout';
 import RiderBottomNav from '../../components/RiderBottomNav';
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 const RiderEarnings = () => {
     const [stats, setStats] = useState({ 
         total_earnings: 0, 
@@ -23,7 +25,7 @@ const RiderEarnings = () => {
     const fetchEarnings = async () => {
         const token = localStorage.getItem('hivet_token');
         try {
-            const res = await fetch('http://localhost:8000/api/rider/earnings', {
+            const res = await fetch(`${API}/api/rider/earnings`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -31,15 +33,13 @@ const RiderEarnings = () => {
                 setStats(data);
             }
 
-            // Mocking history for now
-            setHistory([
-                { id: 10234, amount: 150, status: 'Completed', date: 'Today, 2:30 PM', address: '123 Rizal St, QC' },
-                { id: 10232, amount: 120, status: 'Completed', date: 'Today, 11:15 AM', address: '456 Aurora Blvd, QC' },
-                { id: 10221, amount: 200, status: 'Completed', date: 'Yesterday', address: '789 Katipunan, QC' },
-                { id: 10220, amount: 180, status: 'Completed', date: 'Yesterday', address: '321 Commonwealth Ave, QC' },
-                { id: 10219, amount: 140, status: 'Completed', date: '2 days ago', address: '555 Taft Ave, Manila' },
-                { id: 10218, amount: 210, status: 'Completed', date: '2 days ago', address: '777 Espana Blvd, Manila' },
-            ]);
+            const historyRes = await fetch(`${API}/api/rider/earnings/history`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (historyRes.ok) {
+                const historyData = await historyRes.json();
+                setHistory(historyData.history || []);
+            }
         } catch (err) {
             console.error(err);
         } finally {
@@ -158,18 +158,29 @@ const RiderEarnings = () => {
 
                                         <div className="space-y-2 mb-8">
                                             <div className="flex items-center gap-3">
-                                                <p className="text-xl font-black text-accent-brown tracking-tighter">#HY-{item.id.toString().slice(-4)}</p>
+                                                <p className="text-xl font-black text-accent-brown tracking-tighter">HV-2026-{item.id.toString().padStart(6, '0')}</p>
                                                 <div className="w-1.5 h-1.5 rounded-full bg-accent-brown/20" />
                                                 <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest">{item.date}</p>
                                             </div>
                                             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/20 italic">Validated Assignment</p>
                                         </div>
 
-                                        <div className="flex-1 mb-8 p-6 bg-[#FAF9F6] rounded-[2rem] border border-accent-brown/5 flex flex-col justify-center">
-                                            <p className="text-[8px] font-black uppercase tracking-widest text-accent-brown/30 mb-2">Location Target</p>
-                                            <p className="text-sm font-black text-accent-brown leading-tight uppercase tracking-tight line-clamp-2" title={item.address}>
-                                                {item.address}
-                                            </p>
+                                        <div className="flex-1 mb-8 p-8 bg-[#FAF9F6] rounded-[2.5rem] border border-accent-brown/5 space-y-6">
+                                            <div className="relative pl-6 border-l-2 border-dashed border-accent-brown/10">
+                                                <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-brand-dark border-4 border-[#FAF9F6]" />
+                                                <p className="text-[8px] font-black uppercase tracking-widest text-accent-brown/30 mb-1">Pickup Hub</p>
+                                                <p className="text-xs font-black text-accent-brown leading-tight uppercase tracking-tight line-clamp-1">
+                                                    {item.pickup_name || 'Clinic Hub'}
+                                                </p>
+                                            </div>
+
+                                            <div className="relative pl-6 border-l-2 border-dashed border-transparent">
+                                                <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-orange-600 border-4 border-[#FAF9F6]" />
+                                                <p className="text-[8px] font-black uppercase tracking-widest text-accent-brown/30 mb-1">Drop-off Point</p>
+                                                <p className="text-xs font-black text-accent-brown leading-tight uppercase tracking-tight line-clamp-2" title={item.address}>
+                                                    {item.address}
+                                                </p>
+                                            </div>
                                         </div>
 
                                         <div className="pt-2 border-t border-accent-brown/5 flex items-center justify-between">

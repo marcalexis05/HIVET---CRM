@@ -536,7 +536,7 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
                 return (
                     <div className="flex-grow flex flex-col relative overflow-hidden">
                         <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY} libraries={['marker', 'places']}>
-                            <Map mapId={import.meta.env.VITE_GOOGLE_MAPS_ID} center={{ lat: Number(markerLocation.lat), lng: Number(markerLocation.lng) }} defaultZoom={18} disableDefaultUI={true} gestureHandling='greedy' style={{ width: '100%', height: '100%' }}>
+                            <Map mapId={import.meta.env.VITE_GOOGLE_MAPS_ID} defaultCenter={{ lat: Number(markerLocation.lat), lng: Number(markerLocation.lng) }} defaultZoom={18} disableDefaultUI={true} gestureHandling='greedy' style={{ width: '100%', height: '100%' }}>
                                 <MapContent inputRef={inputRef} setMarkerLocation={setMarkerLocation} setAddress={setAddress} updateReverseGeocode={handleReverseGeocode} setComponents={setComponents} setMapInstance={setMapInstance} setGranular={setGranular} />
                             </Map>
                         </APIProvider>
@@ -591,8 +591,8 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
                                 Drag map to move pin · or use street view
                             </div>
                         </div>
-                        <button onClick={() => setShowStreetView(!showStreetView)} className={`absolute bottom-28 left-6 px-6 h-14 rounded-[1.25rem] shadow-2xl flex items-center gap-3 font-black text-[10px] uppercase tracking-widest transition-all z-20 active:scale-95 ${showStreetView ? 'bg-[#EE4D2D] text-white hover:bg-[#d43d22]' : 'bg-white text-gray-600 border border-gray-100 hover:bg-[#EE4D2D]/5 hover:text-[#EE4D2D] hover:border-[#EE4D2D]/20'}`}>
-                            {showStreetView ? <MapIcon size={18} /> : <Eye size={18} />} {showStreetView ? 'Exit Street View' : 'Real-World Check'}
+                        <button onClick={() => setShowStreetView(!showStreetView)} className={`absolute bottom-28 left-6 px-6 h-14 rounded-[1.25rem] shadow-2xl flex items-center gap-3 font-black text-[10px] uppercase tracking-widest transition-all z-20 active:scale-95 ${showStreetView ? 'bg-[#EE4D2D] text-white hover:bg-[#d43d22]' : 'bg-white text-gray-600 border border-gray-100 hover:bg-[#EE4D2D] hover:text-white hover:border-transparent'}`}>
+                            {showStreetView ? <MapIcon size={18} /> : <Eye size={18} />} {showStreetView ? 'Exit Street View' : 'Street View'}
                         </button>
 
                         <button onClick={() => mapInstance?.panTo(markerLocation)} className="absolute bottom-28 right-6 w-14 h-14 bg-white rounded-[1.25rem] shadow-2xl flex items-center justify-center text-gray-400 border border-gray-100 z-20 hover:bg-[#EE4D2D] hover:text-white hover:border-transparent active:scale-95 transition-all">

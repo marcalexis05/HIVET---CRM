@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Calendar, Clock, MapPin, User, Scissors, CheckCircle,
-    AlertCircle, Loader2, Plus, Edit2, Trash2, X,
+    AlertCircle, Loader2, Plus, Edit2, Trash2, X, XCircle,
     ClipboardList, Settings, Tag, Timer, ToggleLeft, ToggleRight, Check,
-    ChevronLeft, ChevronRight, Award, Package
+    ChevronLeft, ChevronRight, Award, Package, Archive, Syringe, Activity, Stethoscope
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { CustomDropdown } from '../../components/CustomDropdown';
@@ -142,6 +142,8 @@ interface Reservation {
     business_id: number;
     branch_id: number | null;
     pet_name: string;
+    pet_type: string;
+    pet_breed?: string;
     service: string;
     date: string;
     time: string;
@@ -191,14 +193,22 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; dot: string }> =
     'Pending': { bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-400' },
     'Confirmed': { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-400' },
     'Ready for Pickup': { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
-    'Completed': { bg: 'bg-gray-50', text: 'text-gray-500', dot: 'bg-gray-300' },
+    'Completed': { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
     'Cancelled': { bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-400' },
 };
 
-const NEXT_STATUSES: Record<string, { label: string; value: string; color: string }[]> = {
-    'Pending': [{ label: 'Confirm', value: 'Confirmed', color: 'bg-blue-500 hover:bg-blue-600 text-white' }, { label: 'Cancel', value: 'Cancelled', color: 'bg-red-500 hover:bg-red-600 text-white' }],
-    'Confirmed': [{ label: 'Mark Ready', value: 'Ready for Pickup', color: 'bg-green-500 hover:bg-green-600 text-white' }, { label: 'Cancel', value: 'Cancelled', color: 'bg-red-500 hover:bg-red-600 text-white' }],
-    'Ready for Pickup': [{ label: 'Complete', value: 'Completed', color: 'bg-accent-brown hover:bg-black text-white' }],
+const NEXT_STATUSES: Record<string, { label: string; value: string; color: string; icon: any }[]> = {
+    'Pending': [
+        { label: 'Confirm', value: 'Confirmed', color: 'bg-blue-500 hover:bg-blue-600 text-white', icon: CheckCircle },
+        { label: 'Cancel', value: 'Cancelled', color: 'bg-red-500 hover:bg-red-600 text-white', icon: X }
+    ],
+    'Confirmed': [
+        { label: 'Mark Ready', value: 'Ready for Pickup', color: 'bg-green-500 hover:bg-green-600 text-white', icon: Package },
+        { label: 'Cancel', value: 'Cancelled', color: 'bg-red-500 hover:bg-red-600 text-white', icon: X }
+    ],
+    'Ready for Pickup': [
+        { label: 'Complete', value: 'Completed', color: 'bg-accent-brown hover:bg-black text-white', icon: Award }
+    ],
     'Completed': [],
     'Cancelled': [],
 };
@@ -232,7 +242,7 @@ export default function BusinessReservations() {
     const [hoursSuccess, setHoursSuccess] = useState(false);
     const [filter, setFilter] = useState('All');
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-    const [showServiceModal, setShowServiceModal] = useState(false);
+    const [showServiceEditor, setShowServiceEditor] = useState(false);
     const [editingService, setEditingService] = useState<Service | null>(null);
     const [serviceForm, setServiceForm] = useState(EMPTY_SERVICE);
     const [savingService, setSavingService] = useState(false);
@@ -241,6 +251,10 @@ export default function BusinessReservations() {
     const [showServicePickerModal, setShowServicePickerModal] = useState(false);
     const [serviceCategory, setServiceCategory] = useState<string>('');
     const [selectionCategory, setSelectionCategory] = useState<string>('');
+    const [servicesPage, setServicesPage] = useState(1);
+    const [reservationsPage, setReservationsPage] = useState(1);
+    const SERVICES_PER_PAGE = 6;
+    const RESERVATIONS_PER_PAGE = 6;
 
     // Special Date Hours
     const [specialHours, setSpecialHours] = useState<SpecialDateHour[]>([]);
@@ -365,7 +379,7 @@ export default function BusinessReservations() {
             setServiceForm(EMPTY_SERVICE);
             setServiceCategory('');
         }
-        setShowServiceModal(true);
+        setShowServiceEditor(true);
         setShowSelectionModal(false);
         setShowServicePickerModal(false);
     };
@@ -443,7 +457,7 @@ export default function BusinessReservations() {
             const saved: Service = await res.json();
             if (editingService) setServices(prev => prev.map(s => s.id === saved.id ? saved : s));
             else setServices(prev => [saved, ...prev]);
-            setShowServiceModal(false);
+            setShowServiceEditor(false);
             showToast(editingService ? 'Service updated!' : 'Service created!');
         } catch { showToast('Failed to save service.', 'error'); }
         finally { setSavingService(false); }
@@ -465,214 +479,700 @@ export default function BusinessReservations() {
     const pending = reservations.filter(r => r.status === 'Pending').length;
     const confirmed = reservations.filter(r => r.status === 'Confirmed').length;
 
-    return (
-        <DashboardLayout title="Reservations">
-            <div className="space-y-8">
+    if (showServiceEditor) {
+        return (
+            <DashboardLayout title="Service Editor">
+                <div className="space-y-8 animate-in fade-in duration-500">
+                    {/* Header Block */}
+                    <div className="relative rounded-[3rem] bg-brand p-12 text-white shadow-2xl shadow-brand/20 overflow-hidden">
+                        <div className="absolute inset-0">
+                            <div className="absolute -right-20 -top-20 h-96 w-96 rounded-full bg-brand/10 blur-[100px]" />
+                            <div className="absolute -left-20 -bottom-20 h-96 w-96 rounded-full bg-accent-peach/5 blur-[100px]" />
+                        </div>
 
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h2 className="text-3xl font-black text-accent-brown tracking-tighter">Clinic Bookings</h2>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 mt-1">Manage appointments across locations</p>
+                        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+                            <div>
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="h-1 w-12 bg-white rounded-full" />
+                                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Configuration Portal</span>
+                                </div>
+                                <h2 className="text-4xl lg:text-5xl font-black tracking-tighter mb-4 text-white">
+                                    {editingService ? `Editing: ${editingService.name}` : 'New Clinic Service'}
+                                </h2>
+                                <p className="text-sm font-medium text-white max-w-md">Design and publish high-performance clinic services and package bundles for your clients.</p>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                <button onClick={() => setShowServiceEditor(false)}
+                                    className="px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/5 transition-all border border-white/10">
+                                    Discard Changes
+                                </button>
+                                <button onClick={handleSaveService} disabled={savingService}
+                                    className="flex items-center gap-3 bg-brand text-white px-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-2xl shadow-brand/20 disabled:opacity-50">
+                                    {savingService ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                                    Publish to Catalog
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    {token && <BranchSelector token={token} onBranchChange={setBranchId} currentBranchId={branchId} />}
+
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
+                        {/* Configuration Column */}
+                        <div className="xl:col-span-4 space-y-8">
+                            <div className="bg-white rounded-[3rem] p-10 shadow-2xl shadow-accent-brown/5 border border-white space-y-8">
+                                <div className="flex items-center gap-4 mb-2">
+                                    <div className="w-12 h-12 rounded-2xl bg-brand/10 flex items-center justify-center text-brand"><Settings className="w-6 h-6" /></div>
+                                    <h4 className="text-xl font-black text-accent-brown tracking-tight">Core Configuration</h4>
+                                </div>
+
+                                <div className="space-y-6">
+                                    <div className="group space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-black pl-2">Service Name</label>
+                                            <button onClick={() => setShowServicePickerModal(true)} className="text-[9px] font-black uppercase tracking-widest text-brand hover:underline">Pick from Catalog</button>
+                                        </div>
+                                        <div className="relative">
+                                            <input value={serviceForm.name} onChange={e => setServiceForm({ ...serviceForm, name: e.target.value })}
+                                                className="w-full bg-accent-peach/5 border-2 border-transparent focus:border-brand/30 rounded-2xl px-6 py-4.5 text-sm font-bold text-accent-brown transition-all shadow-inner placeholder:text-black/20" placeholder="e.g., Premium Grooming & Bath" />
+                                            <div className="absolute right-6 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-brand rounded-full" />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-black pl-2">Service Type</label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button onClick={() => setServiceForm({ ...serviceForm, is_package: false, package_items_json: '[]' })}
+                                                className={`py-4 px-6 rounded-2xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${!serviceForm.is_package ? 'bg-brand border-brand text-white shadow-xl' : 'bg-white border-accent-brown/5 text-black hover:border-brand/20'}`}>
+                                                Standard
+                                            </button>
+                                            <button onClick={() => setServiceForm({ ...serviceForm, is_package: true })}
+                                                className={`py-4 px-6 rounded-2xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${serviceForm.is_package ? 'bg-[#ea580c] border-[#ea580c] text-white shadow-xl' : 'bg-white border-accent-brown/5 text-black hover:border-brand/20'}`}>
+                                                Package
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-black pl-2">Description</label>
+                                        <textarea value={serviceForm.description} onChange={e => setServiceForm({ ...serviceForm, description: e.target.value })} rows={4}
+                                            className="w-full bg-accent-peach/5 border-2 border-transparent focus:border-brand/30 rounded-3xl px-6 py-5 text-sm font-medium text-black transition-all shadow-inner resize-none" placeholder="Elaborate on the specific value and details of this clinic service..." />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-white rounded-[3rem] p-10 shadow-2xl shadow-accent-brown/5 border border-white space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="text-xl font-black text-accent-brown tracking-tight">Visibility</h4>
+                                    <button onClick={() => setServiceForm({ ...serviceForm, is_active: !serviceForm.is_active })} className="transition-transform active:scale-95">
+                                        {serviceForm.is_active ? <ToggleRight className="w-12 h-12 text-brand" /> : <ToggleLeft className="w-12 h-12 text-black" />}
+                                    </button>
+                                </div>
+                                <p className="text-[10px] font-black text-black uppercase tracking-widest opacity-60">Control whether this service is available for public booking.</p>
+                            </div>
+                        </div>
+
+                        {/* Financials & Deliverables Column */}
+                        <div className="xl:col-span-8 space-y-8">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                {[
+                                    { label: 'Market Price (₱)', icon: Scissors, value: serviceForm.price, key: 'price', color: 'text-brand', prefix: '₱' },
+                                    { label: 'Time Allocated', icon: Timer, value: serviceForm.duration_minutes, key: 'duration_minutes', color: 'text-blue-500', suffix: ' Min' },
+                                    { label: 'Loyalty Units', icon: Award, value: serviceForm.loyalty_points, key: 'loyalty_points', color: 'text-green-500', suffix: ' pts' },
+                                ].map(stat => (
+                                    <div key={stat.label} className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-accent-brown/5 border border-white space-y-6 group hover:border-brand/20 transition-all duration-500">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-12 h-12 rounded-2xl bg-accent-peach/10 flex items-center justify-center ${stat.color}`}><stat.icon className="w-6 h-6" /></div>
+                                            <label className="text-[9px] font-black uppercase tracking-[0.2em] text-black">{stat.label}</label>
+                                        </div>
+                                        <div className="relative">
+                                            <input type="number" value={stat.value} onChange={e => setServiceForm({ ...serviceForm, [stat.key]: parseFloat(e.target.value) || 0 })}
+                                                className="w-full bg-accent-peach/5 border-none focus:ring-0 text-3xl font-black text-accent-brown tracking-tighter p-0 bg-transparent placeholder:text-black/10" />
+                                            <div className="absolute bottom-0 left-0 h-0.5 w-8 bg-brand/40 group-hover:w-full transition-all duration-700" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {serviceForm.is_package && (
+                                <div className="bg-white rounded-[4rem] p-10 md:p-14 shadow-2xl shadow-accent-brown/10 border border-white relative overflow-hidden group">
+                                    <div className="absolute top-0 right-0 w-80 h-80 bg-[#ea580c]/5 rounded-full blur-[80px] -mr-40 -mt-40 transition-transform duration-1000 group-hover:scale-125" />
+                                    <div className="relative z-10">
+                                        <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
+                                            <div className="space-y-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-14 h-14 rounded-2xl bg-[#ea580c]/10 flex items-center justify-center text-[#ea580c] shadow-lg shadow-[#ea580c]/10"><Package className="w-7 h-7" /></div>
+                                                    <h4 className="text-3xl font-black text-accent-brown tracking-tighter">Package Contents</h4>
+                                                </div>
+                                                <p className="text-black text-sm font-medium max-w-sm">Bundle multiple standard offerings into a high-value package for your customers.</p>
+                                            </div>
+                                            <button onClick={() => setShowSelectionModal(true)}
+                                                className="flex items-center gap-4 bg-[#ea580c] text-white px-10 py-5 rounded-[2rem] font-black text-[11px] uppercase tracking-widest hover:bg-black transition-all shadow-2xl shadow-[#ea580c]/20">
+                                                <Plus className="w-5 h-5 transition-transform duration-500 hover:rotate-90" strokeWidth={3} />
+                                                Add Services
+                                            </button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <AnimatePresence mode="popLayout">
+                                                {JSON.parse(serviceForm.package_items_json || '[]').map((item: string, idx: number) => (
+                                                    <motion.div key={item} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+                                                        className="group flex items-center justify-between p-6 bg-accent-peach/5 border border-accent-brown/5 rounded-[2rem] hover:bg-white hover:shadow-xl hover:shadow-accent-brown/5 transition-all duration-300">
+                                                        <div className="flex items-center gap-5">
+                                                            <div className="h-12 w-1.5 bg-[#ea580c] rounded-full group-hover:h-8 transition-all" />
+                                                            <p className="font-black text-accent-brown text-base tracking-tight">{item}</p>
+                                                        </div>
+                                                        <button onClick={() => togglePackageItem(item)} className="w-10 h-10 rounded-xl bg-white text-black/20 hover:text-red-500 hover:bg-red-50 transition-all flex items-center justify-center">
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </motion.div>
+                                                ))}
+                                            </AnimatePresence>
+                                            {JSON.parse(serviceForm.package_items_json || '[]').length === 0 && (
+                                                <div className="col-span-full py-20 border-2 border-dashed border-accent-brown/10 rounded-[3rem] flex flex-col items-center justify-center gap-4 text-center">
+                                                    <div className="w-16 h-16 bg-accent-peach/20 rounded-full flex items-center justify-center text-accent-brown/30"><Archive className="w-8 h-8" /></div>
+                                                    <p className="text-[10px] uppercase font-black tracking-widest text-black/40">No services bundled yet</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Toast Notification for Editor */}
+                            <AnimatePresence>
+                                {toast && (
+                                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
+                                        className={`fixed bottom-10 right-10 z-[100] flex items-center gap-3 px-8 py-5 rounded-[2rem] shadow-2xl font-black text-[10px] uppercase tracking-widest border-2 ${toast.type === 'success' ? 'bg-white border-green-500 text-green-600' : 'bg-white border-red-500 text-red-600'}`}>
+                                        {toast.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                                        {toast.msg}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Toast */}
+                {/* Editor Specific Sub-Modals */}
+                <AnimatePresence>
+                    {showSelectionModal && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSelectionModal(false)} className="absolute inset-0 bg-accent-brown/80 backdrop-blur-2xl" />
+                            <motion.div initial={{ scale: 0.9, opacity: 0, y: 30 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 30 }}
+                                className="relative bg-white rounded-[4rem] w-full max-w-5xl shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col border border-white" style={{ height: '85vh' }}>
+                                <div className="p-12 border-b border-accent-brown/5 bg-accent-peach/5 flex items-center justify-between shrink-0 relative">
+                                    <div className="absolute top-0 right-0 w-96 h-96 bg-[#ea580c]/5 rounded-full blur-[100px] -mr-48 -mt-48 pointer-events-none" />
+                                    <div className="relative z-10">
+                                        <h3 className="text-4xl font-black text-accent-brown tracking-tighter">Package Builder</h3>
+                                        <p className="text-[10px] font-black text-brand uppercase tracking-[0.4em] mt-3 bg-brand/10 px-4 py-1 rounded-full w-fit">
+                                            {JSON.parse(serviceForm.package_items_json || '[]').length} Components Selected
+                                        </p>
+                                    </div>
+                                    <button onClick={() => setShowSelectionModal(false)} className="w-14 h-14 hover:bg-white rounded-2xl flex items-center justify-center transition-all shadow-sm border border-transparent hover:border-accent-brown/5 group">
+                                        <X className="w-8 h-8 text-black group-hover:text-accent-brown transition-colors" />
+                                    </button>
+                                </div>
+
+                                <div className="flex flex-1 overflow-hidden">
+                                    <div className="w-80 shrink-0 border-r border-accent-brown/5 overflow-y-auto p-8 space-y-4 bg-accent-peach/5 custom-scrollbar">
+                                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-black mb-6 px-2 opacity-40">Categories</p>
+                                        {Object.keys(SERVICE_CATEGORIES).map(cat => {
+                                            const catItems = SERVICE_CATEGORIES[cat];
+                                            const selectedNames = JSON.parse(serviceForm.package_items_json || '[]') as string[];
+                                            const isAllSelected = catItems.length > 0 && catItems.every(name => selectedNames.includes(name));
+                                            const isSomeSelected = !isAllSelected && catItems.some(name => selectedNames.includes(name));
+
+                                            return (
+                                                <div key={cat} className="group flex items-center gap-3 p-1.5 rounded-3xl hover:bg-white transition-all duration-300">
+                                                    <button type="button" onClick={() => toggleCategoryItems(catItems)}
+                                                        className={`w-12 h-12 shrink-0 flex items-center justify-center rounded-2xl border-2 transition-all ${isAllSelected ? 'bg-[#ea580c] border-[#ea580c] text-white shadow-lg' : isSomeSelected ? 'bg-white border-[#ea580c]/40 text-[#ea580c]' : 'bg-white border-black text-black group-hover:border-black'
+                                                            }`}>
+                                                        {isAllSelected ? <Check className="w-6 h-6" strokeWidth={4} /> : isSomeSelected ? <div className="w-3 h-0.5 rounded-full bg-[#ea580c]" /> : <Plus className="w-5 h-5" />}
+                                                    </button>
+                                                    <button type="button" onClick={() => setSelectionCategory(cat)}
+                                                        className={`flex-1 text-left px-5 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all ${(selectionCategory || Object.keys(SERVICE_CATEGORIES)[0]) === cat ? 'bg-accent-brown text-white shadow-xl' : 'text-black hover:text-accent-brown'}`}>
+                                                        {cat}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-white">
+                                        {(() => {
+                                            const activeCat = selectionCategory || Object.keys(SERVICE_CATEGORIES)[0];
+                                            const selectedNames = JSON.parse(serviceForm.package_items_json || '[]') as string[];
+                                            return activeCat && (
+                                                <motion.div key={activeCat} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 gap-4">
+                                                    {SERVICE_CATEGORIES[activeCat].map((name: string) => {
+                                                        const isSelected = selectedNames.includes(name);
+                                                        const match = services.find(s => s.name === name);
+                                                        return (
+                                                            <button key={name} type="button" onClick={() => togglePackageItem(name)}
+                                                                className={`w-full flex items-center gap-8 p-8 rounded-[2.5rem] border-2 transition-all duration-500 text-left relative overflow-hidden group ${isSelected ? 'border-brand bg-brand text-white shadow-2xl shadow-brand/20' : 'border-transparent bg-accent-peach/5 hover:bg-white hover:border-brand/20 text-accent-brown'
+                                                                    }`}>
+                                                                <div className="flex-1 min-w-0 relative z-10">
+                                                                    <p className={`text-xl font-black tracking-tight truncate ${isSelected ? 'text-white' : 'text-accent-brown'}`}>{name}</p>
+                                                                    <div className="flex items-center gap-4 mt-3">
+                                                                        <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg ${isSelected ? 'bg-white/20 text-white' : 'bg-green-100 text-green-700'}`}>Standard Offer</span>
+                                                                        {match && <span className={`text-[10px] font-black uppercase tracking-widest font-mono ${isSelected ? 'text-white/40' : 'text-black/40'}`}>₱{match.price} · {match.duration_minutes}M</span>}
+                                                                    </div>
+                                                                </div>
+                                                                {isSelected ? <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center relative z-10"><Check className="w-7 h-7 text-white" strokeWidth={4} /></div> : <div className="w-12 h-12 bg-white shadow-sm rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 translate-x-4 group-hover:translate-x-0 transition-all"><Plus className="w-6 h-6 text-black" /></div>}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </motion.div>
+                                            );
+                                        })()}
+                                    </div>
+                                </div>
+                                <div className="p-10 border-t border-accent-brown/5 bg-accent-peach/5 shrink-0">
+                                    <button onClick={() => setShowSelectionModal(false)}
+                                        className="w-full h-20 rounded-[2.5rem] font-black text-xs uppercase tracking-[0.4em] bg-brand text-white hover:bg-black transition-all shadow-2xl shadow-brand/20 active:scale-95 leading-none">
+                                        Update Bundle Components
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                    {showServicePickerModal && (
+                        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowServicePickerModal(false)} className="absolute inset-0 bg-accent-brown/80 backdrop-blur-2xl" />
+                            <motion.div initial={{ scale: 0.9, opacity: 0, y: 30 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 30 }}
+                                className="relative bg-white rounded-[4rem] w-full max-w-5xl shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col border border-white" style={{ height: '85vh' }}>
+                                <div className="p-12 border-b border-accent-brown/5 bg-accent-peach/5 flex items-center justify-between shrink-0 relative">
+                                    <div className="absolute top-0 right-0 w-96 h-96 bg-brand/5 rounded-full blur-[100px] -mr-48 -mt-48 pointer-events-none" />
+                                    <div className="relative z-10">
+                                        <h3 className="text-4xl font-black text-accent-brown tracking-tighter">Service Library</h3>
+                                        <p className="text-[10px] font-black text-black uppercase tracking-[0.4em] mt-3 opacity-60">Template Catalog</p>
+                                    </div>
+                                    <button onClick={() => setShowServicePickerModal(false)} className="w-14 h-14 hover:bg-white rounded-2xl flex items-center justify-center transition-all shadow-sm border border-transparent hover:border-accent-brown/5 group">
+                                        <X className="w-8 h-8 text-black group-hover:text-accent-brown transition-colors" />
+                                    </button>
+                                </div>
+
+                                <div className="flex flex-1 overflow-hidden">
+                                    <div className="w-80 shrink-0 border-r border-accent-brown/5 overflow-y-auto p-8 space-y-4 bg-accent-peach/5 custom-scrollbar">
+                                        {Object.keys(SERVICE_CATEGORIES).map(cat => (
+                                            <button key={cat} type="button" onClick={() => setServiceCategory(cat)}
+                                                className={`w-full text-left px-8 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest transition-all duration-300 ${(serviceCategory || Object.keys(SERVICE_CATEGORIES)[0]) === cat ? 'bg-brand text-white shadow-2xl shadow-brand/20 scale-[1.05]' : 'text-black hover:text-accent-brown hover:bg-white shadow-sm'}`}>
+                                                {cat}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto p-12 custom-scrollbar bg-white">
+                                        {(() => {
+                                            const activeCat = serviceCategory || Object.keys(SERVICE_CATEGORIES)[0];
+                                            return activeCat && (
+                                                <motion.div key={activeCat} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                                    {SERVICE_CATEGORIES[activeCat].map(service => {
+                                                        const isSelected = serviceForm.name === service;
+                                                        return (
+                                                            <button key={service} type="button"
+                                                                onClick={() => { setServiceForm(f => ({ ...f, name: service })); setShowServicePickerModal(false); }}
+                                                                className={`w-full p-8 rounded-[2.5rem] border-2 transition-all duration-500 text-left relative overflow-hidden group ${isSelected ? 'border-brand bg-brand text-white shadow-2xl shadow-brand/20' : 'border-transparent bg-accent-peach/5 hover:bg-white hover:border-brand/20 text-accent-brown'}`}>
+                                                                <p className={`text-xl font-black tracking-tight leading-tight ${isSelected ? 'text-white' : 'text-accent-brown'}`}>{service}</p>
+                                                                <div className="flex items-center gap-3 mt-5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <div className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white' : 'bg-brand'}`} />
+                                                                    <span className={`text-[9px] font-black uppercase tracking-widest ${isSelected ? 'text-white/60' : 'text-brand'}`}>Deploy Service</span>
+                                                                </div>
+                                                                {isSelected && <Check className="absolute top-8 right-8 w-6 h-6 text-white" strokeWidth={4} />}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </motion.div>
+                                            );
+                                        })()}
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+            </DashboardLayout>
+        );
+    }
+
+    return (
+        <DashboardLayout title="">
+            <div className="space-y-8">
+                {/* Redesigned Header Area */}
+                <div className="relative rounded-[2.5rem] bg-brand p-8 text-white shadow-2xl shadow-brand/20 lg:p-12">
+                    <div className="absolute inset-0 rounded-[2.5rem] overflow-hidden pointer-events-none">
+                        <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-brand/20 blur-3xl pointer-events-none" />
+                        <div className="absolute -left-20 -bottom-20 h-64 w-64 rounded-full bg-accent-peach/5 blur-3xl pointer-events-none" />
+                    </div>
+
+                    <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+                        <div>
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="h-1 w-12 bg-white rounded-full" />
+                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Management Portal</span>
+                            </div>
+                            <h2 className="text-4xl lg:text-5xl font-black tracking-tighter mb-2 text-white">Clinic Bookings</h2>
+                            <p className="text-sm font-medium text-white max-w-md">Oversee appointments, manage clinic capacity, and monitor service performance across all locations.</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-4 min-w-[280px]">
+                            {token && <BranchSelector token={token} onBranchChange={setBranchId} currentBranchId={branchId} />}
+                        </div>
+                    </div>
+
+                    {/* Integrated Tab Navigation */}
+                    <div className="relative z-10 flex items-center gap-1 bg-black/20 backdrop-blur-md rounded-2xl p-1.5 mt-10 w-fit border border-white/10">
+                        {[
+                            { id: 'reservations', label: 'Reservations', icon: ClipboardList },
+                            { id: 'hours', label: 'Schedule', icon: Clock },
+                            { id: 'special', label: 'Overrides', icon: Calendar },
+                            { id: 'services', label: 'Clinic Service', icon: Tag },
+                        ].map(({ id, label, icon: Icon }) => (
+                            <button key={id} onClick={() => setTab(id as any)}
+                                className={`flex items-center gap-2.5 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all duration-300 ${tab === id ? 'bg-white text-accent-brown shadow-xl scale-[1.02]' : 'text-white hover:bg-white/10'}`}>
+                                <Icon className={`w-4 h-4 ${tab === id ? 'text-brand' : 'text-white/40'}`} />
+                                {label}
+                                {id === 'reservations' && (pending + confirmed) > 0 && (
+                                    <span className={`flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-[9px] font-black tabular-nums transition-colors ${tab === id ? 'bg-brand text-white' : 'bg-white/20 text-white'}`}>
+                                        {pending + confirmed}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Toast Notification */}
                 <AnimatePresence>
                     {toast && (
-                        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-                            className={`fixed top-28 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 rounded-full shadow-xl font-bold text-sm ${toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-500 text-white'}`}>
+                        <motion.div initial={{ opacity: 0, y: -20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0, y: -20, x: '-50%' }}
+                            className={`fixed top-28 left-1/2 z-[100] flex items-center gap-3 px-6 py-4 rounded-3xl shadow-2xl font-black text-[10px] uppercase tracking-widest border-2 ${toast.type === 'success' ? 'bg-white border-green-500 text-green-600' : 'bg-white border-red-500 text-red-600'}`}>
                             {toast.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
                             {toast.msg}
                         </motion.div>
                     )}
                 </AnimatePresence>
 
-                {/* Tab Bar */}
-                <div className="flex items-center gap-2 bg-white rounded-2xl p-2 shadow-xl shadow-accent-brown/5 border border-white w-fit">
-                    {[
-                        { id: 'reservations', label: 'Reservations', icon: ClipboardList },
-                        { id: 'hours', label: 'Operating Hours', icon: Clock },
-                        { id: 'special', label: 'Special Dates', icon: Calendar },
-                        { id: 'services', label: 'Services', icon: Tag },
-                    ].map(({ id, label, icon: Icon }) => (
-                        <button key={id} onClick={() => setTab(id as any)}
-                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${tab === id ? 'bg-brand-dark text-white shadow-lg shadow-brand-dark/20' : 'text-accent-brown/50 hover:bg-accent-peach/30 hover:text-accent-brown'}`}>
-                            <Icon className="w-3.5 h-3.5" />
-                            {label}
-                            {id === 'reservations' && (pending + confirmed) > 0 && (
-                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] ${tab === id ? 'bg-white text-brand-dark' : 'bg-brand-dark text-white'}`}>{pending + confirmed}</span>
-                            )}
-                        </button>
-                    ))}
-                </div>
-
                 {/* ── RESERVATIONS TAB ── */}
                 {tab === 'reservations' && (
-                    <div className="space-y-6">
-                        {/* Quick Stats */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {/* More Professional Stats Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                             {[
-                                { label: 'Total', value: reservations.length, color: 'bg-accent-peach/30 text-accent-brown' },
-                                { label: 'Pending', value: pending, color: 'bg-yellow-50 text-yellow-700' },
-                                { label: 'Confirmed', value: confirmed, color: 'bg-blue-50 text-blue-700' },
-                                { label: 'Completed', value: reservations.filter(r => r.status === 'Completed').length, color: 'bg-green-50 text-green-700' },
-                            ].map(({ label, value, color }) => (
-                                <div key={label} className={`rounded-2xl p-5 ${color} flex flex-col gap-1`}>
-                                    <span className="text-[10px] font-black uppercase tracking-widest opacity-60">{label}</span>
-                                    <span className="text-3xl font-black tracking-tight">{value}</span>
+                                { label: 'Total Volume', value: reservations.length, icon: ClipboardList, color: 'text-accent-brown', bg: 'bg-accent-peach/20', trend: 'Lifetime' },
+                                { label: 'Awaiting Action', value: pending, icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50', trend: 'Requires update' },
+                                { label: 'Confirmed', value: confirmed, icon: CheckCircle, color: 'text-blue-600', bg: 'bg-blue-50', trend: 'Scheduled' },
+                                { label: 'Successfully Met', value: reservations.filter(r => r.status === 'Completed').length, icon: Award, color: 'text-green-600', bg: 'bg-green-50', trend: 'Completed' },
+                            ].map(({ label, value, icon: Icon, color, bg, trend }) => (
+                                <div key={label} className={`group relative bg-white rounded-3xl p-6 shadow-xl shadow-accent-brown/5 border border-white hover:border-brand/20 transition-all duration-300 overflow-hidden`}>
+                                    <div className={`absolute -right-4 -top-4 h-24 w-24 rounded-full opacity-5 group-hover:scale-150 transition-transform duration-500 ${bg}`} />
+                                    <div className="relative z-10">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${bg} ${color}`}>
+                                                <Icon className="w-6 h-6" />
+                                            </div>
+                                            <div className="text-[10px] font-black uppercase tracking-widest text-black bg-accent-peach/10 px-2 py-1 rounded-md">{trend}</div>
+                                        </div>
+                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-black block mb-1">{label}</span>
+                                        <div className="flex items-baseline gap-2">
+                                            <span className={`text-4xl font-black tracking-tight text-accent-brown`}>{value}</span>
+                                        </div>
+                                    </div>
                                 </div>
                             ))}
                         </div>
 
-                        {/* Filter Tabs */}
-                        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-                            {STATUS_FILTERS.map(f => (
-                                <button key={f} onClick={() => setFilter(f)}
-                                    className={`shrink-0 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${filter === f ? 'bg-brand-dark text-white shadow-lg shadow-brand-dark/20' : 'bg-white text-accent-brown/50 hover:bg-accent-peach/30'}`}>
-                                    {f}
-                                </button>
-                            ))}
+                        {/* Integrated Filter System */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-white rounded-3xl p-4 shadow-xl shadow-accent-brown/5 border border-white">
+                            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar shrink-0">
+                                {STATUS_FILTERS.map(f => {
+                                    const count = f === 'All' ? reservations.length : reservations.filter(r => r.status === f).length;
+                                    return (
+                                        <button key={f} onClick={() => setFilter(f)}
+                                            className={`relative shrink-0 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 ${filter === f ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-black hover:bg-accent-peach/30 hover:text-accent-brown'}`}>
+                                            {f}
+                                            <span className={`flex h-4 min-w-[1rem] items-center justify-center rounded-lg px-1 text-[8px] font-black tabular-nums transition-colors ${filter === f ? 'bg-white text-brand' : 'bg-accent-brown/10 text-black'}`}>
+                                                {count}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <div className="h-10 w-px bg-accent-brown/5 hidden sm:block" />
+                            <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-black">
+                                <Calendar className="w-4 h-4" />
+                                Showing {filtered.length} matching entries
+                            </div>
                         </div>
 
-                        {/* Reservation List */}
-                        {loading && <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 text-brand-dark animate-spin" /></div>}
+                        {/* Reservation List with Enhanced Visual Hierarchy */}
+                        {loading && <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 text-brand animate-spin" /></div>}
                         {!loading && filtered.length === 0 && (
-                            <div className="bg-white rounded-[2rem] p-16 flex flex-col items-center gap-4 text-center shadow-xl shadow-accent-brown/5">
-                                <div className="w-20 h-20 bg-accent-peach/30 rounded-full flex items-center justify-center"><Calendar className="w-10 h-10 text-accent-brown/30" /></div>
-                                <div><h3 className="font-black text-accent-brown text-xl tracking-tight">No reservations found</h3><p className="text-accent-brown/50 text-sm mt-1">Bookings from customers will appear here.</p></div>
-                            </div>
+                            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                                className="bg-white rounded-[3rem] p-24 flex flex-col items-center gap-6 text-center shadow-2xl shadow-accent-brown/10 border border-white">
+                                <div className="w-24 h-24 bg-accent-peach rounded-full flex items-center justify-center border-4 border-white shadow-xl"><Calendar className="w-12 h-12 text-brand" /></div>
+                                <div><h3 className="font-black text-accent-brown text-2xl tracking-tight mb-2">No Records Found</h3><p className="text-black text-sm font-medium">There are currently no reservations under the "{filter}" status.</p></div>
+                                <button onClick={() => setFilter('All')} className="text-[10px] font-black uppercase tracking-[0.2em] text-brand hover:underline">View all records</button>
+                            </motion.div>
                         )}
-                        <div className="space-y-4">
-                            {filtered.map((r, i) => {
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {filtered.slice((reservationsPage - 1) * RESERVATIONS_PER_PAGE, reservationsPage * RESERVATIONS_PER_PAGE).map((r, i) => {
                                 const style = STATUS_STYLES[r.status] || STATUS_STYLES['Pending'];
                                 const actions = NEXT_STATUSES[r.status] || [];
+
+                                // Dynamic iconography based on service name
+                                let ServiceIcon = Activity;
+                                const lowerService = (r.service || "").toLowerCase();
+                                if (lowerService.includes('vaccin') || lowerService.includes('rabies') || lowerService.includes('deworm')) ServiceIcon = Syringe;
+                                else if (lowerService.includes('groom') || lowerService.includes('trim') || lowerService.includes('bath')) ServiceIcon = Scissors;
+                                else if (lowerService.includes('consult') || lowerService.includes('check')) ServiceIcon = Stethoscope;
+
                                 return (
-                                    <motion.div key={r.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                                        className="bg-white rounded-2xl p-5 sm:p-6 shadow-xl shadow-accent-brown/5 border border-white hover:border-brand/20 transition-all">
-                                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                                            <div className="flex items-start gap-4">
-                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${style.bg}`}>
-                                                    <Scissors className={`w-5 h-5 ${style.text}`} />
+                                    <motion.div key={r.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                                        className="group relative bg-white rounded-2xl p-2 shadow-2xl shadow-accent-brown/5 border border-white hover:border-brand/10 transition-all duration-300 flex flex-col h-full">
+
+                                        {/* Profile/Service Top Block */}
+                                        <div className="p-6 flex flex-col gap-6 flex-1">
+                                            {/* Header Row: Icon & Status */}
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="relative shrink-0">
+                                                    <div className={`w-16 h-16 rounded-xl flex items-center justify-center shadow-inner ${style.bg}`}>
+                                                        <ServiceIcon className={`w-6 h-6 ${style.text}`} />
+                                                    </div>
+                                                    <div className={`absolute -right-2 -bottom-2 w-6 h-6 rounded-xl flex items-center justify-center border-4 border-white shadow-lg ${style.dot}`} />
                                                 </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                                                        <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">{r.id}</span>
-                                                        <span className={`inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${style.bg} ${style.text}`}>
-                                                            <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
-                                                            {r.status}
-                                                        </span>
+                                                <div className="flex flex-col items-end text-right mt-1">
+                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-black mb-1.5">{r.id}</span>
+                                                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full ${style.bg} ${style.text}`}>
+                                                        <div className={`w-1 h-1 rounded-full ${style.dot}`} />
+                                                        <span className="text-[8px] font-black uppercase tracking-widest">{r.status}</span>
                                                     </div>
-                                                    <p className="font-black text-accent-brown text-base mb-2">{r.service} — <span className="text-brand">{r.pet_name}</span></p>
-                                                    <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[10px] font-bold text-accent-brown/50">
-                                                        <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3" /> {r.date}</span>
-                                                        <span className="flex items-center gap-1.5"><Clock className="w-3 h-3" /> {r.time}</span>
-                                                        {r.location && <span className="flex items-center gap-1.5"><MapPin className="w-3 h-3" /> {r.location}</span>}
-                                                        <span className="flex items-center gap-1.5"><User className="w-3 h-3" /> {r.customer_name}</span>
-                                                    </div>
-                                                    {r.notes && <p className="mt-2 text-xs text-accent-brown/60 italic bg-accent-peach/20 px-3 py-1.5 rounded-lg">"{r.notes}"</p>}
                                                 </div>
                                             </div>
-                                            <div className="flex flex-col items-end gap-3 shrink-0">
-                                                <p className="font-black text-accent-brown text-xl">₱{r.total.toFixed(2)}</p>
-                                                <div className="flex items-center gap-2 flex-wrap justify-end">
-                                                    {actions.map(action => {
-                                                        let isActionDisabled = updatingId === r.db_id;
-                                                        if (action.value === 'Ready for Pickup') {
-                                                            const match = services.find(s => s.name === r.service);
-                                                            const duration = match ? match.duration_minutes || 60 : 60;
-                                                            const [timeStr, ampm] = r.time.split(' ');
-                                                            const [hourStr, minStr] = timeStr.split(':');
-                                                            let hour = parseInt(hourStr);
-                                                            if (ampm === 'PM' && hour !== 12) hour += 12;
-                                                            if (ampm === 'AM' && hour === 12) hour = 0;
 
-                                                            const appointmentEnd = new Date(r.date);
-                                                            appointmentEnd.setHours(hour, parseInt(minStr) + duration, 0, 0);
-                                                            const now = new Date();
-                                                            if (now < appointmentEnd) isActionDisabled = true;
-                                                        }
-
-                                                        return (
-                                                            <button key={action.value}
-                                                                onClick={() => updateStatus(r.db_id, action.value)}
-                                                                disabled={isActionDisabled}
-                                                                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isActionDisabled ? 'opacity-50 cursor-not-allowed filter grayscale' : ''} ${action.color}`}>
-                                                                {updatingId === r.db_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
-                                                                {action.label}
-                                                            </button>
-                                                        );
-                                                    })}
+                                            {/* Service Title & Sub-Services */}
+                                            <div className="flex flex-col gap-2">
+                                                <div className="flex flex-col gap-1">
+                                                    <h4 className="text-2xl font-black text-accent-brown tracking-tighter leading-none mb-1">
+                                                        {r.service}
+                                                    </h4>
+                                                    {r.pet_name && (
+                                                        <div className="flex flex-col gap-1 items-start">
+                                                            <span className="text-brand text-sm tracking-tight font-bold bg-brand/10 px-3 py-0.5 rounded-lg">for {r.pet_name}</span>
+                                                            <span className="text-[10px] font-black uppercase tracking-widest text-black pl-1">{r.pet_type}{r.pet_breed ? ` • ${r.pet_breed}` : ''}</span>
+                                                        </div>
+                                                    )}
                                                 </div>
+
+                                                {/* Specify Sub-Services if Package */}
+                                                {(() => {
+                                                    const matchedService = services.find(s => s.name === r.service);
+                                                    if (matchedService && matchedService.is_package && matchedService.package_items_json) {
+                                                        try {
+                                                            const items = JSON.parse(matchedService.package_items_json);
+                                                            if (Array.isArray(items) && items.length > 0) {
+                                                                return (
+                                                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                                                        {items.map((it: string, idx: number) => (
+                                                                            <span key={idx} className="text-[9px] font-black tracking-widest uppercase bg-accent-peach/20 text-black px-2 py-0.5 rounded-md border border-accent-brown/10">
+                                                                                {it}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                );
+                                                            }
+                                                        } catch (e) { }
+                                                    }
+                                                    return null;
+                                                })()}
+                                            </div>
+
+                                            {/* Details Grid (2x2) */}
+                                            <div className="grid grid-cols-2 gap-4 mt-auto pt-2">
+                                                <div className="flex items-center gap-3 text-black">
+                                                    <div className="w-8 h-8 rounded-xl bg-accent-peach/30 flex items-center justify-center shrink-0"><Calendar className="w-4 h-4" /></div>
+                                                    <div className="flex flex-col min-w-0">
+                                                        <span className="text-[8px] font-black uppercase tracking-widest text-black">Date</span>
+                                                        <span className="text-xs font-bold truncate text-black">{r.date}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3 text-black">
+                                                    <div className="w-8 h-8 rounded-xl bg-accent-peach/30 flex items-center justify-center shrink-0"><Clock className="w-4 h-4" /></div>
+                                                    <div className="flex flex-col min-w-0">
+                                                        <span className="text-[8px] font-black uppercase tracking-widest text-black">Time</span>
+                                                        <span className="text-xs font-bold truncate text-black">{r.time}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3 text-black">
+                                                    <div className="w-8 h-8 rounded-xl bg-accent-peach/30 flex items-center justify-center shrink-0"><User className="w-4 h-4" /></div>
+                                                    <div className="flex flex-col min-w-0">
+                                                        <span className="text-[8px] font-black uppercase tracking-widest text-black">Cust</span>
+                                                        <span className="text-xs font-bold truncate text-black">{r.customer_name}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3 text-black">
+                                                    <div className="w-8 h-8 rounded-xl bg-accent-peach/30 flex items-center justify-center shrink-0"><MapPin className="w-4 h-4" /></div>
+                                                    <div className="flex flex-col min-w-0">
+                                                        <span className="text-[8px] font-black uppercase tracking-widest text-black">Loc</span>
+                                                        <span className="text-xs font-bold truncate text-black">{r.location || 'Clinic'}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Bottom Action & Price Section */}
+                                        <div className="bg-accent-peach/10 rounded-xl p-6 flex flex-col gap-5 border border-accent-brown/5 mt-auto">
+                                            <div className="flex items-end justify-between border-b border-accent-brown/5 pb-4">
+                                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-black">Total</span>
+                                                <p className="text-3xl font-black text-black tracking-tighter">₱{r.total.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</p>
+                                            </div>
+
+                                            <div className="flex flex-col gap-2">
+                                                {actions.length > 0 ? actions.map(action => {
+                                                    let isActionDisabled = updatingId === r.db_id;
+                                                    if (action.value === 'Ready for Pickup') {
+                                                        const match = services.find(s => s.name === r.service);
+                                                        const duration = match ? match.duration_minutes || 60 : 60;
+                                                        const [timeStr, ampm] = r.time.split(' ');
+                                                        const [hourStr, minStr] = timeStr.split(':');
+                                                        let hour = parseInt(hourStr);
+                                                        if (ampm === 'PM' && hour !== 12) hour += 12;
+                                                        if (ampm === 'AM' && hour === 12) hour = 0;
+                                                        const appointmentEnd = new Date(r.date);
+                                                        appointmentEnd.setHours(hour, parseInt(minStr) + duration, 0, 0);
+                                                        const now = new Date();
+                                                        if (now < appointmentEnd) isActionDisabled = true;
+                                                    }
+
+                                                    const ActionIcon = action.icon;
+                                                    return (
+                                                        <button key={action.value}
+                                                            onClick={() => updateStatus(r.db_id, action.value)}
+                                                            disabled={isActionDisabled}
+                                                            className={`w-full flex items-center justify-center gap-3 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 shadow-xl ${isActionDisabled ? 'bg-accent-brown/10 text-black cursor-not-allowed shadow-none select-none' : `${action.color} shadow-accent-brown/10 active:scale-95 cursor-pointer`}`}>
+                                                            {updatingId === r.db_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ActionIcon className="w-4 h-4" />}
+                                                            {action.label}
+                                                        </button>
+                                                    );
+                                                }) : (
+                                                    <div className="py-3.5 text-center rounded-xl bg-white/50 border border-dashed border-accent-brown/20">
+                                                        <span className="text-[9px] font-black uppercase tracking-widest text-black italic">No actions available</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </motion.div>
                                 );
                             })}
                         </div>
+
+                        {/* Pagination Controls */}
+                        {filtered.length > RESERVATIONS_PER_PAGE && (
+                            <div className="flex items-center justify-between bg-white rounded-3xl p-4 shadow-xl shadow-accent-brown/5 border border-white">
+                                <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-black">
+                                    <ClipboardList className="w-4 h-4" />
+                                    Showing {(reservationsPage - 1) * RESERVATIONS_PER_PAGE + 1}-{Math.min(reservationsPage * RESERVATIONS_PER_PAGE, filtered.length)} of {filtered.length} entries
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => setReservationsPage(p => Math.max(1, p - 1))} disabled={reservationsPage === 1}
+                                        className="w-10 h-10 rounded-xl flex items-center justify-center bg-white border border-accent-brown/5 text-accent-brown hover:text-brand hover:shadow-lg transition-all disabled:opacity-30">
+                                        <ChevronLeft className="w-5 h-5" />
+                                    </button>
+                                    <div className="flex items-center gap-1.5">
+                                        {Array.from({ length: Math.ceil(filtered.length / RESERVATIONS_PER_PAGE) }).map((_, idx) => (
+                                            <button key={idx} onClick={() => setReservationsPage(idx + 1)}
+                                                className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-[10px] transition-all duration-300 ${reservationsPage === idx + 1 ? 'bg-brand text-white shadow-lg' : 'bg-accent-peach/5 text-black hover:bg-accent-peach/20'}`}>
+                                                {idx + 1}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <button onClick={() => setReservationsPage(p => Math.min(Math.ceil(filtered.length / RESERVATIONS_PER_PAGE), p + 1))} disabled={reservationsPage >= Math.ceil(filtered.length / RESERVATIONS_PER_PAGE)}
+                                        className="w-10 h-10 rounded-xl flex items-center justify-center bg-white border border-accent-brown/5 text-accent-brown hover:text-brand hover:shadow-lg transition-all disabled:opacity-30">
+                                        <ChevronRight className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
                 {/* ── OPERATING HOURS TAB ── */}
                 {tab === 'hours' && (
-                    <div className="space-y-6">
-                        <div className="bg-white rounded-[2rem] shadow-xl shadow-accent-brown/5 border border-white overflow-hidden">
-                            <div className="p-6 sm:p-8 border-b border-accent-brown/5 bg-accent-peach/5">
-                                <h3 className="font-black text-accent-brown text-xl tracking-tight">Weekly Schedule</h3>
-                                <p className="text-accent-brown/50 text-sm mt-1">Set your clinic's open, break, and closing times for each day.</p>
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="bg-white rounded-[3rem] shadow-2xl shadow-accent-brown/5 border border-white overflow-hidden">
+                            <div className="p-8 sm:p-12 border-b border-accent-brown/5 bg-accent-peach/5 relative overflow-hidden">
+                                <div className="absolute right-0 top-0 w-64 h-64 bg-brand/5 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
+                                <div className="relative z-10">
+                                    <h3 className="font-black text-accent-brown text-3xl tracking-tighter">Weekly Schedule</h3>
+                                    <p className="text-black text-sm font-medium mt-2 max-w-xl">Define your clinic's core operating hours, including standard opening times and midday breaks for coordination.</p>
+                                </div>
                             </div>
-                            {loading ? <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 text-brand-dark animate-spin" /></div> : (
-                                <div className="p-4 sm:p-6 space-y-3">
+
+                            {loading ? (
+                                <div className="flex justify-center py-24"><Loader2 className="w-12 h-12 text-brand animate-spin" /></div>
+                            ) : (
+                                <div className="p-6 sm:p-10 space-y-4">
                                     {hours.map((h, i) => (
-                                        <motion.div key={h.day_of_week} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
-                                            className={`rounded-2xl border-2 transition-all ${h.is_open ? 'border-brand/20 bg-white' : 'border-accent-brown/5 bg-accent-peach/10'}`}>
-                                            <div className="flex items-center gap-4 p-4">
-                                                <button onClick={() => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, is_open: !d.is_open } : d))}
-                                                    className="shrink-0">
-                                                    {h.is_open
-                                                        ? <ToggleRight className="w-8 h-8 text-brand-dark" />
-                                                        : <ToggleLeft className="w-8 h-8 text-accent-brown/30" />}
-                                                </button>
-                                                <div className="w-28 shrink-0">
-                                                    <p className={`font-black text-sm ${h.is_open ? 'text-accent-brown' : 'text-accent-brown/30'}`}>{h.day_name}</p>
-                                                    {!h.is_open && <p className="text-[10px] font-bold text-accent-brown/30 uppercase tracking-widest">Closed</p>}
+                                        <motion.div key={h.day_of_week} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
+                                            className={`group relative rounded-[2rem] border-2 transition-all duration-500 overflow-hidden ${h.is_open ? 'border-accent-peach/50 bg-white shadow-xl shadow-accent-brown/5' : 'border-accent-brown/5 bg-accent-peach/5 opacity-60 grayscale'}`}>
+                                            <div className="flex flex-col xl:flex-row xl:items-center gap-8 p-6 lg:p-8">
+                                                <div className="flex items-center gap-6 min-w-[200px]">
+                                                    <button onClick={() => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, is_open: !d.is_open } : d))}
+                                                        className="shrink-0 transition-transform active:scale-90 duration-300">
+                                                        {h.is_open
+                                                            ? <div className="w-14 h-8 bg-brand rounded-full p-1 flex items-center justify-end transition-colors"><div className="w-6 h-6 bg-white rounded-full shadow-lg" /></div>
+                                                            : <div className="w-14 h-8 bg-accent-brown/10 rounded-full p-1 flex items-center transition-colors"><div className="w-6 h-6 bg-white rounded-full shadow-md" /></div>}
+                                                    </button>
+                                                    <div>
+                                                        <p className={`text-xl font-black tracking-tight ${h.is_open ? 'text-accent-brown' : 'text-black'}`}>{h.day_name}</p>
+                                                        <p className={`text-[9px] font-black uppercase tracking-[0.2em] mt-1 ${h.is_open ? 'text-brand' : 'text-black'}`}>{h.is_open ? 'Operational' : 'Facility Closed'}</p>
+                                                    </div>
                                                 </div>
+
                                                 {h.is_open && (
-                                                    <div className="flex flex-wrap items-center gap-3 flex-1">
-                                                        {/* Open */}
-                                                        <div className="flex flex-col gap-0.5 min-w-[120px]">
-                                                            <label className="text-[8px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Open</label>
+                                                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-end">
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-center gap-2 px-1">
+                                                                <Clock className="w-3 h-3 text-brand" />
+                                                                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-black">Opening Time</label>
+                                                            </div>
                                                             <CustomDropdown
                                                                 value={h.open_time || '09:00 AM'}
                                                                 options={TIME_OPTIONS}
                                                                 onChange={val => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, open_time: val } : d))}
                                                             />
                                                         </div>
-                                                        <span className="font-black text-accent-brown/30 text-xs mt-5">→</span>
-                                                        {/* Break Start */}
-                                                        <div className="flex flex-col gap-0.5 min-w-[120px]">
-                                                            <label className="text-[8px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Break Start</label>
+
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-center gap-2 px-1">
+                                                                <div className="w-3 h-3 border-2 border-accent-brown/20 rounded-sm" />
+                                                                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-black">Break Starts</label>
+                                                            </div>
                                                             <CustomDropdown
                                                                 value={h.break_start || 'No break'}
                                                                 options={['No break', ...TIME_OPTIONS]}
                                                                 onChange={val => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, break_start: val === 'No break' ? null : val, break_end: val === 'No break' ? null : d.break_end } : d))}
                                                             />
                                                         </div>
-                                                        {h.break_start && <>
-                                                            <span className="font-black text-accent-brown/30 text-xs mt-5">–</span>
-                                                            <div className="flex flex-col gap-0.5 min-w-[120px]">
-                                                                <label className="text-[8px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Break End</label>
+
+                                                        {h.break_start && (
+                                                            <div className="space-y-2">
+                                                                <div className="flex items-center gap-2 px-1">
+                                                                    <div className="w-3 h-3 border-2 border-brand/50 rounded-sm bg-brand/10" />
+                                                                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-black">Break Ends</label>
+                                                                </div>
                                                                 <CustomDropdown
                                                                     value={h.break_end || '—'}
                                                                     options={['—', ...TIME_OPTIONS]}
                                                                     onChange={val => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, break_end: val === '—' ? null : val } : d))}
                                                                 />
                                                             </div>
-                                                        </>}
-                                                        <span className="font-black text-accent-brown/30 text-xs mt-5">→</span>
-                                                        {/* Close */}
-                                                        <div className="flex flex-col gap-0.5 min-w-[120px]">
-                                                            <label className="text-[8px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Close</label>
+                                                        )}
+
+                                                        <div className="space-y-2 lg:col-start-4">
+                                                            <div className="flex items-center gap-2 px-1">
+                                                                <MapPin className="w-3 h-3 text-red-400" />
+                                                                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-black">Closing Time</label>
+                                                            </div>
                                                             <CustomDropdown
                                                                 value={h.close_time || '06:00 PM'}
                                                                 options={TIME_OPTIONS}
@@ -686,11 +1186,19 @@ export default function BusinessReservations() {
                                     ))}
                                 </div>
                             )}
-                            <div className="p-6 border-t border-accent-brown/5 flex justify-end">
+
+                            <div className="p-8 border-t border-accent-brown/5 bg-accent-peach/5 flex flex-col sm:flex-row items-center justify-between gap-6">
+                                <div className="flex items-center gap-3 text-black">
+                                    <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center shadow-sm border border-accent-brown/5"><CheckCircle className="w-5 h-5" /></div>
+                                    <span className="text-[10px] font-black uppercase tracking-widest leading-none">Last synced with <br />branch database</span>
+                                </div>
                                 <button onClick={saveHours} disabled={savingHours}
-                                    className="flex items-center gap-2.5 bg-brand-dark text-white px-8 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors shadow-lg shadow-brand-dark/20 disabled:opacity-50">
-                                    {savingHours ? <Loader2 className="w-4 h-4 animate-spin" /> : hoursSuccess ? <Check className="w-4 h-4" /> : <Settings className="w-4 h-4" />}
-                                    {hoursSuccess ? 'Saved!' : 'Save Schedule'}
+                                    className="group relative flex items-center gap-4 bg-brand text-white pl-8 pr-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-2xl shadow-brand/20 disabled:opacity-50 min-w-[240px]">
+                                    <div className="flex-1 flex items-center gap-3 justify-center">
+                                        {savingHours ? <Loader2 className="w-5 h-5 animate-spin text-brand" /> : hoursSuccess ? <Check className="w-5 h-5 text-green-400" /> : <Settings className="w-5 h-5 text-brand group-hover:rotate-90 transition-transform duration-700" />}
+                                        {hoursSuccess ? 'Success!' : 'Save Schedule'}
+                                    </div>
+                                    <div className="absolute right-4 w-1.5 h-1.5 bg-brand rounded-full animate-pulse" />
                                 </button>
                             </div>
                         </div>
@@ -699,124 +1207,129 @@ export default function BusinessReservations() {
 
                 {/* ── SPECIAL DATES TAB ── */}
                 {tab === 'special' && (
-                    <div className="space-y-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="font-black text-accent-brown text-xl tracking-tight">Advanced Overrides</h3>
-                                <p className="text-accent-brown/50 text-sm">Manage holidays, breaks, and special operating hours.</p>
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="bg-white rounded-[3rem] shadow-2xl shadow-accent-brown/5 border border-white overflow-hidden">
+                            <div className="p-8 sm:p-12 border-b border-accent-brown/5 bg-accent-peach/5 relative overflow-hidden">
+                                <div className="absolute right-0 top-0 w-64 h-64 bg-brand/5 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
+                                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                    <div>
+                                        <h3 className="font-black text-accent-brown text-3xl tracking-tighter">Advanced Overrides</h3>
+                                        <p className="text-black text-sm font-medium mt-2 max-w-xl">Configure holidays, sudden interruptions, or extended hours for specific dates without changing your master schedule.</p>
+                                    </div>
+                                    <div className="flex items-center gap-3 bg-white/50 backdrop-blur-sm p-2 rounded-2xl border border-white/50">
+                                        <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center text-brand"><Calendar className="w-5 h-5" /></div>
+                                        <div className="pr-4">
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-black">Active Overrides</p>
+                                            <p className="text-lg font-black text-accent-brown leading-none">{specialHours.length}</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="bg-white rounded-[2rem] shadow-xl shadow-accent-brown/5 border border-white overflow-hidden">
-                            <div className="p-6 sm:p-8 border-b border-accent-brown/5 bg-accent-peach/5">
-                                <h3 className="font-black text-accent-brown text-xl tracking-tight">Special Date Overrides</h3>
-                                <p className="text-accent-brown/50 text-sm mt-1">Set custom hours or mark specific dates as closed by selecting them on the calendar.</p>
-                            </div>
-
-                            <div className="p-6 sm:p-8">
+                            <div className="p-6 sm:p-10">
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                                    {/* Left: Inline Calendar */}
-                                    <div className="space-y-6">
-                                        <div className="flex items-center justify-between px-2">
-                                            <div className="flex flex-col">
-                                                <h4 className="text-2xl font-black text-accent-brown tracking-tighter leading-tight">
-                                                    {new Date(viewDate).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-                                                </h4>
-                                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand">Select a date to manage</p>
+                                    {/* Left: Premium Calendar */}
+                                    <div className="space-y-8">
+                                        <div className="flex items-center justify-between px-4">
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex flex-col">
+                                                    <h4 className="text-3xl font-black text-accent-brown tracking-tighter leading-tight">
+                                                        {new Date(viewDate).toLocaleDateString(undefined, { month: 'long' })}
+                                                    </h4>
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand">{viewDate.getFullYear()}</p>
+                                                </div>
                                             </div>
-                                            <div className="flex gap-2">
+                                            <div className="flex gap-2 bg-accent-peach/10 p-1.5 rounded-2xl border border-accent-brown/5">
                                                 <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1))}
-                                                    className="w-10 h-10 rounded-full border border-accent-brown/10 flex items-center justify-center hover:bg-white hover:shadow-lg transition-all text-accent-brown/40 hover:text-accent-brown active:scale-90">
+                                                    className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-white hover:text-brand hover:shadow-lg transition-all text-black active:scale-95">
                                                     <ChevronLeft className="w-5 h-5" />
                                                 </button>
                                                 <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1))}
-                                                    className="w-10 h-10 rounded-full border border-accent-brown/10 flex items-center justify-center hover:bg-white hover:shadow-lg transition-all text-accent-brown/40 hover:text-accent-brown active:scale-90">
+                                                    className="w-10 h-10 rounded-xl flex items-center justify-center hover:bg-white hover:text-brand hover:shadow-lg transition-all text-black active:scale-95">
                                                     <ChevronRight className="w-5 h-5" />
                                                 </button>
                                             </div>
                                         </div>
 
-                                        <div className="bg-accent-peach/5 border border-accent-brown/5 rounded-[2.5rem] p-6 sm:p-8">
-                                            <div className="grid grid-cols-7 gap-1 text-center mb-6">
-                                                {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(d => (
-                                                    <span key={d} className="text-[9px] font-black text-brand tracking-widest opacity-30">{d}</span>
-                                                ))}
-                                            </div>
+                                        <div className="bg-white rounded-[2.5rem] p-6 sm:p-8 shadow-xl shadow-accent-brown/5 border border-accent-brown/5 relative overflow-hidden group">
+                                            <div className="absolute inset-0 bg-accent-peach/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                                            <div className="relative z-10">
+                                                <div className="grid grid-cols-7 gap-2 text-center mb-8">
+                                                    {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(d => (
+                                                        <span key={d} className="text-[9px] font-black text-brand tracking-widest opacity-40">{d}</span>
+                                                    ))}
+                                                </div>
 
-                                            <div className="grid grid-cols-7 gap-1">
-                                                {/* Empty spaces for previous month */}
-                                                {Array.from({ length: new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay() }).map((_, i) => (
-                                                    <div key={`empty-${i}`} className="aspect-square" />
-                                                ))}
+                                                <div className="grid grid-cols-7 gap-3">
+                                                    {Array.from({ length: new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay() }).map((_, i) => (
+                                                        <div key={`empty-${i}`} className="aspect-square opacity-0" />
+                                                    ))}
 
-                                                {/* Days of the month */}
-                                                {Array.from({ length: new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate() }).map((_, i) => {
-                                                    const d = i + 1;
-                                                    const dateStr = new Date(viewDate.getFullYear(), viewDate.getMonth(), d).toLocaleDateString('en-CA');
-                                                    const isSelected = selectedSpecialDate === dateStr;
-                                                    const hasOverride = specialHours.find(sh => sh.specific_date === dateStr);
-                                                    const isToday = new Date().toLocaleDateString('en-CA') === dateStr;
+                                                    {Array.from({ length: new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate() }).map((_, i) => {
+                                                        const d = i + 1;
+                                                        const dateStr = new Date(viewDate.getFullYear(), viewDate.getMonth(), d).toLocaleDateString('en-CA');
+                                                        const isSelected = selectedSpecialDate === dateStr;
+                                                        const hasOverride = specialHours.find(sh => sh.specific_date === dateStr);
+                                                        const isToday = new Date().toLocaleDateString('en-CA') === dateStr;
 
-                                                    return (
-                                                        <button key={d} onClick={() => {
-                                                            setSelectedSpecialDate(dateStr);
-                                                            const existing = specialHours.find(sh => sh.specific_date === dateStr);
-                                                            if (existing) {
-                                                                setSpecialForm({ ...existing });
-                                                            } else {
-                                                                setSpecialForm({
-                                                                    specific_date: dateStr,
-                                                                    is_open: true,
-                                                                    open_time: '09:00 AM',
-                                                                    break_start: '12:00 PM',
-                                                                    break_end: '01:00 PM',
-                                                                    close_time: '06:00 PM'
-                                                                });
-                                                            }
-                                                        }}
-                                                            className={`relative aspect-square flex flex-col items-center justify-center rounded-2xl text-xs font-black transition-all group ${isSelected
-                                                                ? 'bg-brand text-white shadow-xl shadow-brand/20 scale-110 z-10'
-                                                                : isToday
-                                                                    ? 'bg-brand-dark/5 text-brand-dark'
-                                                                    : 'text-accent-brown/60 hover:bg-white hover:shadow-md'
-                                                                }`}>
-                                                            {d}
-                                                            {hasOverride && !isSelected && (
-                                                                <div className={`absolute bottom-2 w-1 h-1 rounded-full ${hasOverride.is_open ? 'bg-brand' : 'bg-red-400'}`} />
-                                                            )}
-                                                            {isSelected && (
-                                                                <motion.div layoutId="activeDay" className="absolute bottom-1.5 w-1 h-1 bg-white rounded-full" />
-                                                            )}
-                                                        </button>
-                                                    );
-                                                })}
+                                                        return (
+                                                            <button key={d} onClick={() => {
+                                                                setSelectedSpecialDate(dateStr);
+                                                                const existing = specialHours.find(sh => sh.specific_date === dateStr);
+                                                                if (existing) {
+                                                                    setSpecialForm({ ...existing });
+                                                                } else {
+                                                                    setSpecialForm({
+                                                                        specific_date: dateStr,
+                                                                        is_open: true,
+                                                                        open_time: '09:00 AM',
+                                                                        break_start: '12:00 PM',
+                                                                        break_end: '01:00 PM',
+                                                                        close_time: '06:00 PM'
+                                                                    });
+                                                                }
+                                                            }}
+                                                                className={`relative aspect-square flex flex-col items-center justify-center rounded-2xl text-[11px] font-black transition-all duration-300 ${isSelected
+                                                                ? 'bg-brand text-white shadow-2xl shadow-brand/20 scale-110 z-10'
+                                                                    : isToday
+                                                                        ? 'bg-brand/10 text-brand ring-2 ring-brand ring-offset-2 ring-offset-white'
+                                                                        : 'text-accent-brown/60 hover:bg-accent-peach/20'
+                                                                    }`}>
+                                                                {d}
+                                                                {hasOverride && !isSelected && (
+                                                                    <div className={`absolute bottom-2 w-1.5 h-1.5 rounded-full ${hasOverride.is_open ? 'bg-brand' : 'bg-red-400'} animate-pulse shadow-sm`} />
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
                                         </div>
 
-                                        <div className="flex flex-wrap gap-4 px-2">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-2 h-2 rounded-full bg-brand" />
-                                                <span className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40">Custom Hours</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-2 h-2 rounded-full bg-red-400" />
-                                                <span className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40">Special Closure</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-2 h-2 rounded-full bg-brand-dark/20" />
-                                                <span className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40">Today</span>
-                                            </div>
+                                        <div className="flex flex-wrap gap-6 px-4">
+                                            {[
+                                                { label: 'Custom Hours', color: 'bg-brand' },
+                                                { label: 'Facility Closed', color: 'bg-red-400' },
+                                                { label: 'Current Date', color: 'bg-brand/20 ring-2 ring-brand' }
+                                            ].map(item => (
+                                                <div key={item.label} className="flex items-center gap-3">
+                                                    <div className={`w-3 h-3 rounded-full ${item.color}`} />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-black">{item.label}</span>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
 
-                                    {/* Right: Override Form */}
-                                    <div className="space-y-6">
-                                        <div className="bg-accent-peach/5 border border-accent-brown/10 rounded-[2.5rem] p-8 space-y-8">
-                                            <div className="flex items-center justify-between">
+                                    {/* Right: Modern Override Form */}
+                                    <div className="space-y-8">
+                                        <div className="bg-accent-peach/10 rounded-[3rem] p-8 lg:p-10 border border-white shadow-xl shadow-accent-brown/5 space-y-10 relative overflow-hidden">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-brand/5 rounded-full blur-2xl -mr-16 -mt-16 pointer-events-none" />
+
+                                            <div className="flex items-start justify-between relative z-10">
                                                 <div>
-                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand">Managing date</p>
-                                                    <h5 className="text-xl font-black text-accent-brown tracking-tight">
-                                                        {new Date(selectedSpecialDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                                                    <p className="text-[11px] font-black uppercase tracking-[0.3em] text-brand mb-1">Override Details</p>
+                                                    <h5 className="text-3xl font-black text-accent-brown tracking-tighter">
+                                                        {new Date(selectedSpecialDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
                                                     </h5>
                                                 </div>
                                                 {specialHours.find(sh => sh.specific_date === selectedSpecialDate) && (
@@ -824,82 +1337,70 @@ export default function BusinessReservations() {
                                                         const id = specialHours.find(sh => sh.specific_date === selectedSpecialDate)?.id;
                                                         if (id) handleDeleteSpecial(id);
                                                     }}
-                                                        className="p-3 rounded-2xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm">
-                                                        <Trash2 className="w-5 h-5" />
+                                                        className="w-12 h-12 rounded-2xl bg-white text-red-400 hover:bg-red-500 hover:text-white transition-all shadow-lg shadow-red-500/5 group">
+                                                        <Trash2 className="w-5 h-5 mx-auto group-hover:rotate-12 transition-transform" />
                                                     </button>
                                                 )}
                                             </div>
 
-                                            <div className="space-y-6">
-                                                {/* Toggle */}
-                                                <div className="flex items-center justify-between bg-white p-5 rounded-[2rem] border border-accent-brown/5 shadow-sm">
-                                                    <div>
-                                                        <p className="font-black text-accent-brown text-sm">Open on this date?</p>
-                                                        <p className="text-[10px] text-accent-brown/40 uppercase font-black tracking-widest mt-0.5">Toggle to mark as closed</p>
+                                            <div className="space-y-8 relative z-10">
+                                                {/* Toggle Switch Card */}
+                                                <div className="bg-white p-6 rounded-[2rem] border border-accent-brown/5 shadow-sm group hover:shadow-md transition-shadow">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${specialForm.is_open ? 'bg-green-50 text-green-500' : 'bg-red-50 text-red-400'}`}>
+                                                                {specialForm.is_open ? <CheckCircle className="w-6 h-6" /> : <XCircle className="w-6 h-6" />}
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-black text-accent-brown text-base tracking-tight">Facility Status</p>
+                                                                <p className="text-[10px] text-black uppercase font-black tracking-widest mt-1">Open for business on {new Date(selectedSpecialDate).getDate()}th?</p>
+                                                            </div>
+                                                        </div>
+                                                        <button onClick={() => setSpecialForm(prev => ({ ...prev, is_open: !prev.is_open }))}
+                                                            className="transition-transform active:scale-90 overflow-hidden">
+                                                            {specialForm.is_open ? <ToggleRight className="w-12 h-12 text-brand" /> : <ToggleLeft className="w-12 h-12 text-black" />}
+                                                        </button>
                                                     </div>
-                                                    <button onClick={() => setSpecialForm(prev => ({ ...prev, is_open: !prev.is_open }))}>
-                                                        {specialForm.is_open ? <ToggleRight className="w-10 h-10 text-brand-dark" /> : <ToggleLeft className="w-10 h-10 text-accent-brown/20" />}
-                                                    </button>
                                                 </div>
 
-                                                {/* Time Dropdowns */}
-                                                <AnimatePresence>
-                                                    {specialForm.is_open && (
-                                                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                                                            className="grid grid-cols-2 gap-4">
-                                                            <div className="flex flex-col gap-1.5">
-                                                                <label className="text-[8px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Open</label>
-                                                                <CustomDropdown value={specialForm.open_time} options={TIME_OPTIONS} onChange={v => setSpecialForm(p => ({ ...p, open_time: v }))} />
-                                                            </div>
-                                                            <div className="flex flex-col gap-1.5">
-                                                                <label className="text-[8px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Close</label>
-                                                                <CustomDropdown value={specialForm.close_time} options={TIME_OPTIONS} onChange={v => setSpecialForm(p => ({ ...p, close_time: v }))} />
-                                                            </div>
-                                                            <div className="flex flex-col gap-1.5">
-                                                                <label className="text-[8px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Break Start</label>
-                                                                <CustomDropdown value={specialForm.break_start || 'No break'} options={['No break', ...TIME_OPTIONS]} onChange={v => setSpecialForm(p => ({ ...p, break_start: v === 'No break' ? null : v }))} />
-                                                            </div>
-                                                            <div className="flex flex-col gap-1.5">
-                                                                <label className="text-[8px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Break End</label>
-                                                                <CustomDropdown value={specialForm.break_end || '—'} options={['—', ...TIME_OPTIONS]} onChange={v => setSpecialForm(p => ({ ...p, break_end: v === '—' ? null : v }))} />
-                                                            </div>
+                                                {/* Time Dropdowns Container */}
+                                                <AnimatePresence mode="wait">
+                                                    {specialForm.is_open ? (
+                                                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                                                            className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-white/50 p-2 rounded-[2.5rem]">
+                                                            {[
+                                                                { label: 'Opening Time', icon: Clock, value: specialForm.open_time, key: 'open_time', options: TIME_OPTIONS },
+                                                                { label: 'Closing Time', icon: MapPin, value: specialForm.close_time, key: 'close_time', options: TIME_OPTIONS },
+                                                                { label: 'Break Start', icon: Timer, value: specialForm.break_start || 'No break', key: 'break_start', options: ['No break', ...TIME_OPTIONS] },
+                                                                { label: 'Break End', icon: CheckCircle, value: specialForm.break_end || '—', key: 'break_end', options: ['—', ...TIME_OPTIONS] }
+                                                            ].map(field => (
+                                                                <div key={field.label} className="bg-white p-5 rounded-3xl shadow-sm border border-accent-brown/5 space-y-3">
+                                                                    <div className="flex items-center gap-2 px-1">
+                                                                        <field.icon className="w-3.5 h-3.5 text-brand" />
+                                                                        <label className="text-[10px] font-black uppercase tracking-widest text-black">{field.label}</label>
+                                                                    </div>
+                                                                    <CustomDropdown value={field.value} options={field.options}
+                                                                        onChange={v => setSpecialForm(p => ({ ...p, [field.key]: v === 'No break' || v === '—' ? null : v }))} />
+                                                                </div>
+                                                            ))}
+                                                        </motion.div>
+                                                    ) : (
+                                                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20 px-10 text-center bg-red-400/5 rounded-[2.5rem] border border-dashed border-red-400/20">
+                                                            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4 text-red-400 shadow-inner"><XCircle className="w-8 h-8" /></div>
+                                                            <h6 className="font-black text-accent-brown text-lg tracking-tight">Closed for Service</h6>
+                                                            <p className="text-black text-xs font-medium mt-2">All reservation slots for this date will be automatically blocked for customers.</p>
                                                         </motion.div>
                                                     )}
                                                 </AnimatePresence>
 
                                                 <button onClick={handleSaveSpecial} disabled={savingSpecial}
-                                                    className="w-full h-16 bg-brand-dark text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-3 shadow-xl shadow-brand-dark/20 disabled:opacity-50 mt-4">
-                                                    {savingSpecial ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
-                                                    Apply Special Hours
+                                                    className="w-full h-20 bg-brand text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.25em] hover:bg-black transition-all flex items-center justify-center gap-4 shadow-2xl shadow-brand/20 disabled:opacity-50 mt-6 relative group overflow-hidden">
+                                                    <div className="absolute inset-0 bg-brand opacity-0 group-hover:opacity-10 transition-opacity" />
+                                                    {savingSpecial ? <Loader2 className="w-6 h-6 animate-spin text-brand" /> : <div className="w-1.5 h-1.5 bg-brand rounded-full animate-pulse" />}
+                                                    Apply Override
                                                 </button>
                                             </div>
                                         </div>
-
-                                        {/* Existing Overrides Quick List */}
-                                        {specialHours.length > 0 && (
-                                            <div className="space-y-3">
-                                                <h6 className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Quick Overview</h6>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {specialHours.slice(0, 5).map(sh => (
-                                                        <button key={sh.id} onClick={() => {
-                                                            setSelectedSpecialDate(sh.specific_date);
-                                                            setSpecialForm({ ...sh });
-                                                            setViewDate(new Date(sh.specific_date));
-                                                        }}
-                                                            className={`px-4 py-2 rounded-full border text-[10px] font-black uppercase tracking-tighter transition-all ${selectedSpecialDate === sh.specific_date
-                                                                ? 'bg-brand text-white border-brand'
-                                                                : 'bg-white text-accent-brown/60 border-accent-brown/10 hover:border-brand/40'
-                                                                }`}>
-                                                            {new Date(sh.specific_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                                            {!sh.is_open && <span className="ml-1.5 opacity-40">Closed</span>}
-                                                        </button>
-                                                    ))}
-                                                    {specialHours.length > 5 && (
-                                                        <div className="px-3 py-2 rounded-full bg-accent-peach/10 text-accent-brown/40 text-[10px] font-black uppercase">+{specialHours.length - 5} more</div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -909,438 +1410,137 @@ export default function BusinessReservations() {
 
                 {/* ── SERVICES TAB ── */}
                 {tab === 'services' && (
-                    <div className="space-y-6">
-                        <div className="flex items-center justify-between">
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2">
                             <div>
-                                <h3 className="font-black text-accent-brown text-xl tracking-tight">{services.length} service{services.length !== 1 ? 's' : ''} offered</h3>
-                                <p className="text-accent-brown/50 text-sm">Customers will see these when booking reservations.</p>
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="h-6 w-1.5 bg-brand rounded-full" />
+                                    <h3 className="font-black text-accent-brown text-3xl tracking-tighter">Clinic Service</h3>
+                                </div>
+                                <p className="text-black text-sm font-medium">Manage your clinic's offerings, packages, and points-based loyalty rewards.</p>
                             </div>
                             <button onClick={() => openServiceModal()}
-                                className="flex items-center gap-2 bg-brand-dark text-white px-6 py-3 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors shadow-lg shadow-brand-dark/20">
-                                <Plus className="w-4 h-4" /> Add Service
+                                className="group flex items-center gap-4 bg-brand text-white pl-8 pr-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-2xl shadow-brand/20 min-w-[240px]">
+                                <div className="flex-1 flex items-center gap-3 justify-center">
+                                    <Plus className="w-5 h-5 text-white group-hover:rotate-90 transition-transform duration-500" />
+                                    Launch New Service
+                                </div>
                             </button>
                         </div>
 
-                        {loading && <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 text-brand-dark animate-spin" /></div>}
-                        {!loading && services.length === 0 && (
-                            <div className="bg-white rounded-[2rem] p-16 flex flex-col items-center gap-4 text-center shadow-xl shadow-accent-brown/5">
-                                <div className="w-20 h-20 bg-accent-peach/30 rounded-full flex items-center justify-center"><Tag className="w-10 h-10 text-accent-brown/30" /></div>
-                                <div><h3 className="font-black text-accent-brown text-xl">No services yet</h3><p className="text-accent-brown/50 text-sm mt-1">Add your first service to allow customers to book.</p></div>
-                                <button onClick={() => openServiceModal()} className="flex items-center gap-2 bg-brand-dark text-white px-6 py-3 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-black transition-colors">
-                                    <Plus className="w-4 h-4" /> Add Service
-                                </button>
-                            </div>
-                        )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                            {services.map((s, i) => (
-                                <motion.div key={s.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
-                                    className={`bg-white rounded-2xl p-5 shadow-xl shadow-accent-brown/5 border-2 transition-all group relative overflow-hidden ${s.is_active ? 'border-white hover:border-brand/20' : 'border-accent-brown/5 opacity-60'}`}>
-                                    <div className="absolute top-4 right-4 flex gap-2">
-                                        <button onClick={() => openServiceModal(s)} className="w-8 h-8 bg-accent-peach/30 hover:bg-brand hover:text-white text-accent-brown/60 rounded-lg flex items-center justify-center transition-all">
-                                            <Edit2 className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button onClick={() => handleDeleteService(s.id)} disabled={deletingId === s.id}
-                                            className="w-8 h-8 bg-red-50 hover:bg-red-500 hover:text-white text-red-400 rounded-lg flex items-center justify-center transition-all disabled:opacity-50">
-                                            {deletingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                                        </button>
-                                    </div>
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className="w-10 h-10 bg-brand/10 rounded-xl flex items-center justify-center">
-                                            <Scissors className="w-5 h-5 text-brand-dark" />
-                                        </div>
-                                        {s.is_package && (
-                                            <span className="bg-[#ea580c] text-white text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-lg shadow-[#ea580c]/20">
-                                                Package
-                                            </span>
-                                        )}
-                                    </div>
-                                    <h4 className="font-black text-accent-brown text-base mb-1 leading-tight pr-20">{s.name}</h4>
-                                    {s.description && <p className="text-xs text-accent-brown/50 mb-3 line-clamp-2">{s.description}</p>}
-                                    <div className="flex items-center gap-3 mt-auto pt-4 border-t border-accent-brown/5">
-                                        <div className="flex flex-col">
-                                            <span className="text-[8px] font-black uppercase tracking-widest text-accent-brown/30">Price</span>
-                                            <span className="font-black text-accent-brown text-lg">₱{s.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[8px] font-black uppercase tracking-widest text-accent-brown/30">Duration</span>
-                                            <span className="font-bold text-accent-brown/60 text-sm flex items-center gap-1"><Timer className="w-3 h-3" />{s.duration_minutes} min</span>
-                                        </div>
-                                        <div className="ml-auto">
-                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${s.is_active ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
-                                                {s.is_active ? 'Active' : 'Inactive'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* ── SERVICE MODAL ── */}
-                <AnimatePresence>
-                    {showServiceModal && (
-                        <>
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowServiceModal(false)} className="fixed inset-0 bg-accent-brown/20 backdrop-blur-sm z-50" />
-                            <motion.div initial={{ scale: 0.95, opacity: 0, y: 40 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 40 }}
-                                className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                                <div className="bg-white rounded-[2rem] w-full max-w-6xl shadow-2xl overflow-hidden relative" onClick={e => e.stopPropagation()}>
-                                    <div className="flex items-center justify-between p-6 border-b border-accent-brown/5 bg-accent-peach/5 shrink-0">
-                                        <div>
-                                            <h2 className="text-xl font-black text-accent-brown tracking-tight">{editingService ? 'Edit Service Details' : 'Design New Service'}</h2>
-                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/30 mt-1">{editingService ? 'Refine your offering and package components' : 'Create a new standard or package service'}</p>
-                                        </div>
-                                        <button onClick={() => setShowServiceModal(false)} className="w-10 h-10 bg-white hover:bg-red-50 text-accent-brown/20 hover:text-red-500 rounded-2xl flex items-center justify-center transition-all shadow-sm border border-accent-brown/5">
-                                            <X className="w-5 h-5" />
-                                        </button>
-                                    </div>
-
-                                    <div className="p-6">
-                                        <div className={`grid grid-cols-1 ${serviceForm.is_package ? 'lg:grid-cols-3' : 'md:grid-cols-2'} gap-8`}>
-                                            {/* Column 1: Basic Info */}
-                                            <div className="space-y-5">
-                                                <div className="flex items-center gap-4 p-1 bg-accent-peach/5 rounded-2xl border border-accent-brown/5">
-                                                    <button type="button" onClick={() => setServiceForm(f => ({ ...f, is_package: false, package_items_json: null }))}
-                                                        className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!serviceForm.is_package ? 'bg-white shadow-sm text-accent-brown' : 'text-accent-brown/40 hover:text-accent-brown'}`}>
-                                                        Service
-                                                    </button>
-                                                    <button type="button" onClick={() => setServiceForm(f => ({ ...f, is_package: true, package_items_json: JSON.stringify([]) }))}
-                                                        className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${serviceForm.is_package ? 'bg-[#ea580c] shadow-lg text-white' : 'text-accent-brown/40 hover:text-accent-brown'}`}>
-                                                        Package
-                                                    </button>
-                                                </div>
-
-                                                {!serviceForm.is_package ? (
-                                                    <div>
-                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Service Name *</label>
-                                                        <button type="button" onClick={() => setShowServicePickerModal(true)}
-                                                            className="w-full flex items-center justify-between px-4 py-3 bg-accent-peach/10 border-2 border-transparent hover:border-brand/30 rounded-xl text-sm text-left transition-all group">
-                                                            <div className="flex-1 min-w-0">
-                                                                {serviceForm.name ? (
-                                                                    <div>
-                                                                        <p className="text-[9px] font-black uppercase tracking-widest text-[#ea580c] mb-0.5">{serviceCategory}</p>
-                                                                        <p className="text-sm font-bold text-accent-brown truncate">{serviceForm.name}</p>
-                                                                    </div>
-                                                                ) : (
-                                                                    <p className="text-sm font-medium text-accent-brown/30">Click to browse &amp; select a service...</p>
-                                                                )}
-                                                            </div>
-                                                            <ChevronRight className="w-4 h-4 text-accent-brown/30 group-hover:text-brand transition-colors shrink-0 ml-2" />
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <div>
-                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Package Name *</label>
-                                                        <input type="text" value={serviceForm.name} placeholder="Enter package name..."
-                                                            onChange={e => setServiceForm(f => ({ ...f, name: e.target.value }))}
-                                                            className="w-full px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-sm font-bold text-accent-brown outline-none transition-all placeholder:text-accent-brown/30" />
-                                                    </div>
-                                                )}
-
-                                                <div>
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Description</label>
-                                                    <textarea value={serviceForm.description} onChange={e => setServiceForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief description..."
-                                                        className={`w-full px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-sm font-medium text-accent-brown outline-none resize-none placeholder:text-accent-brown/30 ${serviceForm.is_package ? 'h-[250px]' : 'h-[116px]'}`} />
-                                                </div>
-                                            </div>
-
-                                            {/* Column 2: Package Items (Only for Packages) */}
-                                            {serviceForm.is_package && (
-                                                <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-                                                    <div className="flex flex-col h-full bg-accent-peach/5 rounded-2xl border border-accent-brown/5 overflow-hidden">
-                                                        <div className="p-4 border-b border-accent-brown/5 flex items-center justify-between">
-                                                            <div>
-                                                                <label className="text-[10px] font-black uppercase tracking-widest text-[#ea580c]">Included Services</label>
-                                                                <p className="text-[9px] font-bold text-accent-brown/40 uppercase tracking-widest mt-0.5">{JSON.parse(serviceForm.package_items_json || '[]').length} item(s) selected</p>
-                                                            </div>
-                                                            <button type="button" onClick={() => setShowSelectionModal(true)}
-                                                                className="flex items-center gap-1.5 px-4 py-2 bg-[#ea580c] rounded-xl text-[9px] font-black uppercase tracking-widest text-white hover:bg-[#c2410c] transition-all shadow-lg shadow-[#ea580c]/10">
-                                                                <Plus className="w-3 h-3" /> Manage Selection
-                                                            </button>
-                                                        </div>
-                                                        <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar max-h-[385px]">
-                                                            {(() => {
-                                                                const selectedNames = JSON.parse(serviceForm.package_items_json || '[]');
-                                                                
-                                                                if (selectedNames.length === 0) {
-                                                                    return (
-                                                                        <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                                                                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm">
-                                                                                <Package className="w-6 h-6 text-accent-brown/20" />
-                                                                            </div>
-                                                                            <p className="text-[10px] font-bold text-accent-brown/30 italic">No services added to this package yet.</p>
-                                                                            <button type="button" onClick={() => setShowSelectionModal(true)}
-                                                                                className="mt-4 text-[9px] font-black uppercase tracking-widest text-[#ea580c] hover:underline">
-                                                                                Click to add services
-                                                                            </button>
-                                                                        </div>
-                                                                    );
-                                                                }
-
-                                                                return selectedNames.map((name: string) => {
-                                                                    const match = services.find(s => s.name === name);
-                                                                    return (
-                                                                        <div key={name} className="w-full flex items-center justify-between p-3 rounded-xl bg-white border border-accent-brown/5 shadow-sm group">
-                                                                            <div className="text-left flex-1 min-w-0">
-                                                                                <p className="text-xs font-bold text-accent-brown truncate">{name}</p>
-                                                                                <p className="text-[9px] font-black text-accent-brown/40 uppercase tracking-widest">
-                                                                                    {match ? `₱${match.price} · ${match.duration_minutes}m` : 'Not offered yet'}
-                                                                                </p>
-                                                                            </div>
-                                                                            <button type="button" onClick={() => togglePackageItem(name)}
-                                                                                className="w-6 h-6 flex items-center justify-center rounded-lg bg-red-50 text-red-400 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white shrink-0 ml-2">
-                                                                                <X className="w-3 h-3" />
-                                                                            </button>
-                                                                        </div>
-                                                                    );
-                                                                });
-                                                            })()}
-                                                        </div>
-                                                    </div>
-                                                </motion.div>
-                                            )}
-
-                                            {/* Column 3: Pricing & Setup */}
-                                            <div className="space-y-6">
-                                                <div className="p-5 bg-white border border-accent-brown/5 shadow-sm rounded-2xl space-y-4">
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div>
-                                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Price (₱) *</label>
-                                                            <input type="number" min="0" step="0.01" value={serviceForm.price} onChange={e => setServiceForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00"
-                                                                className="w-full px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-sm font-bold text-accent-brown outline-none" />
-                                                        </div>
-                                                        <div>
-                                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50 mb-1.5 block">Duration (min)</label>
-                                                            <input type="number" min="15" step="15" value={serviceForm.duration_minutes} onChange={e => setServiceForm(f => ({ ...f, duration_minutes: e.target.value }))}
-                                                                className="w-full px-4 py-3 bg-accent-peach/10 border-2 border-transparent focus:border-brand/30 rounded-xl text-sm font-bold text-accent-brown outline-none" />
-                                                        </div>
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="text-[10px] font-black uppercase tracking-widest text-[#ea580c] mb-1.5 block flex items-center gap-2">
-                                                            <Award className="w-3 h-3" />
-                                                            Loyalty Points Awarded
-                                                        </label>
-                                                        <input type="number" min="0" value={serviceForm.loyalty_points} onChange={e => setServiceForm(f => ({ ...f, loyalty_points: e.target.value }))} placeholder="50"
-                                                            className="w-full px-4 py-3 bg-[#ea580c]/5 border-2 border-[#ea580c]/20 focus:border-[#ea580c] rounded-xl text-sm font-bold text-accent-brown outline-none transition-all" />
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-center justify-between p-5 bg-accent-peach/10 rounded-2xl">
-                                                    <div>
-                                                        <p className="font-black text-sm text-accent-brown">Active Status</p>
-                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-accent-brown/50 mt-0.5">{serviceForm.is_active ? 'Visible to customers' : 'Hidden from customers'}</p>
-                                                    </div>
-                                                    <button onClick={() => setServiceForm(f => ({ ...f, is_active: !f.is_active }))} className="shrink-0 transition-transform active:scale-90">
-                                                        {serviceForm.is_active ? <ToggleRight className="w-10 h-10 text-brand-dark" /> : <ToggleLeft className="w-10 h-10 text-accent-brown/30" />}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-6 border-t border-accent-brown/5 flex gap-4 bg-gray-50/50 shrink-0">
-                                        <button onClick={() => setShowServiceModal(false)} className="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] text-accent-brown/40 hover:text-accent-brown hover:bg-white transition-all">Cancel</button>
-                                        <button onClick={handleSaveService} disabled={savingService || !serviceForm.name || !serviceForm.price}
-                                            className="flex-[1.5] flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] bg-[#ea580c] text-white hover:bg-[#c2410c] transition-all shadow-xl shadow-[#ea580c]/20 disabled:opacity-50 disabled:cursor-not-allowed">
-                                            {savingService ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                                            {editingService ? 'Update Service' : 'Confirm Service'}
-                                        </button>
-                                    </div>
-
-                                    {/* Selection Modal (two-panel with checkboxes) */}
-                                    <AnimatePresence>
-                                        {showSelectionModal && (
-                                            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-                                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSelectionModal(false)} className="absolute inset-0 bg-accent-brown/40 backdrop-blur-sm" />
-                                                <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                                                    className="relative bg-white rounded-[2rem] w-full max-w-2xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col" style={{ height: '75vh' }}>
-                                                    {/* Header */}
-                                                    <div className="p-5 border-b border-accent-brown/5 bg-accent-peach/5 flex items-center justify-between shrink-0">
-                                                        <div>
-                                                            <h3 className="text-lg font-black text-accent-brown tracking-tight">Select Services</h3>
-                                                            <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest mt-0.5">
-                                                                {JSON.parse(serviceForm.package_items_json || '[]').length} service(s) selected · Browse by category
-                                                            </p>
-                                                        </div>
-                                                        <button onClick={() => setShowSelectionModal(false)} className="p-2 hover:bg-white rounded-full transition-colors">
-                                                            <X className="w-5 h-5 text-accent-brown/40" />
-                                                        </button>
-                                                    </div>
-                                                    {/* Body: Two-panel */}
-                                                    {(() => {
-                                                        const cats = Object.keys(SERVICE_CATEGORIES);
-                                                        const activeCat = selectionCategory || cats[0] || '';
-                                                        const selectedNames = JSON.parse(serviceForm.package_items_json || '[]') as string[];
-
-                                                        return (
-                                                            <div className="flex flex-1 overflow-hidden">
-                                                                {/* Left: Categories Sidebar */}
-                                                                <div className="w-64 shrink-0 border-r border-accent-brown/5 overflow-y-auto p-4 space-y-1 bg-accent-peach/5 custom-scrollbar">
-                                                                    <p className="text-[8px] font-black uppercase tracking-[0.2em] text-accent-brown/30 mb-4 px-2">Service Categories</p>
-                                                                    {cats.map(cat => {
-                                                                        const catItems = SERVICE_CATEGORIES[cat];
-                                                                        const isAllSelected = catItems.length > 0 && catItems.every(name => selectedNames.includes(name));
-                                                                        const isSomeSelected = !isAllSelected && catItems.some(name => selectedNames.includes(name));
-
-                                                                        return (
-                                                                            <div key={cat} className="group flex items-center gap-1.5 p-1 rounded-2xl hover:bg-white transition-all">
-                                                                                <button type="button" onClick={() => toggleCategoryItems(catItems)}
-                                                                                    title={isAllSelected ? "Deselect Category" : "Select Category"}
-                                                                                    className={`w-9 h-9 shrink-0 flex items-center justify-center rounded-xl border-2 transition-all ${
-                                                                                        isAllSelected
-                                                                                            ? 'bg-[#ea580c] border-[#ea580c] text-white shadow-lg shadow-[#ea580c]/20'
-                                                                                            : isSomeSelected
-                                                                                                ? 'bg-white border-[#ea580c]/50 text-[#ea580c]'
-                                                                                                : 'bg-white border-accent-brown/5 text-accent-brown/20 group-hover:border-accent-brown/10'
-                                                                                    }`}>
-                                                                                    {isAllSelected ? (
-                                                                                        <Check className="w-4 h-4" strokeWidth={4} />
-                                                                                    ) : isSomeSelected ? (
-                                                                                        <div className="w-2 h-0.5 rounded-full bg-[#ea580c]" />
-                                                                                    ) : (
-                                                                                        <Plus className="w-3 h-3 group-hover:text-accent-brown/40" />
-                                                                                    )}
-                                                                                </button>
-                                                                                <button type="button" onClick={() => setSelectionCategory(cat)}
-                                                                                    className={`flex-1 text-left px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                                                                                        activeCat === cat
-                                                                                            ? 'bg-[#ea580c] text-white shadow-md'
-                                                                                            : 'text-accent-brown/50 hover:text-accent-brown'
-                                                                                    }`}>
-                                                                                    {cat}
-                                                                                </button>
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                                {/* Right: Items Grid */}
-                                                                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                                                                    {activeCat && SERVICE_CATEGORIES[activeCat] && (
-                                                                        <motion.div key={activeCat} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-2">
-                                                                            <p className="text-[9px] font-black uppercase tracking-widest text-[#ea580c] mb-3 px-1">{activeCat}</p>
-                                                                            {SERVICE_CATEGORIES[activeCat].map((name: string) => {
-                                                                                const isSelected = selectedNames.includes(name);
-                                                                                const match = services.find(s => s.name === name);
-                                                                                return (
-                                                                                    <button key={name} type="button" onClick={() => togglePackageItem(name)}
-                                                                                        className={`w-full flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left shadow-sm group ${
-                                                                                            isSelected
-                                                                                                ? 'border-[#ea580c] bg-[#ea580c] text-white'
-                                                                                                : 'border-transparent bg-white hover:bg-accent-peach/5 hover:border-accent-brown/10 text-accent-brown'
-                                                                                        }`}>
-                                                                                        <div className="flex-1 min-w-0">
-                                                                                            <p className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-accent-brown'}`}>{name}</p>
-                                                                                            {match && (
-                                                                                                <div className="flex items-center gap-2 mt-0.5">
-                                                                                                    <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${isSelected ? 'bg-white/20 text-white' : 'bg-green-100 text-green-700'}`}>
-                                                                                                        Offered
-                                                                                                    </span>
-                                                                                                    <span className={`text-[8px] font-bold ${isSelected ? 'text-white/60' : 'text-accent-brown/40'}`}>
-                                                                                                        ₱{match.price} · {match.duration_minutes}m
-                                                                                                    </span>
-                                                                                                </div>
-                                                                                            )}
-                                                                                        </div>
-                                                                                        {isSelected && <Check className="w-4 h-4 text-white shrink-0" strokeWidth={4} />}
-                                                                                    </button>
-                                                                                );
-                                                                            })}
-                                                                        </motion.div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                    {/* Footer */}
-                                                    <div className="p-6 border-t border-accent-brown/5 bg-gray-50/50 shrink-0">
-                                                        <button onClick={() => setShowSelectionModal(false)}
-                                                            className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] bg-[#ea580c] text-white hover:bg-[#c2410c] transition-all shadow-xl shadow-[#ea580c]/20 active:scale-95">
-                                                            Confirm Selection
-                                                        </button>
-                                                    </div>
-                                                </motion.div>
-                                            </div>
-                                        )}
-                                    </AnimatePresence>
-
-                                    {/* ── SERVICE PICKER MODAL ── */}
-                                    <AnimatePresence>
-                                        {showServicePickerModal && (
-                                            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-                                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowServicePickerModal(false)} className="absolute inset-0 bg-accent-brown/50 backdrop-blur-sm" />
-                                                <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                                                    className="relative bg-white rounded-[2rem] w-full max-w-2xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col" style={{ height: '75vh' }}>
-                                                    {/* Header */}
-                                                    <div className="p-5 border-b border-accent-brown/5 bg-accent-peach/5 flex items-center justify-between shrink-0">
-                                                        <div>
-                                                            <h3 className="text-lg font-black text-accent-brown tracking-tight">Browse Services</h3>
-                                                            <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest mt-0.5">Select a category, then choose a service type</p>
-                                                        </div>
-                                                        <button onClick={() => setShowServicePickerModal(false)} className="p-2 hover:bg-white rounded-full transition-colors">
-                                                            <X className="w-5 h-5 text-accent-brown/40" />
-                                                        </button>
-                                                    </div>
-                                                    {/* Body: Two-panel */}
-                                                    <div className="flex flex-1 overflow-hidden">
-                                                        {/* Left: Categories */}
-                                                        <div className="w-56 shrink-0 border-r border-accent-brown/5 overflow-y-auto p-3 space-y-1 bg-accent-peach/5 custom-scrollbar">
-                                                            {Object.keys(SERVICE_CATEGORIES).map(cat => (
-                                                                <button key={cat} type="button" onClick={() => setServiceCategory(cat)}
-                                                                    className={`w-full text-left px-3 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                                                                        serviceCategory === cat
-                                                                            ? 'bg-[#ea580c] text-white shadow-md'
-                                                                            : 'text-accent-brown/60 hover:bg-white hover:text-accent-brown hover:shadow-sm'
-                                                                    }`}>
-                                                                    {cat}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                        {/* Right: Services */}
-                                                        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                                                            {serviceCategory ? (
-                                                                <motion.div key={serviceCategory} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-2">
-                                                                    <p className="text-[9px] font-black uppercase tracking-widest text-[#ea580c] mb-3 px-1">{serviceCategory}</p>
-                                                                    {SERVICE_CATEGORIES[serviceCategory].map(service => {
-                                                                        const isSelected = serviceForm.name === service;
-                                                                        return (
-                                                                            <button key={service} type="button"
-                                                                                onClick={() => {
-                                                                                    setServiceForm(f => ({ ...f, name: service }));
-                                                                                    setShowServicePickerModal(false);
-                                                                                }}
-                                                                                className={`w-full flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left shadow-sm group ${
-                                                                                    isSelected
-                                                                                        ? 'border-[#ea580c] bg-[#ea580c] text-white'
-                                                                                        : 'border-transparent bg-white hover:bg-accent-peach/5 hover:border-accent-brown/10 text-accent-brown'
-                                                                                }`}>
-                                                                                <p className={`text-sm font-bold flex-1 ${isSelected ? 'text-white' : 'text-accent-brown'}`}>{service}</p>
-                                                                            </button>
-                                                                        );
-                                                                    })}
-                                                                </motion.div>
-                                                            ) : (
-                                                                <div className="flex flex-col items-center justify-center h-full text-center">
-                                                                    <div className="w-16 h-16 bg-accent-peach/10 rounded-full flex items-center justify-center mb-3">
-                                                                        <Package className="w-8 h-8 text-accent-brown/20" />
-                                                                    </div>
-                                                                    <p className="text-sm font-bold text-accent-brown/30">Pick a category on the left</p>
-                                                                    <p className="text-[10px] text-accent-brown/20 mt-1">to see available service types</p>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </motion.div>
-                                            </div>
-                                        )}
-                                    </AnimatePresence>
+                        {loading ? (
+                            <div className="flex justify-center py-32"><Loader2 className="w-12 h-12 text-brand animate-spin" /></div>
+                        ) : services.length === 0 ? (
+                            <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
+                                className="bg-white rounded-[3rem] p-32 flex flex-col items-center gap-8 text-center shadow-2xl shadow-accent-brown/5 border border-white relative overflow-hidden">
+                                <div className="absolute inset-0 bg-accent-peach/5 opacity-40" />
+                                <div className="relative z-10">
+                                    <div className="w-32 h-32 bg-white rounded-[2.5rem] flex items-center justify-center shadow-xl border border-accent-brown/5 mb-6 mx-auto"><Tag className="w-16 h-16 text-brand/20" /></div>
+                                    <h3 className="font-black text-accent-brown text-3xl tracking-tight mb-3">Your Clinic Service is Empty</h3>
+                                    <p className="text-black text-base max-w-sm font-medium">Create your first service or bundle to start accepting reservations from your clients.</p>
+                                    <button onClick={() => openServiceModal()} className="mt-10 flex items-center gap-3 bg-brand text-white px-10 py-5 rounded-full font-black text-[11px] uppercase tracking-widest hover:bg-black transition-all shadow-lg mx-auto">
+                                        <Plus className="w-4 h-4" /> Initialize Clinic Service
+                                    </button>
                                 </div>
                             </motion.div>
-                        </>
-                    )}
-                </AnimatePresence>
+                        ) : (
+                            <div className="space-y-12">
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                                    {services.slice((servicesPage - 1) * SERVICES_PER_PAGE, servicesPage * SERVICES_PER_PAGE).map((s, i) => (
+                                        <motion.div key={s.id} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
+                                            className={`group relative bg-white rounded-[2.5rem] p-6 shadow-2xl shadow-accent-brown/5 border-2 transition-all duration-500 flex flex-col ${s.is_active ? 'border-transparent hover:border-brand/20 shadow-accent-brown/10' : 'border-dashed border-accent-brown/10 opacity-60 grayscale scale-[0.98]'}`}>
+
+                                            {/* Status & Package Badge */}
+                                            <div className="absolute top-6 left-6 flex items-center gap-2 z-10">
+                                                {s.is_package && (
+                                                    <div className="flex items-center gap-2 px-3 py-1.5 bg-[#ea580c] text-white rounded-full shadow-lg shadow-[#ea580c]/20">
+                                                        <Package className="w-3.5 h-3.5" />
+                                                        <span className="text-[9px] font-black uppercase tracking-widest whitespace-nowrap">Package Bundle</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Actions Floating */}
+                                            <div className="absolute top-6 right-6 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-2 group-hover:translate-y-0 z-20">
+                                                <button onClick={() => openServiceModal(s)} className="w-10 h-10 bg-white shadow-xl rounded-xl flex items-center justify-center text-accent-brown hover:text-brand transition-all border border-accent-brown/5">
+                                                    <Edit2 className="w-4 h-4" />
+                                                </button>
+                                                <button onClick={() => handleDeleteService(s.id)} disabled={deletingId === s.id}
+                                                    className="w-10 h-10 bg-white shadow-xl rounded-xl flex items-center justify-center text-red-300 hover:text-red-500 transition-all border border-accent-brown/5 disabled:opacity-50">
+                                                    {deletingId === s.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                                </button>
+                                            </div>
+
+                                            <div className="pt-12 mb-8 flex-1">
+                                                <div className={`w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-inner transition-transform group-hover:scale-110 duration-500 ${s.is_package ? 'bg-orange-50 text-[#ea580c]' : 'bg-brand/5 text-brand'}`}>
+                                                    <Scissors className="w-10 h-10" />
+                                                </div>
+                                                <h4 className="font-black text-accent-brown text-2xl tracking-tighter mb-3 leading-none group-hover:text-brand transition-colors">{s.name}</h4>
+                                                {s.description ? (
+                                                    <p className="text-sm text-black line-clamp-2 font-medium leading-relaxed mb-6">{s.description}</p>
+                                                ) : (
+                                                    <div className="h-10 mb-6 flex items-center"><span className="text-[10px] italic text-black uppercase font-black tracking-widest">No description provided</span></div>
+                                                )}
+
+                                                <div className="flex flex-wrap gap-3">
+                                                    <div className="px-4 py-2 bg-accent-peach/10 rounded-2xl flex items-center gap-2 border border-accent-brown/5">
+                                                        <Timer className="w-3.5 h-3.5 text-black" />
+                                                        <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/70">{s.duration_minutes} Minutes</span>
+                                                    </div>
+                                                    <div className="px-4 py-2 bg-brand/5 rounded-2xl flex items-center gap-2 border border-brand/10">
+                                                        <Award className="w-3.5 h-3.5 text-brand" />
+                                                        <span className="text-[10px] font-black uppercase tracking-widest text-brand">{s.loyalty_points} Points</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-auto pt-6 border-t border-accent-brown/5 flex items-center justify-between">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[9px] font-black uppercase tracking-widest text-black mb-1">Clinic Fee</span>
+                                                    <span className="text-3xl font-black text-accent-brown tracking-tighter">₱{s.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                                                </div>
+                                                <div className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${s.is_active ? 'bg-green-50 border-green-100 text-green-600' : 'bg-accent-brown/5 border-transparent text-black'}`}>
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${s.is_active ? 'bg-green-500 animate-pulse' : 'bg-accent-brown/20'}`} />
+                                                    <span className="text-[9px] font-black uppercase tracking-[0.2em]">{s.is_active ? 'Market Active' : 'Off-Market'}</span>
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </div>
+
+                                {/* Pagination Controls */}
+                                {services.length > SERVICES_PER_PAGE && (
+                                    <div className="flex items-center justify-between bg-white rounded-3xl p-4 shadow-xl shadow-accent-brown/5 border border-white">
+                                        <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-black">
+                                            <Tag className="w-4 h-4" />
+                                            Showing {(servicesPage - 1) * SERVICES_PER_PAGE + 1}-{Math.min(servicesPage * SERVICES_PER_PAGE, services.length)} of {services.length} services
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => setServicesPage(p => Math.max(1, p - 1))} disabled={servicesPage === 1}
+                                                className="w-10 h-10 rounded-[12px] flex items-center justify-center bg-white border border-accent-brown/5 text-accent-brown hover:text-brand hover:shadow-lg transition-all disabled:opacity-30">
+                                                <ChevronLeft className="w-5 h-5" />
+                                            </button>
+                                            <div className="flex items-center gap-1.5">
+                                                {Array.from({ length: Math.ceil(services.length / SERVICES_PER_PAGE) }).map((_, idx) => (
+                                                    <button key={idx} onClick={() => setServicesPage(idx + 1)}
+                                                        className={`w-10 h-10 rounded-[12px] flex items-center justify-center font-black text-[10px] transition-all duration-300 ${servicesPage === idx + 1 ? 'bg-brand text-white shadow-lg' : 'bg-accent-peach/5 text-black hover:bg-accent-peach/20'}`}>
+                                                        {idx + 1}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <button onClick={() => setServicesPage(p => Math.min(Math.ceil(services.length / SERVICES_PER_PAGE), p + 1))} disabled={servicesPage >= Math.ceil(services.length / SERVICES_PER_PAGE)}
+                                                className="w-10 h-10 rounded-[12px] flex items-center justify-center bg-white border border-accent-brown/5 text-accent-brown hover:text-brand hover:shadow-lg transition-all disabled:opacity-30">
+                                                <ChevronRight className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </DashboardLayout>
     );
 }
+

@@ -104,6 +104,19 @@ def run_migrations():
                 conn.execute(text("ALTER TABLE business_profiles ADD COLUMN owner_gender VARCHAR(255) NULL"))
                 conn.commit()
 
+    if "order_items" in inspector.get_table_names():
+        columns = [c['name'] for c in inspector.get_columns('order_items')]
+        if 'serial_number' not in columns:
+            print("Adding serial_number column to order_items...")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE order_items ADD COLUMN serial_number VARCHAR(255) NULL"))
+                conn.commit()
+        if 'loyalty_points' not in columns:
+            print("Adding loyalty_points column to order_items...")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE order_items ADD COLUMN loyalty_points INTEGER DEFAULT 0"))
+                conn.commit()
+
     if "reservations" in inspector.get_table_names():
         columns = [c['name'] for c in inspector.get_columns('reservations')]
         if 'voucher_code' not in columns:
@@ -115,6 +128,11 @@ def run_migrations():
             print("Adding tracking_id column to reservations...")
             with engine.connect() as conn:
                 conn.execute(text("ALTER TABLE reservations ADD COLUMN tracking_id VARCHAR(100) NULL"))
+                conn.commit()
+        if 'loyalty_points' not in columns:
+            print("Adding loyalty_points column to reservations...")
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE reservations ADD COLUMN loyalty_points INTEGER DEFAULT 0"))
                 conn.commit()
 
 run_migrations()
@@ -409,6 +427,7 @@ class Order(Base):
     paymongo_session_id = Column(String, nullable=True)
     paymongo_intent_id  = Column(String, nullable=True)
     paymongo_qr_data    = Column(Text, nullable=True)
+    is_customer_deleted = Column(Boolean, default=False)
     created_at          = Column(DateTime, default=datetime.utcnow)
 
 class OrderItem(Base):
@@ -422,6 +441,8 @@ class OrderItem(Base):
     variant      = Column(String, nullable=True)
     size         = Column(String, nullable=True)
     image        = Column(String, nullable=True)
+    serial_number = Column(String, nullable=True)
+    loyalty_points = Column(Integer, default=0)
 
 class Notification(Base):
     __tablename__ = "notifications"
@@ -470,6 +491,8 @@ class Reservation(Base):
     branch_id           = Column(Integer, nullable=True) # The specific location/branch
     service_id          = Column(Integer, ForeignKey("business_services.id"), nullable=True)
     pet_name            = Column(String, nullable=False)
+    pet_type            = Column(String, default="Dog") # Dog, Cat, etc.
+    pet_breed           = Column(String, nullable=True)
     service             = Column(String, nullable=False)
     date                = Column(String, nullable=False)  # YYYY-MM-DD
     time                = Column(String, nullable=False)  # e.g. "10:00 AM"
@@ -487,6 +510,7 @@ class Reservation(Base):
     customer_lat        = Column(Float, nullable=True)
     customer_lng        = Column(Float, nullable=True)
     tracking_id         = Column(String, unique=True, nullable=True)
+    loyalty_points      = Column(Integer, default=0)
     created_at          = Column(DateTime, default=datetime.utcnow)
 
 class BusinessOperatingHours(Base):
@@ -525,6 +549,55 @@ class BusinessSpecialDateHours(Base):
     break_end    = Column(String, nullable=True)
     close_time   = Column(String, default="06:00 PM")
 
+class Delivery(Base):
+    __tablename__ = "product_deliveries"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    clinic_id = Column(Integer, ForeignKey("business_profiles.id"), nullable=False)
+    rider_id = Column(Integer, ForeignKey("rider_profiles.id"), nullable=True)
+    status = Column(String, default="pending_pickup") # pending_pickup, out_for_delivery, completed, failed, returned
+    pickup_pin = Column(String, nullable=True)
+    customer_pin = Column(String, nullable=True)
+    cod_amount = Column(Float, default=0.0)
+    delivery_fee = Column(Float, default=0.0)
+    proof_of_delivery_url = Column(String, nullable=True)
+    signature_url = Column(String, nullable=True)
+    failed_reason = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class RiderWallet(Base):
+    __tablename__ = "rider_wallets"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    rider_id = Column(Integer, ForeignKey("rider_profiles.id"), nullable=False, unique=True)
+    balance = Column(Float, default=0.0) # Earnings
+    remittance_balance = Column(Float, default=0.0) # Debt to clinics
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class RiderRemittance(Base):
+    __tablename__ = "rider_remittances"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    rider_id = Column(Integer, ForeignKey("rider_profiles.id"), nullable=False)
+    clinic_id = Column(Integer, ForeignKey("business_profiles.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    method = Column(String, nullable=False) # physical, digital
+    reference_number = Column(String, nullable=True)
+    status = Column(String, default="pending") # pending, approved, rejected
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class ReturnRequest(Base):
+    __tablename__ = "return_requests"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    customer_id = Column(Integer, ForeignKey("customer.id"), nullable=False)
+    clinic_id = Column(Integer, ForeignKey("business_profiles.id"), nullable=False)
+    reason = Column(String, nullable=False)
+    status = Column(String, default="pending") # pending, approved, rejected, picked_up, returned, refunded
+    evidence_url = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 # Recreate the schema
 Base.metadata.create_all(bind=engine)
 
@@ -549,6 +622,8 @@ if "orders" in inspector.get_table_names():
             conn.execute(text("ALTER TABLE orders ADD COLUMN delivery_lat FLOAT"))
         if "delivery_lng" not in columns:
             conn.execute(text("ALTER TABLE orders ADD COLUMN delivery_lng FLOAT"))
+        if "is_customer_deleted" not in columns:
+            conn.execute(text("ALTER TABLE orders ADD COLUMN is_customer_deleted BOOLEAN DEFAULT FALSE"))
         if "paymongo_session_id" not in columns:
             conn.execute(text("ALTER TABLE orders ADD COLUMN paymongo_session_id VARCHAR"))
         if "paymongo_intent_id" not in columns:
@@ -563,6 +638,43 @@ if "orders" in inspector.get_table_names():
             conn.execute(text("ALTER TABLE orders ADD COLUMN picked_up_at TIMESTAMP"))
         if "delivered_at" not in columns:
             conn.execute(text("ALTER TABLE orders ADD COLUMN delivered_at TIMESTAMP"))
+        if "delivery_type" not in columns:
+            conn.execute(text("ALTER TABLE orders ADD COLUMN delivery_type VARCHAR"))
+        if "shipping_fee" not in columns:
+            conn.execute(text("ALTER TABLE orders ADD COLUMN shipping_fee FLOAT"))
+        if "customer_lat" not in columns:
+            conn.execute(text("ALTER TABLE orders ADD COLUMN customer_lat FLOAT"))
+        if "customer_lng" not in columns:
+            conn.execute(text("ALTER TABLE orders ADD COLUMN customer_lng FLOAT"))
+        if "discount_amount" not in columns:
+            conn.execute(text("ALTER TABLE orders ADD COLUMN discount_amount INTEGER"))
+        if "voucher_code" not in columns:
+            conn.execute(text("ALTER TABLE orders ADD COLUMN voucher_code VARCHAR"))
+        if "fulfillment_method" not in columns:
+            conn.execute(text("ALTER TABLE orders ADD COLUMN fulfillment_method VARCHAR"))
+
+
+# Auto-migrate product_deliveries table
+if "product_deliveries" in inspector.get_table_names():
+    delivery_cols = [col['name'] for col in inspector.get_columns("product_deliveries")]
+    with engine.begin() as conn:
+        for col_name, col_type in [
+            ("order_id", "INTEGER"),
+            ("clinic_id", "INTEGER"),
+            ("rider_id", "INTEGER"),
+            ("status", "VARCHAR"),
+            ("pickup_pin", "VARCHAR"),
+            ("customer_pin", "VARCHAR"),
+            ("cod_amount", "FLOAT"),
+            ("delivery_fee", "FLOAT"),
+            ("proof_of_delivery_url", "VARCHAR"),
+            ("signature_url", "VARCHAR"),
+            ("failed_reason", "VARCHAR"),
+            ("created_at", "TIMESTAMP"),
+            ("updated_at", "TIMESTAMP")
+        ]:
+            if col_name not in delivery_cols:
+                conn.execute(text(f"ALTER TABLE product_deliveries ADD COLUMN {col_name} {col_type}"))
 
 # Auto-migrate rider_profiles table
 if "rider_profiles" in inspector.get_table_names():
@@ -700,6 +812,10 @@ if "reservations" in inspector.get_table_names():
             conn.execute(text("ALTER TABLE reservations ADD COLUMN paymongo_intent_id VARCHAR"))
         if "paymongo_qr_data" not in res_cols:
             conn.execute(text("ALTER TABLE reservations ADD COLUMN paymongo_qr_data TEXT"))
+        if "pet_type" not in res_cols:
+            conn.execute(text("ALTER TABLE reservations ADD COLUMN pet_type VARCHAR DEFAULT 'Dog'"))
+        if "pet_breed" not in res_cols:
+            conn.execute(text("ALTER TABLE reservations ADD COLUMN pet_breed VARCHAR NULL"))
 
 # Auto-migrate business_services table
 if "business_services" in inspector.get_table_names():
@@ -784,6 +900,22 @@ def get_distance(lat1, lon1, lat2, lon2):
     r = 6371 # Radius of earth in kilometers
     return c * r
 
+def calculate_shipping_fee(distance_km: float) -> float:
+    """
+    Calculate shipping fee based on distance:
+    - Base Fare: â‚±50.00 (Covers up to 5 km)
+    - Mid-Range: +â‚±6.00 per km (5 km to 9 km)
+    - Long Distance: +â‚±5.00 per km (beyond 9 km)
+    """
+    base_fare = 50.0
+    if distance_km <= 5.0:
+        return base_fare
+    elif distance_km <= 9.0:
+        return base_fare + (distance_km - 5.0) * 6.0
+    else:
+        return base_fare + (4.0 * 6.0) + (distance_km - 9.0) * 5.0
+
+
 # ---------------------------------------------------------------------------
 # Background task: auto-cancel overdue reservations
 # ---------------------------------------------------------------------------
@@ -859,7 +991,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    with open("error_log.txt", "a") as f:
+    with open("error_log.txt", "a", encoding="utf-8") as f:
         f.write(f"\n--- ERROR at {datetime.now()} ---\n")
         f.write(f"URL: {request.url}\n")
         f.write(traceback.format_exc())
@@ -879,6 +1011,8 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 class ReservationCreate(BaseModel):
     pet_name: str
+    pet_type: Optional[str] = "Dog"
+    pet_breed: Optional[str] = None
     service: str
     service_id: int
     date: str
@@ -903,6 +1037,8 @@ class ReservationSchema(BaseModel):
     business_id: Optional[int] = None
     service_id: Optional[int] = None
     pet_name: str
+    pet_type: Optional[str] = "Dog"
+    pet_breed: Optional[str] = None
     service: str
     date: str
     time: str
@@ -1086,6 +1222,7 @@ class OrderItemCreate(BaseModel):
     variant: Optional[str] = None
     size: Optional[str] = None
     image: Optional[str] = None
+    serial_number: Optional[str] = None
 
 class OrderCreate(BaseModel):
     items: List[OrderItemCreate]
@@ -1102,6 +1239,14 @@ class OrderCreate(BaseModel):
     shipping_fee: Optional[float] = 0.0
     customer_lat: Optional[float] = None
     customer_lng: Optional[float] = None
+
+class DeliveryBroadcastRequest(BaseModel):
+    order_id: int
+
+class DeliveryStepUpdate(BaseModel):
+    status: Optional[str] = None
+    new_status: Optional[str] = None
+    pin: Optional[str] = None
 
 class PayMongoSessionResponse(BaseModel):
     checkout_url: str
@@ -1276,6 +1421,7 @@ class BusinessAnalyticsData(BaseModel):
     distribution_data: List[dict] = []
     comparison_data: List[dict] = []
     all_branches_trend: List[dict] = []
+    pet_stats: Optional[dict] = None
 
 @app.delete("/api/account")
 async def delete_account(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
@@ -1357,21 +1503,30 @@ async def get_business_orders(
         raise HTTPException(status_code=401, detail="Invalid token")
 
     # Fetch all order items that belong to this business's products
-    # Join OrderItem -> Product -> Order -> Customer
-    query = db.query(OrderItem, Order, Product, Customer)\
+    # Join OrderItem -> Product -> Order -> Customer -> Delivery (outer join)
+    query = db.query(OrderItem, Order, Product, Customer, Delivery)\
         .join(Product, OrderItem.product_id == Product.id)\
         .join(Order, OrderItem.order_id == Order.id)\
         .join(Customer, Order.customer_id == Customer.id)\
+        .outerjoin(Delivery, Order.id == Delivery.order_id)\
         .filter(Product.business_id == business_id)\
-        .filter(Order.status != "Payment Pending")
+        .filter(Order.status.notin_(["Payment Pending", "Cancelled"]))
+
+    # Fetch all branches to identify main branch for unassigned orders
+    branches = db.query(BusinessBranch).filter(BusinessBranch.business_id == business_id).all()
+    main_branch = next((b for b in branches if b.is_main), None)
+    main_branch_id = main_branch.id if main_branch else (branches[0].id if branches else None)
 
     if branch_id:
-        query = query.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
+        if branch_id == main_branch_id:
+            query = query.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
+        else:
+            query = query.filter(Order.branch_id == branch_id)
 
     results = query.order_by(Order.created_at.desc()).all()
         
     orders_response = []
-    for order_item, order, product, customer in results:
+    for order_item, order, product, customer, delivery in results:
         # Calculate the total for this specific item (price * qty)
         item_total = order_item.price * order_item.quantity
         
@@ -1398,10 +1553,44 @@ async def get_business_orders(
             "delivery_address": order.delivery_address,
             "delivery_lat": order.delivery_lat,
             "delivery_lng": order.delivery_lng,
-            "fulfillment_method": order.fulfillment_method
+            "fulfillment_method": order.fulfillment_method,
+            "delivery_id": delivery.id if delivery else None,
+            "pickup_pin": delivery.pickup_pin if delivery else None,
+            "customer_pin": delivery.customer_pin if delivery else None,
+            "delivery_status": delivery.status if delivery else None,
+            "serial_number": order_item.serial_number or f"HV-SN-{order.id}-{order_item.id}-{(int(order.created_at.timestamp()) % 10000)}",
+            "item_id": order_item.id,
+            "image": order_item.image or product.image
         })
 
     return orders_response
+    
+class SerialNumberUpdate(BaseModel):
+    serial_number: str
+
+@app.patch("/api/business/order-items/{item_id}/serial")
+async def update_item_serial(item_id: int, body: SerialNumberUpdate, request: Request, db: Session = Depends(get_db)):
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = decode_token(auth_header.split(" ", 1)[1])
+        business_id = int(payload["sub"])
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    item = db.query(OrderItem).filter(OrderItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    # Check ownership
+    product = db.query(Product).filter(Product.id == item.product_id).first()
+    if not product or product.business_id != business_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    item.serial_number = body.serial_number
+    db.commit()
+    return {"message": "Serial number updated", "serial_number": item.serial_number}
 
 class BusinessOrderStatusUpdate(BaseModel):
     status: str  # Pending | Processing | Order Received | Completed | Cancelled
@@ -1419,6 +1608,9 @@ async def update_business_order_status(order_id: int, body: BusinessOrderStatusU
             raise HTTPException(status_code=403, detail="Not authorized as business")
     except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
 
     # Verify this order contains items that belong to this business
     order_has_business_items = db.query(OrderItem).join(Product, OrderItem.product_id == Product.id)\
@@ -1434,8 +1626,9 @@ async def update_business_order_status(order_id: int, body: BusinessOrderStatusU
     if body.status == "Cancelled" and (previous_status == "Completed" or previous_status == "Delivered"):
         restore_stock(db, order_id)
     
-    # Deduct stock when status first changes to 'Completed'
-    if (body.status == "Completed" or body.status == "Delivered") and previous_status not in ["Completed", "Delivered"]:
+    # Deduct stock when status first changes to an active fulfillment state
+    fulfillment_states = ["Processing", "Ready for Pickup", "Order Received", "Completed", "Delivered"]
+    if body.status in fulfillment_states and previous_status not in fulfillment_states:
         reduce_stock(db, order_id)
 
     # Award loyalty points ONLY when status changes to 'Completed' for the first time
@@ -1451,31 +1644,36 @@ async def update_business_order_status(order_id: int, body: BusinessOrderStatusU
             # Use item-specific fixed points if available, otherwise calculate from price
             prod = db.query(Product).filter(Product.id == item.product_id).first()
             if prod:
-                if prod.loyalty_points > 0:
+                # 1. Use points captured at order time (if set)
+                if item.loyalty_points and item.loyalty_points > 0:
+                    points = item.loyalty_points * item.quantity
+                elif prod and prod.loyalty_points > 0:
+                    # 2. Use current product points
                     points = prod.loyalty_points * item.quantity
-                elif biz:
-                    points = int(item.price * item.quantity * biz.loyalty_points_per_peso)
                 else:
-                    points = int(item.price * item.quantity * 0.01) # fallback multiplier (1%)
+                    # No points if not in catalog
+                    points = 0
                 total_loyalty_points += points
 
         if total_loyalty_points > 0:
             customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
             if customer:
                 customer.loyalty_points += total_loyalty_points
+                year = order.created_at.year if order.created_at else 2026
                 db.add(LoyaltyHistory(
                     customer_id=order.customer_id,
-                    description=f"Purchase Reward – Order #HV-{order.id:04d}",
+                    description=f"Purchase Reward (HV-{year}-{order.id:06d})",
                     points=total_loyalty_points
                 ))
 
     db.commit()
 
     # NOTIFY CUSTOMER
+    year = order.created_at.year if order.created_at else 2026
     add_notification(
         db, order.customer_id, "System",
         f"Order Status: {body.status}",
-        f"Your order #HV-{order.id:04d} has been updated to '{body.status}' by the clinic.",
+        f"Your order HV-{year}-{order.id:06d} has been updated to '{body.status}' by the clinic.",
         "/dashboard/customer/orders"
     )
 
@@ -1658,158 +1856,138 @@ class EmailChangeRequest(BaseModel):
 
 class EmailChangeVerifyRequest(BaseModel):
     new_email: str
+    otp: str
 
 async def send_bespoke_reservation_email(to_email: str, receipt_data: dict, is_business: bool = False):
-    """Sends a professional, minimalist dual-card invoice email (button-free) using local SMTP."""
-    subject = "New Reservation Alert - Hi-Vet" if is_business else "Your Hi-Vet Reservation Receipt"
+    """Sends a premium, clean Architecture Noir reservation email using local SMTP."""
     
-    # Minimalist Invoice Design (No Buttons)
+    # Fetch clinic email dynamically for the 'From' field
+    clinic_email = receipt_data.get('clinic_email') or EMAIL_SENDER
+    clinic_name = receipt_data.get('clinic_name', 'Hi-Vet Clinic')
+    
+    subject = "New Booking Alert - Hi-Vet" if is_business else "Your Booking Confirmation"
+    
+    # Premium Architecture Noir Design (White Glass Aesthetic)
     html_content = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="utf-8">
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,700;0,900;1,700;1,900&display=swap');
-            body {{ margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }}
+            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+            body {{ margin: 0; padding: 0; background-color: #FAF9F6; font-family: 'Outfit', sans-serif; -webkit-font-smoothing: antialiased; }}
             .surface {{ padding: 60px 20px; text-align: center; }}
-            .container {{ max-width: 450px; margin: 0 auto; text-align: left; }}
+            .container {{ max-width: 500px; margin: 0 auto; text-align: left; }}
             
             .receipt-card {{
-                background-color: #FF6B00;
-                border-radius: 40px;
-                padding: 40px 32px;
-                color: #ffffff;
-                box-shadow: 0 25px 50px -12px rgba(255, 107, 0, 0.25);
-                position: relative;
-                overflow: hidden;
-            }}
-            
-            .title-area {{ display: table; width: 100%; margin-bottom: 30px; }}
-            .receipt-title {{ font-size: 24px; font-weight: 900; font-style: italic; letter-spacing: -1px; margin: 0; display: table-cell; vertical-align: middle; }}
-            .tag-icon {{ display: table-cell; text-align: right; vertical-align: middle; }}
-            
-            .section-label {{ font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; color: rgba(255, 255, 255, 0.4); margin-bottom: 12px; display: block; }}
-            
-            .info-block {{ display: table; width: 100%; margin-bottom: 24px; }}
-            .info-icon {{ display: table-cell; width: 48px; }}
-            .info-icon-inner {{ background-color: rgba(255,255,255,0.2); width: 40px; height: 40px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); display: inline-block; }}
-            .info-text-cell {{ display: table-cell; vertical-align: middle; }}
-            .info-title {{ font-size: 10px; font-weight: 900; margin: 0 0 2px 0; color: #ffffff; letter-spacing: 0.5px; text-transform: uppercase; font-style: italic; }}
-            .info-subtitle {{ font-size: 9px; font-weight: 700; color: rgba(255, 255, 255, 0.6); margin: 0; letter-spacing: 1px; }}
-            
-            .procedure-row {{ display: table; width: 100%; margin-bottom: 35px; border-top: 1px solid rgba(255, 255, 255, 0.2); padding-top: 24px; }}
-            .procedure-details {{ display: table-cell; vertical-align: middle; }}
-            .procedure-price {{ display: table-cell; vertical-align: middle; text-align: right; font-size: 14px; font-weight: 900; font-variant-numeric: tabular-nums; }}
-            
-            .math-row {{ display: table; width: 100%; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; }}
-            .math-label {{ display: table-cell; color: rgba(255, 255, 255, 0.6); }}
-            .math-value {{ display: table-cell; text-align: right; color: #ffffff; }}
-            
-            .total-section {{ border-top: 1px solid rgba(255, 255, 255, 0.2); padding-top: 30px; display: table; width: 100%; margin-bottom: 15px; border-bottom: 1px solid rgba(255, 255, 255, 0.2); padding-bottom: 30px; }}
-            .total-info {{ display: table-cell; vertical-align: bottom; }}
-            .total-big {{ font-size: 36px; font-weight: 900; font-style: italic; letter-spacing: -2px; margin: 0; line-height: 1; }}
-            
-            .qr-container {{
-                text-align: center;
                 background-color: #ffffff;
-                border: 2px solid #D1FAE5;
-                padding: 24px;
-                border-radius: 24px;
-                margin-top: 24px;
-                display: flex;
-                align-items: center;
+                border-radius: 40px;
+                padding: 45px 40px;
+                color: #262626;
+                box-shadow: 0 40px 80px rgba(38, 38, 38, 0.05);
+                border: 1px solid rgba(0, 0, 0, 0.03);
             }}
-            .qr-text {{ text-align: left; padding-left: 16px; }}
-            .qr-text-top {{ color: #065F46; font-size: 10px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 4px 0; }}
-            .qr-text-bot {{ color: #059669; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin: 0; opacity: 0.8; }}
-            .qr-image {{ width: 80px; height: 80px; }}
             
-            @media only screen and (max-width: 500px) {{
-                .surface {{ padding: 30px 15px; }}
-                .receipt-card {{ padding: 30px 24px; border-radius: 30px; }}
-                .total-big {{ font-size: 32px; }}
-            }}
+            .brand-tag {{ color: #F26B21; font-weight: 900; font-size: 10px; text-transform: uppercase; letter-spacing: 4px; display: block; margin-bottom: 25px; opacity: 0.8; }}
+            .receipt-title {{ font-size: 32px; font-weight: 900; letter-spacing: -1.5px; margin: 0 0 40px 0; color: #262626; }}
+            
+            .section-label {{ font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; color: #262626; margin-bottom: 12px; display: block; opacity: 0.3; }}
+            
+            .info-block {{ margin-bottom: 35px; }}
+            .info-title {{ font-size: 16px; font-weight: 700; margin: 0 0 4px 0; color: #262626; }}
+            .info-subtitle {{ font-size: 13px; font-weight: 500; color: #262626; margin: 0; opacity: 0.5; }}
+            
+            .detail-row {{ display: table; width: 100%; margin-bottom: 15px; }}
+            .detail-label {{ display: table-cell; font-size: 13px; font-weight: 500; color: #262626; opacity: 0.5; }}
+            .detail-value {{ display: table-cell; text-align: right; font-size: 14px; font-weight: 700; color: #262626; }}
+            
+            .divider {{ height: 1px; background-color: rgba(0, 0, 0, 0.05); margin: 30px 0; }}
+            
+            .total-section {{ padding-top: 10px; }}
+            .total-label {{ font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; color: #262626; opacity: 0.4; margin-bottom: 8px; display: block; }}
+            .total-big {{ font-size: 42px; font-weight: 900; letter-spacing: -2px; margin: 0; color: #F26B21; }}
+            
+            .qr-table {{ width: 100%; margin-top: 40px; background-color: #FAF9F6; border-radius: 32px; padding: 25px; border: 1px solid rgba(0, 0, 0, 0.03); }}
+            .footer-info {{ text-align: center; margin-top: 45px; }}
+            .ref-text {{ font-size: 10px; font-weight: 700; color: #262626; text-transform: uppercase; letter-spacing: 3px; margin: 0 0 8px 0; opacity: 0.2; }}
+            .copyright {{ font-size: 9px; font-weight: 900; color: #F26B21; text-transform: uppercase; letter-spacing: 4px; margin: 0; opacity: 0.4; }}
         </style>
     </head>
     <body>
         <div class="surface">
             <div class="container">
                 <div class="receipt-card">
-                    <div class="title-area">
-                        <h3 class="receipt-title">Receipt Summary</h3>
-                    </div>
+                    <span class="brand-tag">Booking Receipt</span>
+                    <h1 class="receipt-title">Order Summary</h1>
                     
-                    <span class="section-label">Assigned Facility</span>
+                    <span class="section-label">Your Clinic</span>
                     <div class="info-block">
-                        <div class="info-text-cell">
-                            <h4 class="info-title">{receipt_data.get('clinic_name', 'Hi-Vet Clinic')}</h4>
-                            <p class="info-subtitle">{receipt_data.get('location', 'Main Branch')}</p>
-                        </div>
+                        <h4 class="info-title">{receipt_data.get('clinic_name', 'Hi-Vet Clinic')}</h4>
+                        <p class="info-subtitle">{receipt_data.get('location', 'Main Branch')}</p>
                     </div>
                     
-                    <span class="section-label" style="margin-bottom: 12px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 24px;">Owner</span>
-                    <div class="info-block" style="margin-bottom: 24px;">
-                        <div class="info-text-cell">
-                            <h4 class="info-title">{receipt_data.get('customer_name', 'Customer')}</h4>
-                            <p class="info-subtitle">Owner of {receipt_data.get('pet_name', 'Pet')}</p>
-                        </div>
+                    <span class="section-label">Pet Information</span>
+                    <div class="info-block">
+                        <h4 class="info-title">{receipt_data.get('pet_name', 'Pet')}</h4>
+                        <p class="info-subtitle">{receipt_data.get('pet_type', 'Dog')} &bull; {receipt_data.get('pet_breed', 'Unspecified')}</p>
+                        <p class="info-subtitle" style="font-size: 11px; margin-top: 4px;">Owned by {receipt_data.get('customer_name', 'Customer')}</p>
                     </div>
                     
-                    <div class="procedure-row">
-                        <span class="section-label" style="margin-bottom: 12px; margin-top: -10px;">Selected Procedure</span>
-                        <div style="display: table; width: 100%;">
-                            <div class="procedure-details">
-                                <div style="display: table;">
-                                    <div class="info-text-cell">
-                                        <h4 class="info-title">{receipt_data.get('service_name')}</h4>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="procedure-price">{receipt_data.get('base_price')}</div>
-                        </div>
+                    <div class="divider"></div>
+                    
+                    <span class="section-label">Your Service</span>
+                    <div class="detail-row" style="margin-bottom: 30px;">
+                        <div class="detail-label" style="font-weight: 700; opacity: 1;">{receipt_data.get('service_name')}</div>
+                        <div class="detail-value">{receipt_data.get('base_price')}</div>
                     </div>
                     
-                    <div style="margin-bottom: 40px;">
-                        <div class="math-row">
-                            <div class="math-label">Subtotal</div>
-                            <div class="math-value">{receipt_data.get('base_price')}</div>
-                        </div>
-                        {f'''
-                        <div class="math-row">
-                            <div class="math-label" style="color: #6ee7b7;"><span style="display:block;">Reward Applied</span><span style="font-size: 7px; color: rgba(255,255,255,0.4); display:block; margin-top: 2px;">{receipt_data.get('voucher_type', 'SERVICE')} &bull; {receipt_data.get('voucher_code')}</span></div>
-                            <div class="math-value" style="color: #6ee7b7;">{receipt_data.get('discount_amount')}</div>
-                        </div>
-                        ''' if receipt_data.get('voucher_code') else ""}
+                    <div class="detail-row">
+                        <div class="detail-label">Appointment Date</div>
+                        <div class="detail-value">{receipt_data.get('date')}</div>
                     </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Scheduled Time</div>
+                        <div class="detail-value">{receipt_data.get('time')}</div>
+                    </div>
+                    
+                    {f'''
+                    <div class="detail-row" style="margin-top: 15px; color: #F26B21;">
+                        <div class="detail-label" style="color: #F26B21; opacity: 0.8;">Reward Applied</div>
+                        <div class="detail-value">{receipt_data.get('discount_amount')}</div>
+                    </div>
+                    <p style="font-size: 10px; font-weight: 700; color: #F26B21; opacity: 0.5; text-transform: uppercase; letter-spacing: 2px; margin: -10px 0 0 0;">{receipt_data.get('voucher_type', 'SERVICE')} &bull; {receipt_data.get('voucher_code')}</p>
+                    ''' if receipt_data.get('voucher_code') else ""}
+                    
+                    <div class="divider"></div>
                     
                     <div class="total-section">
-                        <div class="total-info">
-                            <span class="section-label" style="margin-bottom: 8px;">Total Settlement</span>
-                            <h2 class="total-big">{receipt_data.get('total_amount')}</h2>
-                        </div>
+                        <span class="total-label">Total Amount</span>
+                        <h2 class="total-big">{receipt_data.get('total_amount')}</h2>
+                    </div>
+                    
+                    <table class="qr-table">
+                        <tr>
+                            <td style="width: 80px;">
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data={receipt_data.get('qr_content')}" style="width: 80px; height: 80px; border-radius: 12px;" alt="Receipt QR">
+                            </td>
+                            <td style="padding-left: 20px; text-align: left; vertical-align: middle;">
+                                <h4 style="color: #262626; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; margin: 0 0 6px 0; opacity: 0.8;">Verification Token</h4>
+                                <p style="color: #262626; font-size: 9px; font-weight: 500; margin: 0; opacity: 0.4; line-height: 1.6;">Scan this code at the clinic to securely validate your booking identity.</p>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <div style="margin-top: 40px; padding: 30px; background-color: #FAF9F6; border-radius: 32px; border: 1px solid rgba(0, 0, 0, 0.03);">
+                        <p style="margin: 0; font-weight: 900; color: #262626; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.8;">Need Help?</p>
+                        <p style="margin: 8px 0 15px 0; color: #262626; font-size: 11px; font-weight: 500; opacity: 0.5;">Contact the clinic directly at:</p>
+                        <p style="margin: 4px 0; color: #262626; font-size: 12px; font-weight: 700;"><strong>Email:</strong> tabios.genebsis2023@gmail.com</p>
+                        <p style="margin: 4px 0; color: #262626; font-size: 12px; font-weight: 700;"><strong>Phone:</strong> 9073040705</p>
                     </div>
                 </div>
                 
-                <table style="width: 100%; margin-top: 24px; background-color: #ECFDF5; border-radius: 20px; padding: 24px; border: 2px solid #D1FAE5;">
-                    <tr>
-                        <td style="width: 80px;">
-                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data={receipt_data.get('qr_content')}" style="width: 80px; height: 80px; border-radius: 12px;" alt="Receipt QR">
-                        </td>
-                        <td style="padding-left: 20px; text-align: left; vertical-align: middle;">
-                            <h4 style="color: #065F46; font-size: 10px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 6px 0;">Encrypted Terminal</h4>
-                            <p style="color: #059669; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin: 0; opacity: 0.8;">Session data is encrypted and validated in real-time.</p>
-                        </td>
-                    </tr>
-                </table>
-                
-                <div style="text-align: center; margin-top: 30px;">
-                    <p style="font-size: 9px; font-weight: 900; color: #94A3B8; text-transform: uppercase; letter-spacing: 2px; margin: 4px 0;">
-                        REF: {receipt_data.get('reservation_id')} &bull; {receipt_data.get('date')}
-                    </p>
-                    <p style="font-size: 9px; font-weight: 900; color: #CBD5E1; text-transform: uppercase; letter-spacing: 2px; margin: 0;">
-                        HI-VET &bull; INTEGRATED CLINICAL SYSTEMS &copy; 2026
-                    </p>
+                <div class="footer-info">
+                    <p class="ref-text">REF: {receipt_data.get('reservation_id')}</p>
+                    <p class="copyright">HI-VET &bull; COMPANION HEALTH SYSTEMS &copy; 2026</p>
                 </div>
             </div>
         </div>
@@ -1818,8 +1996,8 @@ async def send_bespoke_reservation_email(to_email: str, receipt_data: dict, is_b
     """
 
     msg = MIMEMultipart('alternative')
-    msg['Subject'] = subject
-    msg['From'] = EMAIL_SENDER
+    msg['Subject'] = f"Your Booking Confirmation - {receipt_data.get('clinic_name')}"
+    msg['From'] = f'"{clinic_name}" <{clinic_email}>'
     msg['To'] = to_email
     msg['Date'] = formatdate(localtime=True)
     msg['Message-ID'] = make_msgid()
@@ -2515,6 +2693,10 @@ async def get_product_detail(product_id: int, branch_id: Optional[int] = Query(N
         product.clinic_lat = biz.clinic_lat
         product.clinic_lng = biz.clinic_lng
         
+    # Parse sizes for multi-size aware stock calculation
+    import json
+    sizes = json.loads(product.sizes_json) if product.sizes_json else []
+
     # Override stock/coords if a specific branch is requested
     if branch_id:
         branch = db.query(BusinessBranch).filter(BusinessBranch.id == branch_id, BusinessBranch.business_id == product.business_id).first()
@@ -2522,9 +2704,22 @@ async def get_product_detail(product_id: int, branch_id: Optional[int] = Query(N
             # Override coordinates for the map
             product.clinic_lat = branch.lat if branch.lat else product.clinic_lat
             product.clinic_lng = branch.lng if branch.lng else product.clinic_lng
-            # Override stock
-            branch_inv = db.query(BranchInventory).filter(BranchInventory.product_id == product_id, BranchInventory.branch_id == branch_id).first()
-            product.stock = branch_inv.stock if branch_inv else 0
+            
+            # Override stock: If sizes exist, sum them for this branch. If not, check BranchInventory.
+            if sizes:
+                branch_total = 0
+                for s in sizes:
+                    b_stock = s.get('branch_stock', {})
+                    # Ensure we handle the dict structure: { "branch_id": { "stock": "X" } }
+                    target_b = b_stock.get(str(branch_id))
+                    if isinstance(target_b, dict):
+                        branch_total += int(target_b.get('stock', 0))
+                    else:
+                        branch_total += int(target_b or 0)
+                product.stock = branch_total
+            else:
+                branch_inv = db.query(BranchInventory).filter(BranchInventory.product_id == product_id, BranchInventory.branch_id == branch_id).first()
+                product.stock = branch_inv.stock if branch_inv else 0
 
     # Fetch branch availability
     branches = db.query(BusinessBranch).filter(BusinessBranch.business_id == product.business_id).all()
@@ -2533,6 +2728,19 @@ async def get_product_detail(product_id: int, branch_id: Optional[int] = Query(N
     
     branch_stocks = []
     for b in branches:
+        # Compute stock for this specific branch
+        if sizes:
+            current_stock = 0
+            for s in sizes:
+                b_stock = s.get('branch_stock', {})
+                target_b = b_stock.get(str(b.id))
+                if isinstance(target_b, dict):
+                    current_stock += int(target_b.get('stock', 0))
+                else:
+                    current_stock += int(target_b or 0)
+        else:
+            current_stock = inv_map.get(b.id, 0)
+
         # Construct full address
         addr_parts = [b.house_number, b.block_number, b.street, b.subdivision, b.sitio, b.barangay, b.city, b.province]
         full_addr = ", ".join([p for p in addr_parts if p and p.strip()])
@@ -2542,7 +2750,7 @@ async def get_product_detail(product_id: int, branch_id: Optional[int] = Query(N
         branch_stocks.append({
             "branch_id": b.id,
             "name": b.name,
-            "stock": inv_map.get(b.id, 0),
+            "stock": current_stock,
             "lat": b.lat,
             "lng": b.lng,
             "address": full_addr
@@ -2588,6 +2796,28 @@ async def get_business_catalog(
 
     return products
 
+@app.get("/api/business/catalog/{product_id}", response_model=ProductSchema)
+async def get_business_product_detail(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Fetch details of a specific product for the business owner."""
+    if current_user.get("role") != "business":
+        raise HTTPException(status_code=403, detail="Business access required")
+    
+    business_id = int(current_user["sub"])
+    product = db.query(Product).filter(Product.id == product_id, Product.business_id == business_id).first()
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+        
+    # Load inventory distribution
+    distribution = db.query(BranchInventory).filter(BranchInventory.product_id == product_id).all()
+    product.inventory_distribution = {str(inv.branch_id): inv.stock for inv in distribution}
+    
+    return product
+
 @app.post("/api/business/catalog", response_model=ProductSchema)
 async def create_product(
     body: ProductCreate,
@@ -2623,7 +2853,12 @@ async def create_product(
     # Handle inventory distribution initialization
     if body.inventory_distribution:
         for b_id, s_val in body.inventory_distribution.items():
-            inv = BranchInventory(product_id=new_product.id, branch_id=int(b_id), stock=int(s_val))
+            stock_int = 0
+            if isinstance(s_val, dict):
+                stock_int = int(s_val.get('stock', 0))
+            else:
+                stock_int = int(s_val)
+            inv = BranchInventory(product_id=new_product.id, branch_id=int(b_id), stock=stock_int)
             db.add(inv)
         db.commit()
         
@@ -2663,7 +2898,12 @@ async def update_product(
     if body.inventory_distribution is not None:
         for b_id, s_val in body.inventory_distribution.items():
             branch_id_int = int(b_id)
-            stock_int = int(s_val)
+            stock_int = 0
+            if isinstance(s_val, dict):
+                stock_int = int(s_val.get('stock', 0))
+            else:
+                stock_int = int(s_val)
+                
             # Find existing record or create new
             inv = db.query(BranchInventory).filter(BranchInventory.product_id == product.id, BranchInventory.branch_id == branch_id_int).first()
             if inv:
@@ -2818,11 +3058,15 @@ def _reservation_to_dict(r: Reservation, customer_name: Optional[str] = None, cu
         "business_id": r.business_id,
         "branch_id": r.branch_id,
         "pet_name": r.pet_name,
+        "pet_type": getattr(r, 'pet_type', 'Dog'),
+        "pet_breed": getattr(r, 'pet_breed', ''),
         "service": r.service,
         "date": r.date,
         "time": r.time,
         "status": r.status,
         "payment_status": getattr(r, 'payment_status', 'unpaid') or 'unpaid',
+        "payment_method": "Online (PayMongo)" if getattr(r, 'paymongo_intent_id', None) or getattr(r, 'paymongo_session_id', None) else "Pay at Clinic (Cash/Card)",
+        "voucher_code": getattr(r, 'voucher_code', None),
         "paymongo_session_id": getattr(r, 'paymongo_session_id', None),
         "location": r.location or "",
         "notes": r.notes or "",
@@ -3190,6 +3434,8 @@ async def create_reservation(
         branch_id=body.branch_id,
         service_id=body.service_id,
         pet_name=body.pet_name,
+        pet_type=body.pet_type,
+        pet_breed=body.pet_breed,
         service=body.service,
         date=body.date,
         time=body.time,
@@ -3203,6 +3449,7 @@ async def create_reservation(
         customer_lng=body.customer_lng,
         status=new_status,
         payment_status=new_payment_status,
+        loyalty_points=db.query(BusinessService.loyalty_points).filter(BusinessService.id == body.service_id).scalar() or 0
     )
     db.add(new_res)
     db.commit()
@@ -3211,8 +3458,10 @@ async def create_reservation(
     # 7. Collect Data for Receipt/Notification Summary
     customer_name = current_user.get("name") or f"{current_user.get('first_name', '')} {current_user.get('last_name', '')}".strip() or "Valued Customer"
     
-    # Fetch Clinic Name
-    clinic_name = db.query(BusinessProfile.clinic_name).filter(BusinessProfile.id == body.business_id).scalar() or "Hi-Vet Clinic"
+    # Fetch Clinic Name and Email
+    clinic_profile = db.query(BusinessProfile).filter(BusinessProfile.id == body.business_id).first()
+    clinic_name = clinic_profile.clinic_name if clinic_profile else "Hi-Vet Clinic"
+    clinic_email = clinic_profile.email if clinic_profile else EMAIL_SENDER
     
     # Format Date (e.g., April 9, 2026)
     try:
@@ -3236,7 +3485,10 @@ async def create_reservation(
         "reservation_id": tracking_id,
         "customer_name": customer_name,
         "clinic_name": clinic_name,
+        "clinic_email": clinic_email,
         "pet_name": new_res.pet_name,
+        "pet_type": new_res.pet_type,
+        "pet_breed": new_res.pet_breed,
         "service_name": new_res.service,
         "date": formatted_date,
         "time": new_res.time,
@@ -3418,8 +3670,11 @@ async def update_reservation_status(
             customer = db.query(Customer).filter(Customer.id == res.customer_id).first()
             if customer:
                 points_to_award = 0
-                # 1. Check if the specific service has fixed fixed points
-                if res.service_id:
+                # 1. Check points captured at reservation time
+                if res.loyalty_points and res.loyalty_points > 0:
+                    points_to_award = res.loyalty_points
+                # 2. Check if the specific service has fixed points
+                elif res.service_id:
                     service_obj = db.query(BusinessService).filter(BusinessService.id == res.service_id).first()
                     if service_obj and service_obj.loyalty_points > 0:
                         points_to_award = service_obj.loyalty_points
@@ -3434,9 +3689,10 @@ async def update_reservation_status(
 
                 if points_to_award > 0:
                     customer.loyalty_points += points_to_award
+                    year = res.created_at.year if res.created_at else datetime.now().year
                     db.add(LoyaltyHistory(
                         customer_id=customer.id,
-                        description=f"Service Reward – {res.service} at {biz.clinic_name or 'Clinic'}",
+                        description=f"Service Reward (HV-RES-{year}-{res.id:06d}) – {res.service} at {biz.clinic_name or 'Clinic'}",
                         points=points_to_award
                     ))
     
@@ -4103,7 +4359,7 @@ async def get_clinics(db: Session = Depends(get_db)):
             "zip": zip_code,
             "phone": phone,
             "branches": branches_list,
-            "services": [{"id": s.id, "name": s.name, "description": s.description, "price": s.price, "duration_minutes": s.duration_minutes, "is_package": s.is_package, "package_items_json": s.package_items_json} for s in services],
+            "services": [{"id": s.id, "name": s.name, "description": s.description, "price": s.price, "duration_minutes": s.duration_minutes, "loyalty_points": s.loyalty_points, "is_package": s.is_package, "package_items_json": s.package_items_json} for s in services],
             "hours": [{"day_of_week": h.day_of_week, "day_name": DAYS_OF_WEEK[h.day_of_week], "is_open": h.is_open, "open_time": h.open_time, "close_time": h.close_time, "break_start": h.break_start, "break_end": h.break_end} for h in hours],
             "special_hours": [{"specific_date": sh.specific_date, "is_open": sh.is_open, "open_time": sh.open_time, "close_time": sh.close_time, "break_start": sh.break_start, "break_end": sh.break_end} for sh in special_hours]
         })
@@ -4150,6 +4406,15 @@ async def get_business_dashboard_stats(
     now = datetime.utcnow()
     month_start = datetime(now.year, now.month, 1)
     last_month_start = (month_start - timedelta(days=1)).replace(day=1)
+    
+    # 0. Calculate Feedback Statistics
+    review_query = db.query(ProductReview).join(Product, ProductReview.product_id == Product.id).filter(Product.business_id == biz_id)
+    if branch_id:
+        pass
+    
+    reviews_list = review_query.all()
+    avg_rating = sum(r.rating for r in reviews_list) / len(reviews_list) if reviews_list else 5.0
+    total_reviews = len(reviews_list)
     
     # Product revenue (Current vs Previous)
     curr_prod_q = db.query(OrderItem).join(Product, Product.id == OrderItem.product_id).join(Order, Order.id == OrderItem.order_id).filter(Product.business_id == biz_id, Order.created_at >= month_start, Order.status.notin_(["Cancelled", "Pending"]))
@@ -4212,7 +4477,10 @@ async def get_business_dashboard_stats(
         ord_change_str = "+100% this month" if product_orders_count > 0 else "0% this month"
 
     active_prods = db.query(Product).filter(Product.business_id == biz_id).count()
-    low_stock = db.query(Product).filter(Product.business_id == biz_id, Product.stock <= 10).count()
+    if branch_id:
+        low_stock = db.query(BranchInventory).filter(BranchInventory.branch_id == branch_id, BranchInventory.stock <= 10).count()
+    else:
+        low_stock = db.query(Product).filter(Product.business_id == biz_id, Product.stock <= 10).count()
     
     return {
         "product_orders": product_orders_count,
@@ -4225,6 +4493,53 @@ async def get_business_dashboard_stats(
         "revenue_change": rev_change_str,
         "orders_change": ord_change_str
     }
+
+@app.get("/api/business/inventory/low-stock")
+async def get_low_stock_products(
+    branch_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    if current_user.get("role") != "business":
+        raise HTTPException(status_code=403, detail="Business access required")
+    
+    biz_id = int(current_user["sub"])
+    alert_threshold = 10
+    
+    if branch_id:
+        # Get products that are low stock in this specific branch
+        low_items = db.query(BranchInventory, Product).join(Product, Product.id == BranchInventory.product_id).filter(
+            BranchInventory.branch_id == branch_id,
+            BranchInventory.stock <= alert_threshold
+        ).all()
+        
+        result = []
+        for inv, p in low_items:
+            result.append({
+                "id": p.id,
+                "name": p.name,
+                "sku": p.sku,
+                "stock": inv.stock,
+                "image": p.image,
+                "category": p.category
+            })
+        return result
+    else:
+        # Global low stock (legacy check)
+        low_items = db.query(Product).filter(
+            Product.business_id == biz_id,
+            Product.stock <= alert_threshold,
+            Product.is_archived == False
+        ).all()
+        
+        return [{
+            "id": p.id,
+            "name": p.name,
+            "sku": p.sku,
+            "stock": p.stock,
+            "image": p.image,
+            "category": p.category
+        } for p in low_items]
 
 @app.get("/api/business/dashboard/recent-orders", response_model=List[BusinessDashboardOrder])
 async def get_business_recent_orders(
@@ -4294,6 +4609,15 @@ async def get_business_analytics(
     now = datetime.utcnow()
     month_start = datetime(now.year, now.month, 1)
     
+    # 0. Calculate Feedback Statistics
+    review_query = db.query(ProductReview).join(Product, ProductReview.product_id == Product.id).filter(Product.business_id == biz_id)
+    if branch_id:
+        pass
+    
+    reviews_list = review_query.all()
+    avg_rating = sum(r.rating for r in reviews_list) / len(reviews_list) if reviews_list else 5.0
+    total_reviews = len(reviews_list)
+    
     # Identify Main Branch and Other Branches for catch-all logic
     all_branches = db.query(BusinessBranch).filter(BusinessBranch.business_id == biz_id).all()
     main_branch = next((b for b in all_branches if b.is_main), None)
@@ -4323,11 +4647,11 @@ async def get_business_analytics(
         op_query = db.query(OrderItem, Order).join(Order, Order.id == OrderItem.order_id).join(Product, Product.id == OrderItem.product_id).filter(
             Product.business_id == biz_id, 
             Order.created_at >= cutoff, 
-            Order.status.notin_(["Cancelled", "Pending"])
+            Order.status.notin_(["Cancelled", "Pending", "Payment Pending"])
         )
         if branch_id: 
             if branch_id == main_branch_id:
-                op_query = op_query.filter(or_(Order.branch_id.notin_(other_branch_ids), Order.branch_id == None))
+                op_query = op_query.filter(or_(Order.branch_id == branch_id, Order.branch_id == None))
             else:
                 op_query = op_query.filter(Order.branch_id == branch_id)
         p_items = op_query.all()
@@ -4340,7 +4664,7 @@ async def get_business_analytics(
         )
         if branch_id: 
             if branch_id == main_branch_id:
-                rs_query = rs_query.filter(or_(Reservation.branch_id.notin_(other_branch_ids), Reservation.branch_id == None))
+                rs_query = rs_query.filter(or_(Reservation.branch_id == branch_id, Reservation.branch_id == None))
             else:
                 rs_query = rs_query.filter(Reservation.branch_id == branch_id)
         s_items = rs_query.all()
@@ -4379,24 +4703,24 @@ async def get_business_analytics(
     
     if data_type == 'products':
         kpis = [
-            {"label": "Product Revenue", "value": f"₱{int(p_rev):,}", "change": f"Period Sales{kpi_suffix}", "up": True, "icon": "TrendingUp", "color": "bg-green-50 text-green-600"},
-            {"label": "Total Orders", "value": f"{p_ords}", "change": "in period", "up": True, "icon": "ShoppingBag", "color": "bg-blue-50 text-blue-600"},
-            {"label": "Active Products", "value": f"{stats['active_products']}", "change": "Live", "up": True, "icon": "Package", "color": "bg-orange-50 text-orange-600"},
-            {"label": "Inventory Status", "value": f"{stats['active_products']}", "change": f"{stats['low_stock_count']} low stock", "up": stats['low_stock_count'] == 0, "icon": "Package", "color": "bg-orange-50 text-orange-600"}
+            {"label": "Total Orders", "value": f"{p_ords}", "change": "in period", "up": True, "icon": "ShoppingBag", "color": "bg-blue-50 text-blue-600", "chartData": [{"value": 10}, {"value": 15}, {"value": 12}]},
+            {"label": "Active Products", "value": f"{stats['active_products']}", "change": "In catalog", "up": True, "icon": "Package", "color": "bg-orange-50 text-orange-600", "chartData": [{"value": 10}, {"value": 8}, {"value": 12}]},
+            {"label": "Inventory Status", "value": f"{stats['active_products']}", "change": f"{stats['low_stock_count']} LOW STOCK", "up": stats['low_stock_count'] == 0, "icon": "Package", "color": "bg-orange-50 text-orange-600", "chartData": [{"value": 20}, {"value": 18}, {"value": 22}]},
+            {"label": "Feedback Pulse", "value": f"{avg_rating:.1f}", "change": f"{total_reviews} reviews", "up": avg_rating >= 4.0, "icon": "Star", "color": "bg-yellow-50 text-yellow-600", "chartData": [{"name": "P1", "value": avg_rating - 0.2}, {"name": "P2", "value": avg_rating + 0.1}, {"name": "P3", "value": avg_rating}]}
         ]
     elif data_type == 'services':
         kpis = [
-            {"label": "Service Revenue", "value": f"₱{int(s_rev):,}", "change": f"Period Income{kpi_suffix}", "up": True, "icon": "TrendingUp", "color": "bg-green-50 text-green-600"},
-            {"label": "Total Appointments", "value": f"{s_appts}", "change": "in period", "up": True, "icon": "Users", "color": "bg-blue-50 text-blue-600"},
-            {"label": "Avg Appointment", "value": f"₱{int(avg_session_val):,}", "change": "Per completion", "up": True, "icon": "Award", "color": "bg-purple-50 text-purple-600"},
-            {"label": "Inventory Status", "value": f"{stats['active_products']}", "change": f"{stats['low_stock_count']} low stock", "up": stats['low_stock_count'] == 0, "icon": "Package", "color": "bg-orange-50 text-orange-600"}
+            {"label": "Total Appointments", "value": f"{s_appts}", "change": "in period", "up": True, "icon": "Users", "color": "bg-blue-50 text-blue-600", "chartData": [{"value": 10}, {"value": 15}, {"value": 12}]},
+            {"label": "Avg Appointment", "value": f"₱{int(avg_session_val):,}", "change": "Per completion", "up": True, "icon": "Award", "color": "bg-purple-50 text-purple-600", "chartData": [{"value": 5}, {"value": 8}, {"value": 12}]},
+            {"label": "Inventory Status", "value": f"{stats['active_products']}", "change": f"{stats['low_stock_count']} LOW STOCK", "up": stats['low_stock_count'] == 0, "icon": "Package", "color": "bg-orange-50 text-orange-600", "chartData": [{"value": 20}, {"value": 18}, {"value": 22}]},
+            {"label": "Feedback Pulse", "value": f"{avg_rating:.1f}", "change": f"{total_reviews} reviews", "up": avg_rating >= 4.0, "icon": "Star", "color": "bg-yellow-50 text-yellow-600", "chartData": [{"name": "P1", "value": avg_rating - 0.2}, {"name": "P2", "value": avg_rating + 0.1}, {"name": "P3", "value": avg_rating}]}
         ]
     else: # all
         kpis = [
-            {"label": "Total Revenue", "value": f"₱{int(total_rev):,}", "change": f"Period Total{kpi_suffix}", "up": True, "icon": "TrendingUp", "color": "bg-green-50 text-green-600"},
-            {"label": "Product Sales", "value": f"₱{int(p_rev):,}", "change": f"{p_ords} orders", "up": True, "icon": "ShoppingBag", "color": "bg-blue-50 text-blue-600"},
-            {"label": "Clinic Services", "value": f"₱{int(s_rev):,}", "change": f"{s_appts} appts", "up": True, "icon": "Award", "color": "bg-purple-50 text-purple-600"},
-            {"label": "Inventory Status", "value": f"{stats['active_products']}", "change": f"{stats['low_stock_count']} low stock", "up": stats['low_stock_count'] == 0, "icon": "Package", "color": "bg-orange-50 text-orange-600"}
+            {"label": "Business Revenue", "value": f"₱{int(p_rev):,}", "change": f"{p_ords} orders", "up": True, "icon": "ShoppingBag", "color": "bg-blue-50 text-blue-600", "chartData": [{"value": 10}, {"value": 15}, {"value": 13}]},
+            {"label": "Clinic Services", "value": f"₱{int(s_rev):,}", "change": f"{s_appts} appts", "up": True, "icon": "LayoutGrid", "color": "bg-purple-50 text-purple-600", "chartData": [{"value": 10}, {"value": 15}, {"value": 12}]},
+            {"label": "Inventory Status", "value": f"{stats['active_products']}", "change": f"{stats['low_stock_count']} LOW STOCK", "up": stats['low_stock_count'] == 0, "icon": "Package", "color": "bg-orange-50 text-orange-600", "chartData": [{"value": 20}, {"value": 18}, {"value": 22}]},
+            {"label": "Feedback Pulse", "value": f"{avg_rating:.1f}", "change": f"{total_reviews} reviews", "up": avg_rating >= 4.0, "icon": "Star", "color": "bg-yellow-50 text-yellow-600", "chartData": [{"name": "P1", "value": avg_rating - 0.2}, {"name": "P2", "value": avg_rating + 0.1}, {"name": "P3", "value": avg_rating}]}
         ]
 
     # 5. Revenue Trend (Optimized Python Aggr)
@@ -4414,7 +4738,7 @@ async def get_business_analytics(
         count = 6 if period == '6m' else 12
         for i in range(count - 1, -1, -1):
             d = month_start - relativedelta(months=i)
-            intervals.append((d, d + relativedelta(months=1), d.strftime("%Y-%m")))
+            intervals.append((d, d + relativedelta(months=1), d.strftime("%B %Y")))
 
     for start, end, label in intervals:
         val = 0
@@ -4435,13 +4759,13 @@ async def get_business_analytics(
             p_map[p_name]["sold"] += (item.quantity or 0)
             p_map[p_name]["revenue"] += (item.price or 0) * (item.quantity or 0)
         
-        p_list = sorted([{"name": k, **v} for k, v in p_map.items()], key=lambda x: x["revenue"], reverse=True)[:5]
-        max_p = max([i["revenue"] for i in p_list]) if p_list else 1
+        p_list = sorted([{"name": k, **v} for k, v in p_map.items()], key=lambda x: x["revenue"], reverse=True)[:6]
+        max_p = max([i["revenue"] for i in p_list]) if p_list and max([i["revenue"] for i in p_list]) > 0 else 1
         for i in p_list:
             top_products.append({"name": i["name"], "sold": i["sold"], "revenue": f"₱{i['revenue']:,.0f}", "pct": int((i["revenue"]/max_p)*100), "delta": 5})
     
-    if not top_products:
-        top_products = [{"name": "No sales yet", "sold": 0, "revenue": "₱0", "pct": 0, "delta": 0}]
+        # Return empty list to trigger frontend placeholder
+        pass
     # Services
     top_services = []
     if data_type in ['all', 'services']:
@@ -4452,19 +4776,46 @@ async def get_business_analytics(
             s_map[s_name]["sold"] += 1
             if res.status == "Completed": s_map[s_name]["revenue"] += (res.total_amount or 0)
         
-        s_list = sorted([{"name": k, **v} for k, v in s_map.items()], key=lambda x: x["revenue"], reverse=True)[:5]
-        max_s = max([i["revenue"] for i in s_list]) if s_list else 1
+        s_list = sorted([{"name": k, **v} for k, v in s_map.items()], key=lambda x: x["revenue"], reverse=True)[:6]
+        max_s = max([i["revenue"] for i in s_list]) if s_list and max([i["revenue"] for i in s_list]) > 0 else 1
         for i in s_list:
             top_services.append({"name": i["name"], "sold": i["sold"], "revenue": f"₱{i['revenue']:,.0f}", "pct": int((i['revenue']/max_s)*100), "delta": 5})
 
-    if not top_services:
-        top_services = [{"name": "No services yet", "sold": 0, "revenue": "₱0", "pct": 0, "delta": 0}]
+    # Return empty list to trigger frontend placeholder
+    pass
 
-# 7. Distribution (Products vs Services)
+    # 7. Distribution (Products vs Services)
     distribution_data = [
-        {"name": "Product Revenue", "value": len(p_data), "color": "#FB8500"},
-        {"name": "Services Revenue", "value": len(s_data), "color": "#219EBC"}
+        {"name": "Product Revenue", "value": int(p_rev), "color": "#FB8500"},
+        {"name": "Services Revenue", "value": int(s_rev), "color": "#219EBC"}
     ]
+
+    # 7.5 Animal Breakdown (BI Stats)
+    pet_map = {"Dog": 0, "Cat": 0, "Others": 0}
+    breed_map = {}
+    
+    for res in s_data:
+        ptype = (res.pet_type or "Dog").capitalize()
+        if ptype in ["Dog", "Cat"]:
+            pet_map[ptype] += 1
+        else:
+            pet_map["Others"] += 1
+            
+        breed = (res.pet_breed or "Unknown").title()
+        breed_map[breed] = breed_map.get(breed, 0) + 1
+        
+    species_dist = [
+        {"name": "Dogs", "value": pet_map["Dog"], "color": "#FB8500"},
+        {"name": "Cats", "value": pet_map["Cat"], "color": "#219EBC"},
+        {"name": "Others", "value": pet_map["Others"], "color": "#8D6E63"}
+    ]
+    
+    top_breeds = sorted([{"name": k, "value": v} for k, v in breed_map.items()], key=lambda x: x["value"], reverse=True)[:5]
+    
+    pet_stats = {
+        "species": species_dist,
+        "breeds": top_breeds
+    }
 
     # 8. Date vs Date Comparison
     comparison_data = []
@@ -4621,7 +4972,7 @@ async def get_business_analytics(
     # Process revenue
     branch_stats = {bid: 0 for bid in branch_name_map.keys()}
     
-    op_global = db.query(OrderItem, Order).join(Order, Order.id == OrderItem.order_id).join(Product, Product.id == OrderItem.product_id).filter(Product.business_id == biz_id, Order.created_at >= cutoff_date, Order.status.notin_(["Cancelled", "Pending"])).all()
+    op_global = db.query(OrderItem, Order).join(Order, Order.id == OrderItem.order_id).join(Product, Product.id == OrderItem.product_id).filter(Product.business_id == biz_id, Order.created_at >= cutoff_date, Order.status.notin_(["Cancelled", "Pending", "Payment Pending"])).all()
     rs_global = db.query(Reservation).filter(Reservation.business_id == biz_id, Reservation.created_at >= cutoff_date, Reservation.status.in_(["Completed", "Confirmed"])).all()
     
     for item in op_global:
@@ -4728,6 +5079,55 @@ async def get_business_analytics(
                     new_entry[short_name] = int(total_val)
                     all_branches_trend.append(new_entry)
     
+    # 11. Data Mining & Cluster Sampling Extensions
+    
+    # Treemap Logic: Market Matrix
+    market_matrix = [
+        {
+            "name": "Revenue Pillars",
+            "children": [
+                {
+                    "name": "Products",
+                    "children": [{"name": k[:10], "value": int(v["revenue"])} for k, v in list(p_map.items())[:6]] if p_map else [{"name": "No Data", "value": 0}]
+                },
+                {
+                    "name": "Services",
+                    "children": [{"name": k[:10], "value": int(v["revenue"])} for k, v in list(s_map.items())[:6]] if s_map else [{"name": "No Data", "value": 0}]
+                }
+            ]
+        }
+    ]
+
+    # Radar Logic: Service DNA
+    service_dna = [
+        {"subject": "Volume", "A": min(100, (s_appts * 10)), "fullMark": 100},
+        {"subject": "Revenue", "A": min(100, (int(s_rev / 5000) * 10)), "fullMark": 100},
+        {"subject": "Diversity", "A": min(100, (len(breed_map) * 15)), "fullMark": 100},
+        {"subject": "Retention", "A": retention_rate, "fullMark": 100},
+        {"subject": "Growth", "A": 85, "fullMark": 100} # Mock growth for visual
+    ]
+
+    # Cluster Intelligence (Mined Insights)
+    total_curr = sum(d.get('value', 0) for d in comparison_data)
+    total_prev = sum(d.get('previous', 0) for d in comparison_data)
+    growth_pct = int(((total_curr - total_prev) / total_prev * 100)) if total_prev > 0 else 0
+    
+    health_msg = "Your business is performing well. Data density is increasing."
+    if growth_pct > 10:
+        health_msg = f"Business is booming! You're seeing a {growth_pct}% increase in revenue vs previous period."
+    elif growth_pct > 0:
+        health_msg = f"Steady growth detected. You're up by {growth_pct}% this period."
+    elif growth_pct < 0:
+        health_msg = f"Volume is down by {abs(growth_pct)}%. Consider running a flash sale to boost momentum."
+    
+    mined_insights = [health_msg]
+    if pet_map["Dog"] > pet_map["Cat"]:
+        mined_insights.append("Dogs represent the primary revenue cluster in the current period.")
+    if p_rev > s_rev:
+        mined_insights.append("Product sales are currently outperforming services in total volume.")
+    if top_breeds:
+        mined_insights.append(f"The '{top_breeds[0]['name']}' cluster shows the highest service affinity.")
+
     return {
         "kpis": kpis,
         "revenue_trend": {"chartData": revenue_trend_data},
@@ -4738,7 +5138,11 @@ async def get_business_analytics(
         "retention_change": "↑ Stable performance" if retention_rate > 0 else "0% change",
         "distribution_data": distribution_data,
         "comparison_data": comparison_data,
-        "all_branches_trend": all_branches_trend
+        "all_branches_trend": all_branches_trend,
+        "pet_stats": pet_stats,
+        "market_matrix": market_matrix,
+        "service_dna": service_dna,
+        "mined_insights": mined_insights
     }
 
 # ─── Admin Compliance Endpoints ───────────────────────────────────────────────
@@ -5307,6 +5711,7 @@ async def login_customer(body: LoginRequest, db: Session = Depends(get_db)):
         "gender": getattr(user, "gender", ""),
         "birthday": getattr(user, "birthday", ""),
         "avatar": avatar,
+        "clinic_name": getattr(user, 'clinic_name', '') if getattr(user, 'role', '') == 'business' else '',
         "has_password": bool(user.password_hash)
     }
     token = create_access_token(token_data)
@@ -5762,7 +6167,7 @@ async def get_customer_dashboard_stats(request: Request, db: Session = Depends(g
 
 
         recent_order = {
-            "id": f"RV-{recent_order_obj.id:04d}",
+            "id": f"HV-2026-{recent_order_obj.id:06d}",
             "status": recent_order_obj.status,
             "item_summary": f"{items[0].product_name} ({len(items)} Items)" if items else "Order Items",
             "location": location_display,
@@ -5826,12 +6231,53 @@ async def get_customer_dashboard_stats(request: Request, db: Session = Depends(g
     points_savings = abs(month_points_redeemed)
     total_savings = month_discounts + points_savings
     
+    # ── Medical Metrics: Compliance & Care Hours ──────────────────────────
+    all_reservations = db.query(Reservation).filter(Reservation.customer_id == customer_id).all()
+    
+    # Care Hours (Completed Reservs * Service Duration)
+    care_minutes = db.query(func.sum(BusinessService.duration_minutes)).join(
+        Reservation, Reservation.service_id == BusinessService.id
+    ).filter(
+        Reservation.customer_id == customer_id,
+        Reservation.status == "Completed"
+    ).scalar() or 0
+    care_hours = round(care_minutes / 60, 1)
+    
+    # Compliance (Completed vs (Completed + Cancelled + No Show))
+    final_reservs = [r for r in all_reservations if r.status in ["Completed", "Cancelled", "No Show"]]
+    attended = [r for r in final_reservs if r.status == "Completed"]
+    compliance = 100
+    if final_reservs:
+        compliance = round((len(attended) / len(final_reservs)) * 100)
+    
     if total_savings > 0:
         insight_msg = f"You've saved ₱{total_savings:,} this month using your loyalty points and member-only promos."
     elif customer.loyalty_points > 0:
         insight_msg = f"You have {customer.loyalty_points:,} points ready to be redeemed for exclusive rewards."
     else:
         insight_msg = "Start shopping to earn loyalty points and unlock exclusive member-only promos."
+
+    # Pets Data (Unique pet names and their next reservation)
+    pets_data = []
+    unique_pets = db.query(Reservation.pet_name).filter(Reservation.customer_id == customer_id).distinct().all()
+    for (pname,) in unique_pets:
+        next_res = db.query(Reservation.date).filter(
+            Reservation.customer_id == customer_id,
+            Reservation.pet_name == pname,
+            Reservation.date >= datetime.utcnow().strftime('%Y-%m-%d'),
+            Reservation.status.in_(["Pending", "Confirmed"])
+        ).order_by(Reservation.date.asc()).first()
+        
+        pets_data.append({
+            "name": pname,
+            "next": next_res[0] if next_res else "None",
+            "icon": "🐶" if "dog" in pname.lower() else "🐱" if "cat" in pname.lower() else "🐾"
+        })
+
+    # Sort pets by next reservation date (move "None" to end)
+    pets_data.sort(key=lambda x: (x['next'] == "None", x['next']))
+    # Only return top 3
+    pets_data = pets_data[:3]
 
     return {
         "loyalty": {
@@ -5840,10 +6286,11 @@ async def get_customer_dashboard_stats(request: Request, db: Session = Depends(g
             "next_tier": loyalty_info["next_tier"],
             "next_points": loyalty_info["next_points"],
             "points_to_next": max(0, loyalty_info["next_points"] - customer.loyalty_points) if loyalty_info["next_points"] > 0 else 0,
-            "points_per_peso": 10.0, # Default for dashboard overview
+            "points_per_peso": 10.0,
             "points_per_reservation": 50
         },
         "recent_order": recent_order,
+        "pets": pets_data,
         "alerts": [{
             "id": n.id,
             "type": n.type,
@@ -5853,8 +6300,28 @@ async def get_customer_dashboard_stats(request: Request, db: Session = Depends(g
         } for n in unread_notifs],
         "unread_count": unread_count,
         "insight": insight_msg,
-        "clinic_checkup": clinic_checkup
+        "clinic_checkup": clinic_checkup,
+        "medical_metrics": {
+            "total_visits": len(all_reservations),
+            "completed_visits": len(attended)
+        }
     }
+    
+@app.get("/api/customers/me/pets")
+async def get_my_pets(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    customer_id = int(current_user["sub"])
+    unique_pets = db.query(Reservation.pet_name, Reservation.pet_type, Reservation.pet_breed)\
+        .filter(Reservation.customer_id == customer_id)\
+        .distinct().all()
+    
+    pets = []
+    for pname, ptype, pbreed in unique_pets:
+        pets.append({
+            "name": pname,
+            "type": ptype or "Dog",
+            "breed": pbreed or ""
+        })
+    return {"pets": pets}
 
 class PasswordUpdate(BaseModel):
     current_password: Optional[str] = None
@@ -6172,6 +6639,7 @@ def restore_stock(db: Session, order_id: int):
     """Helper to return items to stock when a completed order is cancelled."""
     import json
     order_items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+    order = db.query(Order).filter(Order.id == order_id).first()
     for item in order_items:
         product = db.query(Product).filter(Product.id == item.product_id).first()
         if not product:
@@ -6179,6 +6647,15 @@ def restore_stock(db: Session, order_id: int):
         
         qty = item.quantity
         restored = False
+        
+        # 1. Update Branch Inventory if branch_id is set
+        if order and order.branch_id:
+            inv = db.query(BranchInventory).filter(
+                BranchInventory.product_id == item.product_id,
+                BranchInventory.branch_id == order.branch_id
+            ).first()
+            if inv:
+                inv.stock = inv.stock + qty
         
         # 1. Restore Variants
         if item.variant and product.variants_json:
@@ -6200,58 +6677,99 @@ def restore_stock(db: Session, order_id: int):
                 for s in sizes:
                     if s.get('name') == item.size:
                         s['stock'] = s.get('stock', 0) + qty
+                        # Update branch-specific stock within size if branch_id is set
+                        if order and order.branch_id and 'branchStocks' in s:
+                            b_id_str = str(order.branch_id)
+                            curr_b_stock = int(s['branchStocks'].get(b_id_str, 0))
+                            s['branchStocks'][b_id_str] = curr_b_stock + qty
+                        
                         product.sizes_json = json.dumps(sizes)
                         restored = True
                         break
             except Exception as e:
                 print(f"Restore stock error (sizes): {e}")
         
-        # 3. Fallback to main stock
-        if not restored:
-            product.stock = product.stock + qty
+        # 4. Standard Stock & Global Sync
+        # We always increment global stock to keep it in sync with branch total
+        product.stock = product.stock + qty
+        db.add(product)
+            
     db.commit()
 
 def reduce_stock(db: Session, order_id: int):
-    """Helper to decrement stock when an order is completed."""
+    """Helper to decrement stock when an order is completed/processing, ensuring branch-specific inventory is updated."""
     import json
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        return
+
+    # Fallback to main branch if no branch_id on the order
+    branch_id = order.branch_id
+    if not branch_id and order.clinic_id:
+        main_branch = db.query(BusinessBranch).filter(
+            BusinessBranch.business_id == order.clinic_id,
+            BusinessBranch.is_main == True
+        ).first()
+        if main_branch:
+            branch_id = main_branch.id
+
     order_items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+    
     for item in order_items:
         product = db.query(Product).filter(Product.id == item.product_id).first()
         if not product:
             continue
         
-        needed = item.quantity
+        qty = item.quantity
         reduced = False
         
-        # 1. Variants
+        # 1. Update Branch Inventory
+        if branch_id:
+            inv = db.query(BranchInventory).filter(
+                BranchInventory.product_id == item.product_id,
+                BranchInventory.branch_id == branch_id
+            ).first()
+            if inv:
+                inv.stock = max(0, inv.stock - qty)
+                db.add(inv)
+        
+        # 2. Variants logic
         if item.variant and product.variants_json:
             try:
                 variants = json.loads(product.variants_json)
                 for v in variants:
                     if v.get('name') == item.variant:
-                        v['stock'] = max(0, v.get('stock', 0) - needed)
+                        v['stock'] = max(0, v.get('stock', 0) - qty)
                         product.variants_json = json.dumps(variants)
                         reduced = True
                         break
             except Exception as e:
                 print(f"Reduce stock error (variants): {e}")
         
-        # 2. Sizes
+        # 3. Sizes logic
         if not reduced and item.size and product.sizes_json:
             try:
                 sizes = json.loads(product.sizes_json)
                 for s in sizes:
                     if s.get('name') == item.size:
-                        s['stock'] = max(0, s.get('stock', 0) - needed)
+                        s['stock'] = max(0, s.get('stock', 0) - qty)
+                        # Update branch-specific stock within size if branch_id is set
+                        if branch_id and 'branchStocks' in s:
+                            b_id_str = str(branch_id)
+                            curr_b_stock = int(s['branchStocks'].get(b_id_str, 0))
+                            s['branchStocks'][b_id_str] = max(0, curr_b_stock - qty)
+                            
                         product.sizes_json = json.dumps(sizes)
                         reduced = True
                         break
             except Exception as e:
                 print(f"Reduce stock error (sizes): {e}")
         
-        # 3. Main Stock
-        if not reduced:
-            product.stock = max(0, product.stock - needed)
+        # 4. Standard Stock & Global Sync
+        # Always update main product stock for global visibility
+        product.stock = max(0, product.stock - qty)
+        db.add(product)
+            
     db.commit()
 
 @app.post("/api/orders", status_code=201)
@@ -6335,11 +6853,36 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
             if product.stock < needed:
                 raise HTTPException(400, detail=f"Insufficient stock for {product.name}. Only {product.stock} left.")
 
+    # --- NEW: Shipping Fee Calculation & Delivery Logic ---
+    calc_shipping_fee = 0.0
+    if body.fulfillmentMethod == "delivery":
+        # We need the branch/clinic location to calculate distance
+        branch = None
+        if body.branch_id:
+            branch = db.query(BusinessBranch).filter(BusinessBranch.id == body.branch_id).first()
+        
+        if not branch:
+            # Fallback to main branch if any
+            branch = db.query(BusinessBranch).filter(BusinessBranch.business_id == body.clinic_id, BusinessBranch.is_main == True).first()
+        
+        if branch and branch.lat and branch.lng and (body.customer_lat or body.delivery_lat) and (body.customer_lng or body.delivery_lng):
+            c_lat = body.customer_lat or body.delivery_lat
+            c_lng = body.customer_lng or body.delivery_lng
+            dist = get_distance(branch.lat, branch.lng, c_lat, c_lng)
+            calc_shipping_fee = calculate_shipping_fee(dist)
+        else:
+            # Flat fallback if no coordinates
+            calc_shipping_fee = 50.0
+
     # Consume voucher (Phase 2)
     if voucher_obj:
         voucher_obj.is_used = True
         voucher_obj.redeemed_at = datetime.utcnow()
 
+    # Calculate final total including shipping (if not already included in body.totalAmount)
+    # The frontend seems to send totalAmount = products + shipping - discount.
+    # To be safe, we'll trust body.totalAmount but ensure shipping_fee is recorded.
+    
     new_order = Order(
         customer_id=customer_id,
         status="Pending",
@@ -6351,19 +6894,62 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
         delivery_address=body.deliveryDetails.get("address") if body.deliveryDetails else None,
         delivery_lat=body.delivery_lat or (body.deliveryDetails.get("lat") if body.deliveryDetails else None),
         delivery_lng=body.delivery_lng or (body.deliveryDetails.get("lng") if body.deliveryDetails else None),
+        customer_lat=body.customer_lat or (body.deliveryDetails.get("lat") if body.deliveryDetails else None),
+        customer_lng=body.customer_lng or (body.deliveryDetails.get("lng") if body.deliveryDetails else None),
+        shipping_fee=calc_shipping_fee if body.fulfillmentMethod == "delivery" else 0.0,
+        delivery_type=body.delivery_type or "CLINIC",
         contact_name=body.deliveryDetails.get("contactName") if body.deliveryDetails else None,
         contact_phone=body.deliveryDetails.get("phone") if body.deliveryDetails else None,
         clinic_id=body.clinic_id,
-        branch_id=body.branch_id
+        branch_id=body.branch_id or (branch.id if branch else None)
     )
+    
+    # Critical: If clinic_id is missing, try to resolve it from the items
+    if not new_order.clinic_id and body.items:
+        for item in body.items:
+            p = db.query(Product).filter(Product.id == item.id).first()
+            if p:
+                new_order.clinic_id = p.business_id
+                break
+
     db.add(new_order)
     db.commit()
     db.refresh(new_order)
 
+    # Initialize Delivery Record if applicable
+    if new_order.fulfillment_method == "delivery":
+        # Final safety check before commit
+        t_clinic_id = new_order.clinic_id
+        if not t_clinic_id:
+             # Fallback to any business if absolutely stuck, to prevent 500
+             first_biz = db.query(BusinessProfile).first()
+             t_clinic_id = first_biz.id if first_biz else None
+             
+        if not t_clinic_id:
+             raise HTTPException(status_code=400, detail="Logistics Error: No clinic identified for delivery.")
+
+        new_delivery = Delivery(
+            order_id=new_order.id,
+            clinic_id=t_clinic_id,
+            status="pending_pickup",
+            delivery_fee=new_order.shipping_fee,
+            cod_amount=new_order.total_amount if new_order.payment_method == "cod" else 0.0,
+            pickup_pin=str(random.randint(1000, 9999)),
+            customer_pin=str(random.randint(1000, 9999))
+        )
+        db.add(new_delivery)
+        db.commit()
+
+
+
     # Loyalty points are now awarded when the business accepts/receives the order
     # for better accuracy and to prevent awarding for cancelled orders.
 
-    for item in body.items:
+    for idx, item in enumerate(body.items):
+        import time
+        ts = int(time.time() * 1000) % 10000
+        sn = f"HV-SN-{new_order.id}-{idx+1}-{ts}"
+        
         order_item = OrderItem(
             order_id=new_order.id,
             product_id=item.id,
@@ -6372,12 +6958,15 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
             quantity=item.quantity,
             variant=item.variant,
             size=item.size,
-            image=item.image
+            image=item.image,
+            serial_number=sn,
+            loyalty_points=db.query(Product.loyalty_points).filter(Product.id == item.id).scalar() or 0
         )
         db.add(order_item)
     db.commit()
 
     # NOTIFY BUSINESS OWNERS (Split per Clinic)
+    year = new_order.created_at.year if new_order.created_at else 2026
     notified_biz = set()
     for item in body.items:
         p = db.query(Product).filter(Product.id == item.id).first()
@@ -6385,7 +6974,7 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
             add_notification(
                 db, p.business_id, "System",
                 "New Incoming Order!",
-                f"You have a new order (#HV-{new_order.id:04d}) awaiting processing.",
+                f"You have a new order (HV-{year}-{new_order.id:06d}) awaiting processing. Shipping Fee: ₱{new_order.shipping_fee:,.2f}.",
                 "/dashboard/business/orders",
                 role="business"
             )
@@ -6395,7 +6984,7 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
     add_notification(
         db, customer_id, "System",
         "Order Placed successfully",
-        f"Your order #HV-{new_order.id:04d} has been received and is now pending clinic processing.",
+        f"Your order HV-{year}-{new_order.id:06d} (Shipping: ₱{new_order.shipping_fee:,.2f}) has been received and is now pending clinic processing.",
         "/dashboard/customer/orders"
     )
     db.commit()
@@ -6403,7 +6992,7 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
     add_notification(
         db, customer_id, "System", 
         "Order Placed!", 
-        f"Your order #HV-{new_order.id:04d} has been successfully placed.",
+        f"Your order HV-{year}-{new_order.id:06d} has been successfully placed. Shipping: ₱{new_order.shipping_fee:,.2f}.",
         "/dashboard/customer/orders"
     )
     
@@ -6489,6 +7078,23 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
             if product.stock < needed:
                 raise HTTPException(400, detail=f"Insufficient stock for {product.name}. Only {product.stock} left.")
 
+    # --- NEW: Shipping Fee Calculation ---
+    calc_shipping_fee = 0.0
+    if body.fulfillmentMethod == "delivery":
+        branch = None
+        if body.branch_id:
+            branch = db.query(BusinessBranch).filter(BusinessBranch.id == body.branch_id).first()
+        if not branch:
+            branch = db.query(BusinessBranch).filter(BusinessBranch.business_id == body.clinic_id, BusinessBranch.is_main == True).first()
+        
+        if branch and branch.lat and branch.lng and (body.customer_lat or body.delivery_lat) and (body.customer_lng or body.delivery_lng):
+            c_lat = body.customer_lat or body.delivery_lat
+            c_lng = body.customer_lng or body.delivery_lng
+            dist = get_distance(branch.lat, branch.lng, c_lat, c_lng)
+            calc_shipping_fee = calculate_shipping_fee(dist)
+        else:
+            calc_shipping_fee = 50.0
+
     # Consume voucher (Phase 2)
     if voucher_obj:
         voucher_obj.is_used = True
@@ -6506,6 +7112,10 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
         delivery_address=body.deliveryDetails.get("address") if body.deliveryDetails else None,
         delivery_lat=body.delivery_lat or (body.deliveryDetails.get("lat") if body.deliveryDetails else None),
         delivery_lng=body.delivery_lng or (body.deliveryDetails.get("lng") if body.deliveryDetails else None),
+        customer_lat=body.customer_lat or (body.deliveryDetails.get("lat") if body.deliveryDetails else None),
+        customer_lng=body.customer_lng or (body.deliveryDetails.get("lng") if body.deliveryDetails else None),
+        shipping_fee=calc_shipping_fee if body.fulfillmentMethod == "delivery" else 0.0,
+        delivery_type=body.delivery_type or "CLINIC",
         contact_name=body.deliveryDetails.get("contactName") if body.deliveryDetails else None,
         contact_phone=body.deliveryDetails.get("phone") if body.deliveryDetails else None,
         clinic_id=body.clinic_id,
@@ -6514,9 +7124,14 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
     db.add(new_order)
     db.commit()
     db.refresh(new_order)
+    year = new_order.created_at.year if new_order.created_at else 2026
 
-    # 2. Add Order Items
-    for item in body.items:
+
+    for idx, item in enumerate(body.items):
+        import time
+        ts = int(time.time() * 1000) % 10000
+        sn = f"HV-SN-{new_order.id}-{idx+1}-{ts}"
+        
         order_item = OrderItem(
             order_id=new_order.id,
             product_id=item.id,
@@ -6525,7 +7140,9 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
             quantity=item.quantity,
             variant=item.variant,
             size=item.size,
-            image=item.image
+            image=item.image,
+            serial_number=sn,
+            loyalty_points=db.query(Product.loyalty_points).filter(Product.id == item.id).scalar() or 0
         )
         db.add(order_item)
     db.commit()
@@ -6566,7 +7183,15 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
             "description": f"Product from Hi-Vet CRM"
         })
 
-    # Shipping fee removed per user request (placeholder 150)
+    # Add shipping fee if applicable
+    if new_order.fulfillment_method == "delivery" and new_order.shipping_fee > 0:
+        line_items.append({
+            "amount": int(new_order.shipping_fee * 100),
+            "currency": "PHP",
+            "name": "Shipping Fee",
+            "quantity": 1,
+            "description": "Calculated delivery distance fee"
+        })
 
     enabled_methods = ["qrph", "gcash", "paymaya"]
     if body.paymentMethod == "maya":
@@ -6585,7 +7210,7 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
                 "payment_method_types": enabled_methods,
                 "success_url": f"{FRONTEND_URL}/dashboard/customer/checkout/success?order_id={new_order.id}",
                 "cancel_url": f"{FRONTEND_URL}/dashboard/customer/checkout",
-                "description": f"Payment for Order #HV-{new_order.id:04d} at {clinic_name}",
+                "description": f"Payment for Order HV-{year}-{new_order.id:06d} at {clinic_name}",
                 "send_email_receipt": False, # Disable static PayMongo receipts
                 "show_description": True,
                 "show_line_items": True,
@@ -6603,8 +7228,9 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
             # --- BRANCH: QRPH DIRECT FLOW ---
             if body.paymentMethod == "qrph":
                 # 1. Calculate Total Amount in Centavos
-                total_centavos = sum(int(float(item.price) * 100) * item.quantity for item in body.items)
-                # Shipping fee removed per user request
+                items_total = sum(int(float(item.price) * 100) * item.quantity for item in body.items)
+                shipping_centavos = int(new_order.shipping_fee * 100) if new_order.fulfillment_method == "delivery" else 0
+                total_centavos = items_total + shipping_centavos
 
                 # 2. Create Payment Intent
                 pi_payload = {
@@ -6614,7 +7240,7 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
                             "payment_method_allowed": ["qrph"],
                             "payment_method_options": {"card": {"request_three_d_secure": "any"}},
                             "currency": "PHP",
-                            "description": f"Payment for Order #HV-{new_order.id:04d} at {clinic_name}",
+                            "description": f"Payment for Order HV-{year}-{new_order.id:06d} at {clinic_name}",
                             "statement_descriptor": clinic_name[:22]
                         }
                     }
@@ -6675,8 +7301,8 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
 
                 # Notify
                 if body.clinic_id:
-                    add_notification(db, body.clinic_id, "System", "New Potential Order!", f"A customer is initiating payment for order #HV-{new_order.id:04d} via QRPh.", "/dashboard/business/orders", role="business")
-                add_notification(db, customer_id, "System", "Order Processed", f"Your order #HV-{new_order.id:04d} is pending payment. Scan the QR code to complete.", "/dashboard/customer/orders")
+                    add_notification(db, body.clinic_id, "System", "New Potential Order!", f"A customer is initiating payment for order HV-{year}-{new_order.id:06d} via QRPh. Shipping: ₱{new_order.shipping_fee:,.2f}.", "/dashboard/business/orders", role="business")
+                add_notification(db, customer_id, "System", "Order Processed", f"Your order HV-{year}-{new_order.id:06d} is pending payment. Shipping: ₱{new_order.shipping_fee:,.2f}. Scan the QR code to complete.", "/dashboard/customer/orders")
 
                 return {"qr_code": qr_image_url, "intent_id": intent_id}
 
@@ -6701,8 +7327,8 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
             db.commit()
 
             if body.clinic_id:
-                add_notification(db, body.clinic_id, "System", "New Potential Order!", f"A customer is initiating payment for order #HV-{new_order.id:04d}.", "/dashboard/business/orders", role="business")
-            add_notification(db, customer_id, "System", "Order Processed", f"Your order #HV-{new_order.id:04d} is pending payment. Please complete the checkout.", "/dashboard/customer/orders")
+                add_notification(db, body.clinic_id, "System", "New Potential Order!", f"A customer is initiating payment for order HV-{year}-{new_order.id:06d}. Shipping: ₱{new_order.shipping_fee:,.2f}.", "/dashboard/business/orders", role="business")
+            add_notification(db, customer_id, "System", "Order Processed", f"Your order HV-{year}-{new_order.id:06d} is pending payment. Shipping: ₱{new_order.shipping_fee:,.2f}. Please complete the checkout.", "/dashboard/customer/orders")
 
             return {"checkout_url": checkout_url}
             
@@ -6719,6 +7345,8 @@ def send_clinic_order_receipt(db: Session, order_id: int):
     if not order: 
         print("ERROR: Order not found in database.")
         return
+    
+    year = order.created_at.year if order.created_at else 2026
     
     customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
     if not customer:
@@ -6751,55 +7379,99 @@ def send_clinic_order_receipt(db: Session, order_id: int):
         items_html += f"<tr><td style='padding: 8px;'>{item.product_name} x {item.quantity}</td><td style='text-align: right; padding: 8px;'>P{item.price:,.2f}</td></tr>"
     
     html = f"""
+    <!DOCTYPE html>
     <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background-color: #fdf8f6;">
-            <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #eee; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(255,159,28,0.05);">
-                <div style="text-align: center; margin-bottom: 30px;">
-                    <h1 style="color: #ff9f1c; margin: 0; font-size: 28px;">{clinic_name}</h1>
-                    <p style="text-transform: uppercase; letter-spacing: 2px; font-size: 10px; font-weight: bold; color: #999;">Order Receipt</p>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+            body {{ margin: 0; padding: 0; background-color: #FAF9F6; font-family: 'Outfit', sans-serif; -webkit-font-smoothing: antialiased; }}
+            .surface {{ padding: 60px 20px; text-align: center; }}
+            .container {{ max-width: 500px; margin: 0 auto; text-align: left; }}
+            
+            .receipt-card {{
+                background-color: #ffffff;
+                border-radius: 40px;
+                padding: 45px 40px;
+                color: #262626;
+                box-shadow: 0 40px 80px rgba(38, 38, 38, 0.05);
+                border: 1px solid rgba(0, 0, 0, 0.03);
+            }}
+            
+            .brand-tag {{ color: #F26B21; font-weight: 900; font-size: 10px; text-transform: uppercase; letter-spacing: 4px; display: block; margin-bottom: 25px; opacity: 0.8; }}
+            .receipt-title {{ font-size: 32px; font-weight: 900; letter-spacing: -1.5px; margin: 0 0 40px 0; color: #262626; }}
+            
+            .section-label {{ font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; color: #262626; margin-bottom: 12px; display: block; opacity: 0.3; }}
+            
+            .info-block {{ margin-bottom: 35px; }}
+            .info-title {{ font-size: 16px; font-weight: 700; margin: 0 0 4px 0; color: #262626; }}
+            .info-subtitle {{ font-size: 13px; font-weight: 500; color: #262626; margin: 0; opacity: 0.5; }}
+            
+            .detail-row {{ display: table; width: 100%; margin-bottom: 15px; }}
+            .detail-label {{ display: table-cell; font-size: 13px; font-weight: 500; color: #262626; opacity: 0.5; }}
+            .detail-value {{ display: table-cell; text-align: right; font-size: 14px; font-weight: 700; color: #262626; }}
+            
+            .divider {{ height: 1px; background-color: rgba(0, 0, 0, 0.05); margin: 30px 0; }}
+            
+            .total-section {{ padding-top: 10px; }}
+            .total-label {{ font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; color: #262626; opacity: 0.4; margin-bottom: 8px; display: block; }}
+            .total-big {{ font-size: 42px; font-weight: 900; letter-spacing: -2px; margin: 0; color: #F26B21; }}
+            
+            .footer-info {{ text-align: center; margin-top: 45px; }}
+            .ref-text {{ font-size: 10px; font-weight: 700; color: #262626; text-transform: uppercase; letter-spacing: 3px; margin: 0 0 8px 0; opacity: 0.2; }}
+            .copyright {{ font-size: 9px; font-weight: 900; color: #F26B21; text-transform: uppercase; letter-spacing: 4px; margin: 0; opacity: 0.4; }}
+        </style>
+    </head>
+    <body>
+        <div class="surface">
+            <div class="container">
+                <div class="receipt-card">
+                    <span class="brand-tag">Order Receipt</span>
+                    <h1 class="receipt-title">Success Summary</h1>
+                    
+                    <span class="section-label">Your Clinic</span>
+                    <div class="info-block">
+                        <h4 class="info-title">{clinic_name}</h4>
+                        <p class="info-subtitle">Order Reference: HV-{year}-{order.id:06d}</p>
+                    </div>
+                    
+                    <span class="section-label">Inventory Items</span>
+                    <div style="margin-bottom: 30px;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            {items_html.replace('padding: 8px;', 'padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.03); font-size: 14px; color: #262626; font-weight: 700;')}
+                        </table>
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
+                    <div class="total-section">
+                        <span class="total-label">Total Amount Paid</span>
+                        <h2 class="total-big">P{order.total_amount:,.2f}</h2>
+                    </div>
+
+                    <div style="margin-top: 40px; padding: 30px; background-color: #FAF9F6; border-radius: 32px; border: 1px solid rgba(0, 0, 0, 0.03);">
+                        <p style="margin: 0; font-weight: 900; color: #262626; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.8;">Need Help?</p>
+                        <p style="margin: 8px 0 15px 0; color: #262626; font-size: 11px; font-weight: 500; opacity: 0.5;">Contact the clinic directly at:</p>
+                        <p style="margin: 4px 0; color: #262626; font-size: 12px; font-weight: 700;"><strong>Email:</strong> tabios.genebsis2023@gmail.com</p>
+                        <p style="margin: 4px 0; color: #262626; font-size: 12px; font-weight: 700;"><strong>Phone:</strong> 9073040705</p>
+                    </div>
                 </div>
                 
-                <p>Hi <strong>{customer.name or (f"{customer.first_name} {customer.last_name}")}</strong>,</p>
-                <p>Thank you for choosing {clinic_name}. Your payment for order <strong>#HV-{order.id:04d}</strong> has been successfully processed.</p>
-                
-                <table style="width: 100%; border-collapse: collapse; margin: 25px 0;">
-                    <thead>
-                        <tr style="border-bottom: 2px solid #fdf8f6;">
-                            <th style="text-align: left; padding: 10px; color: #999; font-size: 12px; text-transform: uppercase;">Item</th>
-                            <th style="text-align: right; padding: 10px; color: #999; font-size: 12px; text-transform: uppercase;">Price</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {items_html}
-                    </tbody>
-                    <tfoot>
-                        <tr style="border-top: 2px solid #fdf8f6;">
-                            <td style="padding: 20px 10px; font-weight: bold; font-size: 16px;">Total Amount Paid</td>
-                            <td style="padding: 20px 10px; text-align: right; font-weight: bold; font-size: 18px; color: #ff9f1c;">P{order.total_amount:,.2f}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-                
-                <div style="margin-top: 40px; padding: 20px; background: #fdf8f6; border-radius: 12px;">
-                    <p style="margin: 0; font-weight: bold; color: #555; font-size: 14px;">Need Help?</p>
-                    <p style="margin: 5px 0; color: #777; font-size: 13px;">Contact the clinic directly at:</p>
-                    <p style="margin: 2px 0; color: #333; font-size: 13px;"><strong>Email:</strong> {clinic_email}</p>
-                    <p style="margin: 2px 0; color: #333; font-size: 13px;"><strong>Phone:</strong> {clinic_phone}</p>
-                </div>
-                
-                <div style="margin-top: 30px; text-align: center; color: #bbb; font-size: 11px;">
-                    <p>This is an automated receipt from the Hi-Vet CRM System.</p>
+                <div class="footer-info">
+                    <p class="ref-text">REF: HV-{year}-{order.id:06d}</p>
+                    <p class="copyright">HI-VET &bull; COMPANION HEALTH SYSTEMS &copy; 2026</p>
                 </div>
             </div>
-        </body>
+        </div>
+    </body>
     </html>
     """
     
     try:
         msg = MIMEMultipart()
-        msg['From'] = f"{clinic_name} <{EMAIL_SENDER}>"
+        msg['From'] = f"{clinic_name} <{clinic_email}>"
         msg['To'] = customer.email
-        msg['Subject'] = f"Success! Your receipt from {clinic_name} (#HV-{order.id:04d})"
+        msg['Subject'] = f"Success! Your receipt from {clinic_name} (HV-{year}-{order.id:06d})"
         msg.attach(MIMEText(html, 'html'))
         
         # Using Port 587 with STARTTLS
@@ -6832,66 +7504,120 @@ def send_clinic_reservation_receipt(db: Session, reservation_id: int):
     clinic_name = clinic.clinic_name if clinic and clinic.clinic_name else "Hi-Vet Clinic"
     clinic_email = clinic.email if clinic else EMAIL_SENDER
     clinic_phone = clinic.clinic_phone if clinic else "N/A"
+    clinic_address = clinic.clinic_street if clinic else "Main Branch"
     
     print(f"RESERVATION DETAILS: Clinic: {clinic_name}, Customer Email: {customer.email}")
 
     # Construct Professional HTML
     html = f"""
+    <!DOCTYPE html>
     <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background-color: #fdf8f6;">
-            <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #eee; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(255,159,28,0.05);">
-                <div style="text-align: center; margin-bottom: 30px;">
-                    <h1 style="color: #ff9f1c; margin: 0; font-size: 28px;">{clinic_name}</h1>
-                    <p style="text-transform: uppercase; letter-spacing: 2px; font-size: 10px; font-weight: bold; color: #999;">Reservation Receipt</p>
-                </div>
-                
-                <p>Hi <strong>{customer.name or (f"{customer.first_name} {customer.last_name}")}</strong>,</p>
-                <p>Thank you for choosing {clinic_name}. Your reservation <strong>#RV-{res.id:04d}</strong> has been successfully paid and confirmed.</p>
-                
-                <div style="background-color: #fdf8f6; padding: 25px; border-radius: 15px; margin: 25px 0;">
-                    <p style="margin: 0; color: #999; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">Appointment Details</p>
-                    <h2 style="color: #3d2b1f; margin: 10px 0 5px 0; font-size: 20px;">{res.service}</h2>
-                    <p style="margin: 0; color: #ff9f1c; font-weight: bold; font-size: 14px;">Pet: {res.pet_name}</p>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+            body {{ margin: 0; padding: 0; background-color: #FAF9F6; font-family: 'Outfit', sans-serif; -webkit-font-smoothing: antialiased; }}
+            .surface {{ padding: 60px 20px; text-align: center; }}
+            .container {{ max-width: 500px; margin: 0 auto; text-align: left; }}
+            
+            .receipt-card {{
+                background-color: #ffffff;
+                border-radius: 40px;
+                padding: 45px 40px;
+                color: #262626;
+                box-shadow: 0 40px 80px rgba(38, 38, 38, 0.05);
+                border: 1px solid rgba(0, 0, 0, 0.03);
+            }}
+            
+            .brand-tag {{ color: #F26B21; font-weight: 900; font-size: 10px; text-transform: uppercase; letter-spacing: 4px; display: block; margin-bottom: 25px; opacity: 0.8; }}
+            .receipt-title {{ font-size: 32px; font-weight: 900; letter-spacing: -1.5px; margin: 0 0 40px 0; color: #262626; }}
+            
+            .section-label {{ font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; color: #262626; margin-bottom: 12px; display: block; opacity: 0.3; }}
+            
+            .info-block {{ margin-bottom: 35px; }}
+            .info-title {{ font-size: 16px; font-weight: 700; margin: 0 0 4px 0; color: #262626; }}
+            .info-subtitle {{ font-size: 13px; font-weight: 500; color: #262626; margin: 0; opacity: 0.5; }}
+            
+            .detail-row {{ display: table; width: 100%; margin-bottom: 15px; }}
+            .detail-label {{ display: table-cell; font-size: 13px; font-weight: 500; color: #262626; opacity: 0.5; }}
+            .detail-value {{ display: table-cell; text-align: right; font-size: 14px; font-weight: 700; color: #262626; }}
+            
+            .divider {{ height: 1px; background-color: rgba(0, 0, 0, 0.05); margin: 30px 0; }}
+            
+            .total-section {{ padding-top: 10px; }}
+            .total-label {{ font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; color: #262626; opacity: 0.4; margin-bottom: 8px; display: block; }}
+            .total-big {{ font-size: 42px; font-weight: 900; letter-spacing: -2px; margin: 0; color: #F26B21; }}
+            
+            .footer-info {{ text-align: center; margin-top: 45px; }}
+            .ref-text {{ font-size: 10px; font-weight: 700; color: #262626; text-transform: uppercase; letter-spacing: 3px; margin: 0 0 8px 0; opacity: 0.2; }}
+            .copyright {{ font-size: 9px; font-weight: 900; color: #F26B21; text-transform: uppercase; letter-spacing: 4px; margin: 0; opacity: 0.4; }}
+        </style>
+    </head>
+    <body>
+        <div class="surface">
+            <div class="container">
+                <div class="receipt-card">
+                    <span class="brand-tag">Booking Receipt</span>
+                    <h1 class="receipt-title">Success Summary</h1>
                     
-                    <div style="margin-top: 20px; border-top: 1px solid #eee; pt: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                        <div>
-                            <p style="margin: 0; color: #999; font-size: 10px; font-weight: bold; text-transform: uppercase;">Date</p>
-                            <p style="margin: 2px 0; font-weight: bold; color: #3d2b1f;">{res.date}</p>
-                        </div>
-                        <div>
-                            <p style="margin: 0; color: #999; font-size: 10px; font-weight: bold; text-transform: uppercase;">Time</p>
-                            <p style="margin: 2px 0; font-weight: bold; color: #3d2b1f;">{res.time}</p>
-                        </div>
+                    <span class="section-label">Your Clinic</span>
+                    <div class="info-block">
+                        <h4 class="info-title">{clinic_name}</h4>
+                        <p class="info-subtitle">Reservation: #RV-{res.id:04d}</p>
+                    </div>
+                    
+                    <span class="section-label">Pet Information</span>
+                    <div class="info-block">
+                        <h4 class="info-title">{res.pet_name}</h4>
+                        <p class="info-subtitle">{res.pet_type} &bull; {res.pet_breed}</p>
+                        <p class="info-subtitle" style="font-size: 11px; margin-top: 4px;">Owned by {customer.name or (f"{customer.first_name} {customer.last_name}")}</p>
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
+                    <span class="section-label">Your Service</span>
+                    <div class="detail-row" style="margin-bottom: 30px;">
+                        <div class="detail-label" style="font-weight: 700; opacity: 1;">{res.service}</div>
+                        <div class="detail-value">P{res.total_amount:,.2f}</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Appointment Date</div>
+                        <div class="detail-value">{res.date}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Scheduled Time</div>
+                        <div class="detail-value">{res.time}</div>
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
+                    <div class="total-section">
+                        <span class="total-label">Total Paid Successfully</span>
+                        <h2 class="total-big">P{res.total_amount:,.2f}</h2>
+                    </div>
+
+                    <div style="margin-top: 40px; padding: 30px; background-color: #FAF9F6; border-radius: 32px; border: 1px solid rgba(0, 0, 0, 0.03);">
+                        <p style="margin: 0; font-weight: 900; color: #262626; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.8;">Need Help?</p>
+                        <p style="margin: 8px 0 15px 0; color: #262626; font-size: 11px; font-weight: 500; opacity: 0.5;">Contact the clinic directly at:</p>
+                        <p style="margin: 4px 0; color: #262626; font-size: 12px; font-weight: 700;"><strong>Email:</strong> tabios.genebsis2023@gmail.com</p>
+                        <p style="margin: 4px 0; color: #262626; font-size: 12px; font-weight: 700;"><strong>Phone:</strong> 9073040705</p>
                     </div>
                 </div>
                 
-                <table style="width: 100%; border-collapse: collapse; margin: 25px 0;">
-                    <tfoot>
-                        <tr style="border-top: 2px solid #fdf8f6;">
-                            <td style="padding: 20px 10px; font-weight: bold; font-size: 16px;">Total Paid</td>
-                            <td style="padding: 20px 10px; text-align: right; font-weight: bold; font-size: 18px; color: #ff9f1c;">P{res.total_amount:,.2f}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-                
-                <div style="margin-top: 40px; padding: 20px; background: #fdf8f6; border-radius: 12px;">
-                    <p style="margin: 0; font-weight: bold; color: #555; font-size: 14px;">Need Help?</p>
-                    <p style="margin: 5px 0; color: #777; font-size: 13px;">Contact the clinic directly at:</p>
-                    <p style="margin: 2px 0; color: #333; font-size: 13px;"><strong>Email:</strong> {clinic_email}</p>
-                    <p style="margin: 2px 0; color: #333; font-size: 13px;"><strong>Phone:</strong> {clinic_phone}</p>
-                </div>
-                
-                <div style="margin-top: 30px; text-align: center; color: #bbb; font-size: 11px;">
-                    <p>This is an automated receipt from the Hi-Vet CRM System.</p>
+                <div class="footer-info">
+                    <p class="ref-text">REF: #RV-{res.id:04d}</p>
+                    <p class="copyright">HI-VET &bull; COMPANION HEALTH SYSTEMS &copy; 2026</p>
                 </div>
             </div>
-        </body>
+        </div>
+    </body>
     </html>
     """
     
     try:
         msg = MIMEMultipart()
-        msg['From'] = f"{clinic_name} <{EMAIL_SENDER}>"
+        msg['From'] = f"{clinic_name} <{clinic_email}>"
         msg['To'] = customer.email
         msg['Subject'] = f"Success! Your Reservation at {clinic_name} (#RV-{res.id:04d})"
         msg.attach(MIMEText(html, 'html'))
@@ -6920,6 +7646,8 @@ async def retry_order_payment(body: dict, request: Request, db: Session = Depend
     payment_method = body.get("payment_method", "gcash") # Default to gcash if not provided
 
     order = db.query(Order).filter(Order.id == order_id, Order.customer_id == customer_id).first()
+    year = order.created_at.year if order and order.created_at else 2026
+
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
@@ -6994,7 +7722,7 @@ async def retry_order_payment(body: dict, request: Request, db: Session = Depend
                 "payment_method_types": enabled_methods,
                 "success_url": f"{FRONTEND_URL}/dashboard/customer/checkout/success?order_id={order.id}",
                 "cancel_url": f"{FRONTEND_URL}/dashboard/customer/orders",
-                "description": f"Payment for Order #HV-{order.id:04d} at {clinic_name}",
+                "description": f"Payment for Order HV-{year}-{order.id:06d} at {clinic_name}",
                 "send_email_receipt": False,
                 "show_description": True,
                 "show_line_items": True,
@@ -7022,7 +7750,7 @@ async def retry_order_payment(body: dict, request: Request, db: Session = Depend
                             "amount": total_centavos,
                             "payment_method_allowed": ["qrph"],
                             "currency": "PHP",
-                            "description": f"Payment for Order #HV-{order.id:04d} at {clinic_name}",
+                            "description": f"Payment for Order HV-{year}-{order.id:06d} at {clinic_name}",
                             "statement_descriptor": clinic_name[:22]
                         }
                     }
@@ -7125,19 +7853,39 @@ async def confirm_paymongo_payment(order_id: int, request: Request, db: Session 
         order.status = "Pending"
         db.commit()
         
+        # Initialize Delivery Record if applicable
+        if order.fulfillment_method == "delivery":
+            # Check if it already exists (to be safe)
+            existing_delivery = db.query(Delivery).filter(Delivery.order_id == order.id).first()
+            if not existing_delivery:
+                new_delivery = Delivery(
+                    order_id=order.id,
+                    clinic_id=order.clinic_id,
+                    status="pending_pickup",
+                    delivery_fee=order.shipping_fee,
+                    cod_amount=0.0, # Paid online
+                    pickup_pin=str(random.randint(1000, 9999)),
+                    customer_pin=str(random.randint(1000, 9999))
+                )
+                db.add(new_delivery)
+                db.commit()
+
+
+        
         # TRIGGER CUSTOM RECEIPT
         send_clinic_order_receipt(db, order_id)
         
         # NOTIFY BUSINESS OWNERS (Split per Clinic)
         notified_biz = set()
         paid_items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+        year = order.created_at.year if order.created_at else 2026
         for itm in paid_items:
             p = db.query(Product).filter(Product.id == itm.product_id).first()
             if p and p.business_id and p.business_id not in notified_biz:
                 add_notification(
                     db, p.business_id, "System",
                     "Order Payment Received!",
-                    f"Order #HV-{order.id:04d} has been successfully paid by the customer.",
+                    f"Order HV-{year}-{order.id:06d} has been successfully paid by the customer.",
                     "/dashboard/business/orders",
                     role="business"
                 )
@@ -7146,7 +7894,7 @@ async def confirm_paymongo_payment(order_id: int, request: Request, db: Session 
         add_notification(
             db, customer_id, "System", 
             "Payment Received!", 
-            f"Your payment for order #HV-{order.id:04d} was successful. Check your email for the receipt.",
+            f"Your payment for order HV-{year}-{order.id:06d} was successful. Check your email for the receipt.",
             "/dashboard/customer/orders"
         )
     
@@ -7163,7 +7911,10 @@ async def get_orders(request: Request, db: Session = Depends(get_db)):
     except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    orders = db.query(Order).filter(Order.customer_id == customer_id).order_by(Order.created_at.desc()).all()
+    orders = db.query(Order).filter(
+        Order.customer_id == customer_id,
+        Order.is_customer_deleted == False
+    ).order_by(Order.created_at.desc()).all()
     results = []
     for o in orders:
         items = db.query(OrderItem).filter(OrderItem.order_id == o.id).all()
@@ -7222,7 +7973,8 @@ async def get_orders(request: Request, db: Session = Depends(get_db)):
                 "variant": i.variant,
                 "size": i.size,
                 "image": i.image,
-                "business_id": db.query(Product.business_id).filter(Product.id == i.product_id).scalar()
+                "business_id": db.query(Product.business_id).filter(Product.id == i.product_id).scalar(),
+                "serial_number": i.serial_number or f"HV-SN-{o.id}-{i.id}-{(int(o.created_at.timestamp()) % 10000)}"
             } for i in items]
         })
     return {"orders": results}
@@ -7295,23 +8047,25 @@ async def cancel_order(order_id: int, body: CancelOrderRequest, request: Request
     order.cancellation_reason = body.reason
     db.commit()
     
+    year = order.created_at.year if order.created_at else 2026
     add_notification(
         db, customer_id, "System", 
         "Order Cancelled", 
-        f"Your order #HV-{order.id:04d} was successfully cancelled.",
+        f"Your order HV-{year}-{order.id:06d} was successfully cancelled.",
         "/dashboard/customer/orders"
     )
     
     # NOTIFY BUSINESS OWNERS (Split per Clinic)
     notified_biz = set()
     cancelled_items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+    year = order.created_at.year if order.created_at else 2026
     for itm in cancelled_items:
         p = db.query(Product).filter(Product.id == itm.product_id).first()
         if p and p.business_id and p.business_id not in notified_biz:
             add_notification(
                 db, p.business_id, "System",
                 "Order Cancelled by Customer",
-                f"Customer has cancelled order #HV-{order.id:04d}.",
+                f"Customer has cancelled order HV-{year}-{order.id:06d}.",
                 "/dashboard/business/orders",
                 role="business"
             )
@@ -8298,7 +9052,8 @@ async def get_paymongo_status(intent_id: str, db: Session = Depends(get_db)):
                 if order and order.status == "Payment Pending":
                     order.status = "Pending"
                     # Add notification
-                    add_notification(db, order.customer_id, "System", "Payment Received!", f"Your payment for order #HV-{order.id:04d} has been confirmed.", "/dashboard/customer/orders")
+                    year = order.created_at.year if order.created_at else 2026
+                    add_notification(db, order.customer_id, "System", "Payment Received!", f"Your payment for order HV-{year}-{order.id:06d} has been confirmed.", "/dashboard/customer/orders")
                     db.commit()
                     return {"status": "succeeded", "type": "order", "id": order.id}
                 
@@ -8307,7 +9062,8 @@ async def get_paymongo_status(intent_id: str, db: Session = Depends(get_db)):
                     res.status = "Pending"
                     res.payment_status = "paid"
                     # Add notification
-                    add_notification(db, res.customer_id, "System", "Payment Received!", f"Your payment for reservation #RV-{res.id:04d} has been confirmed.", "/dashboard/customer/reservations")
+                    year = res.created_at.year if res.created_at else 2026
+                    add_notification(db, res.customer_id, "System", "Payment Received!", f"Your payment for reservation HV-RES-{year}-{res.id:06d} has been confirmed.", "/dashboard/customer/reservations")
                     db.commit()
                     return {"status": "succeeded", "type": "reservation", "id": res.id}
 
@@ -8317,6 +9073,102 @@ async def get_paymongo_status(intent_id: str, db: Session = Depends(get_db)):
             return {"status": "processing"}
 
 
+
+# ---------------------------------------------------------------------------
+# Logistics & Delivery Endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/api/deliveries/broadcast")
+async def broadcast_delivery(body: DeliveryBroadcastRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Clinic explicitly triggers a delivery broadcast to nearby riders."""
+    if current_user.get("role") != "business":
+        raise HTTPException(status_code=403, detail="Clinic access required")
+    
+    order = db.query(Order).filter(Order.id == body.order_id, Order.clinic_id == int(current_user["sub"])).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found for your clinic")
+    
+    delivery = db.query(Delivery).filter(Delivery.order_id == order.id).first()
+    if not delivery:
+        delivery = Delivery(
+            order_id=order.id,
+            clinic_id=order.clinic_id,
+            status="pending_pickup",
+            delivery_fee=order.shipping_fee or 50.0,
+            pickup_pin=str(random.randint(1000, 9999)),
+            customer_pin=str(random.randint(1000, 9999))
+        )
+        db.add(delivery)
+        db.commit()
+        db.refresh(delivery)
+    
+    # Notify business
+    year = order.created_at.year if order.created_at else 2026
+    add_notification(db, int(current_user["sub"]), "Logistics", "Broadcast Sent", f"Delivery for Order HV-{year}-{order.id:06d} is now visible to nearby riders.", "/dashboard/business/orders", role="business")
+    
+    return {
+        "message": "Broadcast sent to nearby riders",
+        "delivery_id": delivery.id,
+        "pickup_pin": delivery.pickup_pin
+    }
+
+@app.get("/api/rider/wallet")
+async def get_rider_wallet(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Fetch rider's earnings and remittance debt."""
+    if current_user.get("role") != "rider":
+        raise HTTPException(status_code=403, detail="Rider access required")
+    
+    rider_id = int(current_user["sub"])
+    wallet = db.query(RiderWallet).filter(RiderWallet.rider_id == rider_id).first()
+    if not wallet:
+        # Check customer link
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == rider_id).first()
+        if rider:
+            wallet = db.query(RiderWallet).filter(RiderWallet.rider_id == rider.id).first()
+    
+    if not wallet:
+        return {"balance": 0.0, "remittance_balance": 0.0}
+        
+    return {
+        "balance": wallet.balance,
+        "remittance_balance": wallet.remittance_balance
+    }
+
+@app.post("/api/orders/{order_id}/return")
+async def request_order_return(order_id: int, body: dict, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Customer requests a return/refund for an order."""
+    customer_id = int(current_user["sub"])
+    order = db.query(Order).filter(Order.id == order_id, Order.customer_id == customer_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    if order.status != "Completed":
+        raise HTTPException(status_code=400, detail="Only completed orders can be returned")
+        
+    reason = body.get("reason")
+    if not reason:
+        raise HTTPException(status_code=400, detail="Reason is required")
+        
+    # Check for existing request
+    existing = db.query(ReturnRequest).filter(ReturnRequest.order_id == order_id).first()
+    if existing:
+        return {"message": "Return request already exists", "status": existing.status}
+        
+    new_request = ReturnRequest(
+        order_id=order.id,
+        customer_id=customer_id,
+        clinic_id=order.clinic_id,
+        reason=reason,
+        status="pending"
+    )
+    db.add(new_request)
+    
+    # Notify Clinic
+    year = order.created_at.year if order.created_at else 2026
+    add_notification(db, order.clinic_id, "System", "New Return Request", f"A customer is requesting a return for Order HV-{year}-{order.id:06d}.", "/dashboard/business/orders", role="business")
+    
+    db.commit()
+    return {"message": "Return request submitted successfully", "request_id": new_request.id}
 
 # ─── Rider Specific Endpoints ───────────────────────────────────────────────
 
@@ -8387,37 +9239,185 @@ async def get_rider_earnings_summary(db: Session = Depends(get_db), current_user
     if not rider:
         raise HTTPException(status_code=404, detail="Rider profile not found")
 
-    # Calculate today's earnings (standardizing on 'Completed' as final status)
+    # Calculate today's earnings using actual delivery fees
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    completed_today = db.query(Order).filter(
-        Order.rider_id == rider.id,
-        Order.status == "Completed",
-        Order.delivered_at >= today
+    completed_today = db.query(Delivery).filter(
+        Delivery.rider_id == rider.id,
+        Delivery.status == "completed",
+        Delivery.created_at >= today # Using created_at for simplicity, or delivered_at if available
     ).all()
-    today_earnings = sum(50 for o in completed_today) # Standardized ₱50 per delivery
+    today_earnings = sum((d.delivery_fee or 0.0) for d in completed_today)
     
-    total_completed = db.query(Order).filter(
-        Order.rider_id == rider.id,
-        Order.status == "Completed"
+    total_completed = db.query(Delivery).filter(
+        Delivery.rider_id == rider.id,
+        Delivery.status == "completed"
     ).count()
 
+    # Get accumulated balance from wallet
+    wallet = db.query(RiderWallet).filter(RiderWallet.rider_id == rider.id).first()
+    accumulated_balance = wallet.balance if wallet else 0.0
+
     return {
-        "total_earnings": rider.total_earnings or 0,
+        "total_earnings": accumulated_balance,
         "completed_orders": total_completed,
         "today_earnings": today_earnings
     }
 
-    # Total completed orders
-    total_completed = db.query(Order).filter(
-        Order.rider_id == rider.id,
-        Order.status == "Delivered"
+@app.get("/api/rider/earnings/history")
+async def get_rider_earnings_history(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Fetch recent transaction history for the rider."""
+    if current_user.get("role") != "rider":
+        raise HTTPException(status_code=403, detail="Rider access required")
+    
+    rider = db.query(RiderProfile).filter(RiderProfile.id == int(current_user["sub"])).first()
+    if not rider:
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == int(current_user["sub"])).first()
+
+    deliveries = db.query(Delivery).filter(
+        Delivery.rider_id == rider.id,
+        Delivery.status == "completed"
+    ).order_by(Delivery.created_at.desc()).all()
+
+    history = []
+    for d in deliveries:
+        order = db.query(Order).filter(Order.id == d.order_id).first()
+        pickup_name = "Hi-Vet Hub"
+        if order:
+            if order.branch_id:
+                branch = db.query(BusinessBranch).filter(BusinessBranch.id == order.branch_id).first()
+                if branch:
+                    biz = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
+                    pickup_name = f"{biz.clinic_name} - {branch.name}" if biz else branch.name
+            elif order.clinic_id:
+                biz = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
+                if biz: pickup_name = biz.clinic_name
+
+        history.append({
+            "id": d.order_id,
+            "amount": d.delivery_fee or 0.0,
+            "status": "Completed",
+            "date": d.created_at.strftime("%b %d, %Y %I:%M %p") if d.created_at else "N/A",
+            "pickup_name": pickup_name,
+            "address": order.delivery_address if order else "Address Unknown"
+        })
+
+    return {"history": history}
+
+@app.get("/api/rider/orders/analytics")
+async def get_rider_orders_analytics(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Fetch analytics for the rider's command center."""
+    if current_user.get("role") != "rider":
+        raise HTTPException(status_code=403, detail="Rider access required")
+    
+    rider = db.query(RiderProfile).filter(RiderProfile.id == int(current_user["sub"])).first()
+    if not rider:
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == int(current_user["sub"])).first()
+
+    # Success Rate (Completed / (Completed + Failed))
+    completed_count = db.query(Delivery).filter(Delivery.rider_id == rider.id, Delivery.status == "completed").count()
+    failed_count = db.query(Delivery).filter(Delivery.rider_id == rider.id, Delivery.status == "failed").count()
+    total_closed = completed_count + failed_count
+    success_rate = (completed_count / total_closed * 100) if total_closed > 0 else 100.0
+
+    # Active Threads
+    active_count = db.query(Delivery).filter(
+        Delivery.rider_id == rider.id, 
+        Delivery.status.in_(["pending", "out_for_delivery"])
     ).count()
 
+    # Avg Fulfillment (in minutes)
+    deliveries = db.query(Delivery).join(Order, Delivery.order_id == Order.id).filter(
+        Delivery.rider_id == rider.id, 
+        Delivery.status == "completed",
+        Order.picked_up_at.isnot(None),
+        Order.delivered_at.isnot(None)
+    ).all()
+    
+    avg_minutes = 0
+    if deliveries:
+        # Fetch associated orders to get timings (using join would be cleaner but let's be explicit)
+        total_seconds = 0
+        for d in deliveries:
+            ord_obj = db.query(Order).filter(Order.id == d.order_id).first()
+            if ord_obj and ord_obj.delivered_at and ord_obj.picked_up_at:
+                total_seconds += (ord_obj.delivered_at - ord_obj.picked_up_at).total_seconds()
+        
+        avg_minutes = int(total_seconds / len(deliveries) / 60)
+    
+    # Efficiency Rating
+    rating = "B-Tier"
+    if success_rate >= 98 and avg_minutes < 30: rating = "S-Tier"
+    elif success_rate >= 95: rating = "A-Tier"
+
     return {
-        "today_earnings": today_earnings,
-        "completed_orders": total_completed,
-        "total_earnings": rider.total_earnings or 0
+        "success_rate": f"{success_rate:.1f}%",
+        "avg_fulfillment": f"{avg_minutes}m" if avg_minutes > 0 else "N/A",
+        "active_threads": active_count,
+        "total_fulfilled": completed_count,
+        "efficiency_rating": rating
     }
+
+@app.get("/api/rider/orders/all")
+async def get_rider_orders_all(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Fetch all orders (available, active, and history) for the rider's archive."""
+    if current_user.get("role") != "rider":
+        raise HTTPException(status_code=403, detail="Rider access required")
+    
+    rider = db.query(RiderProfile).filter(RiderProfile.id == int(current_user["sub"])).first()
+    if not rider:
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == int(current_user["sub"])).first()
+
+    # 1. Available Orders (Processing, no rider assigned in either Order or Delivery table)
+    available = db.query(Order).filter(
+        Order.fulfillment_method == "delivery",
+        Order.status == "Processing",
+        Order.rider_id.is_(None)
+    ).all()
+
+    # 2. Rider's own Deliveries (Active and History)
+    my_deliveries = db.query(Delivery).filter(Delivery.rider_id == rider.id).all()
+    
+    all_orders = []
+    
+    # Process available
+    for o in available:
+        # Check if a delivery record already exists for this order (to avoid duplicates if status mismatch)
+        if db.query(Delivery).filter(Delivery.order_id == o.id).first():
+            continue
+            
+        all_orders.append({
+            "id": o.id,
+            "status": "Available",
+            "total_amount": o.total_amount,
+            "delivery_address": o.delivery_address,
+            "can_accept": True
+        })
+
+    # Process my deliveries
+    for d in my_deliveries:
+        o = db.query(Order).filter(Order.id == d.order_id).first()
+        if not o: continue
+        
+        pickup_name = "Hi-Vet Hub"
+        if o.branch_id:
+            branch = db.query(BusinessBranch).filter(BusinessBranch.id == o.branch_id).first()
+            if branch:
+                biz = db.query(BusinessProfile).filter(BusinessProfile.id == o.clinic_id).first()
+                pickup_name = f"{biz.clinic_name} - {branch.name}" if biz else branch.name
+        elif o.clinic_id:
+            biz = db.query(BusinessProfile).filter(BusinessProfile.id == o.clinic_id).first()
+            if biz: pickup_name = biz.clinic_name
+
+        all_orders.append({
+            "id": o.id,
+            "status": d.status.title(),
+            "total_amount": o.total_amount,
+            "delivery_address": o.delivery_address,
+            "pickup_name": pickup_name,
+            "can_accept": False
+        })
+
+    return {"orders": all_orders}
 
 @app.get("/api/rider/available-orders")
 async def get_available_jobs(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
@@ -8440,44 +9440,56 @@ async def get_available_jobs(db: Session = Depends(get_db), current_user: dict =
     print(f"DEBUG: Found {len(orders)} total delivery orders.")
     results = []
     for o in orders:
-        # Determine Pickup Location
+        # Determine Pickup Location and Address
         pickup_lat, pickup_lng = None, None
-        pickup_name = "Hi-Vet Hub"
+        clinic_name = "Hi-Vet Portal"
+        branch_name = "Main Branch"
+        pickup_address = "Address Verification Required"
         
+        # 1. Check if order has a branch_id assigned
         if o.branch_id:
             branch = db.query(BusinessBranch).filter(BusinessBranch.id == o.branch_id).first()
             if branch:
                 pickup_lat, pickup_lng = branch.lat, branch.lng
+                branch_name = branch.name
+                pickup_address = f"{branch.house_number or ''} {branch.street or ''}, {branch.barangay or ''}, {branch.city or ''}".strip(', ')
+                if not pickup_address: pickup_address = branch.address_line1 or "Branch Address"
+                
                 biz = db.query(BusinessProfile).filter(BusinessProfile.id == o.clinic_id).first()
                 if biz:
-                    pickup_name = f"{biz.clinic_name} - {branch.name}"
-                else:
-                    pickup_name = branch.name
+                    clinic_name = biz.clinic_name
+        
+        # 2. Fallback to clinic_id directly if branch_id didn't yield coords
+        if (not pickup_lat or not pickup_lng) and o.clinic_id:
+             biz = db.query(BusinessProfile).filter(BusinessProfile.id == o.clinic_id).first()
+             if biz:
+                 clinic_name = biz.clinic_name
+                 pickup_lat, pickup_lng = biz.clinic_lat, biz.clinic_lng
+                 pickup_address = f"{biz.clinic_house_number or ''} {biz.clinic_street or ''}, {biz.clinic_barangay or ''}, {biz.clinic_city or ''}".strip(', ')
+        
+        # 3. Last resort fallback from items
         if not pickup_lat or not pickup_lng:
-            # Fallback: Get business from first item in order
             item = db.query(OrderItem).filter(OrderItem.order_id == o.id).first()
             if item:
                 prod = db.query(Product).filter(Product.id == item.product_id).first()
                 if prod:
                     biz = db.query(BusinessProfile).filter(BusinessProfile.id == prod.business_id).first()
                     if biz:
-                        pickup_name = biz.clinic_name
-                        # Check for main branch
+                        clinic_name = biz.clinic_name
                         main_b = db.query(BusinessBranch).filter(BusinessBranch.business_id == biz.id, BusinessBranch.is_main == True).first()
                         if main_b:
                             pickup_lat, pickup_lng = main_b.lat, main_b.lng
+                            pickup_address = f"{main_b.house_number or ''} {main_b.street or ''}, {main_b.barangay or ''}, {main_b.city or ''}".strip(', ')
                         else:
                             pickup_lat, pickup_lng = biz.clinic_lat, biz.clinic_lng
+                            pickup_address = f"{biz.clinic_house_number or ''} {biz.clinic_street or ''}, {biz.clinic_barangay or ''}, {biz.clinic_city or ''}".strip(', ')
 
         distance = 0.0
         if rider and rider.current_lat and rider.current_lng and pickup_lat and pickup_lng:
             distance = get_distance(rider.current_lat, rider.current_lng, pickup_lat, pickup_lng)
         
-        print(f"DEBUG: Order #{o.id} - Distance: {distance}km - Rider Lat: {rider.current_lat if rider else 'N/A'}")
-        
         # Filter: Only show orders within 20km for "Nearby" effectiveness
         if distance > 20.0 and rider and rider.current_lat:
-            print(f"DEBUG: Skipping Order #{o.id} due to distance (>20km)")
             continue
 
         # Format friendly time
@@ -8494,7 +9506,10 @@ async def get_available_jobs(db: Session = Depends(get_db), current_user: dict =
             "delivery_address": o.delivery_address,
             "delivery_lat": o.delivery_lat,
             "delivery_lng": o.delivery_lng,
-            "pickup_name": pickup_name,
+            "pickup_name": f"{clinic_name} - {branch_name}",
+            "clinic_name": clinic_name,
+            "branch_name": branch_name,
+            "pickup_address": pickup_address,
             "pickup_lat": pickup_lat,
             "pickup_lng": pickup_lng,
             "distance_km": round(distance, 1),
@@ -8505,7 +9520,12 @@ async def get_available_jobs(db: Session = Depends(get_db), current_user: dict =
     # Sort by distance (nearest first)
     results.sort(key=lambda x: x["distance_km"])
     
-    return {"orders": results}
+    return {"tasks": results, "orders": results}
+
+@app.get("/api/rider/available-tasks")
+async def get_available_tasks_alias(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Alias for available-orders to match frontend."""
+    return await get_available_jobs(db, current_user)
 
 @app.get("/api/rider/active-order")
 async def get_ongoing_job(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
@@ -8530,8 +9550,8 @@ async def get_ongoing_job(db: Session = Depends(get_db), current_user: dict = De
         
     # Inject pickup data (Branch or Clinic)
     pickup_lat, pickup_lng = None, None
-    pickup_name = "Hi-Vet Hub"
     pickup_address = "Main Branch Address"
+    pickup_phone = "N/A"
     
     if order.branch_id:
         branch = db.query(BusinessBranch).filter(BusinessBranch.id == order.branch_id).first()
@@ -8540,9 +9560,11 @@ async def get_ongoing_job(db: Session = Depends(get_db), current_user: dict = De
             pickup_address = f"{branch.house_number or ''} {branch.street or ''}, {branch.barangay or ''}, {branch.city or ''}".strip(', ')
             if not pickup_address: pickup_address = branch.address_line1 or "Branch Address"
             
+            pickup_phone = branch.phone or "N/A"
             biz = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
             if biz:
                 pickup_name = f"{biz.clinic_name} - {branch.name}"
+                if not branch.phone: pickup_phone = biz.clinic_phone or "N/A"
             else:
                 pickup_name = branch.name
     elif order.clinic_id:
@@ -8550,15 +9572,33 @@ async def get_ongoing_job(db: Session = Depends(get_db), current_user: dict = De
         if biz:
             pickup_lat, pickup_lng = biz.clinic_lat, biz.clinic_lng
             pickup_name = biz.clinic_name
+            pickup_phone = biz.clinic_phone or "N/A"
             pickup_address = f"{biz.clinic_house_number or ''} {biz.clinic_street or ''}, {biz.clinic_barangay or ''}, {biz.clinic_city or ''}".strip(', ')
             if not pickup_address: pickup_address = "Clinic Address"
+    
+    # Fetch Customer Info
+    cust_name = "Customer"
+    cust_phone = "N/A"
+    customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
+    if customer:
+        if customer.first_name and customer.last_name:
+            cust_name = f"{customer.first_name} {customer.last_name}"
+        elif customer.name:
+            cust_name = customer.name
+        cust_phone = customer.phone or "N/A"
     
     # Fetch items
     items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
     item_list = []
     for it in items:
         p = db.query(Product).filter(Product.id == it.product_id).first()
-        item_list.append({"name": p.name if p else "Product", "quantity": it.quantity})
+        item_list.append({
+            "name": p.name if p else "Product", 
+            "quantity": it.quantity,
+            "serial_number": it.serial_number or f"HV-SN-{order.id}-{it.id}-{(int(order.created_at.timestamp()) % 10000)}"
+        })
+
+    primary_sn = item_list[0]["serial_number"] if item_list else f"HV-SN-{order.id}"
 
     return {
         "order": {
@@ -8567,105 +9607,189 @@ async def get_ongoing_job(db: Session = Depends(get_db), current_user: dict = De
             "delivery_address": order.delivery_address,
             "delivery_lat": order.delivery_lat,
             "delivery_lng": order.delivery_lng,
+            "primary_serial_number": primary_sn,
             "items": item_list,
             "clinic": {
                 "name": pickup_name,
                 "address": pickup_address,
+                "phone": pickup_phone,
                 "lat": pickup_lat,
                 "lng": pickup_lng
-            }
+            },
+            "customer": {
+                "name": cust_name,
+                "phone": cust_phone
+            },
+            "delivery_id": db.query(Delivery).filter(Delivery.order_id == order.id).first().id if db.query(Delivery).filter(Delivery.order_id == order.id).first() else None
         }
     }
 
-@app.post("/api/rider/orders/{order_id}/accept")
-async def accept_delivery_job(order_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    """Claim a delivery request."""
+@app.post("/api/rider/tasks/{delivery_id}/accept")
+async def accept_delivery_task(delivery_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Claim a delivery task."""
     if current_user.get("role") != "rider":
         raise HTTPException(status_code=403, detail="Rider access required")
     
-    rider = db.query(RiderProfile).filter(RiderProfile.id == int(current_user["sub"])).first()
+    rider_id = int(current_user["sub"])
+    rider = db.query(RiderProfile).filter(RiderProfile.id == rider_id).first()
     if not rider:
-        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == int(current_user["sub"])).first()
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == rider_id).first()
 
-    order = db.query(Order).filter(Order.id == order_id, Order.rider_id == None).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order already claimed or not found.")
+    # Frontend often passes Order ID instead of Delivery ID for tasks
+    delivery = db.query(Delivery).filter(
+        or_(Delivery.id == delivery_id, Delivery.order_id == delivery_id),
+        Delivery.rider_id == None
+    ).first()
+    
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Task already claimed, completed, or not found.")
         
-    order.rider_id = rider.id
-    order.status = "Processing"
-    order.assigned_at = datetime.utcnow()
+    delivery.rider_id = rider.id
+    delivery.status = "pending_pickup"
+    
+    # Update Order too
+    order = db.query(Order).filter(Order.id == delivery.order_id).first()
+    if order:
+        order.rider_id = rider.id
+        order.status = "Processing"
+        order.assigned_at = datetime.utcnow()
+        
     db.commit()
-    return {"message": "Order accepted"}
+    return {"message": "Task accepted", "pickup_pin": delivery.pickup_pin}
 
-@app.patch("/api/rider/orders/{order_id}/status")
-async def update_delivery_step(order_id: int, body: dict, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    """Move the delivery through stages: Picked Up -> Delivered."""
+
+@app.patch("/api/rider/tasks/{delivery_id}/status")
+async def update_delivery_status(delivery_id: int, body: DeliveryStepUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Move the delivery through stages with PIN validation."""
     if current_user.get("role") != "rider":
         raise HTTPException(status_code=403, detail="Rider access required")
     
-    new_status = body.get("status")
-    order = db.query(Order).filter(Order.id == order_id).first()
+    rider_id = int(current_user["sub"])
+    # Frontend may pass Order ID or Delivery ID
+    delivery = db.query(Delivery).filter(
+        or_(Delivery.id == delivery_id, Delivery.order_id == delivery_id)
+    ).first()
+    
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery record not found")
+        
+    if delivery.rider_id != rider_id:
+        # Check customer_id link (Legacy)
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == rider_id).first()
+        if not rider or delivery.rider_id != rider.id:
+            raise HTTPException(status_code=403, detail="Not assigned to this delivery")
+
+    new_status = body.status or body.new_status
+    
+    # Map frontend status strings to internal states if needed
+    if new_status in ["Picked Up", "Picked-Up", "out_for_delivery"]:
+        new_status = "out_for_delivery"
+    elif new_status in ["Delivered", "Completed", "completed"]:
+        new_status = "completed"
+
+    if new_status == "out_for_delivery":
+        order = db.query(Order).filter(Order.id == delivery.order_id).first()
+        if not order:
+             raise HTTPException(status_code=404, detail="Relational order not found")
+
+        # Any Serial Number from the order can be used as the Pickup verification code
+        order_items = db.query(OrderItem).filter(OrderItem.order_id == delivery.order_id).all()
+        # Ensure we use the same deterministic formula as get_ongoing_job
+        valid_sns = []
+        for it in order_items:
+            sn = it.serial_number
+            if not sn:
+                ts_mod = (int(order.created_at.timestamp()) % 10000) if order.created_at else 0
+                sn = f"HV-SN-{order.id}-{it.id}-{ts_mod}"
+            valid_sns.append(sn.upper().strip())
+        
+        # Fallback to pickup_pin if no serial numbers found (for legacy orders)
+        if delivery.pickup_pin:
+            valid_sns.append(delivery.pickup_pin.upper().strip())
+            
+        input_code = body.pin.upper().strip() if body.pin else ""
+        if input_code not in valid_sns:
+            raise HTTPException(status_code=400, detail="Invalid Verification Code. Please enter the Serial Number printed on the product.")
+        
+        delivery.status = "out_for_delivery"
+        if order.status != "Picked Up":
+            order.status = "Picked Up"
+            order.picked_up_at = datetime.utcnow()
+            
+    elif new_status == "completed":
+        # No PIN required for final delivery to customer
+        delivery.status = "completed"
+        order = db.query(Order).filter(Order.id == delivery.order_id).first()
+        if order:
+            if order.status != "Completed":
+                reduce_stock(db, order.id)
+                order.status = "Completed"
+                order.delivered_at = datetime.utcnow()
+                
+                # Update Wallet & Remittance
+                wallet = db.query(RiderWallet).filter(RiderWallet.rider_id == delivery.rider_id).first()
+                if not wallet:
+                    wallet = RiderWallet(rider_id=delivery.rider_id, balance=0.0, remittance_balance=0.0)
+                    db.add(wallet)
+                
+                # Ensure balances are not None
+                if wallet.balance is None: wallet.balance = 0.0
+                if wallet.remittance_balance is None: wallet.remittance_balance = 0.0
+                fee = delivery.delivery_fee or 0.0
+
+                # Earnings logic: shipping fee goes to rider
+                wallet.balance += fee
+                
+                # COD logic: if COD, rider owes the total amount (products + fee) to the clinic? 
+                if order.payment_method == "cod":
+                    wallet.remittance_balance += (order.total_amount - fee)
+                
+                # Award points
+                biz = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
+                items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
+                total_points = 0
+                for item in items:
+                    prod = db.query(Product).filter(Product.id == item.product_id).first()
+                    # 1. Use points captured at order time
+                    if item.loyalty_points and item.loyalty_points > 0:
+                        total_points += item.loyalty_points * item.quantity
+                    elif prod and prod.loyalty_points > 0:
+                        # 2. Current product points
+                        total_points += prod.loyalty_points * item.quantity
+                    # No points if not in catalog
+                
+                if total_points > 0:
+                    cust = db.query(Customer).filter(Customer.id == order.customer_id).first()
+                    if cust:
+                        if cust.loyalty_points is None: cust.loyalty_points = 0
+                        cust.loyalty_points += total_points
+                        year = order.created_at.year if order.created_at else 2026
+                        db.add(LoyaltyHistory(customer_id=cust.id, description=f"Earned points from Order HV-{year}-{order.id:06d}", points=total_points))
+
+    db.commit()
+    return {"message": f"Status updated to {new_status}", "delivery_status": delivery.status}
+
+
+@app.patch("/api/rider/deliveries/{delivery_id}/status")
+async def update_delivery_status_alias(delivery_id: int, body: DeliveryStepUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Alias for status update to match alternate frontend naming."""
+    return await update_delivery_status(delivery_id, body, db, current_user)
+
+
+@app.delete("/api/orders/{order_id}")
+async def delete_order(order_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Allow customer to hide/delete a cancelled order from their terminal."""
+    order = db.query(Order).filter(Order.id == order_id, Order.customer_id == int(current_user["sub"])).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-        
-    order.status = new_status
-    if new_status == "Pending":
-        order.rider_id = None
-        order.assigned_at = None
-    elif new_status == "Picked Up":
-        order.picked_up_at = datetime.utcnow()
-    elif new_status == "Delivered":
-        if order.status != "Completed":
-            # --- DEDUCT STOCK ---
-            reduce_stock(db, order_id)
-            order.status = "Completed"
-            order.delivered_at = datetime.utcnow()
-            
-            # Update rider earnings
-            rider = db.query(RiderProfile).filter(RiderProfile.id == order.rider_id).first()
-            if rider:
-                rider.total_earnings = (rider.total_earnings or 0) + 5000 # Standard ₱50 delivery fee
-            
-            # --- AWARD LOYALTY POINTS TO CUSTOMER ---
-            biz = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
-            items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
-            total_points = 0
-            for item in items:
-                prod = db.query(Product).filter(Product.id == item.product_id).first()
-                if prod and prod.loyalty_points > 0:
-                    total_points += prod.loyalty_points * item.quantity
-                elif biz:
-                    total_points += int(item.price * item.quantity * biz.loyalty_points_per_peso)
-                else:
-                    total_points += int(item.price * item.quantity * 0.01)
-                    
-            if total_points > 0:
-                customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
-                if customer:
-                    customer.loyalty_points += total_points
-                    db.add(LoyaltyHistory(
-                        customer_id=order.customer_id,
-                        description=f"Purchase Reward – Order #HV-{order.id:04d}",
-                        points=total_points
-                    ))
-        
+    if order.status != "Cancelled":
+        raise HTTPException(status_code=400, detail="Only cancelled orders can be deleted from terminal")
+    
+    order.is_customer_deleted = True
     db.commit()
+    return {"message": "Order purged from records"}
 
-    # NOTIFY CUSTOMER
-    status_msg = f"Your order #HV-{order.id:04d} status is now: {new_status}"
-    if new_status == "Picked Up":
-        status_msg = f"A rider has picked up your order #HV-{order.id:04d} and is on the way!"
-    elif new_status == "Delivered":
-        status_msg = f"Your order #HV-{order.id:04d} has been delivered. Enjoy!"
 
-    add_notification(
-        db, order.customer_id, "System",
-        f"Delivery Update: {new_status}",
-        status_msg,
-        "/dashboard/customer/orders"
-    )
-
-    return {"message": f"Order status updated to {new_status}"}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

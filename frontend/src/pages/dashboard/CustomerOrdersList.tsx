@@ -9,11 +9,13 @@ import {
     User, Phone, ShieldCheck, X, MessageSquare,
     ShieldAlert, Clock, CreditCard, Tag, Loader2,
     Activity, Trophy, Search, Filter, ArrowRight,
-    Map as MapIcon, Navigation
+    Map as MapIcon, Navigation, Trash2
 } from 'lucide-react';
 import { APIProvider, useMap, AdvancedMarker, InfoWindow, Map } from '@vis.gl/react-google-maps';
 import ModernModal from '../../components/ModernModal';
 import QrCodeModal from '../../components/QrCodeModal';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -25,6 +27,7 @@ interface OrderItem {
     variant?: string;
     size?: string;
     image?: string;
+    serial_number?: string;
 }
 
 interface Order {
@@ -48,6 +51,7 @@ interface Order {
     items: OrderItem[];
     voucher_code?: string;
     discount_amount?: number;
+    shipping_fee?: number;
 }
 
 const MapBoundsHandler = ({ points, id, padding }: { points: { lat: number; lng: number }[], id?: string, padding?: number | google.maps.Padding }) => {
@@ -142,7 +146,7 @@ const CustomerOrders = () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('hivet_token');
-            const response = await fetch('http://localhost:8000/api/orders', {
+            const response = await fetch(`${API}/api/orders`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await response.json();
@@ -163,7 +167,7 @@ const CustomerOrders = () => {
         setIsCancelling(true);
         try {
             const token = localStorage.getItem('hivet_token');
-            const response = await fetch(`http://localhost:8000/api/orders/${selectedOrder.id}/cancel`, {
+            const response = await fetch(`${API}/api/orders/${selectedOrder.id}/cancel`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -188,7 +192,7 @@ const CustomerOrders = () => {
     const handleHideOrder = async (id: number) => {
         try {
             const token = localStorage.getItem('hivet_token');
-            const response = await fetch(`http://localhost:8000/api/orders/${id}`, {
+            const response = await fetch(`${API}/api/orders/${id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -269,7 +273,7 @@ const CustomerOrders = () => {
                                     placeholder="Search by Order ID or Product Name..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-white h-20 pl-16 pr-8 rounded-[2rem] text-sm font-black text-accent-brown placeholder:text-accent-brown/20 outline-none border border-accent-brown/5 focus:border-brand/40 transition-all shadow-inner"
+                                    className="w-full bg-white h-20 pl-16 pr-8 rounded-[2rem] text-sm font-black text-accent-brown placeholder:text-black/30 outline-none border border-accent-brown/5 focus:border-brand/40 transition-all shadow-inner"
                                 />
                             </div>
 
@@ -281,7 +285,7 @@ const CustomerOrders = () => {
                                         onClick={() => setFulfillmentFilter(f as any)}
                                         className={`px-8 py-3.5 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all ${fulfillmentFilter === f
                                             ? 'bg-white text-accent-brown shadow-xl'
-                                            : 'text-accent-brown/30 hover:text-accent-brown'
+                                            : 'text-black hover:text-accent-brown'
                                             }`}
                                     >
                                         {f === 'delivery' ? 'Delivery' : f === 'pickup' ? 'Pickup' : 'All Methods'}
@@ -291,7 +295,7 @@ const CustomerOrders = () => {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-3 mt-6 pt-6 border-t border-accent-brown/5 overflow-x-auto no-scrollbar">
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/20 mr-4">Filter by Status:</span>
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-black mr-4">Filter by Status:</span>
                             {tabs.map((tab) => {
                                 const count = tab === 'All' ? orders.length : orders.filter(o => o.status === tab).length;
                                 return (
@@ -300,7 +304,7 @@ const CustomerOrders = () => {
                                         onClick={() => setActiveTab(tab)}
                                         className={`px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-3 ${activeTab === tab
                                             ? 'bg-brand text-white shadow-md shadow-brand/20'
-                                            : 'bg-white text-accent-brown/40 border border-accent-brown/5 hover:border-brand/20 hover:text-brand'
+                                            : 'bg-white text-black border border-accent-brown/5 hover:border-brand/20 hover:text-brand'
                                             }`}
                                     >
                                         {tab}
@@ -331,7 +335,7 @@ const CustomerOrders = () => {
                             </div>
                             <div>
                                 <h3 className="text-3xl font-black text-accent-brown tracking-tighter mb-2">No Records Found</h3>
-                                <p className="text-sm font-medium text-accent-brown/40 max-w-xs mx-auto">Try adjusting your filters or search query to find specific orders.</p>
+                                <p className="text-sm font-medium text-black max-w-xs mx-auto">Try adjusting your filters or search query to find specific orders.</p>
                             </div>
                             <button
                                 onClick={() => { setSearchQuery(''); setActiveTab('All'); setFulfillmentFilter('All'); }}
@@ -365,7 +369,7 @@ const CustomerOrders = () => {
                                                         {getStatusIcon(order.status)}
                                                         {order.status}
                                                     </div>
-                                                    <div className="px-4 py-1.5 bg-slate-50 border border-accent-brown/5 rounded-full text-[9px] font-black uppercase tracking-widest text-accent-brown/40">
+                                                    <div className="px-4 py-1.5 bg-slate-50 border border-accent-brown/5 rounded-full text-[9px] font-black uppercase tracking-widest text-black">
                                                         {order.fulfillment_method}
                                                     </div>
                                                 </div>
@@ -389,8 +393,6 @@ const CustomerOrders = () => {
                                                         <p className="text-[9px] font-black text-brand uppercase tracking-widest">
                                                             HV-2026-{order.id.toString().padStart(6, '0')}
                                                         </p>
-                                                        <div className="w-1 h-1 rounded-full bg-accent-brown/10" />
-                                                        <p className="text-[9px] font-bold text-accent-brown/40 uppercase tracking-widest">{new Date(order.created_at).toLocaleDateString()}</p>
                                                     </div>
                                                     <h3 className="text-xl font-black text-accent-brown tracking-tighter leading-tight group-hover:text-brand transition-colors">
                                                         {order.items[0]?.name}
@@ -406,7 +408,7 @@ const CustomerOrders = () => {
                                             {/* LOGISTICS PROGRESS BAR (STYLIZED) */}
                                             <div className="mb-10 relative z-10">
                                                 <div className="flex justify-between items-end mb-3">
-                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/30">Order Progress</p>
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black">Order Progress</p>
                                                     <p className="text-[10px] font-black uppercase tracking-[0.25em] text-brand">
                                                         {order.status === 'Completed' ? '100% Finalized' : order.status === 'Processing' ? '65% Routing' : '15% Initialization'}
                                                     </p>
@@ -437,12 +439,24 @@ const CustomerOrders = () => {
                                                         )}
                                                     </div>
                                                     <div className="flex flex-col">
-                                                        <p className="text-[9px] font-black text-accent-brown/20 uppercase tracking-[0.2em]">Deployment Timestamp</p>
-                                                        <p className="text-[10px] font-black text-accent-brown tracking-widest">{new Date(order.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                                        <p className="text-[9px] font-black text-black uppercase tracking-[0.2em]">Deployment Timestamp</p>
+                                                        <p className="text-[10px] font-black text-black tracking-widest">{new Date(order.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                                                     </div>
                                                 </div>
 
                                                 <div className="flex items-center gap-4">
+                                                    {order.status === 'Cancelled' && (
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.1, rotate: 5 }}
+                                                            whileTap={{ scale: 0.9 }}
+                                                            onClick={(e) => { e.stopPropagation(); handleHideOrder(order.id); }}
+                                                            className="w-14 h-14 bg-rose-50 border border-rose-100 text-rose-500 rounded-2xl flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all shadow-sm"
+                                                            title="Purge Cancellation Record"
+                                                        >
+                                                            <Trash2 className="w-5 h-5" />
+                                                        </motion.button>
+                                                    )}
+
                                                     {order.status === 'Payment Pending' && (
                                                         <motion.button
                                                             whileHover={{ scale: 1.05 }}
@@ -471,7 +485,7 @@ const CustomerOrders = () => {
                             {/* Pagination Bar */}
                             {totalPages > 1 && (
                                 <div className="flex flex-col sm:flex-row items-center justify-between gap-8 py-10">
-                                    <p className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em]">
+                                    <p className="text-[11px] font-black text-black uppercase tracking-[0.2em]">
                                         Logistics Page <span className="text-accent-brown">{currentPage}</span> of <span className="text-accent-brown">{totalPages}</span>
                                     </p>
                                     <div className="flex items-center gap-2">
@@ -487,7 +501,7 @@ const CustomerOrders = () => {
                                                 <button
                                                     key={i}
                                                     onClick={() => setCurrentPage(i + 1)}
-                                                    className={`w-12 h-14 rounded-2xl font-black text-[11px] transition-all ${currentPage === i + 1 ? 'bg-brand text-accent-brown shadow-xl' : 'bg-white text-accent-brown/30 border border-accent-brown/5 hover:border-brand/40'}`}
+                                                    className={`w-12 h-14 rounded-2xl font-black text-[11px] transition-all ${currentPage === i + 1 ? 'bg-brand text-white shadow-xl shadow-brand/20' : 'bg-white text-accent-brown/30 border border-accent-brown/5 hover:border-brand/40 hover:text-brand'}`}
                                                 >
                                                     {(i + 1).toString().padStart(2, '0')}
                                                 </button>
@@ -510,8 +524,10 @@ const CustomerOrders = () => {
                 {/* ORDER DETAILS MODAL */}
                 {createPortal(
                     <AnimatePresence>
-                        {isDetailsModalOpen && selectedOrder && (
-                            <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 lg:p-8">
+                        {isDetailsModalOpen && selectedOrder && (() => {
+                            const order = selectedOrder;
+                            return (
+                                <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 lg:p-8">
                                 <motion.div
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
@@ -540,7 +556,7 @@ const CustomerOrders = () => {
                                                         </div>
                                                         <div>
                                                             <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest">Tracking Number</p>
-                                                            <p className="text-[11px] font-black text-accent-brown uppercase tracking-widest">HV-2026-{selectedOrder.id.toString().padStart(6, '0')}</p>
+                                                            <p className="text-[11px] font-black text-accent-brown uppercase tracking-widest">HV-2026-{order.id.toString().padStart(6, '0')}</p>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-2">
@@ -558,12 +574,12 @@ const CustomerOrders = () => {
                                                         </div>
                                                         <div className="flex-1 space-y-4">
                                                             <div>
-                                                                <p className="text-[9px] font-black text-accent-brown/20 uppercase tracking-widest mb-0.5">Origin (Clinic)</p>
-                                                                <p className="text-xs font-black text-accent-brown truncate">{selectedOrder.branch_name || 'Verification Center'}</p>
+                                                                <p className="text-[9px] font-black text-black uppercase tracking-widest mb-0.5">Origin (Clinic)</p>
+                                                                <p className="text-xs font-black text-accent-brown truncate">{order.branch_name || 'Verification Center'}</p>
                                                             </div>
                                                             <div>
-                                                                <p className="text-[9px] font-black text-accent-brown/20 uppercase tracking-widest mb-0.5">Destination (Encrypted Address)</p>
-                                                                <p className="text-xs font-black text-accent-brown leading-relaxed line-clamp-2">{selectedOrder.delivery_address || selectedOrder.branch_address || 'Clinic Pickup Point'}</p>
+                                                                <p className="text-[9px] font-black text-black uppercase tracking-widest mb-0.5">Destination (Encrypted Address)</p>
+                                                                <p className="text-xs font-black text-accent-brown leading-relaxed line-clamp-2">{order.delivery_address || order.branch_address || 'Clinic Pickup Point'}</p>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -584,19 +600,19 @@ const CustomerOrders = () => {
                                                 <MapBoundsHandler
                                                     id="details-map"
                                                     points={[
-                                                        { lat: Number(selectedOrder.delivery_lat || 14.5995), lng: Number(selectedOrder.delivery_lng || 120.9842) },
-                                                        { lat: Number(selectedOrder.branch_lat || 14.5995), lng: Number(selectedOrder.branch_lng || 120.9842) }
+                                                        { lat: Number(order.delivery_lat || 14.5995), lng: Number(order.delivery_lng || 120.9842) },
+                                                        { lat: Number(order.branch_lat || 14.5995), lng: Number(order.branch_lng || 120.9842) }
                                                     ]}
                                                 />
-                                                {selectedOrder.delivery_lat && (
-                                                    <AdvancedMarker position={{ lat: Number(selectedOrder.delivery_lat), lng: Number(selectedOrder.delivery_lng) }}>
+                                                {order.delivery_lat && (
+                                                    <AdvancedMarker position={{ lat: Number(order.delivery_lat), lng: Number(order.delivery_lng) }}>
                                                         <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-xl border-2 border-brand">
                                                             <User className="w-4 h-4 text-accent-brown" />
                                                         </div>
                                                     </AdvancedMarker>
                                                 )}
-                                                {selectedOrder.branch_lat && (
-                                                    <AdvancedMarker position={{ lat: Number(selectedOrder.branch_lat), lng: Number(selectedOrder.branch_lng) }}>
+                                                {order.branch_lat && (
+                                                    <AdvancedMarker position={{ lat: Number(order.branch_lat), lng: Number(order.branch_lng) }}>
                                                         <div className="w-8 h-8 bg-brand rounded-xl flex items-center justify-center shadow-xl border-2 border-white">
                                                             <Store className="w-4 h-4 text-accent-brown" />
                                                         </div>
@@ -604,10 +620,10 @@ const CustomerOrders = () => {
                                                 )}
                                                 <DirectionsLine
                                                     id="details-map"
-                                                    userLat={Number(selectedOrder.delivery_lat)}
-                                                    userLng={Number(selectedOrder.delivery_lng)}
-                                                    clinicLat={Number(selectedOrder.branch_lat)}
-                                                    clinicLng={Number(selectedOrder.branch_lng)}
+                                                    userLat={Number(order.delivery_lat)}
+                                                    userLng={Number(order.delivery_lng)}
+                                                    clinicLat={Number(order.branch_lat)}
+                                                    clinicLng={Number(order.branch_lng)}
                                                 />
                                             </Map>
                                             <div className="absolute top-4 left-4 right-4 flex justify-between gap-4">
@@ -639,16 +655,15 @@ const CustomerOrders = () => {
                                                 <X className="w-6 h-6 group-hover:rotate-90 transition-transform" />
                                             </button>
                                         </div>
-
                                         <div className="px-10 py-6 grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
                                             {[
-                                                { label: 'Status', value: selectedOrder.status, icon: getStatusIcon(selectedOrder.status) },
-                                                { label: 'Payment', value: selectedOrder.payment_method, icon: <CreditCard className="w-4 h-4" /> },
-                                                { label: 'Deployment', value: new Date(selectedOrder.created_at).toLocaleDateString(), icon: <Clock className="w-4 h-4" /> },
-                                                { label: 'Payload', value: `${selectedOrder.items.length} Units`, icon: <Package className="w-4 h-4" /> }
+                                                { label: 'Status', value: order.status, icon: getStatusIcon(order.status) },
+                                                { label: 'Payment', value: order.payment_method, icon: <CreditCard className="w-4 h-4" /> },
+                                                { label: 'Deployment', value: new Date(order.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase(), icon: <Clock className="w-4 h-4" /> },
+                                                { label: 'Payload', value: `${order.items.length} Units`, icon: <Package className="w-4 h-4" /> }
                                             ].map((stat, i) => (
                                                 <div key={i} className="p-6 bg-slate-50 rounded-[2.5rem] border border-accent-brown/5">
-                                                    <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30 mb-3">{stat.label}</p>
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-black mb-3">{stat.label}</p>
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-accent-brown shadow-sm border border-accent-brown/5">
                                                             {stat.icon}
@@ -662,7 +677,7 @@ const CustomerOrders = () => {
                                         {/* Items Area */}
                                         <div className="flex-1 overflow-y-auto px-10 py-6 no-scrollbar">
                                             <div className="space-y-4">
-                                                {selectedOrder.items.map((item, idx) => (
+                                                {order.items.map((item, idx) => (
                                                     <div key={idx} className="flex items-center gap-8 p-6 bg-white rounded-[3rem] border border-accent-brown/5 hover:border-brand transition-all group shadow-sm hover:shadow-2xl hover:shadow-accent-brown/5">
                                                         <div className="w-24 h-24 bg-slate-50/50 rounded-[2.5rem] p-4 shrink-0 flex items-center justify-center border border-accent-brown/5 group-hover:scale-105 transition-transform duration-500">
                                                             <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
@@ -671,8 +686,16 @@ const CustomerOrders = () => {
                                                             <h5 className="font-black text-xl text-accent-brown truncate mb-2">{item.name}</h5>
                                                             <div className="flex items-center gap-4">
                                                                 <span className="px-3 py-1 bg-brand/10 rounded-full text-[9px] font-black text-brand uppercase tracking-widest">{item.variant}</span>
-                                                                <span className="text-[9px] font-bold text-accent-brown/30 uppercase tracking-[0.2em]">Size: {item.size}</span>
-                                                            </div>
+                                                                <span className="text-[9px] font-bold text-black uppercase tracking-[0.2em]">Size: {item.size}</span>
+                                                             </div>
+                                                             {item.serial_number && (
+                                                                  <div className="mt-3 flex items-center gap-2 px-3 py-1.5 bg-accent-brown/5 rounded-xl border border-accent-brown/5 w-fit">
+                                                                      <Tag className="w-3 h-3 text-accent-brown/20" />
+                                                                      <span className="text-[9px] font-black text-accent-brown/60 uppercase tracking-widest">
+                                                                          Serial: <span className="text-accent-brown">{item.serial_number}</span>
+                                                                      </span>
+                                                                  </div>
+                                                             )}
                                                         </div>
                                                         <div className="text-right shrink-0">
                                                             <p className="text-[10px] font-black text-accent-brown/20 uppercase tracking-widest mb-1.5">Qty {item.quantity}</p>
@@ -685,19 +708,51 @@ const CustomerOrders = () => {
 
                                         {/* Summary Footer */}
                                         <div className="p-8 sm:p-10 bg-accent-peach/5 border-t border-accent-brown/5 shrink-0 flex items-center justify-between">
-                                            <div>
-                                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/30 mb-1">Secure Transaction</p>
-                                                <p className="text-[11px] font-bold text-accent-brown/50">All calculations final</p>
+                                            <div className="flex flex-col gap-4">
+                                                <div className="flex items-center gap-4">
+                                                    {(order.status === 'Pending' || order.status === 'Payment Pending') && (
+                                                        <button
+                                                            onClick={() => {
+                                                                setIsDetailsModalOpen(false);
+                                                                setIsCancelModalOpen(true);
+                                                            }}
+                                                            className="px-8 py-3 bg-rose-50 text-rose-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition-all border border-rose-100"
+                                                        >
+                                                            Cancel Order
+                                                        </button>
+                                                    )}
+                                                    <div>
+                                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black mb-1">Secure Transaction</p>
+                                                        <p className="text-[11px] font-bold text-black/50">All calculations final</p>
+                                                    </div>
+                                                </div>
                                             </div>
                                             <div className="text-right">
-                                                <p className="text-[11px] font-black uppercase tracking-[0.3em] text-brand mb-1.5">Total Value</p>
-                                                <p className="text-5xl sm:text-7xl font-black text-accent-brown tracking-tighter leading-none">₱{selectedOrder.total_amount.toLocaleString()}</p>
+                                                <div className="flex flex-col items-end gap-1 mb-4">
+                                                    <div className="flex items-center gap-6 text-[9px] font-black uppercase tracking-widest text-black/30">
+                                                        <span>Subtotal</span>
+                                                        <span>₱{(order.total_amount - (order.shipping_fee || 0) + (order.discount_amount || 0)).toLocaleString()}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-6 text-[9px] font-black uppercase tracking-widest text-brand">
+                                                        <span>Logistics Fee</span>
+                                                        <span>{(order.shipping_fee && order.shipping_fee > 0) ? `₱${order.shipping_fee.toLocaleString()}` : "FREE"}</span>
+                                                    </div>
+                                                    {order.discount_amount !== undefined && order.discount_amount > 0 && (
+                                                        <div className="flex items-center gap-6 text-[9px] font-black uppercase tracking-widest text-emerald-500">
+                                                            <span>Reward Applied</span>
+                                                            <span>-₱{order.discount_amount.toLocaleString()}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <p className="text-[11px] font-black uppercase tracking-[0.3em] text-brand mb-1.5 leading-none">Total Settlement</p>
+                                                <p className="text-5xl sm:text-7xl font-black text-accent-brown tracking-tighter leading-none">₱{order.total_amount.toLocaleString()}</p>
                                             </div>
                                         </div>
                                     </div>
                                 </motion.div>
                             </div>
-                        )}
+                            );
+                        })()}
                     </AnimatePresence>,
                     document.body
                 )}
@@ -718,7 +773,7 @@ const CustomerOrders = () => {
                                     initial={{ scale: 0.9, opacity: 0, y: 20 }}
                                     animate={{ scale: 1, opacity: 1, y: 0 }}
                                     exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                                    className="bg-white w-full max-w-lg rounded-[4rem] shadow-2xl relative z-10 overflow-hidden border border-white"
+                                    className="bg-white w-full max-w-4xl rounded-[4rem] shadow-2xl relative z-10 overflow-hidden border border-white"
                                 >
                                     <div className="p-12 border-b border-rose-100/10 bg-rose-50/50">
                                         <div className="flex items-center gap-6 mb-8">
@@ -730,24 +785,24 @@ const CustomerOrders = () => {
                                                 <p className="text-[10px] font-black text-rose-500/60 uppercase tracking-widest mt-1">Permanent Transaction Withdrawal</p>
                                             </div>
                                         </div>
-                                        <p className="text-sm font-medium text-accent-brown/60 leading-relaxed">
+                                        <p className="text-sm font-medium text-accent-brown/60 leading-relaxed max-w-2xl">
                                             You are about to revoke this transaction. This action is definitive. Please categorize the logic for our performance registry.
                                         </p>
                                     </div>
 
-                                    <div className="p-12 space-y-3">
+                                    <div className="p-12 grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {[
                                             "Change of mind",
                                             "Algorithm Optimization Error",
                                             "Financial Pivot",
                                             "Logistic Delay Concerns",
                                             "Duplicate Order",
-                                            "Other Intelligence"
+                                            "Others"
                                         ].map(reason => (
                                             <button
                                                 key={reason}
                                                 onClick={() => setCancelReason(reason)}
-                                                className={`w-full flex items-center justify-between p-6 rounded-[1.5rem] border-2 transition-all cursor-pointer ${cancelReason === reason
+                                                className={`flex items-center justify-between p-6 rounded-[1.5rem] border-2 transition-all cursor-pointer ${cancelReason === reason
                                                     ? 'border-rose-500 bg-rose-50 text-rose-600'
                                                     : 'border-accent-brown/5 hover:border-brand/40 text-accent-brown/40 hover:bg-slate-50'
                                                     }`}

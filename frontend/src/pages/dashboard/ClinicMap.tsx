@@ -192,7 +192,7 @@ export default function ClinicMap() {
                     >
                         <MapPin className="text-brand w-8 h-8" />
                     </motion.div>
-                    <p className="font-black text-[10px] uppercase tracking-[0.2em] text-accent-brown/30">Locating Network Clinics...</p>
+                    <p className="font-black text-[10px] uppercase tracking-[0.2em] text-black">Locating Network Clinics...</p>
                 </div>
             </DashboardLayout>
         );
@@ -216,16 +216,16 @@ export default function ClinicMap() {
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <h2 className="text-2xl font-black text-accent-brown tracking-tighter">Clinic Network</h2>
-                                        <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-[0.2em]">Discover Branches Nearby</p>
+                                        <p className="text-[10px] font-black text-black uppercase tracking-[0.2em]">Discover Branches Nearby</p>
                                     </div>
                                     <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center">
-                                        <Filter className="w-5 h-5 text-accent-brown/40" />
+                                        <Filter className="w-5 h-5 text-black" />
                                     </div>
                                 </div>
 
                                 {/* Search Bar */}
                                 <div className="relative">
-                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/30" />
+                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-black" />
                                     <input
                                         type="text"
                                         placeholder="Search by name, clinic or street..."
@@ -239,13 +239,13 @@ export default function ClinicMap() {
                                 <div className="flex gap-2 p-1 bg-white border border-accent-brown/5 rounded-xl shadow-sm">
                                     <button
                                         onClick={() => setActiveTab('all')}
-                                        className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'all' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-accent-brown/40 hover:text-brand'}`}
+                                        className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'all' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-black hover:text-brand'}`}
                                     >
                                         All Clinics
                                     </button>
                                     <button
                                         onClick={() => setActiveTab('nearby')}
-                                        className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'nearby' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-accent-brown/40 hover:text-brand'}`}
+                                        className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'nearby' ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-black hover:text-brand'}`}
                                     >
                                         Nearby Me
                                     </button>
@@ -287,10 +287,10 @@ export default function ClinicMap() {
                                                     <h4 className={`text-sm font-black truncate ${selectedBranch?.branch.id === item.branch.id ? 'text-white' : 'text-accent-brown group-hover:text-brand'}`}>
                                                         {item.clinicName}
                                                     </h4>
-                                                    <p className={`text-[9px] font-bold uppercase tracking-widest mt-0.5 ${selectedBranch?.branch.id === item.branch.id ? 'text-white/60' : 'text-accent-brown/40'}`}>
+                                                    <p className={`text-[9px] font-bold uppercase tracking-widest mt-0.5 ${selectedBranch?.branch.id === item.branch.id ? 'text-white/60' : 'text-black'}`}>
                                                         {item.branch.name}
                                                     </p>
-                                                    <div className={`flex items-center gap-1.5 mt-3 text-[9px] font-medium ${selectedBranch?.branch.id === item.branch.id ? 'text-white/80' : 'text-accent-brown/60'}`}>
+                                                    <div className={`flex items-center gap-1.5 mt-3 text-[9px] font-medium ${selectedBranch?.branch.id === item.branch.id ? 'text-white/80' : 'text-black'}`}>
                                                         <MapPin size={10} className="shrink-0" />
                                                         <span className="truncate">{item.branch.address_line1}</span>
                                                     </div>
@@ -427,7 +427,7 @@ export default function ClinicMap() {
                                                         </div>
                                                         <button
                                                             onClick={() => setSelectedBranch(null)}
-                                                            className="w-9 h-9 bg-accent-peach/5 text-accent-brown/30 hover:text-red-500 rounded-full flex items-center justify-center transition-colors"
+                                                            className="w-9 h-9 bg-accent-peach/5 text-black hover:text-red-500 rounded-full flex items-center justify-center transition-colors"
                                                         >
                                                             <X size={18} />
                                                         </button>
@@ -435,7 +435,7 @@ export default function ClinicMap() {
 
                                                     <div className="grid grid-cols-2 gap-3 mb-5">
                                                         <div className="bg-accent-peach/5 p-3.5 rounded-xl space-y-1 border border-accent-brown/5">
-                                                            <div className="flex items-center gap-2 text-[7px] font-black text-accent-brown/40 uppercase tracking-widest">
+                                                            <div className="flex items-center gap-2 text-[7px] font-black text-black uppercase tracking-widest">
                                                                 <Phone size={9} /> Contact
                                                             </div>
                                                             <p className="text-xs font-bold text-accent-brown truncate">{selectedBranch.branch.phone}</p>
@@ -506,7 +506,7 @@ export default function ClinicMap() {
                                                     </div>
                                                     <div>
                                                         <h4 className="text-[11px] font-black text-white leading-none mb-1">{selectedBranch?.clinicName || 'Clinic View'}</h4>
-                                                        <p className="text-[8px] font-black text-white/50 uppercase tracking-widest">{selectedBranch?.branch.name}</p>
+                                                        <p className="text-[8px] font-black text-white uppercase tracking-widest">{selectedBranch?.branch.name}</p>
                                                     </div>
                                                 </div>
                                             </div>

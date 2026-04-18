@@ -4,7 +4,8 @@ import {
     Package, MapPin, Calendar, Clock, ChevronRight, X,
     AlertCircle, CheckCircle, Loader2, Clock3,
     CreditCard, Wallet, Activity, Eye, ShieldCheck,
-    Smartphone, Info, Sparkles, Tag, User
+    Smartphone, Info, Sparkles, Tag, User,
+    Cat, Dog, Dna, LayoutGrid, Award
 } from 'lucide-react';
 import { APIProvider, useMapsLibrary } from '@vis.gl/react-google-maps';
 import DashboardLayout from '../../components/DashboardLayout';
@@ -13,6 +14,20 @@ import { CustomDropdown } from '../../components/CustomDropdown';
 import QrCodeModal from '../../components/QrCodeModal';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+
+const DOG_BREEDS = [
+    'Aspin (Askal)', 'Shih Tzu', 'Golden Retriever', 'Poodle', 'Pomeranian',
+    'Beagle', 'Labrador Retriever', 'Chihuahua', 'Pug', 'Siberian Husky',
+    'German Shepherd', 'Chow Chow', 'Maltese', 'Bulldog', 'Rottweiler',
+    'Doberman', 'Corgi', 'Dalmatian', 'Cocker Spaniel', 'Pekingese',
+    'Yorkshire Terrier', 'Jack Russell Terrier', 'Other'
+];
+
+const CAT_BREEDS = [
+    'Puspin (Pusakal)', 'Persian', 'Siamese', 'Maine Coon', 'Bengal',
+    'British Shorthair', 'Scottish Fold', 'Ragdoll', 'Sphynx', 'Munchkin',
+    'Himalayan', 'Savannah', 'Russian Blue', 'Abyssinian', 'Burmese', 'Other'
+];
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -33,6 +48,7 @@ interface ClinicService {
     price: number;
     description: string | null;
     duration_minutes: number;
+    loyalty_points: number;
     is_package: boolean;
     package_items_json: string | null;
 }
@@ -115,6 +131,8 @@ const ReservationCheckout = () => {
     const [error, setError] = useState<string | null>(null);
     const [form, setForm] = useState({
         pet_name: '',
+        pet_type: 'Dog',
+        pet_breed: '',
         service: '',
         service_id: 0,
         date: '',
@@ -132,6 +150,12 @@ const ReservationCheckout = () => {
     const [packageModal, setPackageModal] = useState<ClinicService | null>(null);
     const [myVouchers, setMyVouchers] = useState<Voucher[]>([]);
     const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [isClinicListCollapsed, setIsClinicListCollapsed] = useState(false);
+    const [isBranchListCollapsed, setIsBranchListCollapsed] = useState(false);
+    const [isServiceListCollapsed, setIsServiceListCollapsed] = useState(false);
+    const [serviceCategory, setServiceCategory] = useState<'none' | 'packages' | 'individual'>('none');
+    const [servicePage, setServicePage] = useState(1);
 
     const [showQrModal, setShowQrModal] = useState(false);
     const [qrData, setQrData] = useState('');
@@ -139,6 +163,20 @@ const ReservationCheckout = () => {
     const [qrAmount, setQrAmount] = useState(0);
     const [qrStatus, setQrStatus] = useState<'pending' | 'succeeded' | 'expired' | 'processing'>('pending');
     const pollingInterval = useRef<any>(null);
+
+    const formatDate = (dateStr: string) => {
+        if (!dateStr) return '—';
+        try {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+            });
+        } catch (e) {
+            return dateStr;
+        }
+    };
 
     const token = localStorage.getItem('hivet_token');
     const authHeaders = useMemo(() => ({
@@ -322,17 +360,24 @@ const ReservationCheckout = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleSubmit = async () => {
-        if (submitting) return;
+    const handleConfirmFinalize = () => {
         if (!selectedPaymentMethod) {
             showToast('Please select a payment method.', 'error');
             return;
         }
+        setIsConfirmModalOpen(true);
+    };
+
+    const handleSubmit = async () => {
+        if (submitting) return;
+        setIsConfirmModalOpen(false);
 
         setSubmitting(true);
         try {
             const payload = {
                 pet_name: form.pet_name.trim(),
+                pet_type: form.pet_type,
+                pet_breed: form.pet_breed.trim() || null,
                 service: form.service,
                 service_id: Number(form.service_id),
                 date: form.date,
@@ -509,7 +554,7 @@ const ReservationCheckout = () => {
                                                         <Activity className="w-8 h-8" />
                                                     </div>
                                                     <div>
-                                                        <h3 className="text-2xl font-black text-accent-brown tracking-tight uppercase italic">Select Your Clinic</h3>
+                                                        <h3 className="text-2xl font-black text-accent-brown tracking-tight uppercase italic">Pick a Clinic</h3>
                                                         <p className="text-[10px] font-bold text-accent-brown/30 uppercase tracking-[0.2em] mt-1">Choose where you'd like to bring your pet</p>
                                                     </div>
                                                 </div>
@@ -518,148 +563,355 @@ const ReservationCheckout = () => {
                                                 </div>
                                             </div>
 
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                                                {clinics.map(c => (
-                                                    <button
-                                                        key={c.id}
-                                                        onClick={() => {
-                                                            const mainBranch = c.branches?.find(b => b.is_main) || c.branches?.[0];
-                                                            setForm(f => ({
-                                                                ...f,
-                                                                clinic_id: c.id,
-                                                                clinic_option_key: mainBranch ? `${c.id}-${mainBranch.id}` : `${c.id}-main`,
-                                                                service: '',
-                                                                service_id: 0
-                                                            }));
-                                                        }}
-                                                        className={`p-8 rounded-[3rem] border-2 text-left transition-all group relative overflow-hidden ${form.clinic_id === c.id
-                                                            ? 'border-brand bg-white shadow-2xl shadow-brand/10 -translate-y-1'
-                                                            : 'border-brand/5 bg-white hover:border-brand/20 hover:shadow-xl'
-                                                            }`}
-                                                    >
-                                                        <div className="relative z-10">
-                                                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 transition-all ${form.clinic_id === c.id ? 'bg-brand text-white' : 'bg-brand/5 text-brand'
-                                                                }`}>
-                                                                <Activity className="w-7 h-7" />
-                                                            </div>
-                                                            <h4 className="text-lg font-black text-accent-brown tracking-tighter mb-2 uppercase italic leading-none">{c.name}</h4>
-                                                            <div className="flex items-center gap-2 text-accent-brown/40 mb-4">
-                                                                <MapPin className="w-3 h-3" />
-                                                                <p className="text-[11px] font-bold uppercase truncate">
-                                                                    {c.zip} {c.address_line1}
-                                                                </p>
-                                                            </div>
-                                                            <p className="text-[11px] font-medium text-accent-brown/50 leading-relaxed line-clamp-2 uppercase tracking-wide">
-                                                                {c.address_line1} {c.address_line2}
-                                                            </p>
+                                            <div className="space-y-6">
+                                                {isClinicListCollapsed && form.clinic_id ? (
+                                                    <div className="space-y-4">
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <span className="text-[10px] font-black uppercase text-brand tracking-[0.3em]">Your Clinic</span>
                                                         </div>
-                                                        {form.clinic_id === c.id && (
-                                                            <div className="absolute top-8 right-8">
-                                                                <div className="w-8 h-8 bg-brand rounded-full flex items-center justify-center shadow-lg">
-                                                                    <CheckCircle className="w-5 h-5 text-white" />
+                                                        {clinics.filter(c => c.id === form.clinic_id).map(c => (
+                                                            <button
+                                                                key={c.id}
+                                                                onClick={() => {
+                                                                    setIsClinicListCollapsed(false);
+                                                                    setForm(f => ({ ...f, clinic_id: 0, clinic_option_key: '', service: '', service_id: 0 }));
+                                                                }}
+                                                                className="w-full text-left p-8 rounded-[3rem] border-2 border-brand bg-white shadow-2xl shadow-brand/10 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-brand/40 transition-all hover:shadow-brand/20 group"
+                                                            >
+                                                                <div className="flex items-center gap-6">
+                                                                    <div className="w-16 h-16 rounded-2xl bg-brand/5 text-brand flex items-center justify-center shrink-0 group-hover:bg-brand group-hover:text-white transition-all">
+                                                                        <Activity className="w-8 h-8" />
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <h4 className="text-xl font-black text-accent-brown tracking-tighter uppercase italic leading-none mb-2">{c.name}</h4>
+                                                                        <div className="flex items-center gap-2 text-accent-brown/40">
+                                                                            <MapPin className="w-3 h-3" />
+                                                                            <p className="text-[11px] font-bold uppercase truncate">{c.address_line1}</p>
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Decorative Background Element */}
-                                                        <div className={`absolute -bottom-8 -right-8 w-32 h-32 rounded-full blur-3xl transition-all duration-500 ${form.clinic_id === c.id ? 'bg-brand/20' : 'bg-transparent'}`} />
-                                                    </button>
-                                                ))}
+                                                                <div className="flex items-center gap-3 px-6 py-3 bg-brand/5 rounded-2xl border border-brand/10 self-start md:self-center group-hover:bg-brand group-hover:border-brand transition-all">
+                                                                    <div className="w-4 h-4 rounded-full border-2 border-brand group-hover:border-white flex items-center justify-center">
+                                                                        <div className="w-1.5 h-1.5 rounded-full bg-brand group-hover:bg-white" />
+                                                                    </div>
+                                                                    <span className="text-[10px] font-black text-brand uppercase tracking-widest group-hover:text-white transition-colors">Change Selection</span>
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                                                        {clinics.map(c => (
+                                                            <button
+                                                                key={c.id}
+                                                                onClick={() => {
+                                                                    const mainBranch = c.branches?.find(b => b.is_main) || c.branches?.[0];
+                                                                    setForm(f => ({
+                                                                        ...f,
+                                                                        clinic_id: c.id,
+                                                                        clinic_option_key: mainBranch ? `${c.id}-${mainBranch.id}` : `${c.id}-main`,
+                                                                        service: '',
+                                                                        service_id: 0
+                                                                    }));
+                                                                    setIsClinicListCollapsed(true);
+                                                                }}
+                                                                className={`p-8 rounded-[3rem] border-2 text-left transition-all group relative overflow-hidden ${form.clinic_id === c.id
+                                                                    ? 'border-brand bg-white shadow-2xl shadow-brand/10'
+                                                                    : 'border-brand/5 bg-white hover:border-brand/20 hover:shadow-xl'
+                                                                    }`}
+                                                            >
+                                                                <div className="relative z-10">
+                                                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 transition-all ${form.clinic_id === c.id ? 'bg-brand text-white' : 'bg-brand/5 text-brand'
+                                                                        }`}>
+                                                                        <Activity className="w-7 h-7" />
+                                                                    </div>
+                                                                    <h4 className="text-lg font-black text-accent-brown tracking-tighter mb-2 uppercase italic leading-none">{c.name}</h4>
+                                                                    <div className="flex items-center gap-2 text-accent-brown/40 mb-4">
+                                                                        <MapPin className="w-3 h-3" />
+                                                                        <p className="text-[11px] font-bold uppercase truncate">
+                                                                            {c.zip} {c.address_line1}
+                                                                        </p>
+                                                                    </div>
+                                                                    <p className="text-[11px] font-medium text-accent-brown/50 leading-relaxed line-clamp-2 uppercase tracking-wide">
+                                                                        {c.address_line1} {c.address_line2}
+                                                                    </p>
+                                                                </div>
+                                                                {form.clinic_id === c.id && (
+                                                                    <div className="absolute top-8 right-8">
+                                                                        <div className="w-8 h-8 bg-brand rounded-full flex items-center justify-center shadow-lg">
+                                                                            <CheckCircle className="w-5 h-5 text-white" />
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {selectedOption && (
                                                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-16 pt-16 border-t-2 border-brand/5">
                                                     {clinics.find(c => c.id === form.clinic_id)?.branches.length! > 1 && (
                                                         <div className="mb-12">
-                                                            <div className="flex items-center gap-3 mb-6">
-                                                                <div className="w-1.5 h-6 bg-brand rounded-full" />
-                                                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown/40">Select Branch</p>
+                                                            <div className="flex items-center justify-between mb-6">
+                                                                <div className="flex items-center gap-3">
+                                                                    {!isBranchListCollapsed && <div className="w-1.5 h-6 bg-brand rounded-full" />}
+                                                                    <p className={`text-[10px] font-black uppercase tracking-[0.3em] ${isBranchListCollapsed ? 'text-brand' : 'text-accent-brown/40'}`}>
+                                                                        {isBranchListCollapsed ? 'Your Branch' : 'Select Branch'}
+                                                                    </p>
+                                                                </div>
                                                             </div>
-                                                            <div className="flex flex-wrap gap-4">
-                                                                {clinics.find(c => c.id === form.clinic_id)?.branches.map(b => (
-                                                                    <button
-                                                                        key={b.id}
-                                                                        onClick={() => setForm(f => ({ ...f, clinic_option_key: `${form.clinic_id}-${b.id}` }))}
-                                                                        className={`px-8 py-4 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all ${form.clinic_option_key === `${form.clinic_id}-${b.id}`
-                                                                            ? 'bg-brand-dark text-white shadow-xl shadow-brand/20'
-                                                                            : 'bg-white border border-brand/10 text-brand-dark/50 hover:border-brand/30 hover:text-brand shadow-sm'
-                                                                            }`}
-                                                                    >
-                                                                        {b.name}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
+                                                            
+                                                            {isBranchListCollapsed ? (
+                                                                <button
+                                                                    onClick={() => setIsBranchListCollapsed(false)}
+                                                                    className="w-full text-left p-8 rounded-[3rem] border-2 border-brand bg-white shadow-2xl shadow-brand/10 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-brand/40 transition-all hover:shadow-brand/20 group"
+                                                                >
+                                                                    <div className="flex items-center gap-6">
+                                                                        <div className="w-16 h-16 rounded-2xl bg-brand/5 text-brand flex items-center justify-center shrink-0 group-hover:bg-brand group-hover:text-white transition-all">
+                                                                            <Activity className="w-8 h-8" />
+                                                                        </div>
+                                                                        <div className="min-w-0">
+                                                                            <h4 className="text-xl font-black text-accent-brown tracking-tighter uppercase italic leading-none">{clinics.find(c => c.id === form.clinic_id)?.branches.find(b => `${form.clinic_id}-${b.id}` === form.clinic_option_key)?.name}</h4>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3 px-6 py-3 bg-brand/5 rounded-2xl border border-brand/10 self-start md:self-center group-hover:bg-brand group-hover:border-brand transition-all">
+                                                                        <div className="w-4 h-4 rounded-full border-2 border-brand group-hover:border-white flex items-center justify-center">
+                                                                            <div className="w-1.5 h-1.5 rounded-full bg-brand group-hover:bg-white" />
+                                                                        </div>
+                                                                        <span className="text-[10px] font-black uppercase tracking-widest text-brand group-hover:text-white transition-colors">Change Selection</span>
+                                                                    </div>
+                                                                </button>
+                                                            ) : (
+                                                                <div className="flex flex-wrap gap-4">
+                                                                    {clinics.find(c => c.id === form.clinic_id)?.branches.map(b => (
+                                                                        <button
+                                                                            key={b.id}
+                                                                            onClick={() => {
+                                                                                setForm(f => ({ ...f, clinic_option_key: `${form.clinic_id}-${b.id}` }));
+                                                                                setIsBranchListCollapsed(true);
+                                                                            }}
+                                                                            className={`px-8 py-4 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all ${form.clinic_option_key === `${form.clinic_id}-${b.id}`
+                                                                                ? 'bg-brand-dark text-white shadow-xl shadow-brand/20'
+                                                                                : 'bg-white border border-brand/10 text-brand-dark/50 hover:border-brand/30 hover:text-brand shadow-sm'
+                                                                                }`}
+                                                                        >
+                                                                            {b.name}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
 
                                                     <div className="space-y-10">
-                                                        <div className="flex items-center gap-3 mb-2">
-                                                            <div className="w-1.5 h-6 bg-brand rounded-full" />
-                                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown/40">Medical Procedures</p>
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <div className="flex items-center gap-3">
+                                                                {!isServiceListCollapsed && <div className="w-1.5 h-6 bg-brand rounded-full" />}
+                                                                <p className={`text-[10px] font-black uppercase tracking-[0.3em] ${isServiceListCollapsed ? 'text-brand' : 'text-accent-brown/40'}`}>
+                                                                    {isServiceListCollapsed ? 'Your Service' : 'Choose a Service'}
+                                                                </p>
+                                                            </div>
                                                         </div>
 
-                                                        {/* Package Services */}
-                                                        {packageServices.length > 0 && (
-                                                            <div className="space-y-6">
-                                                                <div className="flex items-center justify-between">
-                                                                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-brand flex items-center gap-3 italic">
-                                                                        <Sparkles className="w-4 h-4" /> Comprehensive Packages
-                                                                    </p>
-                                                                </div>
-                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                                                    {packageServices.map(pkg => {
-                                                                        return (
-                                                                            <button
-                                                                                key={pkg.id}
-                                                                                onClick={() => setForm(f => ({ ...f, service: pkg.name, service_id: pkg.id }))}
-                                                                                className={`p-8 rounded-[2.5rem] border-2 text-left transition-all w-full relative overflow-hidden group ${form.service_id === pkg.id
-                                                                                    ? 'border-brand bg-white shadow-2xl shadow-brand/10'
-                                                                                    : 'border-brand/5 bg-white hover:border-brand/20 shadow-sm'
-                                                                                    }`}
-                                                                            >
-                                                                                <div className="flex items-start justify-between gap-4 mb-4 relative z-10">
-                                                                                    <span className="text-lg font-black text-accent-brown uppercase italic leading-none">{pkg.name}</span>
-                                                                                    {form.service_id === pkg.id && <CheckCircle className="w-5 h-5 text-brand shrink-0" />}
+                                                        {isServiceListCollapsed && selectedService ? (
+                                                            <button
+                                                                onClick={() => setIsServiceListCollapsed(false)}
+                                                                className="w-full text-left p-8 rounded-[3rem] border-2 border-brand bg-white shadow-2xl shadow-brand/10 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-brand/40 transition-all hover:-translate-y-1 group"
+                                                            >
+                                                                <div className="flex items-center gap-6">
+                                                                    <div className="w-16 h-16 rounded-2xl bg-brand/5 text-brand flex items-center justify-center group-hover:bg-brand group-hover:text-white transition-all">
+                                                                        <Sparkles className="w-8 h-8" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <h4 className="text-xl font-black text-accent-brown tracking-tighter uppercase italic leading-none mb-1">{selectedService.name}</h4>
+                                                                        <div className="flex items-center gap-4">
+                                                                            <span className="text-2xl font-black text-accent-brown tracking-tighter italic">₱{selectedService.price.toLocaleString()}</span>
+                                                                            {selectedService.loyalty_points > 0 && (
+                                                                                <div className="flex items-center gap-1.5 px-3 py-1 bg-brand text-white rounded-full shadow-lg shadow-brand/20">
+                                                                                    <Award className="w-3 h-3" />
+                                                                                    <span className="text-[9px] font-black uppercase tracking-widest">{selectedService.loyalty_points} Points</span>
                                                                                 </div>
-                                                                                <div className="flex items-end justify-between relative z-10">
-                                                                                    <div className="flex items-center gap-3">
-                                                                                        <span className="text-2xl font-black text-accent-brown tracking-tighter italic">₱{pkg.price.toLocaleString()}</span>
-                                                                                        {pkg.duration_minutes > 0 && (
-                                                                                            <span className="text-[9px] text-accent-brown/40 font-black bg-brand/5 px-3 py-1.5 rounded-full uppercase tracking-widest">{pkg.duration_minutes} MIN</span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={e => { e.stopPropagation(); setPackageModal(pkg); }}
-                                                                                        className="text-[10px] font-black text-brand uppercase tracking-widest flex items-center gap-2 group-hover:gap-3 transition-all"
-                                                                                    >
-                                                                                        Details <ChevronRight className="w-3 h-3" />
-                                                                                    </button>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex flex-col items-end gap-2 pr-2">
+                                                                    <div className="flex items-center gap-3 px-6 py-3 bg-brand/5 rounded-2xl border border-brand/10 self-start md:self-center group-hover:bg-brand group-hover:border-brand transition-all">
+                                                                        <div className="w-4 h-4 rounded-full border-2 border-brand group-hover:border-white flex items-center justify-center">
+                                                                            <div className="w-1.5 h-1.5 rounded-full bg-brand group-hover:bg-white" />
+                                                                        </div>
+                                                                        <span className="text-[10px] font-black uppercase tracking-widest text-brand group-hover:text-white transition-colors">Change Selection</span>
+                                                                    </div>
+                                                                    {selectedService.duration_minutes > 0 && (
+                                                                        <span className="text-[9px] text-accent-brown/40 font-black tracking-widest uppercase mr-4">{selectedService.duration_minutes} MIN DURATION</span>
+                                                                    )}
+                                                                </div>
+                                                            </button>
+                                                        ) : (
+                                                            <div className="space-y-10">
+                                                                {serviceCategory === 'none' ? (
+                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                                                                        <button
+                                                                            onClick={() => setServiceCategory('packages')}
+                                                                            className="group p-10 rounded-[3.5rem] bg-white border-2 border-brand/5 hover:border-brand/40 transition-all text-left relative overflow-hidden shadow-sm hover:shadow-2xl"
+                                                                        >
+                                                                            <div className="relative z-10">
+                                                                                <div className="w-16 h-16 rounded-3xl bg-brand/5 text-brand flex items-center justify-center mb-8 group-hover:bg-brand group-hover:text-white transition-all">
+                                                                                    <LayoutGrid className="w-8 h-8" />
+                                                                                </div>
+                                                                                <h4 className="text-2xl font-black text-accent-brown uppercase italic italic tracking-tighter leading-none mb-3">Clinical Bundles</h4>
+                                                                                <p className="text-[11px] font-bold text-accent-brown/30 uppercase tracking-[0.2em] leading-relaxed">High-fidelity service packages and comprehensive treatments.</p>
+                                                                            </div>
+                                                                            <div className="absolute -bottom-12 -right-12 w-48 h-48 bg-brand/5 rounded-full blur-3xl transition-all group-hover:bg-brand/10" />
+                                                                        </button>
+
+                                                                        <button
+                                                                            onClick={() => setServiceCategory('individual')}
+                                                                            className="group p-10 rounded-[3.5rem] bg-white border-2 border-brand/5 hover:border-brand/40 transition-all text-left relative overflow-hidden shadow-sm hover:shadow-2xl"
+                                                                        >
+                                                                            <div className="relative z-10">
+                                                                                <div className="w-16 h-16 rounded-3xl bg-brand/5 text-brand flex items-center justify-center mb-8 group-hover:bg-brand group-hover:text-white transition-all">
+                                                                                    <Tag className="w-8 h-8" />
+                                                                                </div>
+                                                                                <h4 className="text-2xl font-black text-accent-brown uppercase italic italic tracking-tighter leading-none mb-3">Individual Services</h4>
+                                                                                <p className="text-[11px] font-bold text-accent-brown/30 uppercase tracking-[0.2em] leading-relaxed">Single medical procedures and specific clinic consultations.</p>
+                                                                            </div>
+                                                                            <div className="absolute -bottom-12 -right-12 w-48 h-48 bg-brand/5 rounded-full blur-3xl transition-all group-hover:bg-brand/10" />
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="space-y-10">
+                                                                        <button 
+                                                                            onClick={() => setServiceCategory('none')}
+                                                                            className="flex items-center gap-3 text-[10px] font-black text-brand uppercase tracking-[0.2em] hover:gap-4 transition-all"
+                                                                        >
+                                                                            <ChevronRight className="w-3 h-3 rotate-180" /> Change Service Category
+                                                                        </button>
+
+                                                                        {serviceCategory === 'packages' && (
+                                                                            <div className="space-y-6">
+                                                                                <div className="flex items-center justify-between">
+                                                                                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-brand flex items-center gap-3 italic">
+                                                                                        <Sparkles className="w-4 h-4" /> Comprehensive Packages
+                                                                                    </p>
+                                                                                </div>
+                                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                                                                    {packageServices.map(pkg => (
+                                                                                        <button
+                                                                                            key={pkg.id}
+                                                                                            onClick={() => {
+                                                                                                setForm(f => ({ ...f, service: pkg.name, service_id: pkg.id }));
+                                                                                                setIsServiceListCollapsed(true);
+                                                                                            }}
+                                                                                            className={`p-8 rounded-[2.5rem] border-2 text-left transition-all w-full relative overflow-hidden group ${form.service_id === pkg.id
+                                                                                                ? 'border-brand bg-white shadow-2xl shadow-brand/10'
+                                                                                                : 'border-brand/5 bg-white hover:border-brand/20 shadow-sm hover:shadow-xl'
+                                                                                                }`}
+                                                                                        >
+                                                                                            <div className="flex items-start justify-between gap-4 mb-4 relative z-10">
+                                                                                                <span className="text-lg font-black text-accent-brown uppercase italic leading-none">{pkg.name}</span>
+                                                                                                {form.service_id === pkg.id && <CheckCircle className="w-5 h-5 text-brand shrink-0" />}
+                                                                                            </div>
+                                                                                            <div className="flex items-end justify-between relative z-10">
+                                                                                                <div className="flex items-center gap-3">
+                                                                                                    <span className="text-2xl font-black text-accent-brown tracking-tighter italic">₱{pkg.price.toLocaleString()}</span>
+                                                                                                    {pkg.loyalty_points > 0 && (
+                                                                                                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-full shadow-lg shadow-brand/20">
+                                                                                                            <Award className="w-3.5 h-3.5" />
+                                                                                                            <span className="text-[9px] font-black uppercase tracking-widest">{pkg.loyalty_points} Points</span>
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                    {pkg.duration_minutes > 0 && (
+                                                                                                        <span className="text-[9px] text-accent-brown/40 font-black bg-brand/5 px-3 py-1.5 rounded-full uppercase tracking-widest">{pkg.duration_minutes} MIN</span>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={e => { e.stopPropagation(); setPackageModal(pkg); }}
+                                                                                                    className="px-5 py-2.5 rounded-xl bg-brand/5 border border-brand/10 text-[9px] font-black text-brand uppercase tracking-widest flex items-center gap-2 hover:bg-brand hover:text-white hover:border-brand transition-all shadow-sm active:scale-95"
+                                                                                                >
+                                                                                                    Details <ChevronRight className="w-3 h-3" />
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        </button>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+
+                                                                        {serviceCategory === 'individual' && (
+                                                                            <div className="space-y-8">
+                                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                                                                                    {regularServices.slice((servicePage - 1) * 4, servicePage * 4).map(svc => (
+                                                                                        <button
+                                                                                            key={svc.id}
+                                                                                            onClick={() => {
+                                                                                                setForm(f => ({ ...f, service: svc.name, service_id: svc.id }));
+                                                                                                setIsServiceListCollapsed(true);
+                                                                                            }}
+                                                                                            className={`p-8 rounded-[2.5rem] border-2 text-left transition-all w-full relative overflow-hidden group ${form.service_id === svc.id
+                                                                                                ? 'border-brand bg-white shadow-2xl shadow-brand/10'
+                                                                                                : 'border-brand/5 bg-white hover:border-brand/20 shadow-sm hover:shadow-xl'
+                                                                                                }`}
+                                                                                        >
+                                                                                            <div className="flex items-start justify-between gap-4 mb-4 relative z-10">
+                                                                                                <span className="text-lg font-black text-accent-brown uppercase italic leading-none">{svc.name}</span>
+                                                                                                {form.service_id === svc.id && <CheckCircle className="w-5 h-5 text-brand shrink-0" />}
+                                                                                            </div>
+                                                                                            <div className="flex items-end justify-between relative z-10">
+                                                                                                <div className="flex items-center gap-3">
+                                                                                                    <span className="text-2xl font-black text-accent-brown tracking-tighter italic">₱{svc.price.toLocaleString()}</span>
+                                                                                                    {svc.loyalty_points > 0 && (
+                                                                                                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-full shadow-lg shadow-brand/20">
+                                                                                                            <span className="text-[9px] font-black uppercase tracking-widest">{svc.loyalty_points} Points</span>
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                    {svc.duration_minutes > 0 && (
+                                                                                                        <span className="text-[9px] text-accent-brown/40 font-black bg-brand/5 px-3 py-1.5 rounded-full uppercase tracking-widest">{svc.duration_minutes} MIN</span>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                                <div className="w-10 h-10 rounded-xl bg-brand/5 text-brand flex items-center justify-center group-hover:bg-brand group-hover:text-white transition-all shrink-0">
+                                                                                                    <ChevronRight className="w-5 h-5" />
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </button>
+                                                                                    ))}
                                                                                 </div>
 
-                                                                                <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl transition-all duration-500 -mr-16 -mt-16 ${form.service_id === pkg.id ? 'bg-brand/10' : 'bg-transparent'}`} />
-                                                                            </button>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                                <div className="flex items-center gap-8 py-4">
-                                                                    <div className="flex-1 h-[2px] bg-brand/10" />
-                                                                    <span className="text-[11px] font-black text-accent-brown/50 uppercase tracking-[0.3em] italic leading-none">Or select individual service</span>
-                                                                    <div className="flex-1 h-[2px] bg-brand/10" />
-                                                                </div>
+                                                                                {regularServices.length > 4 && (
+                                                                                    <div className="flex items-center justify-center gap-3">
+                                                                                        <button
+                                                                                            disabled={servicePage === 1}
+                                                                                            onClick={() => setServicePage(p => Math.max(1, p - 1))}
+                                                                                            className="w-10 h-10 rounded-xl border border-brand/10 flex items-center justify-center text-accent-brown disabled:opacity-20 hover:bg-brand/5 transition-all"
+                                                                                        >
+                                                                                            <ChevronRight className="w-4 h-4 rotate-180" />
+                                                                                        </button>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            {Array.from({ length: Math.ceil(regularServices.length / 4) }).map((_, i) => (
+                                                                                                <button
+                                                                                                    key={i}
+                                                                                                    onClick={() => setServicePage(i + 1)}
+                                                                                                    className={`w-2 h-2 rounded-full transition-all ${servicePage === i + 1 ? 'bg-brand w-6' : 'bg-brand/10'}`}
+                                                                                                />
+                                                                                            ))}
+                                                                                        </div>
+                                                                                        <button
+                                                                                            disabled={servicePage === Math.ceil(regularServices.length / 4)}
+                                                                                            onClick={() => setServicePage(p => p + 1)}
+                                                                                            className="w-10 h-10 rounded-xl border border-brand/10 flex items-center justify-center text-accent-brown disabled:opacity-20 hover:bg-brand/5 transition-all"
+                                                                                        >
+                                                                                            <ChevronRight className="w-4 h-4" />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         )}
-
-                                                        {/* Regular Services */}
-                                                        <CustomDropdown
-                                                            label="Select a medical service"
-                                                            value={selectedService && !isPackageService(selectedService) ? `${selectedService.name} — ₱${selectedService.price.toLocaleString()}` : 'Select service...'}
-                                                            options={regularServices.map(s => `${s.name} — ₱${s.price.toLocaleString()}`)}
-                                                            onChange={val => {
-                                                                const svc = regularServices.find(s => `${s.name} — ₱${s.price.toLocaleString()}` === val);
-                                                                setForm(f => ({ ...f, service: svc?.name || '', service_id: svc?.id || 0 }));
-                                                            }}
-                                                        />
                                                     </div>
                                                 </motion.div>
                                             )}
@@ -699,19 +951,62 @@ const ReservationCheckout = () => {
                                             </div>
 
                                             <div className="space-y-12">
-                                                <div className="relative group">
-                                                    <label className="block text-[12px] font-black uppercase tracking-[0.3em] text-accent-brown/70 mb-5 ml-2 italic">Pet's Name</label>
-                                                    <div className="relative">
-                                                        <input
-                                                            type="text"
-                                                            value={form.pet_name}
-                                                            onChange={e => setForm(f => ({ ...f, pet_name: e.target.value }))}
-                                                            placeholder="E.G. BUDDY, LUNA, MAX..."
-                                                            className="w-full bg-white border-2 border-brand/5 focus:border-brand focus:ring-4 focus:ring-brand/5 rounded-[2rem] px-8 py-5 text-base font-black text-accent-brown outline-none transition-all placeholder:text-accent-brown/10 uppercase italic"
-                                                        />
-                                                        <div className="absolute right-6 top-1/2 -translate-y-1/2 p-3 bg-brand/5 rounded-2xl text-accent-brown/40 group-focus-within:text-brand transition-colors">
-                                                            <Activity className="w-5 h-5" />
+                                                <div>
+                                                    <div className="flex items-center gap-3 mb-6 ml-2">
+                                                        <div className="w-1.5 h-6 bg-brand rounded-full" />
+                                                        <p className="text-[12px] font-black uppercase tracking-[0.3em] text-accent-brown/70 italic leading-none">Pet Classification</p>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        {[
+                                                            { id: 'Dog', label: 'Dogs', icon: Dog },
+                                                            { id: 'Cat', label: 'Cats', icon: Cat },
+                                                        ].map((type) => (
+                                                            <button
+                                                                key={type.id}
+                                                                onClick={() => setForm(f => ({ ...f, pet_type: type.id, pet_breed: '' }))}
+                                                                className={`p-6 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-4 group ${form.pet_type === type.id
+                                                                    ? 'border-brand bg-white shadow-xl shadow-brand/10'
+                                                                    : 'border-brand/5 bg-white hover:border-brand/20'
+                                                                    }`}
+                                                            >
+                                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${form.pet_type === type.id ? 'bg-brand text-white shadow-lg' : 'bg-brand/5 text-brand group-hover:bg-brand/10'
+                                                                    }`}>
+                                                                    <type.icon className="w-6 h-6" />
+                                                                </div>
+                                                                <span className={`text-[10px] font-black uppercase tracking-widest ${form.pet_type === type.id ? 'text-accent-brown' : 'text-accent-brown/40'
+                                                                    }`}>{type.label}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                    <div className="relative group">
+                                                        <label className="block text-[12px] font-black uppercase tracking-[0.3em] text-accent-brown/70 mb-5 ml-2 italic">Pet's Name</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={form.pet_name}
+                                                                onChange={e => setForm(f => ({ ...f, pet_name: e.target.value }))}
+                                                                placeholder="E.G. BUDDY, LUNA, MAX..."
+                                                                className="w-full bg-white border-2 border-brand/5 focus:border-brand focus:ring-4 focus:ring-brand/5 rounded-[2rem] px-8 py-5 text-base font-black text-accent-brown outline-none transition-all placeholder:text-accent-brown/10 uppercase italic"
+                                                            />
+                                                            <div className="absolute right-6 top-1/2 -translate-y-1/2 p-3 bg-brand/5 rounded-2xl text-accent-brown/40 group-focus-within:text-brand transition-colors">
+                                                                <Activity className="w-5 h-5" />
+                                                            </div>
                                                         </div>
+                                                    </div>
+
+                                                    <div className="relative group">
+                                                        <label className="block text-[12px] font-black uppercase tracking-[0.3em] text-accent-brown/70 mb-5 ml-2 italic">Pet Breed</label>
+                                                        <CustomDropdown
+                                                            options={form.pet_type === 'Dog' ? DOG_BREEDS : CAT_BREEDS}
+                                                            value={form.pet_breed}
+                                                            onChange={val => setForm(f => ({ ...f, pet_breed: val }))}
+                                                            placeholder="SELECT BREED..."
+                                                            icon={<Dna className="w-5 h-5" />}
+                                                            className="w-full bg-white border-2 border-brand/5 focus:border-brand focus:ring-4 focus:ring-brand/5 rounded-[2rem] text-base font-black text-accent-brown outline-none transition-all placeholder:text-accent-brown/10 uppercase italic"
+                                                        />
                                                     </div>
                                                 </div>
 
@@ -952,36 +1247,35 @@ const ReservationCheckout = () => {
                                             <div className="space-y-10">
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                                     <div className="space-y-4">
-                                                        <span className="text-[9px] font-black uppercase text-accent-brown/40 tracking-[0.3em] block ml-2">Assigned Facility</span>
+                                                        <span className="text-[11px] font-black uppercase text-accent-brown/40 tracking-[0.3em] block ml-2">Assigned Facility</span>
                                                         <div className="p-8 bg-white border border-brand/5 rounded-[2.5rem] flex gap-6">
                                                             <div className="w-16 h-16 bg-brand/5 rounded-2xl flex items-center justify-center shrink-0 border border-brand/5">
                                                                 <Activity className="w-8 h-8 text-brand" />
                                                             </div>
                                                             <div className="min-w-0 flex flex-col justify-center">
-                                                                <p className="text-base font-black text-accent-brown leading-none uppercase italic truncate mb-2">{selectedOption?.clinic_name}</p>
+                                                                <p className="text-lg font-black text-accent-brown leading-none uppercase italic truncate mb-2">{selectedOption?.clinic_name}</p>
                                                                 <div className="flex items-center gap-2 text-accent-brown/30">
                                                                     <MapPin className="w-3 h-3" />
-                                                                    <p className="text-[10px] font-bold uppercase truncate">{selectedOption?.address_line1}</p>
+                                                                    <p className="text-[11px] font-bold uppercase truncate">{selectedOption?.address_line1}</p>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
-
                                                     <div className="space-y-4">
-                                                        <span className="text-[9px] font-black uppercase text-accent-brown/40 tracking-[0.3em] block ml-2">Selected Procedure</span>
+                                                        <span className="text-[11px] font-black uppercase text-accent-brown/40 tracking-[0.3em] block ml-2">Selected Procedure</span>
                                                         <div className="p-8 bg-white border border-brand/5 rounded-[2.5rem] flex items-center justify-between">
                                                             <div className="flex items-center gap-6">
                                                                 <div className="w-16 h-16 bg-brand/5 rounded-2xl flex items-center justify-center border border-brand/5">
                                                                     <Eye className="w-8 h-8 text-brand" />
                                                                 </div>
                                                                 <div>
-                                                                    <p className="text-base font-black text-accent-brown leading-none uppercase italic mb-2">{selectedService?.name}</p>
+                                                                    <p className="text-lg font-black text-accent-brown leading-none uppercase italic mb-2">{selectedService?.name}</p>
                                                                     <div className="flex items-center gap-3">
 
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                            <p className="text-xl font-black text-accent-brown tracking-tighter italic">₱{selectedService?.price.toLocaleString()}</p>
+                                                            <p className="text-2xl font-black text-accent-brown tracking-tighter italic">₱{selectedService?.price.toLocaleString()}</p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -993,50 +1287,81 @@ const ReservationCheckout = () => {
                                                             <div className="p-6 rounded-[2rem] bg-white border border-brand/10 flex items-center gap-5 shadow-sm">
                                                                 <Calendar className="w-6 h-6 text-brand" />
                                                                 <div className="min-w-0">
-                                                                    <p className="text-[9px] font-black text-accent-brown uppercase tracking-tighter truncate leading-none mb-1">{form.date}</p>
-                                                                    <p className="text-[7px] font-black text-accent-brown/20 uppercase tracking-widest leading-none">Arrival Date</p>
+                                                                    <p className="text-sm font-black text-accent-brown uppercase tracking-tight truncate leading-none mb-2">{formatDate(form.date)}</p>
+                                                                    <p className="text-[10px] font-black text-accent-brown/20 uppercase tracking-[0.2em] leading-none mb-1">Arrival Date</p>
                                                                 </div>
                                                             </div>
                                                             <div className="p-6 rounded-[2rem] bg-white border border-brand/10 flex items-center gap-5 shadow-sm">
                                                                 <Clock className="w-6 h-6 text-brand" />
                                                                 <div className="min-w-0">
-                                                                    <p className="text-[9px] font-black text-accent-brown uppercase tracking-tighter truncate leading-none mb-1">{form.time}</p>
-                                                                    <p className="text-[7px] font-black text-accent-brown/20 uppercase tracking-widest leading-none">Arrival Time</p>
+                                                                    <p className="text-sm font-black text-accent-brown uppercase tracking-tight truncate leading-none mb-2">{form.time}</p>
+                                                                    <p className="text-[10px] font-black text-accent-brown/20 uppercase tracking-[0.2em] leading-none mb-1">Arrival Time</p>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
 
                                                     <div className="space-y-4">
-                                                        <span className="text-[9px] font-black uppercase text-accent-brown/40 tracking-[0.3em] block ml-2">Payment selection</span>
-                                                        <div className="p-8 bg-white border border-brand/10 rounded-[2.5rem] flex items-center gap-6 shadow-sm">
-                                                            <div className="w-14 h-14 bg-brand/5 rounded-2xl flex items-center justify-center border border-brand/10">
-                                                                <CreditCard className="w-6 h-6 text-brand" />
+                                                        <span className="text-[11px] font-black uppercase text-accent-brown/40 tracking-[0.3em] block ml-2">Pet Information</span>
+                                                        <div className="p-8 bg-white border border-brand/5 rounded-[2.5rem] flex gap-6">
+                                                            <div className="w-16 h-16 bg-brand/5 rounded-2xl flex items-center justify-center shrink-0 border border-brand/5">
+                                                                {form.pet_type === 'Dog' ? <Dog className="w-8 h-8 text-brand" /> : <Cat className="w-8 h-8 text-brand" />}
                                                             </div>
-                                                            <div>
-                                                                <p className="text-base font-black text-accent-brown leading-none uppercase italic mb-1">{selectedPaymentMethod === 'cash' ? 'Clinic Counter' : selectedPaymentMethod.toUpperCase()}</p>
-                                                                <p className="text-[9px] font-bold text-accent-brown/40 uppercase tracking-widest leading-none">Authorization Method</p>
+                                                            <div className="min-w-0 flex flex-col justify-center">
+                                                                <p className="text-lg font-black text-accent-brown leading-none uppercase italic truncate mb-2">{form.pet_name || 'UNNAMED PET'}</p>
+                                                                <div className="flex items-center gap-2 text-accent-brown/30">
+                                                                    <Dna className="w-3 h-3" />
+                                                                    <p className="text-[11px] font-bold uppercase truncate">{form.pet_type} &bull; {form.pet_breed || 'MIXED BREED'}</p>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="p-1 bg-brand-dark rounded-[3.5rem] overflow-hidden shadow-2xl mt-12">
-                                                    <div className="bg-brand-dark p-10 flex flex-col md:flex-row items-center justify-between gap-10 relative overflow-hidden border border-white/5 rounded-[3.4rem]">
-                                                        <div className="absolute top-0 right-0 w-80 h-80 bg-brand/10 rounded-full blur-[100px] -mr-40 -mt-40 pointer-events-none" />
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                    <div className="space-y-4">
+                                                        <span className="text-[11px] font-black uppercase text-accent-brown/40 tracking-[0.3em] block ml-2">How you'll pay</span>
+                                                        <div className="p-8 bg-white border border-brand/10 rounded-[2.5rem] flex items-center gap-6 shadow-sm">
+                                                            <div className="w-14 h-14 bg-brand/5 rounded-2xl flex items-center justify-center border border-brand/10">
+                                                                <CreditCard className="w-6 h-6 text-brand" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-lg font-black text-accent-brown leading-none uppercase italic mb-1">{selectedPaymentMethod === 'cash' ? 'Clinic Counter' : selectedPaymentMethod.toUpperCase()}</p>
+                                                                <p className="text-[11px] font-bold text-accent-brown/40 uppercase tracking-widest leading-none">Payment Type</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-4">
+                                                        <span className="text-[11px] font-black uppercase text-accent-brown/40 tracking-[0.3em] block ml-2">Customer Name</span>
+                                                        <div className="p-8 bg-white border border-brand/5 rounded-[2.5rem] flex gap-6">
+                                                            <div className="w-16 h-16 bg-brand/5 rounded-2xl flex items-center justify-center shrink-0 border border-brand/5">
+                                                                <User className="w-8 h-8 text-brand" />
+                                                            </div>
+                                                            <div className="min-w-0 flex flex-col justify-center">
+                                                                <p className="text-lg font-black text-accent-brown leading-none uppercase italic truncate mb-1">{user?.name || user?.first_name || 'Customer'}</p>
+                                                                <p className="text-[11px] font-bold text-accent-brown/40 uppercase tracking-widest leading-none">Pet's Owner</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="p-1 bg-brand/10 rounded-[3.5rem] overflow-hidden shadow-2xl mt-12 border border-brand/5">
+                                                    <div className="bg-white p-10 flex flex-col md:flex-row items-center justify-between gap-10 relative overflow-hidden rounded-[3.4rem]">
+                                                        <div className="absolute top-0 right-0 w-80 h-80 bg-brand/5 rounded-full blur-[100px] -mr-40 -mt-40 pointer-events-none" />
                                                         <div className="relative z-10">
-                                                            <p className="text-[9px] font-black uppercase tracking-[0.5em] text-white/30 mb-2">Final Settlement Amount</p>
-                                                            <h4 className="text-5xl font-black text-white uppercase italic tracking-tighter leading-none mb-2">₱{estimatedTotal.toLocaleString()}</h4>
+                                                            <p className="text-[11px] font-black uppercase tracking-[0.5em] text-accent-brown/40 mb-2">Total Amount</p>
+                                                            <h4 className="text-5xl font-black text-brand-dark uppercase italic tracking-tighter leading-none mb-2">₱{estimatedTotal.toLocaleString()}</h4>
                                                         </div>
                                                         <motion.button
                                                             whileHover={{ scale: 1.05 }}
                                                             whileTap={{ scale: 0.95 }}
-                                                            onClick={handleSubmit}
+                                                            onClick={handleConfirmFinalize}
                                                             disabled={submitting}
-                                                            className="relative z-10 bg-white text-brand-dark px-12 py-6 rounded-[2rem] font-black text-[11px] uppercase tracking-widest shadow-2xl shadow-brand-dark/30 flex items-center gap-4 disabled:opacity-50 min-w-[280px] justify-center"
+                                                            className="relative z-10 bg-brand text-white px-12 py-6 rounded-[2rem] font-black text-[11px] uppercase tracking-widest shadow-2xl shadow-brand/30 flex items-center gap-4 disabled:opacity-50 min-w-[280px] justify-center"
                                                         >
                                                             {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5 animate-pulse" />}
-                                                            Finalize Booking
+                                                            Complete Booking
                                                         </motion.button>
                                                     </div>
                                                 </div>
@@ -1063,84 +1388,120 @@ const ReservationCheckout = () => {
                         {wizardStep === 4 && (
                             <div className="w-full lg:w-[450px] space-y-8">
                                 <div className="sticky top-12 space-y-8">
-                                    <div className="bg-brand rounded-[2.5rem] p-8 text-white shadow-2xl border border-white/20 overflow-hidden relative">
-                                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl pointer-events-none" />
+                                    <div className="bg-white rounded-[2.5rem] p-8 text-accent-brown shadow-2xl border border-brand/10 overflow-hidden relative">
+                                        <div className="absolute top-0 right-0 w-32 h-32 bg-brand/5 rounded-full -mr-16 -mt-16 blur-2xl pointer-events-none" />
 
                                         <div className="relative z-10">
                                             <div className="flex items-center justify-between mb-8">
-                                                <h3 className="text-2xl font-black italic tracking-tighter text-white">Receipt Summary</h3>
-                                                <Tag className="w-5 h-5 text-white/50" />
+                                                <h3 className="text-2xl font-black italic tracking-tighter text-brand-dark">Receipt Summary</h3>
+                                                <Tag className="w-5 h-5 text-brand/20" />
                                             </div>
 
                                             <div className="space-y-4 mb-8">
-                                                <span className="text-[9px] font-black uppercase text-white/40 tracking-[0.3em] block">Assigned Facility</span>
+                                                <span className="text-[11px] font-black uppercase text-accent-brown/40 tracking-[0.3em] block">Your Clinic</span>
                                                 {selectedOption ? (
                                                     <div className="flex group items-center">
                                                         <div className="min-w-0 flex flex-col justify-center">
-                                                            <h4 className="font-black text-[10px] tracking-wider truncate mb-0.5 text-white">{selectedOption.clinic_name}</h4>
-                                                            <p className="text-[9px] font-bold text-white/60 tracking-widest truncate">{selectedOption.address_line1}</p>
+                                                            <h4 className="font-black text-xs tracking-wider truncate mb-0.5 text-accent-brown">{selectedOption.clinic_name}</h4>
+                                                            <p className="text-[11px] font-bold text-accent-brown/40 tracking-widest truncate">{selectedOption.address_line1}</p>
                                                         </div>
                                                     </div>
                                                 ) : (
                                                     <div className="py-2 opacity-50">
-                                                        <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">—</p>
+                                                        <p className="text-[11px] font-black text-accent-brown/20 uppercase tracking-widest">—</p>
                                                     </div>
                                                 )}
                                             </div>
 
-                                            <div className="space-y-5 mb-10 border-t border-white/20 pt-8">
-                                                <span className="text-[9px] font-black uppercase text-white/40 tracking-[0.3em] block">Pet's Owner</span>
-                                                <div className="flex group items-center">
+                                            <div className="space-y-5 mb-10 border-t border-brand/5 pt-8">
+                                                <span className="text-[11px] font-black uppercase text-accent-brown/40 tracking-[0.3em] block">Pet Information</span>
+                                                <div className="flex group items-center gap-4">
                                                     <div className="min-w-0 flex flex-col justify-center">
-                                                        <h4 className="font-black text-[10px] tracking-wider truncate mb-0.5 text-white">{user?.name || user?.first_name || 'Customer'}</h4>
-                                                        <p className="text-[9px] font-bold text-white/60 tracking-widest truncate">Owner of {form.pet_name || 'Pet'}</p>
+                                                        <h4 className="font-black text-xs tracking-wider truncate mb-0.5 text-accent-brown">{form.pet_name}</h4>
+                                                        <p className="text-[11px] font-bold text-accent-brown/40 tracking-widest truncate">{form.pet_type} &bull; {form.pet_breed}</p>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="space-y-5 mb-10 border-t border-white/20 pt-8">
-                                                <span className="text-[9px] font-black uppercase text-white/40 tracking-[0.3em] block">Selected Procedure</span>
+                                            <div className="space-y-5 mb-10 border-t border-brand/5 pt-8">
+                                                <span className="text-[11px] font-black uppercase text-accent-brown/40 tracking-[0.3em] block">Customer Name</span>
+                                                <div className="flex group items-center gap-4">
+                                                    <div className="min-w-0 flex flex-col justify-center">
+                                                        <h4 className="font-black text-xs tracking-wider truncate mb-0.5 text-accent-brown">{user?.name || user?.first_name || 'Customer'}</h4>
+                                                        <p className="text-[11px] font-bold text-accent-brown/40 tracking-widest truncate">Pet's Owner</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+
+                                            <div className="space-y-5 mb-10 border-t border-brand/5 pt-8">
+                                                <span className="text-[11px] font-black uppercase text-accent-brown/40 tracking-[0.3em] block">Your Visit</span>
+                                                <div className="flex group items-center gap-4">
+                                                    <div className="min-w-0 flex flex-col justify-center">
+                                                        <h4 className="font-black text-xs tracking-wider truncate mb-0.5 text-accent-brown">{formatDate(form.date)}</h4>
+                                                        <p className="text-[11px] font-bold text-accent-brown/40 tracking-widest truncate">{form.time} Arrival</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-5 mb-10 border-t border-brand/5 pt-8">
+                                                <span className="text-[11px] font-black uppercase text-accent-brown/40 tracking-[0.3em] block">Payment Method</span>
+                                                <div className="flex group items-center gap-4">
+                                                    <div className="min-w-0 flex flex-col justify-center">
+                                                        <h4 className="font-black text-xs tracking-wider truncate mb-0.5 text-accent-brown uppercase">{selectedPaymentMethod === 'cash' ? 'Clinic Counter' : selectedPaymentMethod}</h4>
+                                                        <p className="text-[11px] font-bold text-accent-brown/40 tracking-widest truncate">Payment Mode</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-5 mb-10 border-t border-brand/5 pt-8">
+                                                <span className="text-[11px] font-black uppercase text-accent-brown/40 tracking-[0.3em] block">Your Service</span>
                                                 {selectedService ? (
                                                     <div className="flex group justify-between items-center">
-                                                        <div className="flex items-center">
+                                                        <div className="flex items-center gap-6">
                                                             <div className="min-w-0 flex flex-col justify-center">
-                                                                <h4 className="font-black text-[10px] tracking-wider truncate mb-0.5 text-white">{selectedService.name}</h4>
-
+                                                                <h4 className="font-black text-xs tracking-wider truncate mb-0.5 text-accent-brown">{selectedService.name}</h4>
+                                                                {selectedService.loyalty_points > 0 && (
+                                                                    <div className="flex items-center gap-1.5 text-brand">
+                                                                        <Award className="w-3 h-3" />
+                                                                        <span className="text-[9px] font-black uppercase tracking-widest">+{selectedService.loyalty_points} Points</span>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
-                                                        <span className="font-black text-xs tabular-nums text-white">₱{selectedService.price.toLocaleString()}</span>
+                                                        <span className="font-black text-sm tabular-nums text-accent-brown">₱{selectedService.price.toLocaleString()}</span>
                                                     </div>
                                                 ) : (
                                                     <div className="py-2 opacity-50">
-                                                        <p className="text-[9px] font-black text-white/40 uppercase tracking-widest">—</p>
+                                                        <p className="text-[11px] font-black text-accent-brown/20 uppercase tracking-widest">—</p>
                                                     </div>
                                                 )}
                                             </div>
 
-                                            <div className="space-y-4 pt-8 border-t border-white/20 text-[10px] font-black uppercase tracking-[0.2em] mb-10">
-                                                <div className="flex justify-between text-white/60">
+                                            <div className="space-y-4 pt-8 border-t border-brand/5 text-[10px] font-black uppercase tracking-[0.2em] mb-10">
+                                                <div className="flex justify-between text-accent-brown/40">
                                                     <span>Subtotal</span>
-                                                    <span className="text-white">₱{baseTotal.toLocaleString()}</span>
+                                                    <span className="text-accent-brown">₱{baseTotal.toLocaleString()}</span>
                                                 </div>
                                                 {appliedVoucher && (
-                                                    <div className="flex justify-between items-start text-white">
+                                                    <div className="flex justify-between items-start text-accent-brown">
                                                         <div className="flex flex-col gap-1.5">
-                                                            <span className="text-emerald-300">Reward Applied</span>
-                                                            <span className="text-[7.5px] font-bold text-white/40 uppercase tracking-[0.3em]">
+                                                            <span className="text-emerald-600">Reward Applied</span>
+                                                            <span className="text-[7.5px] font-bold text-accent-brown/20 uppercase tracking-[0.3em]">
                                                                 {appliedVoucher.type || 'Service'} &bull; {appliedVoucher.code}
                                                             </span>
                                                         </div>
-                                                        <span className="text-emerald-300">-₱{baseTotal.toLocaleString()}</span>
+                                                        <span className="text-emerald-600">-₱{baseTotal.toLocaleString()}</span>
                                                     </div>
                                                 )}
                                             </div>
 
-                                            <div className="flex justify-between items-end mb-4 border-b border-white/20 pb-8">
+                                            <div className="flex justify-between items-end mb-4 border-b border-brand/5 pb-8">
                                                 <div>
-                                                    <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.3em] mb-1">Total Settlement</p>
-                                                    <h2 className="text-4xl font-black tracking-tighter italic text-white leading-none">₱{estimatedTotal.toLocaleString()}</h2>
+                                                    <p className="text-[9px] font-black text-accent-brown/40 uppercase tracking-[0.3em] mb-1">Total Settlement</p>
+                                                    <h2 className="text-4xl font-black tracking-tighter italic text-brand-dark leading-none">₱{estimatedTotal.toLocaleString()}</h2>
                                                 </div>
-                                                <ShieldCheck className="w-8 h-8 text-white/20" />
+                                                <ShieldCheck className="w-8 h-8 text-brand/10" />
                                             </div>
                                         </div>
                                     </div>
@@ -1178,7 +1539,8 @@ const ReservationCheckout = () => {
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
-                                className="fixed inset-0 z-[99999] flex items-center justify-center p-6 bg-[#FDF0D5]"
+                                className="fixed inset-0 z-[99999] flex items-center justify-center p-6 backdrop-blur-2xl bg-accent-brown/30"
+                                style={{ backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)' }}
                                 onClick={() => setPackageModal(null)}
                             >
                                 <motion.div
@@ -1190,35 +1552,28 @@ const ReservationCheckout = () => {
                                     onClick={e => e.stopPropagation()}
                                 >
                                     {/* Modal Header */}
-                                    <div className="bg-brand-dark p-12 relative overflow-hidden sm:w-[40%] flex flex-col justify-center">
-                                        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32" />
+                                    <div className="bg-white p-12 relative overflow-hidden sm:w-[40%] flex flex-col justify-center border-r border-brand/5">
+                                        <div className="absolute top-0 right-0 w-64 h-64 bg-brand/5 rounded-full blur-3xl -mr-32 -mt-32" />
                                         <div className="relative z-10 flex flex-col h-full justify-between">
                                             <div>
                                                 <div className="flex items-center gap-3 mb-6">
-                                                    <div className="w-2 h-8 bg-brand-light rounded-full" />
-                                                    <span className="text-[11px] font-black uppercase tracking-[0.5em] text-white/40 leading-none">Clinical Bundle</span>
+                                                    <div className="w-2 h-8 bg-brand rounded-full" />
+                                                    <span className="text-[11px] font-black uppercase tracking-[0.5em] text-accent-brown/30 leading-none">Pet Care Package</span>
                                                 </div>
-                                                <h3 className="text-4xl sm:text-5xl font-black text-white uppercase italic leading-none tracking-tighter mb-4">{packageModal.name}</h3>
-                                                <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] leading-relaxed">High-fidelity service orchestration for your clinical needs.</p>
+                                                <h3 className="text-4xl sm:text-5xl font-black text-accent-brown uppercase italic leading-none tracking-tighter mb-4">{packageModal.name}</h3>
+                                                <p className="text-[10px] font-bold text-accent-brown/20 uppercase tracking-[0.2em] leading-relaxed">Everything your pet needs in one efficient visit.</p>
                                             </div>
 
-                                            <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 mt-12">
+                                            <div className="bg-brand/5 border border-brand/10 rounded-[2.5rem] p-8 mt-12">
                                                 <div className="flex items-center gap-4 mb-4">
-                                                    <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center">
-                                                        <Sparkles className="w-5 h-5 text-brand-light" />
+                                                    <div className="w-10 h-10 rounded-2xl bg-brand text-white flex items-center justify-center shadow-lg shadow-brand/20">
+                                                        <Sparkles className="w-5 h-5" />
                                                     </div>
-                                                    <span className="text-[11px] font-black text-white uppercase tracking-widest leading-none">Included Services</span>
+                                                    <span className="text-[11px] font-black text-accent-brown uppercase tracking-widest leading-none">What's Included</span>
                                                 </div>
-                                                <p className="text-[10px] font-bold text-white/40 leading-relaxed italic uppercase">This bundle integrates {items.length} laboratory and clinical procedures into a single efficient session.</p>
+                                                <p className="text-[10px] font-bold text-accent-brown/40 leading-relaxed italic uppercase">This bundle includes all the care your pet needs in a single efficient session.</p>
                                             </div>
                                         </div>
-
-                                        <button
-                                            onClick={() => setPackageModal(null)}
-                                            className="absolute top-8 right-8 w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0 sm:hidden"
-                                        >
-                                            <X className="w-5 h-5" />
-                                        </button>
                                     </div>
 
                                     {/* Modal Body */}
@@ -1234,10 +1589,17 @@ const ReservationCheckout = () => {
                                                 <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest mb-1">Standard Price</p>
                                                 <span className="text-4xl font-black text-accent-brown tracking-tighter italic leading-none">₱{packageModal.price.toLocaleString()}</span>
                                             </div>
+                                            {packageModal.loyalty_points > 0 && (
+                                                <div className="bg-brand text-white px-6 py-3 rounded-2xl shadow-lg shadow-brand/20 mb-[2px]">
+                                                    <span className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest leading-none">
+                                                        <Award className="w-4 h-4" /> {packageModal.loyalty_points} Points Reward
+                                                    </span>
+                                                </div>
+                                            )}
                                             {packageModal.duration_minutes > 0 && (
                                                 <div className="bg-brand/5 px-6 py-3 rounded-2xl border border-brand/10 mb-[2px]">
                                                     <span className="flex items-center gap-3 text-[10px] font-black text-accent-brown uppercase tracking-widest leading-none">
-                                                        <Clock3 className="w-4 h-4 text-brand" /> {packageModal.duration_minutes} MIN ALLOCATION
+                                                        <Clock3 className="w-4 h-4 text-brand" /> {packageModal.duration_minutes} MIN ESTIMATED TIME
                                                     </span>
                                                 </div>
                                             )}
@@ -1246,7 +1608,7 @@ const ReservationCheckout = () => {
                                         <div className="space-y-6">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-1 h-4 bg-brand rounded-full" />
-                                                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-accent-brown/40">Technical Specifications</p>
+                                                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-accent-brown/40">Package Details</p>
                                             </div>
 
                                             {items.length > 0 ? (
@@ -1279,9 +1641,9 @@ const ReservationCheckout = () => {
                                                     }`}
                                             >
                                                 {form.service_id === packageModal.id ? (
-                                                    <><CheckCircle className="w-5 h-5" /> Bundle Selected</>
+                                                    <><CheckCircle className="w-5 h-5" /> Package Selected</>
                                                 ) : (
-                                                    <><Sparkles className="w-5 h-5" /> Commit to Bundle</>
+                                                    <><Sparkles className="w-5 h-5" /> Select This Package</>
                                                 )}
                                             </button>
                                         </div>
@@ -1300,6 +1662,80 @@ const ReservationCheckout = () => {
                     amount={qrAmount}
                     status={qrStatus}
                 />
+
+                {/* Confirmation Modal */}
+                <AnimatePresence>
+                    {isConfirmModalOpen && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-12">
+                            <motion.div
+                                 initial={{ opacity: 0 }}
+                                 animate={{ opacity: 1 }}
+                                 exit={{ opacity: 0 }}
+                                 onClick={() => setIsConfirmModalOpen(false)}
+                                 className="absolute inset-0 bg-accent-brown/30 backdrop-blur-2xl"
+                                 style={{ backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)' }}
+                            />
+                            
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                                className="bg-white rounded-[3rem] p-10 sm:p-12 w-full max-w-[600px] shadow-2xl relative z-10 overflow-hidden border border-brand/10"
+                            >
+                                <div className="absolute top-0 right-0 w-80 h-80 bg-brand/5 rounded-full -mr-16 -mt-16 blur-3xl pointer-events-none" />
+                                
+                                <div className="relative z-10">
+                                    <div className="w-20 h-20 bg-brand/5 rounded-3xl flex items-center justify-center mb-8 border border-brand/5">
+                                        <Sparkles className="w-10 h-10 text-brand animate-pulse" />
+                                    </div>
+                                    
+                                    <h2 className="text-4xl font-black italic tracking-tighter text-brand-dark leading-tight mb-4 uppercase">
+                                        Commit Invitation?
+                                    </h2>
+                                    <p className="text-accent-brown/50 font-bold text-sm tracking-wide leading-relaxed mb-10 max-w-[400px] uppercase">
+                                        You are about to finalize a clinical reservation for <span className="text-brand">{form.pet_name}</span> at <span className="text-brand">{selectedOption?.clinic_name}</span>. This commitment cannot be modified once sent.
+                                    </p>
+                                    
+                                    <div className="space-y-4 mb-12">
+                                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-brand/5 border border-brand/5">
+                                            <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-brand">
+                                                <Calendar className="w-4 h-4" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-widest leading-none mb-1 text-xs">Clinical Schedule</p>
+                                                <p className="text-xs font-black text-accent-brown uppercase italic leading-none">{formatDate(form.date)} &bull; {form.time}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-brand/5 border border-brand/5 text-xs">
+                                            <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-brand">
+                                                <Tag className="w-4 h-4" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-widest leading-none mb-1 text-xs">Total Settlement</p>
+                                                <p className="text-xs font-black text-accent-brown uppercase italic leading-none">₱{estimatedTotal.toLocaleString()}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex flex-col sm:flex-row gap-4">
+                                        <button
+                                            onClick={() => setIsConfirmModalOpen(false)}
+                                            className="flex-1 px-8 py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all bg-slate-50 text-accent-brown/40 border border-brand/5 hover:text-accent-brown"
+                                        >
+                                            Revise Details
+                                        </button>
+                                        <button
+                                            onClick={handleSubmit}
+                                            className="flex-1 px-8 py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all bg-brand text-white shadow-xl shadow-brand/20 hover:scale-[1.02] active:scale-[0.98]"
+                                        >
+                                            Authorize & Commit
+                                        </button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
             </DashboardLayout>
         </APIProvider>
     );

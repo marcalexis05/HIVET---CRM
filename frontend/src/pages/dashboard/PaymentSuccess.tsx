@@ -63,15 +63,15 @@ const PaymentSuccess = () => {
                 </div>
                 
                 <h1 className="text-3xl font-black text-accent-brown mb-3">Payment Successful!</h1>
-                <p className="text-accent-brown/60 font-medium mb-8 text-sm">
+                <p className="text-black font-medium mb-8 text-sm">
                     Your payment was processed securely via PayMongo. Your order has been placed and is now being reviewed by the clinic.
                 </p>
 
                 <div className="mb-8 px-6 py-4 bg-brand-dark/5 rounded-[2rem] border border-accent-brown/5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/40 mb-1">Redirecting to Dashboard</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black mb-1">Redirecting to Dashboard</p>
                     <div className="flex items-center justify-center gap-2">
                         <span className="text-2xl font-black text-accent-brown">{seconds}</span>
-                        <span className="text-[10px] font-bold text-accent-brown/30 uppercase tracking-widest">seconds remaining</span>
+                        <span className="text-[10px] font-bold text-black uppercase tracking-widest">seconds remaining</span>
                     </div>
                 </div>
                 
@@ -94,14 +94,14 @@ const PaymentSuccess = () => {
 
                     <button 
                         onClick={() => navigate('/dashboard/customer')}
-                        className="w-full py-4 text-accent-brown/40 hover:text-accent-brown font-black uppercase tracking-widest text-[9px] transition-colors cursor-pointer"
+                        className="w-full py-4 text-black font-black uppercase tracking-widest text-[9px] transition-colors cursor-pointer"
                     >
                         Back to Customer Hub
                     </button>
                 </div>
                 
                 <div className="mt-8 pt-8 border-t border-brand/10">
-                    <p className="text-[10px] text-accent-brown/40 font-bold uppercase tracking-widest">
+                    <p className="text-[10px] text-black font-bold uppercase tracking-widest">
                         A confirmation receipt has been sent to your email.
                     </p>
                 </div>

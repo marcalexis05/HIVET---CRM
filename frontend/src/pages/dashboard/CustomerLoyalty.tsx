@@ -163,7 +163,7 @@ const CustomerLoyalty = () => {
             <DashboardLayout title="">
                 <div className="flex flex-col items-center justify-center py-40 gap-4">
                     <Loader2 className="w-10 h-10 text-accent-brown animate-spin" />
-                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown/40">Accessing Rewards Vault...</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-black">Accessing Rewards Vault...</p>
                 </div>
             </DashboardLayout>
         );
@@ -226,10 +226,10 @@ const CustomerLoyalty = () => {
                                 <div className="space-y-1.5">
                                     <div className="flex items-center gap-3">
                                         <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                                        <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/90">Active Membership</span>
+                                        <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white">Active Membership</span>
                                     </div>
                                     <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter uppercase italic drop-shadow-lg">
-                                        {loyalty.tier} <span className="text-white/90">Member</span>
+                                        {loyalty.tier} <span className="text-white">Member</span>
                                     </h1>
                                 </div>
                             </div>
@@ -239,9 +239,9 @@ const CustomerLoyalty = () => {
                                     <span className="text-5xl md:text-7xl font-black text-white tracking-tighter tabular-nums leading-none">
                                         {loyalty.points.toLocaleString()}
                                     </span>
-                                    <span className="text-[10px] font-black text-white/80 tracking-[0.3em] uppercase italic">Total Points</span>
+                                    <span className="text-[10px] font-black text-white tracking-[0.3em] uppercase italic">Total Points</span>
                                 </div>
-                                <p className="text-sm font-medium text-white/90 max-w-xl leading-relaxed">
+                                <p className="text-sm font-medium text-white max-w-xl leading-relaxed">
                                     Your loyalty tier is calculated based on your total interaction with Hi-Vet. Continue earning to unlock exclusive rewards and priority clinic services.
                                 </p>
                             </div>
@@ -251,12 +251,12 @@ const CustomerLoyalty = () => {
                         <div className="lg:w-[320px] bg-white/5 backdrop-blur-xl rounded-3xl p-8 border border-white/10 shadow-2xl flex flex-col gap-6">
                             <div className="flex justify-between items-end">
                                 <div className="space-y-1">
-                                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/80">Target Tier</span>
+                                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white">Target Tier</span>
                                     <h4 className="text-lg font-black text-white uppercase tracking-tight">{loyalty.next_tier}</h4>
                                 </div>
                                 <div className="text-right">
                                     <div className="text-xl font-black text-white tabular-nums">{tierProgress}%</div>
-                                    <span className="text-[9px] font-black uppercase tracking-[0.1em] text-white/80">Progress</span>
+                                    <span className="text-[9px] font-black uppercase tracking-[0.1em] text-white">Progress</span>
                                 </div>
                             </div>
 
@@ -274,7 +274,7 @@ const CustomerLoyalty = () => {
                             <div className="pt-4 border-t border-white/5">
                                 <div className="bg-white/5 rounded-2xl p-4 flex items-center justify-between border border-white/5">
                                     <div>
-                                        <p className="text-[9px] font-black text-white/80 uppercase tracking-[0.2em] mb-1">Gap to Upgrade</p>
+                                        <p className="text-[9px] font-black text-white uppercase tracking-[0.2em] mb-1">Gap to Upgrade</p>
                                         <p className="text-base font-black text-white">{(loyalty.next_tier_points - loyalty.points).toLocaleString()} Pts</p>
                                     </div>
                                     <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
@@ -309,9 +309,9 @@ const CustomerLoyalty = () => {
                                     <div className="w-12 h-12 rounded-2xl bg-accent-brown/5 flex items-center justify-center text-accent-brown mb-6 group-hover:bg-brand group-hover:text-white transition-all">
                                         <item.icon className="w-6 h-6 group-hover:scale-110 transition-transform" />
                                     </div>
-                                    <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-accent-brown/30 mb-2">{item.title}</h4>
+                                    <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-black mb-2">{item.title}</h4>
                                     <p className="text-lg font-black text-accent-brown mb-1.5">{item.pts}</p>
-                                    <p className="text-[10px] font-medium text-accent-brown/40 leading-relaxed uppercase">{item.desc}</p>
+                                    <p className="text-[10px] font-medium text-black leading-relaxed uppercase">{item.desc}</p>
                                 </motion.div>
                             ))}
                         </div>
@@ -322,7 +322,7 @@ const CustomerLoyalty = () => {
                                 <div className="flex items-center justify-between pb-6 border-b border-accent-brown/10">
                                     <div className="space-y-1.5">
                                         <h3 className="text-3xl font-black tracking-tighter uppercase italic text-accent-brown">Your <span className="text-brand">Vouchers</span></h3>
-                                        <p className="text-[11px] font-black uppercase tracking-[0.4em] text-accent-brown/30">Available benefits in your collection</p>
+                                        <p className="text-[11px] font-black uppercase tracking-[0.4em] text-black">Available benefits in your collection</p>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -333,7 +333,7 @@ const CustomerLoyalty = () => {
                                             className="bg-white rounded-[2.5rem] p-8 border border-accent-brown/10 shadow-sm flex flex-col gap-8 relative group transition-all"
                                         >
                                             <div className="flex justify-between items-start">
-                                                <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${VOUCHER_COLORS[mv.type] || 'bg-accent-brown/5 text-accent-brown/40'}`}>
+                                                <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${VOUCHER_COLORS[mv.type] || 'bg-accent-brown/5 text-black'}`}>
                                                     Voucher #{mv.id}
                                                 </span>
                                                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -341,7 +341,7 @@ const CustomerLoyalty = () => {
 
                                             <div>
                                                 <h4 className="text-xl font-black text-accent-brown tracking-tight leading-tight uppercase italic">{mv.title}</h4>
-                                                <p className="text-[10px] font-bold text-accent-brown/30 uppercase tracking-widest mt-2 flex items-center gap-2">
+                                                <p className="text-[10px] font-bold text-black uppercase tracking-widest mt-2 flex items-center gap-2">
                                                     <CheckCircle className="w-3 h-3" />
                                                     Validated {mv.date}
                                                 </p>
@@ -367,7 +367,7 @@ const CustomerLoyalty = () => {
                             <div className="flex items-center justify-between pb-6 border-b border-accent-brown/10">
                                 <div className="space-y-1.5">
                                     <h3 className="text-3xl font-black tracking-tighter uppercase italic text-accent-brown">Available <span className="text-brand">Vouchers</span></h3>
-                                    <p className="text-[11px] font-black uppercase tracking-[0.4em] text-accent-brown/30">Convert points into rewards</p>
+                                    <p className="text-[11px] font-black uppercase tracking-[0.4em] text-black">Convert points into rewards</p>
                                 </div>
                             </div>
 
@@ -379,20 +379,20 @@ const CustomerLoyalty = () => {
                                         className={`bg-white rounded-[2.5rem] p-8 border transition-all relative overflow-hidden group flex flex-col ${voucher.active ? 'border-accent-brown/10 shadow-sm hover:shadow-2xl hover:border-accent-brown/30' : 'border-accent-brown/5 opacity-50 grayscale'}`}
                                     >
                                         <div className="flex items-start justify-between mb-8">
-                                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${VOUCHER_COLORS[voucher.type] ?? 'bg-accent-brown/5 text-accent-brown/20'}`}>
+                                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${VOUCHER_COLORS[voucher.type] ?? 'bg-accent-brown/5 text-black'}`}>
                                                 <Gift className="w-7 h-7" />
                                             </div>
-                                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-accent-brown/40 bg-accent-brown/5 px-4 py-1.5 rounded-full">{voucher.type}</span>
+                                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-black bg-accent-brown/5 px-4 py-1.5 rounded-full">{voucher.type}</span>
                                         </div>
 
                                         <div className="space-y-3 mb-8 flex-1">
                                             <h4 className="text-xl font-black text-accent-brown leading-tight tracking-tight uppercase italic">{voucher.title}</h4>
-                                            <p className="text-[10px] font-medium text-accent-brown/30 uppercase tracking-[0.1em] leading-relaxed">Secure digital asset. One-time conversion.</p>
+                                            <p className="text-[10px] font-medium text-black uppercase tracking-[0.1em] leading-relaxed">Secure digital asset. One-time conversion.</p>
                                         </div>
 
                                         <div className="pt-6 border-t border-accent-brown/5 flex items-center justify-between">
                                             <div className="flex flex-col">
-                                                <span className="text-[8px] font-black text-accent-brown/20 uppercase tracking-[0.3em] mb-1">Exchange Rate</span>
+                                                <span className="text-[8px] font-black text-black uppercase tracking-[0.3em] mb-1">Exchange Rate</span>
                                                 <span className="flex items-center gap-2 font-black text-xl text-accent-brown tabular-nums">
                                                     <Star className="w-4 h-4 fill-brand text-brand" /> {voucher.cost.toLocaleString()}
                                                 </span>
@@ -407,7 +407,7 @@ const CustomerLoyalty = () => {
                                                 </button>
                                             ) : (
                                                 <div className="bg-accent-brown/5 h-12 px-6 rounded-2xl flex items-center justify-center border border-accent-brown/5">
-                                                    <span className="text-[10px] font-black text-accent-brown/20">{Math.abs(voucher.cost - loyalty.points).toLocaleString()} Deficit</span>
+                                                    <span className="text-[10px] font-black text-black">{Math.abs(voucher.cost - loyalty.points).toLocaleString()} Deficit</span>
                                                 </div>
                                             )}
                                         </div>
@@ -435,7 +435,7 @@ const CustomerLoyalty = () => {
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className="font-black text-accent-brown text-[11px] truncate uppercase tracking-tight">{entry.desc}</p>
-                                            <p className="text-[9px] font-bold text-accent-brown/30 uppercase mt-1 tracking-widest">{entry.date}</p>
+                                            <p className="text-[9px] font-bold text-black uppercase mt-1 tracking-widest">{entry.date}</p>
                                         </div>
                                         <span className={`font-black text-sm tabular-nums tracking-tighter ${entry.points > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                             {entry.points > 0 ? '+' : ''}{entry.points.toLocaleString()}
@@ -466,7 +466,7 @@ const CustomerLoyalty = () => {
                                         <Gift className="w-6 h-6 text-white" />
                                     </div>
                                     <h3 className="text-2xl font-black text-white tracking-tighter uppercase italic">Network <span className="text-accent-brown">Growth</span></h3>
-                                    <p className="text-[11px] font-bold text-white/80 uppercase tracking-[0.2em] leading-relaxed drop-shadow-sm">
+                                    <p className="text-[11px] font-bold text-white uppercase tracking-[0.2em] leading-relaxed drop-shadow-sm">
                                         Acquire 500 Pts for every verified provider successfully integrated into the system.
                                     </p>
                                 </div>
@@ -510,7 +510,7 @@ const CustomerLoyalty = () => {
                                     </div>
 
                                     <div className="space-y-2 mb-10">
-                                        <p className="text-[11px] font-black uppercase tracking-[0.4em] text-accent-brown/30 italic">Confirm Transaction</p>
+                                        <p className="text-[11px] font-black uppercase tracking-[0.4em] text-black italic">Confirm Transaction</p>
                                         <h2 className="text-3xl font-black text-accent-brown tracking-tighter uppercase italic leading-none">Redeem <span className="text-brand">Reward</span></h2>
                                     </div>
 

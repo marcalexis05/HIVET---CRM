@@ -18,7 +18,7 @@ const rewards = [
 
 export function LoyaltySection() {
     const earning = [
-        { icon: ShoppingBag, label: 'Shop the Catalog', pts: 'Variable' },
+        { icon: ShoppingBag, label: 'Shop the Store', pts: 'Variable' },
         { icon: Calendar, label: 'Book Reservations', pts: 'Variable' },
         { icon: Users, label: 'Refer a Friend', pts: '500 PTS Bonus' },
     ];

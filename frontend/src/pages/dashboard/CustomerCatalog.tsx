@@ -164,10 +164,10 @@ const CustomerCatalog = () => {
                     <div className="flex flex-col lg:flex-row items-center gap-8">
                         {/* Search Bar */}
                         <div className="relative flex-1 w-full group">
-                            <Search className="absolute left-8 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/30 group-focus-within:text-brand transition-colors" />
+                            <Search className="absolute left-8 top-1/2 -translate-y-1/2 w-5 h-5 text-black group-focus-within:text-brand transition-colors" />
                             <input 
                                 type="text" 
-                                placeholder="Search our premium catalog..." 
+                                placeholder="Search our premium store..." 
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="w-full bg-accent-brown/5 h-20 pl-16 pr-8 rounded-[2rem] text-sm font-black text-accent-brown placeholder:text-accent-brown/20 outline-none border border-transparent focus:border-brand focus:bg-white focus:shadow-xl transition-all"
@@ -180,7 +180,7 @@ const CustomerCatalog = () => {
                                 <button
                                     key={cat}
                                     onClick={() => setPetFilter(cat)}
-                                    className={`px-10 py-4 rounded-[1.6rem] text-[10px] font-black uppercase tracking-widest transition-all ${petFilter === cat ? 'bg-white text-accent-brown shadow-xl' : 'text-accent-brown/40 hover:text-brand'}`}
+                                    className={`px-10 py-4 rounded-[1.6rem] text-[10px] font-black uppercase tracking-widest transition-all ${petFilter === cat ? 'bg-white text-accent-brown shadow-xl' : 'text-black hover:text-brand'}`}
                                 >
                                     {cat}
                                 </button>
@@ -189,7 +189,7 @@ const CustomerCatalog = () => {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 mt-8 pt-8 border-t border-accent-brown/5 overflow-x-auto no-scrollbar">
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/20 mr-4 italic">Filter by Type:</span>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-black mr-4 italic">Filter by Type:</span>
                         {['All', ...types.slice(0, 6)].map((type) => (
                             <button
                                 key={type}
@@ -197,7 +197,7 @@ const CustomerCatalog = () => {
                                 className={`px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
                                     typeFilter === type 
                                     ? 'bg-brand text-white shadow-md shadow-brand/20' 
-                                    : 'bg-white text-accent-brown/40 border border-accent-brown/10 hover:border-brand hover:text-brand'
+                                    : 'bg-white text-black border border-accent-brown/10 hover:border-brand hover:text-brand'
                                 }`}
                             >
                                 {type}
@@ -238,11 +238,11 @@ const CustomerCatalog = () => {
                             animate={{ opacity: 1, scale: 1 }}
                             className="bg-white py-40 rounded-[4rem] text-center border border-accent-brown/5 shadow-sm"
                         >
-                            <div className="w-24 h-24 bg-accent-brown/5 rounded-full flex items-center justify-center mx-auto mb-8 text-accent-brown/10">
+                            <div className="w-24 h-24 bg-accent-brown/5 rounded-full flex items-center justify-center mx-auto mb-8 text-black/10">
                                 <Search className="w-10 h-10" />
                             </div>
                             <h3 className="text-4xl font-black text-accent-brown tracking-tighter mb-4 uppercase italic">No Products Found</h3>
-                            <p className="text-sm font-medium text-accent-brown/40 max-w-md mx-auto px-6">We couldn't find any products matching your current filters. Please try searching for something else.</p>
+                            <p className="text-sm font-medium text-black max-w-md mx-auto px-6">We couldn't find any products matching your current filters. Please try searching for something else.</p>
                             <button 
                                 onClick={resetFilters}
                                 className="mt-10 px-12 py-5 bg-brand text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] hover:bg-black transition-all shadow-2xl shadow-brand/20"
@@ -312,7 +312,7 @@ const CustomerCatalog = () => {
                                             <div className="flex items-center gap-2 mb-3">
                                                 <span className="text-[9px] font-black text-brand uppercase tracking-widest">{p.category}</span>
                                                 <div className="w-1 h-1 rounded-full bg-accent-brown/20" />
-                                                <span className="text-[9px] font-medium text-accent-brown/30 uppercase tracking-widest">{p.type}</span>
+                                                <span className="text-[9px] font-medium text-black uppercase tracking-widest">{p.type}</span>
                                             </div>
                                             <h4 className="text-xl font-black text-accent-brown tracking-tighter leading-tight group-hover:text-brand transition-colors line-clamp-2 min-h-[3rem] uppercase italic">
                                                 {p.name}
@@ -321,7 +321,7 @@ const CustomerCatalog = () => {
 
                                         <div className="mt-auto pt-6 border-t border-accent-brown/5 flex items-end justify-between px-2">
                                             <div className="space-y-1">
-                                                <p className="text-[8px] font-black text-accent-brown/30 uppercase tracking-[0.2em]">Retail Price</p>
+                                                <p className="text-[8px] font-black text-black uppercase tracking-[0.2em]">Retail Price</p>
                                                 <div className="flex items-baseline gap-1.5 font-black text-accent-brown">
                                                     <span className="text-xs">₱</span>
                                                     <span className="text-3xl tracking-tighter tabular-nums">{p.price.toLocaleString()}</span>
@@ -442,7 +442,7 @@ const CustomerCatalog = () => {
                             >
                                 <div className="flex items-center justify-between mb-6 shrink-0">
                                     <div className="space-y-1">
-                                        <p className="text-[9px] font-black uppercase tracking-[0.4em] text-brand italic">Catalog Categories</p>
+                                        <p className="text-[9px] font-black uppercase tracking-[0.4em] text-brand italic">Store Categories</p>
                                         <h3 className="text-xl sm:text-2xl font-black text-accent-brown tracking-tighter uppercase italic leading-none">Find Exactly What You Need</h3>
                                     </div>
                                     <button 
@@ -464,7 +464,7 @@ const CustomerCatalog = () => {
                                             className={`p-4 rounded-2xl text-left transition-all duration-500 border-2 ${
                                                 typeFilter === type
                                                 ? 'bg-brand border-brand text-white shadow-xl shadow-brand/20'
-                                                : 'bg-white border-accent-brown/5 text-accent-brown/60 hover:border-brand hover:text-brand shadow-sm'
+                                                : 'bg-white border-accent-brown/5 text-black hover:border-brand hover:text-brand shadow-sm'
                                             }`}
                                         >
                                             <p className="text-[8px] font-black uppercase tracking-[0.3em] mb-1 opacity-40">Selection</p>

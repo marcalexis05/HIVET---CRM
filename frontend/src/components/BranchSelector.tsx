@@ -81,27 +81,27 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
             <button 
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 bg-accent-peach/30 rounded-xl sm:rounded-2xl border border-accent-brown/5 shadow-sm hover:border-brand/30 hover:bg-white transition-all text-[9px] sm:text-[10px] font-black text-accent-brown uppercase tracking-widest whitespace-nowrap min-w-[140px] sm:min-w-[180px]"
+                className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3 bg-white hover:opacity-90 active:scale-95 rounded-2xl transition-all shadow-xl shadow-black/10 min-w-[160px] sm:min-w-[200px] font-brand group border border-accent-brown/5"
             >
-                <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-white flex items-center justify-center shrink-0 shadow-sm">
-                    <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-brand-dark" />
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand/10 shadow-sm flex items-center justify-center shrink-0">
+                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-brand" />
                 </div>
                 <div className="flex flex-col items-start overflow-hidden text-left">
-                    <span className="truncate w-full font-black">
-                        {currentBranchId === null && allowAllBranches ? 'All Branches' : currentBranch ? currentBranch.name : 'Selecting Branch...'}
+                    <span className="truncate w-full font-black text-black text-[10px] sm:text-[11px] uppercase tracking-widest">
+                        {currentBranchId === null && allowAllBranches ? 'All Branches' : currentBranch ? currentBranch.name : 'Initializing...'}
                     </span>
-                    <span className="text-[7px] sm:text-[8px] opacity-40 truncate w-full font-bold leading-none mt-0.5">
-                        {currentBranchId === null && allowAllBranches ? 'Aggregate View' : currentBranch ? `${currentBranch.barangay}, ${currentBranch.city}` : 'Branch Selection'}
+                    <span className="text-[8px] sm:text-[9px] text-black/50 font-black uppercase tracking-widest leading-none mt-1">
+                        {currentBranchId === null && allowAllBranches ? 'Global System' : currentBranch ? `${currentBranch.city}` : 'Branch Discovery'}
                     </span>
                 </div>
-                <ChevronDown className={`w-3 h-3 sm:w-3.5 sm:h-3.5 text-accent-brown/30 ml-auto transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 text-black/30 group-hover:text-black ml-auto transition-transform duration-500 ${isOpen ? 'rotate-180 text-black' : ''}`} />
             </button>
 
             {isOpen && (
-                <div className="absolute top-full right-0 mt-2 sm:mt-3 w-72 sm:w-80 bg-white rounded-3xl sm:rounded-[2rem] shadow-2xl border border-accent-brown/5 p-2 sm:p-3 z-[150] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.2em] text-accent-brown/30 px-3 sm:px-4 py-2">Switch Active Branch</div>
+                <div className="absolute top-full right-0 mt-4 w-72 sm:w-80 bg-white rounded-[2.5rem] shadow-2xl shadow-accent-brown/10 border border-accent-peach/10 p-4 z-[150] overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="text-[9px] font-black uppercase tracking-[0.25em] text-black px-4 py-3 border-b border-accent-peach/10 mb-3">Select Clinic Branch</div>
                     
-                    <div className="max-h-[250px] sm:max-h-[300px] overflow-y-auto no-scrollbar space-y-1 p-0.5 sm:p-1">
+                    <div className="max-h-[300px] overflow-y-auto no-scrollbar space-y-2">
                         {allowAllBranches && (
                             <button
                                 type="button"
@@ -110,16 +110,16 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
                                     onBranchChange(null);
                                     setIsOpen(false);
                                 }}
-                                className={`w-full text-left px-3 sm:px-4 py-3 sm:py-4 rounded-xl sm:rounded-2xl text-[10px] sm:text-xs font-bold transition-all flex items-center justify-between group ${currentBranchId === null ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-accent-brown hover:bg-accent-peach/10 bg-accent-peach/5 mb-1'}`}
+                                className={`w-full text-left p-4 rounded-2xl transition-all flex items-center justify-between group ${currentBranchId === null ? 'bg-brand text-white shadow-xl shadow-brand/20' : 'text-black hover:bg-accent-peach/10'}`}
                             >
-                                <div className="flex flex-col overflow-hidden pr-3 sm:pr-4">
-                                    <span className="font-black truncate uppercase tracking-widest text-[9px] sm:text-[10px]">All Branches</span>
-                                    <span className={`text-[7px] sm:text-[8px] truncate font-bold ${currentBranchId === null ? 'text-white/60' : 'text-accent-brown/40'}`}>
-                                        Aggregate View
+                                <div className="flex flex-col overflow-hidden pr-4">
+                                    <span className="font-black truncate uppercase tracking-widest text-[10px]">All Branches</span>
+                                    <span className={`text-[8px] truncate font-black uppercase tracking-widest mt-1 ${currentBranchId === null ? 'text-white/40' : 'text-black'}`}>
+                                        View complete metrics
                                     </span>
                                 </div>
-                                <span className={`text-[7px] sm:text-[8px] uppercase tracking-tighter shrink-0 font-black px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg ${currentBranchId === null ? 'bg-white/20 text-white' : 'bg-brand/10 text-brand-dark'}`}>
-                                    Total
+                                <span className={`text-[8px] uppercase tracking-widest shrink-0 font-black px-2 py-1 rounded-lg ${currentBranchId === null ? 'bg-white/10 text-white' : 'bg-accent-peach/30 text-accent-brown/40'}`}>
+                                    Global
                                 </span>
                             </button>
                         )}
@@ -132,17 +132,17 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
                                     onBranchChange(b.id);
                                     setIsOpen(false);
                                 }}
-                                className={`w-full text-left px-3 sm:px-4 py-3 sm:py-4 rounded-xl sm:rounded-2xl text-[10px] sm:text-xs font-bold transition-all flex items-center justify-between group ${currentBranchId === b.id ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-accent-brown hover:bg-accent-peach/10 bg-accent-peach/5 mb-1'}`}
+                                className={`w-full text-left p-4 rounded-2xl transition-all flex items-center justify-between group ${currentBranchId === b.id ? 'bg-brand text-white shadow-xl shadow-brand/20' : 'text-black hover:bg-accent-peach/10'}`}
                             >
-                                <div className="flex flex-col overflow-hidden pr-3 sm:pr-4">
-                                    <span className="font-black truncate uppercase tracking-widest text-[9px] sm:text-[10px]">{b.name}</span>
-                                    <span className={`text-[7px] sm:text-[8px] truncate font-bold ${currentBranchId === b.id ? 'text-white/60' : 'text-accent-brown/40'}`}>
-                                        {b.barangay}, {b.city}
+                                <div className="flex flex-col overflow-hidden pr-4">
+                                    <span className="font-black truncate uppercase tracking-widest text-[10px]">{b.name}</span>
+                                    <span className={`text-[8px] truncate font-black uppercase tracking-widest mt-1 ${currentBranchId === b.id ? 'text-white/40' : 'text-black'}`}>
+                                        {b.city} Location
                                     </span>
                                 </div>
                                 {b.is_main && (
-                                    <span className={`text-[7px] sm:text-[8px] uppercase tracking-tighter shrink-0 font-black px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg ${currentBranchId === b.id ? 'bg-white/20 text-white' : 'bg-brand/10 text-brand-dark'}`}>
-                                        Main
+                                    <span className={`text-[8px] uppercase tracking-widest shrink-0 font-black px-2 py-1 rounded-lg ${currentBranchId === b.id ? 'bg-white/10 text-white' : 'bg-brand/10 text-brand-dark'}`}>
+                                        Core
                                     </span>
                                 )}
                             </button>

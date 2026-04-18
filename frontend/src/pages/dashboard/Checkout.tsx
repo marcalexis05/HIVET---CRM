@@ -270,10 +270,7 @@ const Checkout = () => {
     });
 
     const [clinics, setClinics] = useState<any[]>([]);
-    const shippingFee = 0;
-    const isMixedCart = Array.from(new Set(items.map(item => item.business_id).filter(id => id != null))).length > 1;
-
-    // Branch map state
+    const [shippingFee, setShippingFee] = useState(0);
     const [selectedBranch, setSelectedBranch] = useState<any>(null);
     const [selectedClinic, setSelectedClinic] = useState<any>(null);
     const [showBranchStreetView, setShowBranchStreetView] = useState(false);
@@ -282,6 +279,51 @@ const Checkout = () => {
     const [panoPov, setPanoPov] = useState({ heading: 0, pitch: 0 });
     const [panoPosition, setPanoPosition] = useState<{ lat: number; lng: number } | null>(null);
     const branchSvRef = useRef<google.maps.StreetViewPanorama | null>(null);
+
+    const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const r = 6371; // Radius of earth in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return r * c;
+    };
+
+    const calculateDistanceFee = (dist: number) => {
+        const base = 50;
+        if (dist <= 5) return base;
+        if (dist <= 9) return base + (dist - 5) * 6;
+        return base + 24 + (dist - 9) * 5;
+    };
+
+    useEffect(() => {
+        if (fulfillmentMethod === 'delivery' && deliveryInfo.lat && deliveryInfo.lng) {
+            // Find a reference branch to calculate distance from.
+            // In a real multi-clinic cart, this would be more complex (e.g., nearest branch of first clinic)
+            let referenceBranch = selectedBranch;
+            if (!referenceBranch && items.length > 0) {
+                const firstItemClinicId = items[0].business_id || items[0].clinic_id;
+                const clinic = clinics.find(c => c.id === firstItemClinicId);
+                if (clinic && clinic.branches && clinic.branches.length > 0) {
+                    referenceBranch = clinic.branches.find((b: any) => b.is_main) || clinic.branches[0];
+                }
+            }
+
+            if (referenceBranch && referenceBranch.lat && referenceBranch.lng) {
+                const dist = getDistance(referenceBranch.lat, referenceBranch.lng, deliveryInfo.lat, deliveryInfo.lng);
+                const fee = calculateDistanceFee(dist);
+                setShippingFee(Math.round(fee));
+            } else {
+                setShippingFee(50); // Fallback base fee
+            }
+        } else {
+            setShippingFee(0);
+        }
+    }, [fulfillmentMethod, deliveryInfo.lat, deliveryInfo.lng, clinics, items, selectedBranch]);
+    const isMixedCart = Array.from(new Set(items.map(item => item.business_id).filter(id => id != null))).length > 1;
+
 
     // Voucher state
     const [applyingVoucher, setApplyingVoucher] = useState(false);
@@ -489,14 +531,17 @@ const Checkout = () => {
                 return;
             }
 
+            const derivedClinicId = deliveryInfo.clinic_id || selectedClinic?.id || (items.length > 0 ? (items[0].business_id || items[0].clinic_id) : null);
+            const derivedBranchId = deliveryInfo.branch_id || selectedBranch?.id;
+
             const orderPayload = {
                 items,
                 totalAmount: totalAmount + shippingFee - (appliedVoucher?.discount || 0),
                 fulfillmentMethod,
                 paymentMethod: selectedPayment,
                 deliveryDetails: deliveryInfo,
-                clinic_id: deliveryInfo.clinic_id,
-                branch_id: deliveryInfo.branch_id,
+                clinic_id: derivedClinicId,
+                branch_id: derivedBranchId,
                 delivery_lat: deliveryInfo.lat,
                 delivery_lng: deliveryInfo.lng,
                 voucher_code: appliedVoucher?.code || null,
@@ -620,7 +665,7 @@ const Checkout = () => {
                                 <s.icon className={`transition-all duration-500 ${currentStep === s.step ? 'w-5 h-5' : 'w-4 h-4'}`} />
                             </motion.button>
                             <div className="absolute top-16 left-1/2 -translate-x-1/2 whitespace-nowrap">
-                                <span className={`text-[8px] font-black uppercase tracking-[0.3em] transition-all duration-500 ${currentStep === s.step ? 'text-accent-brown opacity-100' : 'text-accent-brown/30 opacity-60'
+                                <span className={`text-[8px] font-black uppercase tracking-[0.3em] transition-all duration-500 ${currentStep === s.step ? 'text-accent-brown opacity-100' : 'text-black opacity-60'
                                     }`}>
                                     {s.label}
                                 </span>
@@ -648,7 +693,7 @@ const Checkout = () => {
                                     <div className="flex items-start justify-between mb-12 relative z-10">
                                         <div className="space-y-2">
                                             <h3 className="text-2xl font-black text-accent-brown italic tracking-tighter leading-none">Identity Verification</h3>
-                                            <p className="text-[10px] font-bold text-gray-300 tracking-[0.2em]">Primary Consumer Information</p>
+                                            <p className="text-[10px] font-bold text-black tracking-[0.2em]">Primary Consumer Information</p>
                                         </div>
                                         <div className="w-12 h-12 bg-white border border-gray-100 rounded-2xl flex items-center justify-center text-accent-brown shadow-sm">
                                             <User className="w-5 h-5" />
@@ -667,7 +712,7 @@ const Checkout = () => {
                                                         setDeliveryInfo(prev => ({ ...prev, contactName: val }));
                                                     }}
                                                     placeholder="e.g. Marc Alexis Evangelista"
-                                                    className="w-full bg-white border-b-2 border-gray-100 focus:border-brand px-1 py-4 outline-none text-accent-brown font-black transition-all placeholder:text-gray-200 tracking-wider text-sm"
+                                                    className="w-full bg-white border-b-2 border-gray-100 focus:border-brand px-1 py-4 outline-none text-accent-brown font-black transition-all placeholder:text-black tracking-wider text-sm"
                                                 />
                                             </div>
                                         </div>
@@ -724,7 +769,7 @@ const Checkout = () => {
                                                     className="w-full bg-white border-b-2 border-gray-100 px-1 py-4 outline-none text-accent-brown font-black cursor-not-allowed tracking-wider text-sm"
                                                 />
                                             </div>
-                                            <p className="text-[9px] font-bold text-gray-400 tracking-[0.1em] mt-2 italic">Authentication completed via registered email</p>
+                                            <p className="text-[9px] font-bold text-black tracking-[0.1em] mt-2 italic">Authentication completed via registered email</p>
                                         </div>
                                     </div>
                                 </div>
@@ -771,12 +816,12 @@ const Checkout = () => {
                                             className={`flex-1 p-6 rounded-[2rem] border-2 transition-all duration-500 relative overflow-hidden group ${fulfillmentMethod === 'delivery' ? 'border-brand bg-brand/5 shadow-xl shadow-brand/10' : 'border-gray-100 bg-gray-50/50 grayscale hover:grayscale-0 hover:border-brand/40 hover:bg-white'}`}
                                         >
                                             <div className="relative z-10 flex flex-col items-center gap-3">
-                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${fulfillmentMethod === 'delivery' ? 'bg-brand text-white' : 'bg-gray-100 text-accent-brown/20'}`}>
+                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${fulfillmentMethod === 'delivery' ? 'bg-brand text-white' : 'bg-gray-100 text-black'}`}>
                                                     <Truck className="w-6 h-6" />
                                                 </div>
                                                 <div className="text-center">
-                                                    <span className={`text-[10px] font-black uppercase tracking-[0.25em] block mb-1 ${fulfillmentMethod === 'delivery' ? 'text-accent-brown' : 'text-accent-brown/40'}`}>Doorstep Delivery</span>
-                                                    <p className={`text-[8px] font-bold uppercase tracking-widest ${fulfillmentMethod === 'delivery' ? 'text-brand' : 'text-accent-brown/20'}`}>Express Logistic Channel</p>
+                                                    <span className={`text-[10px] font-black uppercase tracking-[0.25em] block mb-1 ${fulfillmentMethod === 'delivery' ? 'text-accent-brown' : 'text-black'}`}>Doorstep Delivery</span>
+                                                    <p className={`text-[8px] font-bold uppercase tracking-widest ${fulfillmentMethod === 'delivery' ? 'text-brand' : 'text-black'}`}>Express Logistic Channel</p>
                                                 </div>
                                             </div>
                                         </button>
@@ -785,12 +830,12 @@ const Checkout = () => {
                                             className={`flex-1 p-6 rounded-[2rem] border-2 transition-all duration-500 relative overflow-hidden group ${fulfillmentMethod === 'pickup' ? 'border-brand bg-brand/5 shadow-xl shadow-brand/10' : 'border-gray-100 bg-gray-50/50 grayscale hover:grayscale-0 hover:border-brand/40 hover:bg-white'}`}
                                         >
                                             <div className="relative z-10 flex flex-col items-center gap-3">
-                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${fulfillmentMethod === 'pickup' ? 'bg-brand text-white' : 'bg-gray-100 text-accent-brown/20'}`}>
+                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${fulfillmentMethod === 'pickup' ? 'bg-brand text-white' : 'bg-gray-100 text-black'}`}>
                                                     <Store className="w-6 h-6" />
                                                 </div>
                                                 <div className="text-center">
-                                                    <span className={`text-[10px] font-black uppercase tracking-[0.25em] block mb-1 ${fulfillmentMethod === 'pickup' ? 'text-accent-brown' : 'text-accent-brown/40'}`}>Direct Pickup</span>
-                                                    <p className={`text-[8px] font-bold uppercase tracking-widest ${fulfillmentMethod === 'pickup' ? 'text-brand' : 'text-accent-brown/20'}`}>Partner Clinic Settlement</p>
+                                                    <span className={`text-[10px] font-black uppercase tracking-[0.25em] block mb-1 ${fulfillmentMethod === 'pickup' ? 'text-accent-brown' : 'text-black'}`}>Direct Pickup</span>
+                                                    <p className={`text-[8px] font-bold uppercase tracking-widest ${fulfillmentMethod === 'pickup' ? 'text-brand' : 'text-black'}`}>Partner Clinic Settlement</p>
                                                 </div>
                                             </div>
                                         </button>
@@ -805,7 +850,7 @@ const Checkout = () => {
                                                     </div>
                                                     <div>
                                                         <h3 className="text-xl font-black text-accent-brown">Delivery Details</h3>
-                                                        <p className="text-sm font-medium text-accent-brown/50">Where should we send your order?</p>
+                                                        <p className="text-sm font-medium text-black">Where should we send your order?</p>
                                                     </div>
                                                 </div>
                                                 {allAddresses.length > 0 && (
@@ -839,7 +884,7 @@ const Checkout = () => {
                                                         )}
                                                         <div className="space-y-4">
                                                             <div className="space-y-2">
-                                                                <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Delivery Address</label>
+                                                                <label className="text-[10px] font-black uppercase tracking-widest text-black">Delivery Address</label>
                                                                 <div className="relative">
                                                                     <input
                                                                         type="text"
@@ -897,7 +942,7 @@ const Checkout = () => {
                                                 </div>
                                                 <div>
                                                     <h3 className="text-xl font-black text-accent-brown">Pick-up Location</h3>
-                                                    <p className="text-sm font-medium text-accent-brown/50">Select a clinic branch to pick up your items.</p>
+                                                    <p className="text-sm font-medium text-black">Select a clinic branch to pick up your items.</p>
                                                 </div>
                                             </div>
 
@@ -928,7 +973,7 @@ const Checkout = () => {
 
                                             <div className="space-y-4">
                                                 <div className="space-y-2">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Clinic Branch</label>
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-black">Clinic Branch</label>
                                                     <div className="grid grid-cols-1 gap-2">
                                                         {clinics
                                                             .filter(c => {
@@ -966,7 +1011,7 @@ const Checkout = () => {
                                                                         }}
                                                                         className={`w-full text-left p-6 rounded-3xl border-2 transition-all flex items-center gap-5 ${isSelected ? 'border-brand bg-brand/5 shadow-xl shadow-brand/10' : 'border-gray-100 bg-white hover:border-brand/30 hover:shadow-lg'}`}
                                                                     >
-                                                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border-2 transition-all ${isSelected ? 'bg-brand text-white border-brand' : 'bg-gray-50 text-accent-brown/20 border-gray-100'}`}>
+                                                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border-2 transition-all ${isSelected ? 'bg-brand text-white border-brand' : 'bg-gray-50 text-black border-gray-100'}`}>
                                                                             <MapPin className="w-6 h-6" />
                                                                         </div>
                                                                         <div className="flex-1 min-w-0">
@@ -976,7 +1021,7 @@ const Checkout = () => {
                                                                                     <span className="text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-accent-brown text-white">Central Hub</span>
                                                                                 )}
                                                                             </div>
-                                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">{b.address_line1}</p>
+                                                                            <p className="text-[10px] font-bold text-black uppercase tracking-widest truncate">{b.address_line1}</p>
                                                                             <p className="text-[9px] font-black text-brand uppercase tracking-widest mt-1 opacity-60">Verified Logistics Branch</p>
                                                                         </div>
                                                                         <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-brand border-brand' : 'border-gray-100'}`}>
@@ -1149,7 +1194,7 @@ const Checkout = () => {
                                 <div className="flex justify-between items-center pt-4">
                                     <button
                                         onClick={() => setCurrentStep(1)}
-                                        className="py-4 px-8 rounded-xl font-black text-[10px] uppercase tracking-widest text-accent-brown/40 hover:text-accent-brown transition-colors"
+                                        className="py-4 px-8 rounded-xl font-black text-[10px] uppercase tracking-widest text-black hover:text-accent-brown transition-colors"
                                     >
                                         Back to Identity
                                     </button>
@@ -1202,7 +1247,7 @@ const Checkout = () => {
                                         </div>
                                         <div>
                                             <h3 className="text-xl font-black text-accent-brown">Payment Method</h3>
-                                            <p className="text-sm font-medium text-accent-brown/50">All transactions are secure and encrypted.</p>
+                                            <p className="text-sm font-medium text-black">All transactions are secure and encrypted.</p>
                                         </div>
                                     </div>
 
@@ -1225,7 +1270,7 @@ const Checkout = () => {
                                                             <method.icon className={`w-6 h-6 ${method.color}`} />
                                                         </div>
                                                         <div className="text-center">
-                                                            <span className={`text-[10px] font-black uppercase tracking-[0.2em] block mb-0.5 ${isActive ? 'text-accent-brown' : 'text-gray-300'}`}>{method.label}</span>
+                                                            <span className={`text-[10px] font-black uppercase tracking-[0.2em] block mb-0.5 ${isActive ? 'text-accent-brown' : 'text-black'}`}>{method.label}</span>
                                                             <p className={`text-[7px] font-bold uppercase tracking-widest ${isActive ? 'text-brand opacity-100' : 'opacity-0'}`}>Encrypted Channel</p>
                                                         </div>
                                                     </div>
@@ -1257,7 +1302,7 @@ const Checkout = () => {
                                         </div>
                                         <div>
                                             <h3 className="text-xl font-black text-accent-brown">Vouchers & Rewards</h3>
-                                            <p className="text-sm font-medium text-accent-brown/50">Apply your loyalty rewards for discounts</p>
+                                            <p className="text-sm font-medium text-black">Apply your loyalty rewards for discounts</p>
                                         </div>
                                     </div>
 
@@ -1274,7 +1319,7 @@ const Checkout = () => {
                                             </div>
                                             <div className="flex items-center gap-4">
                                                 <span className="font-black text-brand text-lg">-₱{appliedVoucher.discount.toLocaleString()}</span>
-                                                <button onClick={() => setAppliedVoucher(null)} className="p-2 hover:bg-white rounded-xl transition-colors text-accent-brown/40 hover:text-red-500">
+                                                <button onClick={() => setAppliedVoucher(null)} className="p-2 hover:bg-white rounded-xl transition-colors text-black hover:text-red-500">
                                                     <X className="w-5 h-5" />
                                                 </button>
                                             </div>
@@ -1317,7 +1362,7 @@ const Checkout = () => {
                                                             <Gift className="w-4 h-4 text-brand group-hover:scale-110 transition-transform" />
                                                             <div>
                                                                 <p className="text-[10px] font-black text-accent-brown leading-tight">{v.title}</p>
-                                                                <p className="text-[8px] font-bold text-accent-brown/40 uppercase tracking-widest">{v.code}</p>
+                                                                <p className="text-[8px] font-bold text-black uppercase tracking-widest">{v.code}</p>
                                                             </div>
                                                         </button>
                                                     ))}
@@ -1330,7 +1375,7 @@ const Checkout = () => {
                                 <div className="flex justify-between items-center pt-4">
                                     <button
                                         onClick={() => setCurrentStep(2)}
-                                        className="py-4 px-8 rounded-xl font-black text-[10px] uppercase tracking-widest text-accent-brown/40 hover:text-accent-brown transition-colors"
+                                        className="py-4 px-8 rounded-xl font-black text-[10px] uppercase tracking-widest text-black hover:text-accent-brown transition-colors"
                                     >
                                         Back to Shipment
                                     </button>
@@ -1365,7 +1410,7 @@ const Checkout = () => {
                         <div className="relative z-10">
                             <div className="flex items-center justify-between mb-8">
                                 <h3 className="text-2xl font-black italic tracking-tighter text-white">Receipt Summary</h3>
-                                <Tag className="w-5 h-5 text-white/50" />
+                                <Tag className="w-5 h-5 text-white" />
                             </div>
 
                             <div className="space-y-5 mb-10 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
@@ -1376,7 +1421,7 @@ const Checkout = () => {
                                         </div>
                                         <div className="flex-1 min-w-0 flex flex-col justify-center">
                                             <h4 className="font-black text-[10px] tracking-wider truncate mb-0.5 text-white">{item.name}</h4>
-                                            <p className="text-[9px] font-bold text-white/60 tracking-widest">{item.variant} | {item.size}</p>
+                                            <p className="text-[9px] font-bold text-white tracking-widest">{item.variant} | {item.size}</p>
                                             <div className="flex justify-between items-center mt-2">
                                                 <span className="text-[10px] font-black text-white tracking-[0.2em]">x{item.quantity}</span>
                                                 <span className="font-black text-xs tabular-nums text-white">₱{(Number(item.price) * item.quantity).toLocaleString()}</span>
@@ -1387,13 +1432,15 @@ const Checkout = () => {
                             </div>
 
                             <div className="space-y-4 pt-8 border-t border-white/20 text-[10px] font-black uppercase tracking-[0.2em] mb-10">
-                                <div className="flex justify-between text-white/60">
+                                <div className="flex justify-between text-white">
                                     <span>Subtotal</span>
                                     <span className="text-white">₱{totalAmount.toLocaleString()}</span>
                                 </div>
-                                <div className="flex justify-between text-white/60">
+                                <div className="flex justify-between text-white">
                                     <span>Logistics Fee</span>
-                                    <span className="text-white font-black italic">FREE</span>
+                                    <span className="text-white font-black italic">
+                                        {shippingFee > 0 ? `₱${shippingFee.toLocaleString()}` : 'FREE'}
+                                    </span>
                                 </div>
                                 {appliedVoucher && (
                                     <div className="flex justify-between text-white">
@@ -1405,7 +1452,7 @@ const Checkout = () => {
 
                             <div className="flex justify-between items-end mb-10 border-b border-white/20 pb-8">
                                 <div>
-                                    <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.3em] mb-1">Total Settlement</p>
+                                    <p className="text-[9px] font-black text-white uppercase tracking-[0.3em] mb-1">Total Settlement</p>
                                     <h2 className="text-4xl font-black tracking-tighter italic text-white leading-none">₱{grandTotal.toLocaleString()}</h2>
                                 </div>
                             </div>
@@ -1492,11 +1539,11 @@ const Checkout = () => {
                                 <div className="flex items-center justify-between mb-8">
                                     <div>
                                         <h3 className="text-2xl font-black text-accent-brown tracking-tighter">Change Address</h3>
-                                        <p className="text-sm font-medium text-accent-brown/50">Select where to receive your order</p>
+                                        <p className="text-sm font-medium text-black">Select where to receive your order</p>
                                     </div>
                                     <button
                                         onClick={() => setShowAddrModal(false)}
-                                        className="w-10 h-10 rounded-full bg-accent-peach/20 flex items-center justify-center text-accent-brown/40 hover:text-accent-brown transition-colors"
+                                        className="w-10 h-10 rounded-full bg-accent-peach/20 flex items-center justify-center text-black hover:text-accent-brown transition-colors"
                                     >
                                         <X className="w-5 h-5" />
                                     </button>
@@ -1515,11 +1562,11 @@ const Checkout = () => {
                                                     {addr.is_default && (
                                                         <span className="px-2 py-0.5 bg-brand-dark text-white text-[8px] font-black uppercase tracking-widest rounded-full">Default</span>
                                                     )}
-                                                    <span className="px-2 py-0.5 bg-accent-peach/30 text-accent-brown/60 text-[8px] font-black uppercase tracking-widest rounded-full">{addr.label}</span>
+                                                    <span className="px-2 py-0.5 bg-accent-peach/30 text-black text-[8px] font-black uppercase tracking-widest rounded-full">{addr.label}</span>
                                                 </div>
-                                                <span className="text-[10px] font-bold text-accent-brown/40">{addr.phone}</span>
+                                                <span className="text-[10px] font-bold text-black">{addr.phone}</span>
                                             </div>
-                                            <p className="text-xs text-accent-brown/60 leading-relaxed font-medium">
+                                            <p className="text-xs text-black leading-relaxed font-medium">
                                                 {addr.address_line1}<br />
                                                 {addr.address_line2}
                                             </p>
@@ -1530,7 +1577,7 @@ const Checkout = () => {
                                 <div className="mt-8 flex gap-4">
                                     <button
                                         onClick={() => setShowAddrModal(false)}
-                                        className="flex-1 py-4 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest text-accent-brown/40 hover:text-accent-brown transition-colors"
+                                        className="flex-1 py-4 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest text-black hover:text-accent-brown transition-colors"
                                     >
                                         Cancel
                                     </button>
@@ -1615,34 +1662,40 @@ const Checkout = () => {
                 )}
             </AnimatePresence>
 
-            {/* Success Overlay (Cash orders) */}
+            {/* Success Modal (Cash orders) */}
             <AnimatePresence>
                 {showSuccess && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[100] flex items-center justify-center bg-brand-dark/95 backdrop-blur-md"
+                        className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-accent-brown/20 backdrop-blur-md"
                     >
                         <motion.div
-                            initial={{ scale: 0.8, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            transition={{ type: 'spring', damping: 20 }}
-                            className="text-center"
+                            initial={{ scale: 0.9, opacity: 0, y: 30 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 30 }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                            className="bg-white w-full max-w-md rounded-[3rem] p-12 text-center shadow-[0_50px_100px_rgba(245,134,52,0.15)] border border-brand/10 relative overflow-hidden"
                         >
-                            <div className="w-24 h-24 bg-brand rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-brand/40">
-                                <ShieldCheck className="w-12 h-12 text-brand-dark" />
-                            </div>
-                            <h2 className="text-4xl font-black text-brand tracking-tighter mb-4">Order Placed!</h2>
-                            <p className="text-white/60 font-medium max-w-xs mx-auto mb-8">
-                                Your order has been successfully sent to our clinic. Redirecting you to your orders...
-                            </p>
-                            <div className="flex justify-center">
-                                <motion.div
-                                    animate={{ rotate: 360 }}
-                                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                                    className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full"
-                                />
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-brand/5 rounded-full -mr-16 -mt-16 blur-3xl pointer-events-none" />
+                            
+                            <div className="relative z-10">
+                                <div className="w-24 h-24 bg-brand rounded-[2.25rem] flex items-center justify-center mx-auto mb-10 shadow-2xl shadow-brand/30">
+                                    <ShieldCheck className="w-12 h-12 text-white" />
+                                </div>
+                                <h2 className="text-4xl font-black text-accent-brown tracking-tighter mb-4 italic uppercase leading-none">Order Placed!</h2>
+                                <p className="text-accent-brown/40 font-bold text-sm leading-relaxed max-w-[280px] mx-auto mb-10 uppercase tracking-wide">
+                                    Your order has been successfully sent to our clinic. Redirecting to your terminal...
+                                </p>
+                                <div className="flex justify-center items-center gap-4">
+                                    <span className="text-[10px] font-black text-brand uppercase tracking-[0.4em]">Redirecting</span>
+                                    <motion.div
+                                        animate={{ rotate: 360 }}
+                                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                        className="w-5 h-5 border-2 border-brand border-t-transparent rounded-full"
+                                    />
+                                </div>
                             </div>
                         </motion.div>
                     </motion.div>

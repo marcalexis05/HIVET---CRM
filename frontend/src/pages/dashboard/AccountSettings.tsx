@@ -675,7 +675,7 @@ const AccountSettings = () => {
                                         <Bell className="w-4 h-4" />
                                     </div>
                                     <div>
-                                        <p className="text-[8px] font-black text-white/50 uppercase tracking-[0.2em]">Contact Email</p>
+                                        <p className="text-[8px] font-black text-white uppercase tracking-[0.2em]">Contact Email</p>
                                         <p className="text-sm font-bold text-white tracking-tight">{user?.email}</p>
                                     </div>
                                 </div>
@@ -685,7 +685,7 @@ const AccountSettings = () => {
                                         <User className="w-4 h-4" />
                                     </div>
                                     <div>
-                                        <p className="text-[8px] font-black text-white/50 uppercase tracking-[0.2em]">Account Status</p>
+                                        <p className="text-[8px] font-black text-white uppercase tracking-[0.2em]">Account Status</p>
                                         <p className="text-sm font-black text-white uppercase tracking-widest">Active</p>
                                     </div>
                                 </div>
@@ -701,7 +701,7 @@ const AccountSettings = () => {
                     <div className="lg:col-span-3 space-y-6">
                         <div className="bg-white rounded-[2rem] p-3 border border-accent-brown/5 shadow-xl shadow-brand-dark/5">
                             <div className="p-4 mb-2">
-                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/30">Management Hub</h4>
+                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-black">Management Hub</h4>
                             </div>
                             <div className="space-y-1.5">
                                 {getNavLinks(user?.role || '').map(n => {
@@ -721,7 +721,7 @@ const AccountSettings = () => {
                                                 setSection(n.id);
                                             }
                                         }}
-                                            className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all group ${isActive ? 'bg-brand-dark text-white shadow-2xl shadow-brand-dark/20' : 'text-accent-brown/70 hover:bg-brand/5 hover:text-accent-brown'}`}>
+                                            className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all group ${isActive ? 'bg-brand-dark text-white shadow-2xl shadow-brand-dark/20' : 'text-black hover:bg-brand/5 hover:text-accent-brown'}`}>
                                             <div className="flex items-center gap-4">
                                                 <div className={`p-2 rounded-xl transition-colors ${isActive ? 'bg-white/10' : 'bg-brand/5 group-hover:bg-brand/10 group-hover:text-brand-dark'}`}>
                                                     <n.icon className={`w-4 h-4 transition-transform ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
@@ -759,14 +759,14 @@ const AccountSettings = () => {
                                         <>
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 <div>
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Clinic Name</label>
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-black block mb-2 pl-1">Clinic Name</label>
                                                     <input type="text" value={clinicName} onChange={e => setClinicName(e.target.value)} placeholder="My Veterinary Clinic"
-                                                        className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                                        className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-black/40" />
                                                 </div>
                                                 <div>
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Clinic Phone <span className="text-accent-brown">*</span></label>
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-black block mb-2 pl-1">Clinic Phone <span className="text-accent-brown">*</span></label>
                                                     <div className="relative group">
-                                                        <span className="absolute left-5 top-1/2 -translate-y-1/2 text-sm font-black text-accent-brown/30 tracking-tight transition-colors group-focus-within:text-accent-brown">+63</span>
+                                                        <span className="absolute left-5 top-1/2 -translate-y-1/2 text-sm font-black text-black tracking-tight transition-colors group-focus-within:text-accent-brown">+63</span>
                                                         <input
                                                             type="tel"
                                                             value={clinicPhone}
@@ -778,7 +778,7 @@ const AccountSettings = () => {
                                                                 setClinicPhone(val.slice(0, 10));
                                                             }}
                                                             placeholder="9XX XXX XXXX"
-                                                            className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 pl-14 pr-4 sm:pr-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
+                                                            className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 pl-14 pr-4 sm:pr-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-black/40" />
                                                     </div>
                                                 </div>
                                             </div>
@@ -798,9 +798,9 @@ const AccountSettings = () => {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Age <span className="text-accent-brown text-[8px] normal-case tracking-normal font-bold">Auto-fill</span></label>
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-black block mb-2 pl-1">Age <span className="text-accent-brown text-[8px] normal-case tracking-normal font-bold">Auto-fill</span></label>
                                                     <input type="text" value={calculateAge(ownerBirthday)} readOnly
-                                                        className="w-full bg-accent-peach/5 border-2 border-transparent rounded-2xl py-3 sm:py-4 px-4 text-sm font-black text-accent-brown/50 outline-none transition-all cursor-default" />
+                                                        className="w-full bg-accent-peach/5 border-2 border-transparent rounded-2xl py-3 sm:py-4 px-4 text-sm font-black text-black outline-none transition-all cursor-default" />
                                                 </div>
                                             </div>
 
@@ -820,10 +820,10 @@ const AccountSettings = () => {
 
 
                                             <div className="pt-4 border-t border-accent-brown/5">
-                                                <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Registered Email</label>
+                                                <label className="text-[9px] font-black uppercase tracking-widest text-black block mb-2 pl-1">Registered Email</label>
                                                 <div className="relative group">
                                                     <input type="email" value={email} readOnly
-                                                        className="w-full bg-accent-peach/20 border-2 border-transparent rounded-2xl py-3 sm:py-4 pl-4 sm:pl-5 pr-24 text-sm font-bold text-accent-brown/50 outline-none transition-all cursor-default" />
+                                                        className="w-full bg-accent-peach/20 border-2 border-transparent rounded-2xl py-3 sm:py-4 pl-4 sm:pl-5 pr-24 text-sm font-bold text-black outline-none transition-all cursor-default" />
                                                     <button onClick={() => { setShowEmailModal(true); setNewEmail(email); }}
                                                         className="absolute right-5 top-1/2 -translate-y-1/2 text-[9px] font-black text-accent-brown uppercase tracking-widest hover:text-black transition-colors">
                                                         Verify
@@ -837,7 +837,7 @@ const AccountSettings = () => {
                                                 <div className="md:col-span-1">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">First Name <span className="text-red-500">*</span></label>
                                                     <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Enter First Name"
-                                                        className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 px-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/20" />
+                                                        className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 px-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-black/40" />
                                                 </div>
                                                 <div className="md:col-span-1">
                                                     <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">Middle Name <span className="text-accent-brown/30 text-[8px] normal-case tracking-normal font-bold">Optional</span></label>
@@ -897,7 +897,7 @@ const AccountSettings = () => {
                                                         <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">Contact Number <span className="text-red-500">*</span></label>
                                                         <div className="relative group">
                                                             <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-2 border-r border-accent-brown/10 pr-3 transition-colors group-focus-within:border-brand/30">
-                                                                <span className="text-xs font-black text-accent-brown/50 group-focus-within:text-accent-brown">+63</span>
+                                                                <span className="text-xs font-black text-black group-focus-within:text-accent-brown">+63</span>
                                                             </div>
                                                             <input
                                                                 type="tel"
@@ -910,7 +910,7 @@ const AccountSettings = () => {
                                                                     setPhone(val ? `+63${val}` : '');
                                                                 }}
                                                                 placeholder="9XX XXX XXXX"
-                                                                className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 pl-20 pr-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30 tabular-nums" />
+                                                                className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 pl-20 pr-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-black/40 tabular-nums" />
                                                         </div>
                                                     </div>
                                                 </div>
@@ -950,7 +950,7 @@ const AccountSettings = () => {
                                             {isRider && (
                                                 <div className="grid grid-cols-1 gap-6 pt-6 mb-4">
                                                     <div>
-                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">Residential Address <span className="text-accent-brown/30 text-[8px] normal-case tracking-normal font-bold">Registration Address</span></label>
+                                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown block mb-3 pl-1">Residential Address <span className="text-black text-[8px] normal-case tracking-normal font-bold">Registration Address</span></label>
                                                         <div className="relative group">
                                                             <div className="w-full bg-[#FAF9F6] border-2 border-transparent rounded-[1.25rem] py-4 pl-16 pr-24 text-sm font-black text-accent-brown flex items-center min-h-[58px]">
                                                                 <span className="absolute left-6 top-1/2 -translate-y-1/2 text-brand-dark">
@@ -978,10 +978,10 @@ const AccountSettings = () => {
                                                     </div>
                                                     <div>
                                                         <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown">Profile Verified</p>
-                                                        <p className="text-[9px] font-bold text-accent-brown/30 mt-0.5">Your identity has been successfully validated by the system.</p>
+                                                        <p className="text-[9px] font-bold text-black mt-0.5">Your identity has been successfully validated by the system.</p>
                                                     </div>
                                                 </div>
-                                                <div className="text-xs font-black text-accent-brown/20 tabular-nums">
+                                                <div className="text-xs font-black text-black tabular-nums">
                                                     Age Verified: {calculateAge(birthday)}
                                                 </div>
                                             </div>
@@ -1000,7 +1000,7 @@ const AccountSettings = () => {
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                                     <div>
                                         <h3 className="text-xl font-black text-accent-brown tracking-tighter">{isBusiness ? 'Clinic Locations' : 'My Addresses'}</h3>
-                                        <p className="text-[10px] font-bold text-accent-brown/30 uppercase tracking-[0.2em] mt-1">{isBusiness ? 'Manage your veterinary branches' : 'Manage your delivery locations'}</p>
+                                        <p className="text-[10px] font-bold text-black uppercase tracking-[0.2em] mt-1">{isBusiness ? 'Manage your veterinary branches' : 'Manage your delivery locations'}</p>
                                     </div>
                                     <button
                                         onClick={() => {
@@ -1042,11 +1042,11 @@ const AccountSettings = () => {
                                     </div>
                                 ) : addresses.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-[2rem] border-2 border-dashed border-accent-peach/20">
-                                        <div className="w-20 h-20 bg-accent-peach/10 rounded-[1.5rem] flex items-center justify-center mb-6 text-accent-brown/20">
+                                        <div className="w-20 h-20 bg-accent-peach/10 rounded-[1.5rem] flex items-center justify-center mb-6 text-black">
                                             <MapPin className="w-10 h-10" />
                                         </div>
-                                        <h4 className="font-black text-accent-brown/40 tracking-tight text-lg">{isBusiness ? 'No Branch Locations' : 'No Addresses Saved'}</h4>
-                                        <p className="text-xs font-bold text-accent-brown/30 mt-2 max-w-[240px] leading-relaxed uppercase tracking-wider">{isBusiness ? 'Add your clinic branches to let customers find you.' : 'Add an address to start shopping with premium delivery service.'}</p>
+                                        <h4 className="font-black text-black tracking-tight text-lg">{isBusiness ? 'No Branch Locations' : 'No Addresses Saved'}</h4>
+                                        <p className="text-xs font-bold text-black mt-2 max-w-[240px] leading-relaxed uppercase tracking-wider">{isBusiness ? 'Add your clinic branches to let customers find you.' : 'Add an address to start shopping with premium delivery service.'}</p>
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 gap-4">
@@ -1081,7 +1081,7 @@ const AccountSettings = () => {
                                                             });
                                                             setShowAddrModal(true);
                                                         }}
-                                                        className="w-10 h-10 bg-accent-peach/5 rounded-xl flex items-center justify-center text-accent-brown/40 hover:bg-brand/10 hover:text-accent-brown transition-all"
+                                                        className="w-10 h-10 bg-accent-peach/5 rounded-xl flex items-center justify-center text-black hover:bg-brand/10 hover:text-accent-brown transition-all"
                                                         title="Edit"
                                                     >
                                                         <Edit2 className="w-4 h-4" />
@@ -1104,7 +1104,7 @@ const AccountSettings = () => {
                                                                 }
                                                             );
                                                         }}
-                                                        className="w-10 h-10 bg-accent-peach/5 rounded-xl flex items-center justify-center text-accent-brown/40 hover:bg-red-50 hover:text-red-500 transition-all"
+                                                        className="w-10 h-10 bg-accent-peach/5 rounded-xl flex items-center justify-center text-black hover:bg-red-50 hover:text-red-500 transition-all"
                                                         title="Delete"
                                                     >
                                                         <Trash className="w-4 h-4" />
@@ -1113,7 +1113,7 @@ const AccountSettings = () => {
 
                                                 <div className="space-y-4">
                                                     {isBusiness && (
-                                                        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-accent-brown/25 pb-1 border-b border-accent-brown/5">
+                                                        <p className="text-[9px] font-black uppercase tracking-[0.25em] text-black/50 pb-1 border-b border-accent-brown/5">
                                                             {clinicName || 'Clinic'}
                                                         </p>
                                                     )}
@@ -1121,7 +1121,7 @@ const AccountSettings = () => {
                                                         <div className="flex items-center gap-3">
                                                             <span className="text-xl font-black text-accent-brown tracking-tighter">{addr.full_name}</span>
                                                             <div className="w-px h-4 bg-brand-dark/10 hidden sm:block" />
-                                                            <span className="font-bold text-accent-brown/40 tabular-nums">{addr.phone}</span>
+                                                            <span className="font-bold text-black tabular-nums">{addr.phone}</span>
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             <span className={`text-[8px] font-black px-3 py-1.5 rounded-full tracking-widest uppercase ${addr.label === 'Home' ? 'bg-blue-50 text-blue-500 border border-blue-100' : 'bg-green-50 text-green-500 border border-green-100'}`}>
@@ -1136,7 +1136,7 @@ const AccountSettings = () => {
                                                     </div>
 
                                                     <div className="space-y-1">
-                                                        <p className="text-sm font-bold text-accent-brown/50 leading-relaxed uppercase tracking-tight">
+                                                        <p className="text-sm font-bold text-black leading-relaxed uppercase tracking-tight">
                                                             {addr.address_line1}
                                                         </p>
                                                         <p className="text-sm font-black text-brand tracking-[0.05em] uppercase">
@@ -1154,7 +1154,7 @@ const AccountSettings = () => {
                                                                 });
                                                                 if (res.ok) fetchAddresses();
                                                             }}
-                                                            className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/30 hover:text-accent-brown transition-colors flex items-center gap-2 group/btn"
+                                                            className="text-[10px] font-black uppercase tracking-[0.2em] text-black hover:text-accent-brown transition-colors flex items-center gap-2 group/btn"
                                                         >
                                                             <div className="w-4 h-4 rounded-full border-2 border-accent-brown/10 group-hover/btn:border-brand/50 transition-colors" />
                                                             Set as Default
@@ -1167,7 +1167,7 @@ const AccountSettings = () => {
                                         {addresses.length > 1 && (
                                             <button
                                                 onClick={() => setShowAllBranches(!showAllBranches)}
-                                                className="w-full py-4 mt-2 border-2 border-dashed border-accent-peach/20 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown/30 hover:text-brand hover:border-brand/30 transition-all flex items-center justify-center gap-2"
+                                                className="w-full py-4 mt-2 border-2 border-dashed border-accent-peach/20 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] text-black hover:text-brand hover:border-brand/30 transition-all flex items-center justify-center gap-2"
                                             >
                                                 {showAllBranches ? (isBusiness ? 'Hide other branches' : 'Hide other addresses') : (isBusiness ? 'See more branches' : 'See more addresses')}
                                                 <motion.span animate={{ rotate: showAllBranches ? 180 : 0 }}>
@@ -1197,13 +1197,13 @@ const AccountSettings = () => {
                                         .filter(f => !(!hasPassword && f.key === 'current'))
                                         .map(f => (
                                             <div key={f.key}>
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 block mb-3 pl-1">{f.label}</label>
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-black block mb-3 pl-1">{f.label}</label>
                                                 <div className="relative">
                                                     <input type={showPw[f.key] ? 'text' : 'password'} value={pw[f.key]} onChange={e => setPw(p => ({ ...p, [f.key]: e.target.value }))}
                                                         placeholder="••••••••"
-                                                        className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-2xl py-4 pl-6 pr-12 text-sm font-black text-accent-brown outline-none transition-all placeholder:text-accent-brown/20" />
+                                                        className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-2xl py-4 pl-6 pr-12 text-sm font-black text-accent-brown outline-none transition-all placeholder:text-black/40" />
                                                     <button type="button" onClick={() => setShowPw(prev => ({ ...prev, [f.key]: !prev[f.key] }))}
-                                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-accent-brown/30 hover:text-accent-brown transition-colors">
+                                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-black hover:text-accent-brown transition-colors">
                                                         {showPw[f.key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                                     </button>
                                                 </div>
@@ -1227,7 +1227,7 @@ const AccountSettings = () => {
                                 <h3 className="text-xl font-black text-accent-brown tracking-tight mb-6">Notification Preferences</h3>
                                 <div className="space-y-2">
                                     {(isRider ? [
-                                        { key: 'orderUpdates', label: 'Delivery Requests', sub: 'New jobs and customer location updates' },
+                                        { key: 'orderUpdates', label: 'Delivery Requests', sub: 'New jobs and customer location updates. Includes shipping fee info for pending orders.' },
                                         { key: 'loyaltyAlerts', label: 'Earnings & Payouts', sub: 'Weekly summaries and bonus notifications' },
                                         { key: 'newsletter', label: 'Rider Community', sub: 'Safety tips, area alerts, and platform events' },
                                         { key: 'gmailNotifications', label: 'Gmail Notifications', sub: 'Email alerts for critical account updates' },
@@ -1245,7 +1245,7 @@ const AccountSettings = () => {
                                         <div key={n.key} className="flex items-center justify-between py-4 border-b border-accent-brown/5 last:border-0">
                                             <div>
                                                 <p className="font-black text-accent-brown text-sm">{n.label}</p>
-                                                <p className="text-xs text-accent-brown/40 font-medium mt-0.5">{n.sub}</p>
+                                                <p className="text-xs text-black font-medium mt-0.5">{n.sub}</p>
                                             </div>
                                             <Toggle checked={notifs[n.key as keyof typeof notifs]} onChange={() => setNotifs(p => ({ ...p, [n.key]: !p[n.key as keyof typeof notifs] }))} />
                                         </div>
@@ -1261,7 +1261,7 @@ const AccountSettings = () => {
                         {section === 'danger' && (
                             <div>
                                 <h3 className="text-xl font-black text-red-500 tracking-tight mb-2">Danger Zone</h3>
-                                <p className="text-sm text-accent-brown/50 font-medium mb-8">These actions are irreversible. Proceed with caution.</p>
+                                <p className="text-sm text-black font-medium mb-8">These actions are irreversible. Proceed with caution.</p>
                                 <div className="border-2 border-red-100 rounded-2xl p-6">
                                     <div className="flex items-start gap-3 mb-6">
                                         <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center shrink-0">
@@ -1269,7 +1269,7 @@ const AccountSettings = () => {
                                         </div>
                                         <div>
                                             <p className="font-black text-accent-brown">Delete Account</p>
-                                            <p className="text-xs text-accent-brown/40 font-medium mt-1">All data — orders, loyalty points, and reservations — will be permanently deleted.</p>
+                                            <p className="text-xs text-black font-medium mt-1">All data — orders, loyalty points, and reservations — will be permanently deleted.</p>
                                         </div>
                                     </div>
                                     <label className="text-[9px] font-black uppercase tracking-widest text-red-400 block mb-2 pl-1">Type <span className="text-red-600">DELETE</span> to confirm</label>
@@ -1307,7 +1307,7 @@ const AccountSettings = () => {
                                 <Lock className="w-8 h-8" />
                             </div>
                             <h3 className="text-2xl font-black text-accent-brown tracking-tighter mb-2">Google Login User</h3>
-                            <p className="text-sm font-medium text-accent-brown/60 mb-8 leading-relaxed">
+                            <p className="text-sm font-medium text-black mb-8 leading-relaxed">
                                 Since you logged in using your Google account, you don't have a separate password for Hi-Vet CRM.
                                 Your account security is managed directly by Google.
                             </p>
@@ -1333,9 +1333,9 @@ const AccountSettings = () => {
                                 <div className="flex items-center justify-between mb-8">
                                     <div>
                                         <h3 className="text-2xl font-black text-accent-brown tracking-tighter">{editingAddr ? (isBusiness ? 'Edit Location' : 'Edit Address') : (isBusiness ? 'New Branch' : 'New Address')}</h3>
-                                        <p className="text-xs font-bold text-accent-brown/30 uppercase tracking-widest mt-1">{isBusiness ? 'Branch Details' : 'Delivery Details'}</p>
+                                        <p className="text-xs font-bold text-black uppercase tracking-widest mt-1">{isBusiness ? 'Branch Details' : 'Delivery Details'}</p>
                                     </div>
-                                    <button onClick={() => setShowAddrModal(false)} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-accent-brown/30 hover:text-accent-brown transition-all shadow-sm">
+                                    <button onClick={() => setShowAddrModal(false)} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-black hover:text-accent-brown transition-all shadow-sm">
                                         <X className="w-5 h-5" />
                                     </button>
                                 </div>
@@ -1343,7 +1343,7 @@ const AccountSettings = () => {
                                 <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1 custom-scrollbar">
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">{isBusiness ? 'Branch/Clinic Name' : 'Contact Name'}</label>
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-black pl-1">{isBusiness ? 'Branch/Clinic Name' : 'Contact Name'}</label>
                                             <input type="text" value={addrForm.full_name} onChange={e => setAddrForm({ ...addrForm, full_name: e.target.value })} placeholder={isBusiness ? "e.g. Main Branch" : "Full Name"}
                                                 className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all shadow-sm" />
                                         </div>
@@ -1355,7 +1355,7 @@ const AccountSettings = () => {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1 flex items-center gap-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-black pl-1 flex items-center gap-2">
                                             <MapPin className="w-3 h-3" /> Mark Landmark & Enter Detailed Address
                                         </label>
                                         <AddressAutocomplete
@@ -1380,12 +1380,12 @@ const AccountSettings = () => {
                                             placeholder="Search or pick on map..."
                                             className="!py-4 !rounded-2xl shadow-xl border-2 border-transparent focus:border-brand/30"
                                         />
-                                        <p className="text-[9px] font-bold text-accent-brown/30 uppercase tracking-widest pl-1 italic">Note: Searching will auto-fill basic location. Click the pin to edit granular details manually.</p>
+                                        <p className="text-[9px] font-bold text-black uppercase tracking-widest pl-1 italic">Note: Searching will auto-fill basic location. Click the pin to edit granular details manually.</p>
                                     </div>
 
                                     <div className="p-6 bg-accent-peach/5 rounded-[2rem] border border-accent-peach/10 space-y-4">
                                         <div className="space-y-1">
-                                            <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Precise Address Confirmation</p>
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-black">Precise Address Confirmation</p>
                                             <p className="text-xs font-bold text-accent-brown leading-relaxed capitalize">
                                                 {[addrForm.house_number, addrForm.block_number, addrForm.street, addrForm.subdivision, addrForm.sitio, addrForm.barangay, addrForm.city, addrForm.province, addrForm.zip_code].filter(Boolean).join(' ')}
                                             </p>
@@ -1393,7 +1393,7 @@ const AccountSettings = () => {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 pl-1">Delivery Notes / Landmark Instructions</label>
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-black pl-1">Delivery Notes / Landmark Instructions</label>
                                         <textarea
                                             value={addrForm.delivery_notes}
                                             onChange={e => setAddrForm({ ...addrForm, delivery_notes: e.target.value })}
@@ -1405,7 +1405,7 @@ const AccountSettings = () => {
                                     <div className="grid grid-cols-2 gap-4 pt-2">
                                         {(isBusiness ? ['Branch'] : ['Home', 'Work']).map(l => (
                                             <button key={l} onClick={() => setAddrForm({ ...addrForm, label: l })}
-                                                className={`py-4 rounded-2xl text-xs font-black uppercase tracking-widest border-2 transition-all ${addrForm.label === l ? 'border-brand bg-brand/5 text-accent-brown shadow-lg shadow-brand/5' : 'border-transparent bg-white text-accent-brown/30 hover:bg-accent-peach/10'}`}>
+                                                className={`py-4 rounded-2xl text-xs font-black uppercase tracking-widest border-2 transition-all ${addrForm.label === l ? 'border-brand bg-brand/5 text-accent-brown shadow-lg shadow-brand/5' : 'border-transparent bg-white text-black hover:bg-accent-peach/10'}`}>
                                                 {l}
                                             </button>
                                         ))}
@@ -1515,13 +1515,13 @@ const AccountSettings = () => {
                             <div className="absolute top-0 right-0 w-32 h-32 bg-brand/5 rounded-full -mr-16 -mt-16" />
 
                             <h3 className="text-2xl font-black text-accent-brown tracking-tighter mb-2 relative">Change Email</h3>
-                            <p className="text-xs font-bold text-accent-brown/40 uppercase tracking-widest mb-8 relative">Verify your new email address</p>
+                            <p className="text-xs font-bold text-black uppercase tracking-widest mb-8 relative">Verify your new email address</p>
 
                             <div className="space-y-6 relative">
                                 {!otpSent ? (
                                     <>
                                         <div>
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">New Email Address</label>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-black block mb-2 pl-1">New Email Address</label>
                                             <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="new-email@example.com"
                                                 className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all" />
                                         </div>
@@ -1537,7 +1537,7 @@ const AccountSettings = () => {
                                             <div className="bg-accent-peach/10 py-3 px-5 rounded-2xl text-xs font-bold text-accent-brown/50 border-2 border-dashed border-accent-peach/30">{newEmail}</div>
                                         </div>
                                         <div>
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 block mb-2 pl-1">Verification Code</label>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-black block mb-2 pl-1">Verification Code</label>
                                             <input type="text" maxLength={6} value={emailOtp} onChange={e => setEmailOtp(e.target.value.replace(/\D/g, ''))} placeholder="000000"
                                                 className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 px-5 text-center text-2xl font-black tracking-[1em] text-accent-brown outline-none transition-all" />
                                         </div>
@@ -1545,14 +1545,14 @@ const AccountSettings = () => {
                                             className="w-full bg-brand-dark text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-xl shadow-brand/10">
                                             {verifyingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} Verify & Update Email
                                         </button>
-                                        <button onClick={() => setOtpSent(false)} className="w-full text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-accent-brown transition-colors">
+                                        <button onClick={() => setOtpSent(false)} className="w-full text-[10px] font-black uppercase tracking-widest text-black hover:text-accent-brown transition-colors">
                                             Use a different email
                                         </button>
                                     </>
                                 )}
 
                                 <button onClick={() => { setShowEmailModal(false); setOtpSent(false); setNewEmail(''); setEmailOtp(''); }}
-                                    className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-accent-brown/30 hover:bg-accent-peach/10 transition-all border-2 border-accent-peach/20 hover:border-transparent">
+                                    className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-black hover:bg-accent-peach/10 transition-all border-2 border-accent-peach/20 hover:border-transparent">
                                     Cancel
                                 </button>
                             </div>

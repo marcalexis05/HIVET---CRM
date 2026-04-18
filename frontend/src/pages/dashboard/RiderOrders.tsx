@@ -8,8 +8,17 @@ import {
 import DashboardLayout from '../../components/DashboardLayout';
 import RiderBottomNav from '../../components/RiderBottomNav';
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 const RiderOrders = () => {
     const [orders, setOrders] = useState<any[]>([]);
+    const [stats, setStats] = useState({
+        success_rate: '0%',
+        avg_fulfillment: '0m',
+        active_threads: 0,
+        total_fulfilled: 0,
+        efficiency_rating: 'N/A'
+    });
     const [filter, setFilter] = useState('all'); // all, active, completed
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
@@ -18,9 +27,7 @@ const RiderOrders = () => {
     const fetchOrders = async () => {
         const token = localStorage.getItem('hivet_token');
         try {
-            // Fetch comprehensive history
-            // For now reusing available-orders or active-order but in production this would be a specific endpoint
-            const res = await fetch('http://localhost:8000/api/rider/available-orders', {
+            const res = await fetch(`${API}/api/rider/orders/all`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -34,14 +41,30 @@ const RiderOrders = () => {
         }
     };
 
+    const fetchAnalytics = async () => {
+        const token = localStorage.getItem('hivet_token');
+        try {
+            const res = await fetch(`${API}/api/rider/orders/analytics`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setStats(data);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
     useEffect(() => {
         fetchOrders();
+        fetchAnalytics();
     }, []);
 
     const filteredOrders = orders.filter(o => {
         if (filter === 'all') return true;
-        if (filter === 'active') return ['Processing', 'Picked Up'].includes(o.status);
-        if (filter === 'completed') return o.status === 'Delivered';
+        if (filter === 'active') return ['Available', 'Pending', 'Out_For_Delivery'].includes(o.status);
+        if (filter === 'completed') return o.status === 'Completed';
         return true;
     });
 
@@ -68,11 +91,11 @@ const RiderOrders = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-white/5 backdrop-blur-md p-6 rounded-3xl border border-white/5 min-w-[160px]">
                                     <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">Success Rate</p>
-                                    <h4 className="text-2xl font-black text-white tracking-tighter">98.2%</h4>
+                                    <h4 className="text-2xl font-black text-white tracking-tighter">{stats.success_rate}</h4>
                                 </div>
                                 <div className="bg-white/5 backdrop-blur-md p-6 rounded-3xl border border-white/5 min-w-[160px]">
                                     <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">Avg. Fulfilment</p>
-                                    <h4 className="text-2xl font-black text-white tracking-tighter">24m</h4>
+                                    <h4 className="text-2xl font-black text-white tracking-tighter">{stats.avg_fulfillment}</h4>
                                 </div>
                             </div>
                         </div>
@@ -82,9 +105,9 @@ const RiderOrders = () => {
                 {/* Operational Velocity Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                     {[
-                        { label: "Total Fulfilled", value: orders.filter(o => o.status === 'Delivered').length, icon: Package, color: "bg-white", desc: "Successfully completed assignments." },
-                        { label: "Active Threads", value: orders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled').length, icon: Bike, color: "bg-brand-dark text-white", desc: "Ongoing operational logistics." },
-                        { label: "Efficiency Rating", value: "S-Tier", icon: Star, color: "bg-white", desc: "Top 2% of fleet performance." }
+                        { label: "Total Fulfilled", value: stats.total_fulfilled, icon: Package, color: "bg-white", desc: "Successfully completed assignments." },
+                        { label: "Active Threads", value: stats.active_threads, icon: Bike, color: "bg-brand-dark text-white", desc: "Ongoing operational logistics." },
+                        { label: "Efficiency Rating", value: stats.efficiency_rating, icon: Star, color: "bg-white", desc: "Fleet performance ranking." }
                     ].map((stat, i) => (
                         <div key={i} className={`rounded-[2.5rem] p-10 shadow-sm border border-accent-brown/5 hover:shadow-2xl transition-all group/stat ${stat.color.includes('bg-white') ? 'bg-white' : stat.color}`}>
                             <div className="flex items-center justify-between mb-8">
@@ -183,7 +206,7 @@ const RiderOrders = () => {
 
                                             <div className="space-y-1 mb-8">
                                                 <div className="flex items-center gap-3">
-                                                    <p className="text-2xl font-black text-accent-brown tracking-tighter">#HY-{order.id.toString().slice(-4)}</p>
+                                                    <p className="text-2xl font-black text-accent-brown tracking-tighter">HV-2026-{order.id.toString().padStart(6, '0')}</p>
                                                     <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm bg-brand-dark text-white`}>
                                                         {order.status}
                                                     </span>
@@ -195,7 +218,7 @@ const RiderOrders = () => {
                                                 <div className="relative pl-6">
                                                     <div className="absolute left-0 top-1.5 w-2 h-2 rounded-full bg-brand-dark shadow-sm" />
                                                     <p className="text-[8px] font-black uppercase tracking-widest text-accent-brown/30 mb-1">Pickup Hub</p>
-                                                    <p className="text-[11px] font-black text-accent-brown uppercase tracking-tight truncate">Hi-Vet Main Hub</p>
+                                                    <p className="text-[11px] font-black text-accent-brown uppercase tracking-tight truncate">{order.pickup_name || 'Clinic Hub'}</p>
                                                 </div>
                                                 <div className="relative pl-6">
                                                     <div className="absolute left-0 top-1.5 w-2 h-2 rounded-full bg-brand-dark shadow-sm" />

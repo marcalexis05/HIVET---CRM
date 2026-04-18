@@ -76,9 +76,16 @@ const ProductDetail = () => {
                 if (pResp.ok) {
                     const data = await pResp.json();
                     setProduct(data);
-                    // Reset selection states for the new product
+                    
+                    // Auto-select first size if available
+                    const sizes = data.sizes_json ? JSON.parse(data.sizes_json) : [];
+                    if (sizes.length > 0) {
+                        setSelectedSize(sizes[0].name);
+                    } else {
+                        setSelectedSize('');
+                    }
+
                     setSelectedVariant('');
-                    setSelectedSize('');
                     setActiveImage(null);
                 }
                 if (rResp.ok) {
@@ -344,7 +351,7 @@ const ProductDetail = () => {
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                     <h2 className="text-2xl font-black text-accent-brown mb-4">Product Not Found</h2>
                     <button onClick={() => navigate('/dashboard/customer/catalog')} className="bg-accent-brown text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all">
-                        Back to Catalog
+                        Back to Store
                     </button>
                 </div>
             </DashboardLayout>
@@ -400,12 +407,12 @@ const ProductDetail = () => {
                     
                     {/* Navigation Trail */}
                     <div className="flex items-center justify-between mb-6">
-                        <nav className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">
-                            <Link to="/dashboard/customer/catalog" className="hover:text-brand transition-all">Catalog</Link>
+                        <nav className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-black/40">
+                            <Link to="/dashboard/customer/catalog" className="hover:text-brand transition-all">Store</Link>
                             <span>/</span>
-                            <span className="text-gray-900 italic uppercase">{product.category}</span>
+                            <span className="text-black font-black italic uppercase">{product.category}</span>
                             <span>/</span>
-                            <span className="text-gray-400 uppercase">{product.name}</span>
+                            <span className="text-black uppercase">{product.name}</span>
                         </nav>
                     </div>
 
@@ -470,8 +477,8 @@ const ProductDetail = () => {
 
                                 <div className="absolute bottom-6 right-6 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-gray-100 flex items-center gap-2 shadow-sm">
                                     <Star className="w-3 h-3 text-brand fill-brand" />
-                                    <span className="text-[10px] font-black text-accent-brown tabular-nums">{avgRating.toFixed(1)}</span>
-                                    <span className="text-[9px] font-bold text-gray-300">({totalReviews})</span>
+                                    <span className="text-[10px] font-black text-black tabular-nums">{avgRating.toFixed(1)}</span>
+                                    <span className="text-[9px] font-bold text-black/40">({totalReviews})</span>
                                 </div>
                             </div>
                         </div>
@@ -484,21 +491,21 @@ const ProductDetail = () => {
                                         <div className="w-7 h-7 rounded-full bg-accent-brown/5 flex items-center justify-center text-accent-brown">
                                             <Store className="w-3.5 h-3.5" />
                                         </div>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">{product.clinic_name}</span>
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-black">{product.clinic_name}</span>
                                     </div>
-                                    <span className="text-[8px] font-bold text-accent-brown uppercase tracking-widest">ID: {product.sku || 'HIVET-00'}</span>
+                                    <span className="text-[8px] font-bold text-black uppercase tracking-widest">ID: {product.sku || 'HIVET-00'}</span>
                                 </div>
 
                                 <h1 className="text-3xl font-black text-accent-brown tracking-tighter uppercase italic leading-[0.9]">
                                     {product.name}
                                 </h1>
 
-                                <p className="text-xs font-medium text-gray-400 leading-snug max-w-sm italic">
+                                <p className="text-xs font-medium text-black leading-snug max-w-sm italic">
                                     "{product.description}"
                                 </p>
 
                                 <div className="pt-4 border-t border-gray-50 flex flex-col">
-                                    <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1">Recommended Value</span>
+                                    <span className="text-[9px] font-black text-black uppercase tracking-widest mb-1">Recommended Value</span>
                                     <span className="text-4xl font-black text-accent-brown tracking-tighter tabular-nums">₱{finalPrice.toLocaleString()}</span>
                                 </div>
                             </div>
@@ -507,7 +514,7 @@ const ProductDetail = () => {
                                 {/* Sizes */}
                                 {parsedSizes.length > 0 && (
                                     <div className="space-y-4">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown">Unit Selection</span>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-black">Unit Selection</span>
                                         <div className="grid grid-cols-5 gap-3">
                                             {parsedSizes.map((s: any) => (
                                                 <button 
@@ -516,7 +523,7 @@ const ProductDetail = () => {
                                                     setSelectedSize(s.name);
                                                     if (s.image) setActiveImage(s.image);
                                                 }}
-                                                    className={`h-12 border-2 rounded-xl flex items-center justify-center text-[10px] font-black transition-all ${selectedSize === s.name ? 'bg-accent-brown border-accent-brown text-white shadow-xl' : 'bg-white border-gray-100 text-gray-400 hover:border-brand hover:text-brand'}`}
+                                                    className={`h-12 border-2 rounded-xl flex items-center justify-center text-[10px] font-black transition-all ${selectedSize === s.name ? 'bg-accent-brown border-accent-brown text-white shadow-xl' : 'bg-white border-gray-100 text-black/40 hover:border-brand hover:text-brand'}`}
                                                 >
                                                     {s.name}
                                                 </button>
@@ -524,6 +531,7 @@ const ProductDetail = () => {
                                         </div>
                                     </div>
                                 )}
+                                
                                 {/* Market Console */}
                                 <div className="pt-4 space-y-4">
                                     <div className="flex gap-4 items-center">
@@ -534,7 +542,7 @@ const ProductDetail = () => {
                                                 onMouseLeave={stopCounter}
                                                 onTouchStart={() => startCounter(false)}
                                                 onTouchEnd={stopCounter}
-                                                className="w-10 h-10 flex items-center justify-center text-accent-brown/20 hover:text-brand transition-colors select-none"
+                                                className="w-10 h-10 flex items-center justify-center text-black/40 hover:text-brand transition-colors select-none"
                                             >
                                                 <Minus className="w-4 h-4" />
                                             </button>
@@ -551,7 +559,7 @@ const ProductDetail = () => {
                                                 onMouseLeave={stopCounter}
                                                 onTouchStart={() => startCounter(true)}
                                                 onTouchEnd={stopCounter}
-                                                className="w-10 h-10 flex items-center justify-center text-accent-brown/20 hover:text-brand transition-colors select-none"
+                                                className="w-10 h-10 flex items-center justify-center text-black/40 hover:text-brand transition-colors select-none"
                                             >
                                                 <Plus className="w-4 h-4" />
                                             </button>
@@ -573,7 +581,7 @@ const ProductDetail = () => {
                                             </button>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2 text-[8px] font-black uppercase tracking-[0.2em] text-accent-brown">
+                                    <div className="flex items-center gap-2 text-[8px] font-black uppercase tracking-[0.2em] text-black">
                                         <div className={`w-1.5 h-1.5 rounded-full ${availableStock > 0 ? 'bg-emerald-500' : 'bg-red-500'}`} />
                                         <span>{availableStock > 0 ? `${availableStock} Precise Units Available` : 'Sold Out Globally'}</span>
                                     </div>
@@ -588,7 +596,7 @@ const ProductDetail = () => {
                             <div className="space-y-6">
                                 <div className="space-y-1">
                                     <h2 className="text-2xl font-black text-accent-brown tracking-tighter uppercase italic leading-none">Branch Logistics</h2>
-                                    <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">Physical verification points</p>
+                                    <p className="text-[9px] font-bold text-black uppercase tracking-widest">Physical verification points</p>
                                 </div>
                                 <div className="grid grid-cols-1 gap-3">
                                     {(product.branch_availability || []).map((branch: any) => (
@@ -599,7 +607,7 @@ const ProductDetail = () => {
                                         >
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-3">
-                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedBranchId === branch.branch_id ? 'bg-brand text-white shadow-lg' : 'bg-white text-gray-300'}`}>
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedBranchId === branch.branch_id ? 'bg-brand text-white shadow-lg' : 'bg-white text-black/30'}`}>
                                                         <Store className="w-4 h-4" />
                                                     </div>
                                                     <div>
@@ -607,7 +615,7 @@ const ProductDetail = () => {
                                                         <p className="text-[8px] font-black text-accent-brown uppercase tracking-widest mt-0.5">{branch.stock} Units Stocked</p>
                                                     </div>
                                                 </div>
-                                                <ChevronRight className={`w-3.5 h-3.5 ${selectedBranchId === branch.branch_id ? 'text-brand' : 'text-gray-100'}`} />
+                                                <ChevronRight className={`w-3.5 h-3.5 ${selectedBranchId === branch.branch_id ? 'text-brand' : 'text-black/10'}`} />
                                             </div>
                                         </div>
                                     ))}
@@ -645,7 +653,7 @@ const ProductDetail = () => {
                                                 <MapPin className="w-4 h-4" />
                                             </div>
                                             <div>
-                                                <p className="text-[8px] font-black text-gray-300 uppercase tracking-[0.2em]">Travel Distance</p>
+                                                <p className="text-[8px] font-black text-black/50 uppercase tracking-[0.2em]">Travel Distance</p>
                                                 <p className="text-xs font-black text-accent-brown">{distance}</p>
                                             </div>
                                         </div>
@@ -666,7 +674,7 @@ const ProductDetail = () => {
                         <div className="flex items-center justify-between mb-8">
                             <div className="space-y-1">
                                 <h2 className="text-3xl font-black text-accent-brown tracking-tighter uppercase italic leading-none">Customer Review</h2>
-                                <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">Global Customer Feedback</p>
+                                <p className="text-[9px] font-bold text-black uppercase tracking-widest">Global Customer Feedback</p>
                             </div>
                             <div className="flex items-baseline gap-3">
                                 <span className="text-5xl font-black text-brand italic">{avgRating.toFixed(1)}</span>
@@ -674,7 +682,7 @@ const ProductDetail = () => {
                                     <div className="flex text-yellow-400 gap-0.5">
                                         {[1, 2, 3, 4, 5].map(s => <Star key={s} className="w-3.5 h-3.5 fill-current" />)}
                                     </div>
-                                    <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest">{totalReviews} Customer Reviews</p>
+                                    <p className="text-[8px] font-black text-black/40 uppercase tracking-widest">{totalReviews} Customer Reviews</p>
                                 </div>
                             </div>
                         </div>
@@ -684,7 +692,7 @@ const ProductDetail = () => {
                                 <div key={rev.id} className="bg-gray-50/50 p-6 rounded-[1.5rem] border border-gray-50 flex flex-col gap-4 relative overflow-hidden group hover:bg-white hover:border-brand/10 hover:shadow-lg transition-all duration-500">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center font-black text-gray-300 text-xs shadow-sm border border-gray-50">
+                                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center font-black text-black/50 text-xs shadow-sm border border-gray-50">
                                                 {rev.customer_name?.[0]}
                                             </div>
                                             <div>
@@ -694,9 +702,9 @@ const ProductDetail = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                        <span className="text-[8px] font-bold text-gray-200 uppercase tracking-widest font-mono italic">{new Date(rev.created_at).toLocaleDateString()}</span>
+                                        <span className="text-[8px] font-bold text-black uppercase tracking-widest font-mono italic">{new Date(rev.created_at).toLocaleDateString()}</span>
                                     </div>
-                                    <p className="text-xs font-medium text-gray-500 italic leading-relaxed opacity-80 group-hover:opacity-100 transition-opacity px-1">"{rev.comment}"</p>
+                                    <p className="text-xs font-medium text-black italic leading-relaxed opacity-80 group-hover:opacity-100 transition-opacity px-1">"{rev.comment}"</p>
                                 </div>
                             ))}
                         </div>
@@ -707,7 +715,7 @@ const ProductDetail = () => {
                         <div className="text-center mb-10 space-y-3">
                             <h2 className="text-4xl font-black text-accent-brown tracking-tighter uppercase italic leading-none">Discover More</h2>
                             <div className="w-12 h-0.5 bg-brand mx-auto shadow-md shadow-brand/20" />
-                            <p className="text-[8px] font-bold text-gray-300 uppercase tracking-[0.4em] pt-2">Synchronized Catalog Rotations</p>
+                            <p className="text-[8px] font-bold text-black uppercase tracking-[0.4em] pt-2">Handpicked for You</p>
                         </div>
                         
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -733,13 +741,13 @@ const ProductDetail = () => {
                                         </div>
                                     </div>
                                     <div className="space-y-1.5 px-1">
-                                        <p className="text-[8px] font-black text-gray-300 uppercase tracking-[0.25em]">{p.category}</p>
+                                        <p className="text-[8px] font-black text-black/50 uppercase tracking-[0.25em]">{p.category}</p>
                                         <h4 className="text-sm font-black text-brand transition-colors truncate uppercase italic tracking-tight leading-none">{p.name}</h4>
                                         <div className="flex items-center justify-between pt-0.5">
                                             <p className="text-lg font-black text-accent-brown tracking-tighter tabular-nums">₱{Number(p.price).toLocaleString()}</p>
                                             <div className="flex items-center gap-1.5 grayscale group-hover:grayscale-0 transition-all">
                                                 <Star className="w-2.5 h-2.5 text-brand fill-brand" />
-                                                <span className="text-[9px] font-black text-gray-300">{(p.avg_rating || 0).toFixed(1)}</span>
+                                                <span className="text-[9px] font-black text-black">{(p.avg_rating || 0).toFixed(1)}</span>
                                             </div>
                                         </div>
                                     </div>

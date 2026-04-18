@@ -52,7 +52,7 @@ export const CatalogPreview = () => {
                                     <div className="translate-y-8 group-hover:translate-y-0 transition-transform duration-500 space-y-4 text-white">
                                         <div className="inline-flex items-center gap-2 text-brand-dark font-black uppercase tracking-[0.3em] text-[10px]">
                                             <ExternalLink className="w-3 h-3" />
-                                            Live Catalog
+                                            Live Store
                                         </div>
                                         <p className="text-white/70 font-medium italic">Discover professional {c.name.toLowerCase()} curated for performance.</p>
                                     </div>

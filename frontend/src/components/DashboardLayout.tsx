@@ -27,6 +27,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     const [isCartOpen, setIsCartOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+    const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [notifications, setNotifications] = useState<any[]>([]);
     const itemsRef = useRef(items);
@@ -175,17 +176,17 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     };
 
     const businessLinks = [
-        { name: 'Overview', path: '/dashboard/business', icon: LayoutDashboard },
+        { name: 'Dashboard', path: '/dashboard/business', icon: LayoutDashboard },
         { name: 'Reservations', path: '/dashboard/business/reservations', icon: Calendar },
         { name: 'Orders', path: '/dashboard/business/orders', icon: ShoppingBag },
-        { name: 'Catalog', path: '/dashboard/business/catalog', icon: Settings },
+        { name: 'Store', path: '/dashboard/business/catalog', icon: Settings },
         { name: 'Analytics', path: '/dashboard/business/analytics', icon: BarChart2 },
         { name: 'Account', path: '/dashboard/business/account', icon: UserCircle },
     ];
 
     const userLinks = [
         { name: 'Dashboard', path: '/dashboard/customer', icon: LayoutDashboard },
-        { name: 'Catalog', path: '/dashboard/customer/catalog', icon: ShoppingBag },
+        { name: 'Store', path: '/dashboard/customer/catalog', icon: ShoppingBag },
         { name: 'Orders', path: '/dashboard/customer/orders', icon: ShoppingBag },
         { name: 'Visits', path: '/dashboard/customer/reservations', icon: Calendar },
         { name: 'Clinic Map', path: '/dashboard/customer/map', icon: MapPin },
@@ -195,7 +196,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     ];
 
     const superAdminLinks = [
-        { name: 'Platform Overview', path: '/dashboard/admin', icon: LayoutDashboard },
+        { name: 'Dashboard', path: '/dashboard/admin', icon: LayoutDashboard },
         { name: 'Clinic Compliance', path: '/dashboard/admin/compliance?tab=clinics', icon: Store },
         { name: 'Rider Compliance', path: '/dashboard/admin/compliance?tab=riders', icon: Truck },
         { name: 'Global Users', path: '/dashboard/admin/users', icon: Users },
@@ -203,7 +204,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     ];
 
     const systemAdminLinks = [
-        { name: 'Platform Overview', path: '/dashboard/admin', icon: LayoutDashboard },
+        { name: 'Dashboard', path: '/dashboard/admin', icon: LayoutDashboard },
         { name: 'Clinic Compliance', path: '/dashboard/admin/compliance?tab=clinics', icon: Store },
         { name: 'Rider Compliance', path: '/dashboard/admin/compliance?tab=riders', icon: Truck },
         { name: 'System Alerts', path: '/dashboard/admin/alerts', icon: Bell },
@@ -244,7 +245,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                         </div>
                         <div className="flex flex-col min-w-0">
                             <h2 className="text-base sm:text-xl lg:text-[22px] font-black text-accent-brown tracking-tighter leading-none truncate">{user?.clinic_name || 'Hi-Vet'}</h2>
-                            <p className="text-[10px] sm:text-[11px] lg:text-[12px] mt-0.5 font-bold text-accent-brown transition-all whitespace-nowrap opacity-60 uppercase tracking-widest">
+                            <p className="text-[10px] sm:text-[11px] lg:text-[12px] mt-0.5 font-bold text-black transition-all whitespace-nowrap opacity-60 uppercase tracking-widest">
                                 {user?.role === 'super_admin' ? 'Super Admin' : 
                                  user?.role === 'system_admin' ? 'System Admin' : 
                                  user?.role === 'business' ? 'Partner' : 
@@ -300,7 +301,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                         <div className="relative">
                             <motion.button
                                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                                className={`relative w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer ${isNotificationsOpen ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'bg-slate-100 text-accent-brown/40 hover:text-accent-brown hover:bg-slate-200'}`}
+                                className={`relative w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer ${isNotificationsOpen ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'bg-slate-100 text-black hover:text-accent-brown hover:bg-slate-200'}`}
                             >
                                 <Bell className="w-4.5 h-4.5" />
                                 {notifications.filter(n => !n.read).length > 0 && (
@@ -324,19 +325,19 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                             <div className="p-5 sm:p-6 border-b border-accent-brown/5 flex items-center justify-between bg-accent-peach/10">
                                                 <div className="flex items-center gap-2">
                                                     <Bell className="w-3.5 h-3.5 text-brand" />
-                                                    <h3 className="font-black text-accent-brown text-sm uppercase tracking-tighter italic">Notifications</h3>
+                                                    <h3 className="font-black text-black text-sm uppercase tracking-tighter italic">Notifications</h3>
                                                 </div>
                                                 {unreadCount > 0 && (
-                                                    <button onClick={markAllAsRead} className="text-[9px] font-black text-accent-brown uppercase tracking-widest hover:underline bg-white px-3 py-1 rounded-full shadow-sm cursor-pointer">Mark all as read</button>
+                                                    <button onClick={markAllAsRead} className="text-[9px] font-black text-black uppercase tracking-widest hover:underline bg-white px-3 py-1 rounded-full shadow-sm cursor-pointer">Mark all as read</button>
                                                 )}
                                             </div>
                                             <div className="max-h-[350px] sm:max-h-[450px] overflow-y-auto no-scrollbar">
                                                 {notifications?.length === 0 ? (
                                                     <div className="py-16 text-center">
                                                         <div className="w-16 h-16 bg-accent-peach/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                            <Bell className="w-8 h-8 text-brand-dark/10" />
+                                                            <Bell className="w-8 h-8 text-black/10" />
                                                         </div>
-                                                        <p className="text-[10px] font-black text-brand-dark/30 uppercase tracking-widest">
+                                                        <p className="text-[10px] font-black text-black uppercase tracking-widest">
                                                             {basePath === 'admin' ? "No pending applications" : "No notifications yet"}
                                                         </p>
                                                     </div>
@@ -359,9 +360,9 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                                             </div>
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="flex items-center justify-between gap-2 mb-1">
-                                                                    <span className="font-black text-[11px] sm:text-xs text-accent-brown truncate">{n?.title}</span>
+                                                                    <span className="font-black text-[11px] sm:text-xs text-black truncate">{n?.title}</span>
                                                                     <div className="flex items-center gap-2">
-                                                                        <span className="text-[8px] font-bold text-brand-dark/30 uppercase shrink-0">Just now</span>
+                                                                        <span className="text-[8px] font-bold text-black uppercase shrink-0">Just now</span>
                                                                         <motion.button 
                                                                             whileHover={{ scale: 1.2, rotate: 90 }}
                                                                             whileTap={{ scale: 0.8 }}
@@ -375,7 +376,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                                                         </motion.button>
                                                                     </div>
                                                                 </div>
-                                                                <p className="text-[10px] sm:text-[11px] text-accent-brown/60 leading-relaxed line-clamp-2 font-medium">{n?.desc}</p>
+                                                                <p className="text-[10px] sm:text-[11px] text-black leading-relaxed line-clamp-2 font-medium">{n?.desc}</p>
                                                             </div>
                                                         </motion.div>
                                                     ))
@@ -385,7 +386,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                                 <Link
                                                     to={`/dashboard/${basePath}/alerts`}
                                                     onClick={() => setIsNotificationsOpen(false)}
-                                                    className="inline-flex items-center gap-2 text-[10px] font-black text-accent-brown uppercase tracking-widest hover:gap-3 transition-all cursor-pointer"
+                                                    className="inline-flex items-center gap-2 text-[10px] font-black text-black uppercase tracking-widest hover:gap-3 transition-all cursor-pointer"
                                                 >
                                                     View All Notifications <Plus className="w-3 h-3 text-brand" />
                                                 </Link>
@@ -398,16 +399,12 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
 
                         <div className="w-[1px] h-6 sm:h-8 bg-brand-dark/10 hidden xs:block"></div>
 
-                        {/* Desktop User Info & Logout */}
-                        <div className="hidden lg:flex items-center gap-3 xl:gap-6">
-                            <div className="hidden xl:flex flex-col items-end min-w-0">
-                                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-accent-brown/50 leading-none mb-1">Welcome back,</span>
-                                <span className="text-[14px] xl:text-[16px] font-black text-accent-brown truncate max-w-[180px] tracking-tighter">{user?.name ?? user?.email}</span>
-                            </div>
+                        {/* Desktop Logout Button */}
+                        <div className="hidden lg:flex items-center">
                             <motion.button
                                 whileHover={{ scale: 1.1, rotate: -5 }}
                                 whileTap={{ scale: 0.9, rotate: 5 }}
-                                onClick={handleLogout}
+                                onClick={() => setIsLogoutModalOpen(true)}
                                 className="w-10 h-10 sm:w-12 sm:h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center hover:bg-red-500 hover:text-white hover:shadow-xl hover:shadow-red-500/20 transition-all cursor-pointer shrink-0"
                                 title="Log Out"
                             >
@@ -441,7 +438,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                     <MapPin className="w-3 h-3" />
                                     {branchContext?.name}
                                     {branchContext?.address && (
-                                        <span className="text-brand-dark/40 font-medium normal-case ml-1">| {branchContext?.address}</span>
+                                        <span className="text-brand-dark/70 font-bold normal-case ml-1">| {branchContext?.address}</span>
                                     )}
                                 </div>
                             )}
@@ -481,7 +478,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                             className="fixed top-0 right-0 h-full w-[280px] bg-white z-[70] shadow-2xl flex flex-col"
                         >
                             <div className="p-6 flex items-center justify-between border-b border-brand-dark/5 bg-accent-peach/10">
-                                <span className="font-black text-xs uppercase tracking-widest text-brand-dark/40">Navigation</span>
+                                <span className="font-black text-xs uppercase tracking-widest text-black/50">Navigation</span>
                                 <button
                                     onClick={() => setIsMobileMenuOpen(false)}
                                     className="w-8 h-8 flex items-center justify-center bg-white rounded-lg text-brand-dark/40 hover:text-red-500"
@@ -514,7 +511,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                     </div>
                                     <div className="min-w-0">
                                         <p className="text-[11px] font-black text-brand-dark truncate">{user?.name || user?.email}</p>
-                                        <p className="text-[9px] font-bold text-brand-dark/40 uppercase tracking-widest">Logged In</p>
+                                        <p className="text-[9px] font-bold text-black uppercase tracking-widest">Logged In</p>
                                     </div>
                                 </div>
                                 <button
@@ -556,12 +553,12 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                     </div>
                                     <div>
                                         <h2 className="font-black text-accent-brown text-xl leading-none tracking-tight">Your Cart</h2>
-                                        <p className="text-[10px] uppercase font-black tracking-widest text-accent-brown/40 mt-1">{totalItems} items</p>
+                                        <p className="text-[10px] uppercase font-black tracking-widest text-black mt-1">{totalItems} items</p>
                                     </div>
                                 </div>
                                 <button
                                     onClick={() => setIsCartOpen(false)}
-                                    className="w-10 h-10 bg-white hover:bg-red-50 text-brand-dark/40 hover:text-red-500 rounded-xl flex items-center justify-center transition-colors shadow-sm"
+                                    className="w-10 h-10 bg-white hover:bg-red-50 text-black hover:text-red-500 rounded-xl flex items-center justify-center transition-colors shadow-sm"
                                 >
                                     <X className="w-5 h-5" />
                                 </button>
@@ -608,7 +605,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                                         <span className="text-[7px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-tighter shrink-0 mb-auto mt-0.5">Stock Issue</span>
                                                     )}
                                                 </div>
-                                                <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 mb-auto">
+                                                <p className="text-[9px] font-black uppercase tracking-widest text-black mb-auto">
                                                     {item.variant} • {item.size}
                                                 </p>
                                                 {item.quantity > item.stock && (
@@ -656,7 +653,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                             {items.length > 0 && (
                                 <div className="p-6 bg-white border-t border-brand-dark/5 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)]">
                                     <div className="flex flex-col gap-2 mb-6">
-                                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-accent-brown/40">
+                                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-black">
                                             <span>Selected ({selectedCount})</span>
                                             <span>Subtotal</span>
                                         </div>
@@ -664,14 +661,14 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                             <div className="flex gap-1.5">
                                                 <button 
                                                     onClick={() => setSelectedItems(new Set(items.map(i => `${i.id}-${i.variant}-${i.size}`)))}
-                                                    className="text-[9px] font-black text-accent-brown hover:underline uppercase"
+                                                    className="text-[9px] font-black text-black hover:underline uppercase"
                                                 >
                                                     Select All
                                                 </button>
                                                 <span className="text-brand-dark/10">|</span>
                                                 <button 
                                                     onClick={() => setSelectedItems(new Set())}
-                                                    className="text-[9px] font-black text-accent-brown/40 hover:text-red-500 hover:underline uppercase"
+                                                    className="text-[9px] font-black text-black/40 hover:text-red-500 hover:underline uppercase"
                                                 >
                                                     Clear Selection
                                                 </button>
@@ -697,7 +694,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                     </button>
                                     <button
                                         onClick={() => setIsCartOpen(false)}
-                                        className="w-full mt-3 text-[10px] font-black uppercase tracking-widest text-brand-dark/40 hover:text-brand-dark transition-colors"
+                                        className="w-full mt-3 text-[10px] font-black uppercase tracking-widest text-black hover:text-brand-dark transition-colors"
                                     >
                                         Continue Shopping
                                     </button>
@@ -732,6 +729,48 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                     </div>
                 </nav>
             )}
+            {/* Logout Confirmation Modal */}
+            <AnimatePresence>
+                {isLogoutModalOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsLogoutModalOpen(false)}
+                            className="absolute inset-0 bg-accent-brown/20 backdrop-blur-md"
+                        />
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 30 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 30 }}
+                            className="bg-white w-full max-w-sm rounded-[3rem] p-10 text-center shadow-2xl relative z-10 border border-brand/5"
+                        >
+                            <div className="w-20 h-20 bg-red-50 text-red-500 rounded-[2rem] flex items-center justify-center mx-auto mb-8">
+                                <LogOut className="w-10 h-10" />
+                            </div>
+                            <h3 className="text-3xl font-black text-accent-brown tracking-tighter mb-4 italic uppercase leading-none">Log Out?</h3>
+                            <p className="text-[12px] font-bold text-black/40 uppercase tracking-widest leading-relaxed mb-10">
+                                Are you sure you want to log out of your Hi-Vet account?
+                            </p>
+                            <div className="grid grid-cols-2 gap-4">
+                                <button
+                                    onClick={() => setIsLogoutModalOpen(false)}
+                                    className="py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-slate-100 text-black hover:bg-slate-200 transition-all cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleLogout}
+                                    className="py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-red-500 text-white shadow-lg shadow-red-500/20 hover:bg-black hover:shadow-black/20 transition-all cursor-pointer"
+                                >
+                                    Log Out
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

@@ -42,6 +42,7 @@ import BusinessOrders from './pages/dashboard/BusinessOrders';
 import BusinessCatalog from './pages/dashboard/BusinessCatalog';
 import BusinessAnalytics from './pages/dashboard/BusinessAnalytics';
 import BusinessReservations from './pages/dashboard/BusinessReservations';
+import BusinessProductEditor from './pages/dashboard/BusinessProductEditor';
 import AccountSettings from './pages/dashboard/AccountSettings';
 import GoogleCallback from './pages/GoogleCallback';
 import BusinessLanding from './pages/BusinessLanding';
@@ -119,7 +120,7 @@ function Navigation() {
           ) : (
             <>
               <Link to="/" className="hover:text-brand-dark transition-colors" onClick={handleHomeClick}>Home</Link>
-              <Link to="/catalog" className="hover:text-brand-dark transition-colors">Catalog</Link>
+              <Link to="/catalog" className="hover:text-brand-dark transition-colors">Store</Link>
               <a href="/#orders" className="hover:text-brand-dark transition-colors">Orders</a>
               <a href="/#loyalty" className="hover:text-brand-dark transition-colors">Loyalty</a>
               <a href="/#about" className="hover:text-brand-dark transition-colors">About</a>
@@ -195,7 +196,7 @@ function Navigation() {
                 { name: 'Requirements', href: '#requirements', type: 'anchor' }
               ] : [
                 { name: 'Home', href: '/', type: 'link' },
-                { name: 'Catalog', href: '/catalog', type: 'link' },
+                { name: 'Store', href: '/catalog', type: 'link' },
                 { name: 'Orders', href: '/#orders', type: 'anchor' },
                 { name: 'Loyalty', href: '/#loyalty', type: 'anchor' },
                 { name: 'About', href: '/#about', type: 'anchor' },
@@ -450,6 +451,14 @@ function App() {
                     element={
                       <ProtectedRoute allowedRoles={['business']}>
                         <BusinessCatalog />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/business/catalog/product/:id"
+                    element={
+                      <ProtectedRoute allowedRoles={['business']}>
+                        <BusinessProductEditor />
                       </ProtectedRoute>
                     }
                   />

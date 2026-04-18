@@ -81,10 +81,10 @@ const ReservationPaymentSuccess = () => {
                 <h1 className="text-3xl font-black text-accent-brown tracking-tighter mb-3">
                     Appointment Booked!
                 </h1>
-                <p className="text-accent-brown/60 font-medium mb-2 text-sm leading-relaxed">
+                <p className="text-black font-medium mb-2 text-sm leading-relaxed">
                     Your payment was processed securely via PayMongo.
                 </p>
-                <p className="text-accent-brown/50 font-medium mb-8 text-sm leading-relaxed">
+                <p className="text-black font-medium mb-8 text-sm leading-relaxed">
                     Your reservation is now <strong className="text-accent-brown">pending clinic confirmation</strong>. You'll receive a notification once confirmed.
                 </p>
 
@@ -93,20 +93,20 @@ const ReservationPaymentSuccess = () => {
                     <div className="mb-6 px-5 py-3 bg-accent-peach/20 rounded-2xl border border-accent-peach/30 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <CalendarCheck className="w-4 h-4 text-brand" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/50">Reservation ID</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-black">Reservation ID</span>
                         </div>
-                        <span className="font-black text-accent-brown text-sm">RV-{String(reservationId).padStart(4, '0')}</span>
+                        <span className="font-black text-accent-brown text-sm">HV-2026-{String(reservationId).padStart(6, '0')}</span>
                     </div>
                 )}
 
                 {/* Countdown */}
                 <div className="mb-8 px-6 py-4 bg-brand-dark/5 rounded-[2rem] border border-accent-brown/5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/40 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black mb-1">
                         Redirecting to Reservations
                     </p>
                     <div className="flex items-center justify-center gap-2">
                         <span className="text-2xl font-black text-accent-brown">{seconds}</span>
-                        <span className="text-[10px] font-bold text-accent-brown/30 uppercase tracking-widest">seconds remaining</span>
+                        <span className="text-[10px] font-bold text-black uppercase tracking-widest">seconds remaining</span>
                     </div>
                 </div>
 
@@ -121,7 +121,7 @@ const ReservationPaymentSuccess = () => {
                     </button>
                     <button
                         onClick={() => navigate('/dashboard/customer')}
-                        className="w-full py-4 text-accent-brown/40 hover:text-accent-brown font-black uppercase tracking-widest text-[9px] transition-colors cursor-pointer"
+                        className="w-full py-4 text-black font-black uppercase tracking-widest text-[9px] transition-colors cursor-pointer"
                     >
                         Back to Customer Hub
                     </button>
@@ -129,7 +129,7 @@ const ReservationPaymentSuccess = () => {
 
                 {/* Footer note */}
                 <div className="mt-8 pt-6 border-t border-brand/10">
-                    <p className="text-[10px] text-accent-brown/40 font-bold uppercase tracking-widest">
+                    <p className="text-[10px] text-black font-bold uppercase tracking-widest">
                         {confirmed
                             ? 'Payment confirmed. A confirmation has been sent to your notification center.'
                             : 'Processing confirmation...'}

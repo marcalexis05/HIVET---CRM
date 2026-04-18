@@ -6,7 +6,7 @@ export const Features = () => {
         {
             icon: Target,
             title: "Precision Sourcing",
-            description: "A specialized catalog curated with surgical precision for discerning pet professionals and owners.",
+            description: "A specialized store curated with surgical precision for discerning pet professionals and owners.",
             color: "bg-white border-accent-brown/5",
             size: "col-span-1 md:col-span-2",
             accent: "Expert Selection"

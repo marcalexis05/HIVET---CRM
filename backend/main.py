@@ -401,6 +401,10 @@ class Order(Base):
     delivered_at        = Column(DateTime, nullable=True)
     cancellation_reason = Column(String, nullable=True)
     voucher_code        = Column(String, nullable=True)
+    delivery_type       = Column(String, default="CLINIC")
+    shipping_fee        = Column(Float, default=0.0)
+    customer_lat        = Column(Float, nullable=True)
+    customer_lng        = Column(Float, nullable=True)
     discount_amount     = Column(Integer, default=0)
     paymongo_session_id = Column(String, nullable=True)
     paymongo_intent_id  = Column(String, nullable=True)
@@ -478,6 +482,10 @@ class Reservation(Base):
     notes               = Column(Text, nullable=True)
     total_amount        = Column(Float, default=0.0)
     voucher_code        = Column(String, nullable=True)
+    delivery_type       = Column(String, default="CLINIC")
+    shipping_fee        = Column(Float, default=0.0)
+    customer_lat        = Column(Float, nullable=True)
+    customer_lng        = Column(Float, nullable=True)
     tracking_id         = Column(String, unique=True, nullable=True)
     created_at          = Column(DateTime, default=datetime.utcnow)
 
@@ -881,6 +889,10 @@ class ReservationCreate(BaseModel):
     branch_id: Optional[int] = None
     total_amount: Optional[float] = 0.0
     voucher_code: Optional[str] = None
+    delivery_type: Optional[str] = "CLINIC"
+    shipping_fee: Optional[float] = 0.0
+    customer_lat: Optional[float] = None
+    customer_lng: Optional[float] = None
 
 class ReservationStatusUpdate(BaseModel):
     status: str  # Pending|Confirmed|Ready for Pickup|Completed|Cancelled
@@ -1086,6 +1098,10 @@ class OrderCreate(BaseModel):
     delivery_lat: Optional[float] = None
     delivery_lng: Optional[float] = None
     voucher_code: Optional[str] = None
+    delivery_type: Optional[str] = "CLINIC"
+    shipping_fee: Optional[float] = 0.0
+    customer_lat: Optional[float] = None
+    customer_lng: Optional[float] = None
 
 class PayMongoSessionResponse(BaseModel):
     checkout_url: str
@@ -3181,6 +3197,10 @@ async def create_reservation(
         notes=body.notes,
         total_amount=final_amount,
         voucher_code=body.voucher_code if voucher_id_applied else None,
+        delivery_type=body.delivery_type,
+        shipping_fee=body.shipping_fee,
+        customer_lat=body.customer_lat,
+        customer_lng=body.customer_lng,
         status=new_status,
         payment_status=new_payment_status,
     )

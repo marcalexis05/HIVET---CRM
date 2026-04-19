@@ -4,6 +4,7 @@ import base64
 import io
 from PIL import Image
 import uuid
+import json
 import httpx
 import uvicorn
 import random
@@ -428,6 +429,9 @@ class Order(Base):
     paymongo_intent_id  = Column(String, nullable=True)
     paymongo_qr_data    = Column(Text, nullable=True)
     is_customer_deleted = Column(Boolean, default=False)
+    return_status       = Column(String, nullable=True)     # Requested, Approved, Rejected, Refunded
+    return_reason       = Column(String, nullable=True)
+    return_photos       = Column(Text, nullable=True)       # JSON string of photo URLs
     created_at          = Column(DateTime, default=datetime.utcnow)
 
 class OrderItem(Base):
@@ -594,7 +598,7 @@ class ReturnRequest(Base):
     clinic_id = Column(Integer, ForeignKey("business_profiles.id"), nullable=False)
     reason = Column(String, nullable=False)
     status = Column(String, default="pending") # pending, approved, rejected, picked_up, returned, refunded
-    evidence_url = Column(String, nullable=True)
+    photos = Column(Text, nullable=True) # JSON string
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -652,9 +656,38 @@ if "orders" in inspector.get_table_names():
             conn.execute(text("ALTER TABLE orders ADD COLUMN voucher_code VARCHAR"))
         if "fulfillment_method" not in columns:
             conn.execute(text("ALTER TABLE orders ADD COLUMN fulfillment_method VARCHAR"))
+        if "return_status" not in columns:
+            conn.execute(text("ALTER TABLE orders ADD COLUMN return_status VARCHAR"))
+        if "return_reason" not in columns:
+            conn.execute(text("ALTER TABLE orders ADD COLUMN return_reason VARCHAR"))
+        if "return_photos" not in columns:
+            conn.execute(text("ALTER TABLE orders ADD COLUMN return_photos TEXT"))
 
 
-# Auto-migrate product_deliveries table
+# Auto-migrate return_requests table
+if "return_requests" in inspector.get_table_names():
+    rr_cols = [col['name'] for col in inspector.get_columns("return_requests")]
+    with engine.begin() as conn:
+        for col_name, col_type in [
+            ("order_id", "INTEGER"),
+            ("customer_id", "INTEGER"),
+            ("clinic_id", "INTEGER"),
+            ("reason", "VARCHAR"),
+            ("status", "VARCHAR"),
+            ("photos", "TEXT"),
+            ("created_at", "TIMESTAMP"),
+            ("updated_at", "TIMESTAMP")
+        ]:
+            if col_name not in rr_cols:
+                conn.execute(text(f"ALTER TABLE return_requests ADD COLUMN {col_name} {col_type}"))
+        
+        # FIX: Drop NOT NULL on legacy columns that might exist
+        for legacy_col in ["reservation_id", "branch_id", "rider_id"]:
+            if legacy_col in rr_cols:
+                try:
+                    conn.execute(text(f"ALTER TABLE return_requests ALTER COLUMN {legacy_col} DROP NOT NULL"))
+                except Exception:
+                    pass
 if "product_deliveries" in inspector.get_table_names():
     delivery_cols = [col['name'] for col in inspector.get_columns("product_deliveries")]
     with engine.begin() as conn:
@@ -1108,6 +1141,10 @@ class SpecialDateHoursSchema(SpecialDateHoursBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class PayoutRequest(BaseModel):
+    amount: float
+    method: str
+
 class BusinessServiceSchema(BaseModel):
     id: int
     business_id: int
@@ -1560,7 +1597,10 @@ async def get_business_orders(
             "delivery_status": delivery.status if delivery else None,
             "serial_number": order_item.serial_number or f"HV-SN-{order.id}-{order_item.id}-{(int(order.created_at.timestamp()) % 10000)}",
             "item_id": order_item.id,
-            "image": order_item.image or product.image
+            "image": order_item.image or product.image,
+            "return_status": order.return_status,
+            "return_reason": order.return_reason,
+            "return_photos": order.return_photos
         })
 
     return orders_response
@@ -2076,14 +2116,14 @@ def send_professional_otp_email(email: str, otp_code: str, title: str, descripti
             <div class="card">
                 <div class="accent-bar"></div>
                 <div class="content">
-                    <span class="brand-tag">Safe Initialization</span>
-                    <h1 class="greeting">We are honored to assist you, {prefix}</h1>
+                    <span class="brand-tag">Authentication Protocol</span>
+                    <h1 class="greeting">We are truly honored to be of service, {prefix}</h1>
                     <p>{description}</p>
                     <div class="otp-container">
                         <span class="otp-code">{otp_code}</span>
-                        <span class="otp-label">Your Security Token</span>
+                        <span class="otp-label">Verification Code</span>
                     </div>
-                    <p style="font-size: 11px; margin-top: 40px; margin-bottom: 0; opacity: 0.4; font-weight: 700;">Valid for 10 minutes</p>
+                    <p style="font-size: 11px; margin-top: 40px; margin-bottom: 0; opacity: 0.4; font-weight: 700;">This security token is valid for 10 minutes. Thank you for your continued trust in Hi-Vet.</p>
                 </div>
                 <div class="footer">
                     <span class="footer-text">HI-VET &bull; Your Companion in Health &copy; 2026</span>
@@ -2131,6 +2171,254 @@ def send_professional_otp_email(email: str, otp_code: str, title: str, descripti
     except Exception as e:
         print("SMTP Error:", e)
         raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+def send_return_status_email(email: str, user_name: str, order_id: str, status: str, order_items: List = [], reason: str = ""):
+    """Sends a professional notification regarding refund/return status with product details."""
+    subject = f"Update regarding your Return Request [#{order_id}]"
+    
+    status_label = status.upper()
+    message = ""
+    if status == "Approved":
+        message = "We have carefully reviewed your request and are pleased to inform you that your return has been approved. Our team will coordinate with you shortly for the next steps."
+    elif status == "Rejected":
+        message = "We have carefully reviewed your request and, unfortunately, we are unable to approve your return at this time based on our fulfillment policies. We remain at your service for any further questions."
+    elif status == "Refunded":
+        message = "We are pleased to inform you that your refund has been successfully processed. The amount should reflect in your original payment method within 3-5 business days."
+    
+    # Generate items list HTML
+    items_html = ""
+    if order_items:
+        items_html = '<div style="margin-top: 40px; text-align: left; padding: 30px; background-color: #FAF9F6; border-radius: 32px; border: 1px solid rgba(0, 0, 0, 0.03);">'
+        items_html += '<span style="font-size: 10px; font-weight: 900; color: #F26B21; text-transform: uppercase; letter-spacing: 3px; display: block; margin-bottom: 20px; opacity: 0.6;">Items in this Request</span>'
+        for item in order_items:
+            img_src = item.image if item.image and item.image.startswith("http") else "https://via.placeholder.com/100"
+            items_html += f"""
+            <div style="display: table; width: 100%; margin-bottom: 20px;">
+                <div style="display: table-cell; width: 60px; vertical-align: top;">
+                    <img src="{img_src}" style="width: 60px; height: 60px; border-radius: 12px; object-fit: cover;" alt="{item.product_name}">
+                </div>
+                <div style="display: table-cell; padding-left: 20px; vertical-align: middle;">
+                    <p style="margin: 0; font-size: 15px; font-weight: 700; color: #262626;">{item.product_name}</p>
+                    <p style="margin: 4px 0 0 0; font-size: 12px; font-weight: 500; color: #262626; opacity: 0.5;">
+                        {f'{item.variant} &bull; ' if item.variant else ''}{f'Size {item.size} &bull; ' if item.size else ''}Qty: {item.quantity}
+                    </p>
+                    <p style="margin: 6px 0 0 0; font-size: 13px; font-weight: 700; color: #F26B21;">₱{item.price:,}</p>
+                </div>
+            </div>
+            """
+        if reason:
+            items_html += f"""
+            <div style="height: 15px; border-top: 1px solid rgba(0,0,0,0.05); margin-top: 10px; padding-top: 15px;"></div>
+            <span style="font-size: 10px; font-weight: 900; color: #F26B21; text-transform: uppercase; letter-spacing: 3px; display: block; margin-bottom: 8px; opacity: 0.6;">Reason for Return</span>
+            <p style="margin: 0; font-size: 13px; font-weight: 500; color: #262626; opacity: 0.7; font-style: italic;">"{reason}"</p>
+            """
+        items_html += '</div>'
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+            body {{ margin: 0; padding: 0; background-color: #FAF9F6; }}
+            .surface {{ padding: 60px 20px; text-align: center; }}
+            .card {{ 
+                max-width: 680px; 
+                margin: 0 auto; 
+                background-color: #ffffff; 
+                border-radius: 40px; 
+                overflow: hidden; 
+                box-shadow: 0 30px 80px rgba(38, 38, 38, 0.05); 
+                border: 1px solid rgba(0, 0, 0, 0.03); 
+                display: inline-block; 
+                text-align: center;
+                width: 100%;
+            }}
+            .accent-bar {{ height: 6px; background-color: #F26B21; width: 100%; }}
+            .content {{ padding: 65px 60px; font-family: 'Outfit', sans-serif; }}
+            .brand-tag {{ color: #F26B21; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 4px; display: block; margin-bottom: 25px; opacity: 0.8; }}
+            .greeting {{ color: #262626; font-weight: 900; font-size: 32px; letter-spacing: -1px; margin: 0 0 15px 0; line-height: 1.2; }}
+            p {{ color: #4A4A4A; font-size: 16px; line-height: 1.8; margin: 0 0 45px 0; font-weight: 500; opacity: 0.7; }}
+            
+            .status-container {{ 
+                background-color: #FAF9F6; 
+                border-radius: 32px; 
+                padding: 45px 20px; 
+                margin: 0 auto;
+                max-width: 460px;
+                border: 1px solid rgba(0, 0, 0, 0.03);
+            }}
+            .status-label {{ font-size: 48px; font-weight: 900; letter-spacing: -2px; color: #262626; display: block; }}
+            .status-sub {{ font-size: 10px; font-weight: 900; color: #F26B21; text-transform: uppercase; letter-spacing: 5px; margin-top: 20px; display: block; opacity: 0.6; }}
+            
+            .footer {{ background-color: #ffffff; padding: 40px 60px; text-align: center; border-top: 1px solid rgba(0, 0, 0, 0.03); }}
+            .footer-text {{ color: #262626; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; opacity: 0.2; }}
+        </style>
+    </head>
+    <body>
+        <div class="surface">
+            <div class="card">
+                <div class="accent-bar"></div>
+                <div class="content">
+                    <span class="brand-tag">Order Resolution</span>
+                    <h1 class="greeting">We remain honored to assist you, {user_name}</h1>
+                    <p>{message}</p>
+                    <div class="status-container">
+                        <span class="status-label">{status_label}</span>
+                        <span class="status-sub">Refund Status Update</span>
+                    </div>
+                    {items_html}
+                </div>
+                <div class="footer">
+                    <span class="footer-text">HI-VET &bull; Supporting Your Journey &copy; 2026</span>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f'"Hi-Vet Logistics" <{EMAIL_SENDER}>'
+    msg["To"] = email
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="gmail.com")
+    
+    msg.attach(MIMEText(f"Your refund status for Order #{order_id} has been updated to: {status_label}.\n\n{message}", "plain"))
+    msg.attach(MIMEText(html_content, "html"))
+
+    if not EMAIL_SENDER or not EMAIL_APP_PWD:
+         return 
+
+    try:
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+            server.login(EMAIL_SENDER, EMAIL_APP_PWD)
+            server.send_message(msg)
+    except Exception as e:
+        print("SMTP Refund Error:", e)
+
+
+def send_return_request_emails(customer_email: str, customer_name: str, clinic_email: str, clinic_name: str, order_id: str, reason: str):
+    """Notify both customer and clinic owner of a new return request with premium aesthetics."""
+    
+    def generate_html(target_name: str, message: str, label: str):
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+                body {{ margin: 0; padding: 0; background-color: #FAF9F6; }}
+                .surface {{ padding: 60px 20px; text-align: center; }}
+                .card {{ 
+                    max-width: 680px; 
+                    margin: 0 auto; 
+                    background-color: #ffffff; 
+                    border-radius: 40px; 
+                    overflow: hidden; 
+                    box-shadow: 0 30px 80px rgba(38, 38, 38, 0.05); 
+                    border: 1px solid rgba(0, 0, 0, 0.03); 
+                    display: inline-block; 
+                    text-align: center;
+                    width: 100%;
+                }}
+                .accent-bar {{ height: 6px; background-color: #F26B21; width: 100%; }}
+                .content {{ padding: 65px 60px; font-family: 'Outfit', sans-serif; text-align: left; }}
+                .brand-tag {{ color: #F26B21; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 4px; display: block; margin-bottom: 25px; opacity: 0.8; }}
+                .greeting {{ color: #262626; font-weight: 900; font-size: 32px; letter-spacing: -1px; margin: 0 0 15px 0; line-height: 1.2; }}
+                p {{ color: #4A4A4A; font-size: 16px; line-height: 1.8; margin: 0 0 45px 0; font-weight: 500; opacity: 0.7; }}
+                
+                .info-container {{ 
+                    background-color: #FAF9F6; 
+                    border-radius: 32px; 
+                    padding: 40px; 
+                    margin: 0 0 45px 0;
+                    border: 1px solid rgba(0, 0, 0, 0.03);
+                }}
+                .info-label {{ font-size: 10px; font-weight: 900; color: #F26B21; text-transform: uppercase; letter-spacing: 3px; display: block; margin-bottom: 10px; opacity: 0.6; }}
+                .info-value {{ font-size: 18px; font-weight: 700; color: #262626; display: block; line-height: 1.4; }}
+                
+                .footer {{ background-color: #ffffff; padding: 40px 60px; text-align: center; border-top: 1px solid rgba(0, 0, 0, 0.03); }}
+                .footer-text {{ color: #262626; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; opacity: 0.2; }}
+            </style>
+        </head>
+        <body>
+            <div class="surface">
+                <div class="card">
+                    <div class="accent-bar"></div>
+                    <div class="content">
+                        <span class="brand-tag">{label}</span>
+                        <h1 class="greeting">Hello, {target_name}</h1>
+                        <p>{message}</p>
+                        
+                        <div class="info-container">
+                            <span class="info-label">Reference ID</span>
+                            <span class="info-value">{order_id}</span>
+                            <div style="height: 25px;"></div>
+                            <span class="info-label">Reason for Request</span>
+                            <span class="info-value">{reason}</span>
+                        </div>
+                        
+                        <p style="margin-bottom: 0;">We remain truly honored to support your journey with Hi-Vet. Our team will proceed with the highest standard of care.</p>
+                    </div>
+                    <div class="footer">
+                        <span class="footer-text">HI-VET &bull; Precision Logistics &copy; 2026</span>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+    # 1. Email to Customer
+    msg_cust = MIMEMultipart("alternative")
+    msg_cust["Subject"] = f"Return Request Received - {order_id}"
+    msg_cust["From"] = f'"Hi-Vet Assistant" <{EMAIL_SENDER}>'
+    msg_cust["To"] = customer_email
+    msg_cust["Date"] = formatdate(localtime=True)
+    msg_cust["Message-ID"] = make_msgid(domain="gmail.com")
+    
+    cust_html = generate_html(
+        customer_name, 
+        f"We have successfully received your return request for the transaction below. The team at **{clinic_name}** will review the details and provide a resolution shortly.",
+        "Request Receipt"
+    )
+    msg_cust.attach(MIMEText(f"Return request received for Order {order_id}.\nReason: {reason}", "plain"))
+    msg_cust.attach(MIMEText(cust_html, "html"))
+
+    # 2. Email to Clinic
+    msg_clin = MIMEMultipart("alternative")
+    msg_clin["Subject"] = f"Action Required: New Return Request [{order_id}]"
+    msg_clin["From"] = f'"Hi-Vet Logistics" <{EMAIL_SENDER}>'
+    msg_clin["To"] = clinic_email
+    msg_clin["Date"] = formatdate(localtime=True)
+    msg_clin["Message-ID"] = make_msgid(domain="gmail.com")
+    
+    clin_html = generate_html(
+        clinic_name, 
+        f"A new return/refund request has been submitted by **{customer_name}**. Please review the evidence in your Business Dashboard and provide a decision to maintain service excellence.",
+        "Service Alert"
+    )
+    msg_clin.attach(MIMEText(f"New return request from {customer_name} for Order {order_id}.\nReason: {reason}", "plain"))
+    msg_clin.attach(MIMEText(clin_html, "html"))
+
+    # Send both
+    if not EMAIL_SENDER or not EMAIL_APP_PWD: return
+
+    try:
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+            server.login(EMAIL_SENDER, EMAIL_APP_PWD)
+            server.send_message(msg_cust)
+            server.send_message(msg_clin)
+    except Exception as e:
+        print("SMTP Return Request Error:", e)
+
+
 
 @app.post("/api/auth/send-otp")
 def send_otp(body: SendOtpRequest, db: Session = Depends(get_db)):
@@ -2195,11 +2483,19 @@ async def request_email_change(body: EmailChangeRequest, request: Request, db: S
             
             # For simplicity, if the table matches the user's role and the ID matches, skip error
             is_same_user = False
-            if role == "business" and model == BusinessProfile and int(existing.id) == user_id: is_same_user = True
-            elif role == "rider" and model == RiderProfile and (int(getattr(existing, 'id', 0)) == user_id or int(getattr(existing, 'customer_id', 0)) == user_id): is_same_user = True
-            elif role == "customer" and model == Customer and int(existing.id) == user_id: is_same_user = True
-            elif role == "superadmin" and model == SuperAdminUser and int(existing.id) == user_id: is_same_user = True
-            elif role == "admin" and model == SystemAdminUser and int(existing.id) == user_id: is_same_user = True
+            if role == "business" and model == BusinessProfile and int(existing.id) == user_id: 
+                is_same_user = True
+            elif role == "rider":
+                if model == RiderProfile and (int(getattr(existing, 'id', 0)) == user_id or int(getattr(existing, 'customer_id', 0)) == user_id):
+                    is_same_user = True
+                elif model == Customer and int(existing.id) == user_id:
+                    is_same_user = True
+            elif role == "customer" and model == Customer and int(existing.id) == user_id: 
+                is_same_user = True
+            elif role == "superadmin" and model == SuperAdminUser and int(existing.id) == user_id: 
+                is_same_user = True
+            elif role == "admin" and model == SystemAdminUser and int(existing.id) == user_id: 
+                is_same_user = True
             
             if not is_same_user:
                 raise HTTPException(status_code=400, detail="Email is already registered by another account")
@@ -2209,12 +2505,34 @@ async def request_email_change(body: EmailChangeRequest, request: Request, db: S
     # Store with a specific prefix to avoid collision with registration OTPs
     OTP_STORE[f"email_change:{body.new_email}"] = {"otp": otp_code, "expires": expires}
 
+    # Fetch user for personalization
+    curr_user = None
+    if role == "business":
+        curr_user = db.query(BusinessProfile).filter(BusinessProfile.id == user_id).first()
+    elif role == "rider":
+        curr_user = db.query(RiderProfile).filter(RiderProfile.id == user_id).first()
+        if not curr_user:
+            curr_user = db.query(RiderProfile).filter(RiderProfile.customer_id == user_id).first()
+    else:
+        curr_user = db.query(Customer).filter(Customer.id == user_id).first()
+
+    customer_name = "Valued Customer"
+    gender = None
+    last_name = ""
+    if curr_user:
+        customer_name = getattr(curr_user, 'clinic_name', None) or getattr(curr_user, 'name', None) or "Valued Customer"
+        gender = getattr(curr_user, 'gender', getattr(curr_user, 'owner_gender', None))
+        last_name = getattr(curr_user, 'last_name', "")
+
     send_professional_otp_email(
         email=body.new_email,
         otp_code=otp_code,
         title="Verify your new email",
         description="You've requested to change your Hi-Vet account email. Please use the code below to verify your new email address. If you didn't request this, you can safely ignore this email.",
-        subject=f"{otp_code} is your Hi-Vet email change verification code"
+        subject=f"{otp_code} is your Hi-Vet email change verification code",
+        customer_name=customer_name,
+        gender=gender,
+        last_name=last_name
     )
     return {"message": "Verification code sent to your new email"}
 
@@ -2256,7 +2574,16 @@ async def verify_email_change(body: EmailChangeVerifyRequest, request: Request, 
     if not user:
         raise HTTPException(status_code=404, detail="User profile not found")
 
-    user.email = body.new_email
+    if role == "rider":
+        # Need to update both RiderProfile AND Customer records
+        rider_prof = user
+        rider_prof.email = body.new_email
+        cust = db.query(Customer).filter(Customer.id == rider_prof.customer_id).first()
+        if cust:
+            cust.email = body.new_email
+    else:
+        user.email = body.new_email
+        
     db.commit()
     db.refresh(user)
 
@@ -2616,8 +2943,25 @@ async def register_customer(body: RegisterRequest, db: Session = Depends(get_db)
 
 UPLOAD_DIR = "uploads/compliance"
 PRODUCT_UPLOAD_DIR = "uploads/products"
+REFUND_UPLOAD_DIR = "uploads/refunds"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(PRODUCT_UPLOAD_DIR, exist_ok=True)
+os.makedirs(REFUND_UPLOAD_DIR, exist_ok=True)
+
+@app.post("/api/orders/refund/upload")
+async def upload_refund_photo(file: UploadFile = File(...)):
+    """Upload a refund evidence photo."""
+    ext = os.path.splitext(file.filename)[1].lower() if file.filename else ".jpg"
+    if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
+        raise HTTPException(status_code=400, detail="Invalid file type")
+    
+    unique_name = f"refund_{uuid.uuid4().hex}{ext}"
+    file_path = os.path.join(REFUND_UPLOAD_DIR, unique_name)
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    return {"url": f"http://localhost:8000/{REFUND_UPLOAD_DIR}/{unique_name}"}
 
 @app.post("/api/business/upload-document")
 async def upload_compliance_document(
@@ -2765,34 +3109,85 @@ async def get_business_catalog(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """Fetch products. If branch_id is provided, return stock for that specific branch."""
+    """Fetch products. If branch_id is provided, return stock for that specific branch, prioritizing JSON variations."""
     if current_user.get("role") != "business":
         raise HTTPException(status_code=403, detail="Business access required")
     
     business_id = int(current_user["sub"])
+    import json
     
     # Base query: Only active (non-archived) products
     query = db.query(Product).filter(Product.business_id == business_id, Product.is_archived == False)
-    
     products = query.order_by(Product.created_at.desc()).all()
     
-    # If branch_id is specified, we need to adjust the .stock field based on branch inventory
-    # For "All Branches" (no branch_id), we might want to sum or just return the list with distribution info
-    
     for p in products:
-        # Load inventory distribution for management UI
+        # Logic to determine stock from JSON variations (Architecture Noir source of truth)
+        json_branch_stock = {} # {branch_id: total_stock}
+        has_variations = False
+
+        # Helper to parse branch_stock from a JSON object
+        def parse_bs(obj, target_dict):
+            if 'branch_stock' in obj and obj['branch_stock']:
+                bs_data = obj['branch_stock']
+                if isinstance(bs_data, str):
+                    try: bs_data = json.loads(bs_data)
+                    except: bs_data = {}
+                
+                if isinstance(bs_data, dict):
+                    for b_id_raw, stock_data in bs_data.items():
+                        try:
+                            bid = int(b_id_raw)
+                            val = int(stock_data.get('stock', 0)) if isinstance(stock_data, dict) else int(stock_data)
+                            target_dict[bid] = target_dict.get(bid, 0) + val
+                        except: continue
+
+        # --- Process Variants ---
+        if p.variants_json:
+            try:
+                v_list = json.loads(p.variants_json) if isinstance(p.variants_json, str) else (p.variants_json or [])
+                if v_list:
+                    has_variations = True
+                    for v in v_list:
+                        # Check for nested sizes in variant first
+                        if 'sizes' in v and isinstance(v['sizes'], list) and v['sizes']:
+                            for sz in v['sizes']:
+                                parse_bs(sz, json_branch_stock)
+                        else:
+                            # Direct variant stock
+                            parse_bs(v, json_branch_stock)
+            except: pass
+
+        # --- Process Standalone Sizes ---
+        if not has_variations and p.sizes_json:
+            try:
+                s_list = json.loads(p.sizes_json) if isinstance(p.sizes_json, str) else (p.sizes_json or [])
+                if s_list:
+                    has_variations = True
+                    for s in s_list:
+                        parse_bs(s, json_branch_stock)
+            except: pass
+
+        # Load Relational Table Distribution (Legacy/Fallback)
         distribution = db.query(BranchInventory).filter(BranchInventory.product_id == p.id).all()
-        p.inventory_distribution = {str(inv.branch_id): inv.stock for inv in distribution}
+        table_stock = {inv.branch_id: inv.stock for inv in distribution}
         
-        if branch_id:
-            # Override .stock with branch-specific stock
-            branch_inv = next((inv for inv in distribution if inv.branch_id == branch_id), None)
-            p.stock = branch_inv.stock if branch_inv else 0
+        # Determine Final Result
+        # If product has JSON variations, prioritize that data. Otherwise use table.
+        if has_variations:
+            # We use JSON data for distribution
+            p.inventory_distribution = {str(k): v for k, v in json_branch_stock.items()}
+            if branch_id:
+                p.stock = json_branch_stock.get(branch_id, 0)
+            else:
+                p.stock = sum(json_branch_stock.values())
         else:
-            # For aggregate view, we can choose to sum or keep legacy global stock
-            # Let's sum for accuracy if distribution exists
-            if distribution:
-                p.stock = sum(inv.stock for inv in distribution)
+            # Use relational table for simple products
+            p.inventory_distribution = {str(k): v for k, v in table_stock.items()}
+            if branch_id:
+                p.stock = table_stock.get(branch_id, 0)
+            else:
+                # Sum table or use global p.stock? Summing table is safer for branch filtering UI.
+                p.stock = sum(table_stock.values()) if table_stock else (p.stock or 0)
 
     return products
 
@@ -2802,7 +3197,7 @@ async def get_business_product_detail(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """Fetch details of a specific product for the business owner."""
+    """Fetch details of a specific product for the business owner, including JSON-based inventory distribution."""
     if current_user.get("role") != "business":
         raise HTTPException(status_code=403, detail="Business access required")
     
@@ -2811,10 +3206,51 @@ async def get_business_product_detail(
     
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-        
-    # Load inventory distribution
+    
+    import json
+    json_branch_stock = {}
+    has_variations = False
+
+    def parse_bs(obj, target_dict):
+        if 'branch_stock' in obj and obj['branch_stock']:
+            bs_data = obj['branch_stock']
+            if isinstance(bs_data, str):
+                try: bs_data = json.loads(bs_data)
+                except: bs_data = {}
+            if isinstance(bs_data, dict):
+                for b_id_raw, stock_data in bs_data.items():
+                    try:
+                        bid = int(b_id_raw)
+                        val = int(stock_data.get('stock', 0)) if isinstance(stock_data, dict) else int(stock_data)
+                        target_dict[bid] = target_dict.get(bid, 0) + val
+                    except: continue
+
+    if product.variants_json:
+        try:
+            v_list = json.loads(product.variants_json) if isinstance(product.variants_json, str) else (product.variants_json or [])
+            if v_list:
+                has_variations = True
+                for v in v_list:
+                    if 'sizes' in v and isinstance(v['sizes'], list) and v['sizes']:
+                        for sz in v['sizes']: parse_bs(sz, json_branch_stock)
+                    else: parse_bs(v, json_branch_stock)
+        except: pass
+
+    if not has_variations and product.sizes_json:
+        try:
+            s_list = json.loads(product.sizes_json) if isinstance(product.sizes_json, str) else (product.sizes_json or [])
+            if s_list:
+                has_variations = True
+                for s in s_list: parse_bs(s, json_branch_stock)
+        except: pass
+
     distribution = db.query(BranchInventory).filter(BranchInventory.product_id == product_id).all()
-    product.inventory_distribution = {str(inv.branch_id): inv.stock for inv in distribution}
+    table_stock = {inv.branch_id: inv.stock for inv in distribution}
+
+    if has_variations:
+        product.inventory_distribution = {str(k): v for k, v in json_branch_stock.items()}
+    else:
+        product.inventory_distribution = {str(k): v for k, v in table_stock.items()}
     
     return product
 
@@ -5312,6 +5748,78 @@ def send_compliance_email(email: str, clinic_name: str, owner_name: str, status:
     except Exception as e:
         print("SMTP Error sending compliance notification:", e)
 
+def send_rider_payout_email(email: str, rider_name: str, amount: float, method: str, balance: float):
+    """Sends a professional and humble payout notification to the rider."""
+    subject = "Logistics Compensation Finalized - Hi-Vet Fleet"
+    date_str = datetime.now().strftime("%B %d, %Y %I:%M %p")
+    
+    html = f"""
+    <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; color: #1A1A1A; max-width: 600px; margin: auto; padding: 40px; border: 1px solid #F0EFEA; border-radius: 24px; background-color: #FFFFFF;">
+        <div style="text-align: center; margin-bottom: 32px;">
+            <div style="display: inline-block; padding: 12px 24px; background-color: #FAF9F6; border-radius: 12px; border: 1px solid #EAE9E4; margin-bottom: 16px;">
+                <span style="font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.3em; color: #FB8500;">Fleet Logistics Treasury</span>
+            </div>
+            <h2 style="font-size: 28px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.05em; margin: 0; color: #1A1A1A;">Compensation Finalized</h2>
+        </div>
+        
+        <p style="font-size: 14px; line-height: 1.8; color: #4A4A4A; margin-bottom: 24px; text-align: center;">
+            Dear <strong>{rider_name}</strong>,<br><br>
+            With sincere respect and gratitude for your partnership, we are pleased to inform you that your request for compensation has been successfully processed. The funds have been disbursed through the **Hi-Vet Treasury Network**.
+        </p>
+
+        <div style="background-color: #FAF9F6; padding: 32px; border-radius: 20px; margin-bottom: 32px; border: 1px solid #EAE9E4; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
+            <table style="width: 100%; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em; border-collapse: collapse;">
+                <tr>
+                    <td style="color: #A19F9A; padding-bottom: 16px; border-bottom: 1px solid #EAE9E4;">Disbursement Yield</td>
+                    <td style="text-align: right; color: #1A1A1A; padding-bottom: 16px; border-bottom: 1px solid #EAE9E4; font-size: 14px;">₱{amount:,.2f}</td>
+                </tr>
+                <tr>
+                    <td style="color: #A19F9A; padding: 16px 0; border-bottom: 1px solid #EAE9E4;">Target Method</td>
+                    <td style="text-align: right; color: #1A1A1A; padding: 16px 0; border-bottom: 1px solid #EAE9E4;">{method}</td>
+                </tr>
+                <tr>
+                    <td style="color: #A19F9A; padding: 16px 0; border-bottom: 1px solid #EAE9E4;">Remaining Asset</td>
+                    <td style="text-align: right; color: #A19F9A; padding: 16px 0; border-bottom: 1px solid #EAE9E4;">₱{balance:,.2f}</td>
+                </tr>
+                <tr>
+                    <td style="color: #A19F9A; padding-top: 16px;">Temporal Stamp</td>
+                    <td style="text-align: right; color: #1A1A1A; padding-top: 16px;">{date_str}</td>
+                </tr>
+            </table>
+        </div>
+
+        <div style="padding: 24px; border-left: 4px solid #FB8500; background-color: #FFF9F2; border-radius: 4px 16px 16px 4px; margin-bottom: 32px;">
+            <p style="font-size: 12px; line-height: 1.6; color: #8B5E3C; margin: 0; font-style: italic;">
+                "Your dedication to maintaining the continuity of the veterinary logistics chain is invaluable. We are truly humbled to have you as a cornerstone of our fleet."
+            </p>
+        </div>
+
+        <p style="font-size: 13px; line-height: 1.6; color: #1A1A1A; text-align: center; margin-bottom: 40px;">
+            We wish you safety and steady success in all your upcoming missions.
+        </p>
+
+        <div style="text-align: center; font-size: 9px; color: #A19F9A; text-transform: uppercase; letter-spacing: 0.25em; border-top: 1px solid #F0EFEA; padding-top: 32px;">
+            &copy; 2026 Hi-Vet Veterinary Solutions • Fleet Logistics Division<br>
+            Automated Treasury Confirmation — No Reply Necessary
+        </div>
+    </div>
+    """
+    
+    msg = MIMEMultipart()
+    msg['From'] = f"Hi-Vet Treasury <{EMAIL_SENDER}>"
+    msg['To'] = email
+    msg['Subject'] = subject
+    msg.attach(MIMEText(html, 'html'))
+    
+    try:
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server.login(EMAIL_SENDER, EMAIL_APP_PWD)
+        server.sendmail(EMAIL_SENDER, email, msg.as_string())
+        server.quit()
+        print(f"Payout confirmation sent to {email}")
+    except Exception as e:
+        print(f"SMTP Error sending payout email: {e}")
+
 def send_rider_compliance_email(email: str, rider_name: str, status: str, reasoning: str = ""):
     """Send formal email notification regarding rider compliance status using the premium Hi-Vet template."""
     mascot_img_bytes = None
@@ -6696,81 +7204,133 @@ def restore_stock(db: Session, order_id: int):
             
     db.commit()
 
-def reduce_stock(db: Session, order_id: int):
-    """Helper to decrement stock when an order is completed/processing, ensuring branch-specific inventory is updated."""
-    import json
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        return
+def reduce_stock(db: Session, order_id: int): # HIVET STOCKS SYNC ENGINE V2.2
+    """
+    Architecture Noir Inventory Sync Engine.
+    Handles legacy BranchInventory table, master Product.stock, and nested Variations (JSON).
+    """
+    try:
+        order = db.query(Order).filter(Order.id == order_id).first()
+        if not order: 
+            print(f"[REDUCE_STOCK] Order #{order_id} not found.")
+            return
 
-    # Fallback to main branch if no branch_id on the order
-    branch_id = order.branch_id
-    if not branch_id and order.clinic_id:
-        main_branch = db.query(BusinessBranch).filter(
-            BusinessBranch.business_id == order.clinic_id,
-            BusinessBranch.is_main == True
-        ).first()
-        if main_branch:
-            branch_id = main_branch.id
+        # Resolve Branch ID
+        branch_id = order.branch_id
+        if not branch_id and order.clinic_id:
+            # Try to infer branch if not set on order
+            branches = db.query(BusinessBranch).filter(BusinessBranch.business_id == order.clinic_id).all()
+            if len(branches) == 1:
+                branch_id = branches[0].id
+            else:
+                main_branch = next((b for b in branches if b.is_main), None)
+                if main_branch: branch_id = main_branch.id
 
-    order_items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
-    
-    for item in order_items:
-        product = db.query(Product).filter(Product.id == item.product_id).first()
-        if not product:
-            continue
-        
-        qty = item.quantity
-        reduced = False
-        
-        # 1. Update Branch Inventory
-        if branch_id:
-            inv = db.query(BranchInventory).filter(
-                BranchInventory.product_id == item.product_id,
-                BranchInventory.branch_id == branch_id
-            ).first()
-            if inv:
-                inv.stock = max(0, inv.stock - qty)
-                db.add(inv)
-        
-        # 2. Variants logic
-        if item.variant and product.variants_json:
-            try:
-                variants = json.loads(product.variants_json)
-                for v in variants:
-                    if v.get('name') == item.variant:
-                        v['stock'] = max(0, v.get('stock', 0) - qty)
-                        product.variants_json = json.dumps(variants)
-                        reduced = True
-                        break
-            except Exception as e:
-                print(f"Reduce stock error (variants): {e}")
-        
-        # 3. Sizes logic
-        if not reduced and item.size and product.sizes_json:
-            try:
-                sizes = json.loads(product.sizes_json)
-                for s in sizes:
-                    if s.get('name') == item.size:
-                        s['stock'] = max(0, s.get('stock', 0) - qty)
-                        # Update branch-specific stock within size if branch_id is set
-                        if branch_id and 'branchStocks' in s:
-                            b_id_str = str(branch_id)
-                            curr_b_stock = int(s['branchStocks'].get(b_id_str, 0))
-                            s['branchStocks'][b_id_str] = max(0, curr_b_stock - qty)
-                            
-                        product.sizes_json = json.dumps(sizes)
-                        reduced = True
-                        break
-            except Exception as e:
-                print(f"Reduce stock error (sizes): {e}")
-        
-        # 4. Standard Stock & Global Sync
-        # Always update main product stock for global visibility
-        product.stock = max(0, product.stock - qty)
-        db.add(product)
+        order_items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+        for item in order_items:
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            if not product: continue
+
+            qty = item.quantity or 1
+            b_id_str = str(branch_id) if branch_id else None
+
+            # 1. Update Relational Branch Inventory Table
+            if branch_id:
+                inv = db.query(BranchInventory).filter(
+                    BranchInventory.product_id == item.product_id,
+                    BranchInventory.branch_id == branch_id
+                ).first()
+                if inv:
+                    inv.stock = max(0, (inv.stock or 0) - qty)
+                    db.add(inv)
+
+            # 2. Update JSON Variations (Architecture Noir source of truth)
+            variation_updated = False
             
-    db.commit()
+            # --- 2A. Variants logic ---
+            if product.variants_json:
+                try:
+                    variants = json.loads(product.variants_json) if isinstance(product.variants_json, str) else (product.variants_json or [])
+                    target_v = (item.variant or "").strip().lower()
+                    target_s = (item.size or "").strip().lower()
+                    
+                    v_modified = False
+                    for v in variants:
+                        # Match variant name if provided
+                        if target_v and v.get('name', '').strip().lower() != target_v: continue
+                        
+                        # Variant matched
+                        # i) Handle nested sizes inside variant
+                        if target_s and 'sizes' in v and isinstance(v['sizes'], list):
+                            for s in v['sizes']:
+                                if s.get('name', '').strip().lower() == target_s:
+                                    s['stock'] = max(0, int(s.get('stock', 0)) - qty)
+                                    if b_id_str:
+                                        if 'branch_stock' not in s: s['branch_stock'] = {}
+                                        bd = s['branch_stock'].get(b_id_str, {"stock": 0})
+                                        if isinstance(bd, dict):
+                                            bd['stock'] = max(0, int(bd.get('stock', 0)) - qty)
+                                            s['branch_stock'][b_id_str] = bd
+                                        else: 
+                                            s['branch_stock'][b_id_str] = {"stock": max(0, int(bd) - qty)}
+                                    v_modified = True
+                                    variation_updated = True
+                                    break
+                        
+                        # ii) Direct variant stock (if no size targeted or matched)
+                        if not v_modified:
+                            v['stock'] = max(0, int(v.get('stock', 0)) - qty)
+                            if b_id_str:
+                                if 'branch_stock' not in v: v['branch_stock'] = {}
+                                bd = v['branch_stock'].get(b_id_str, {"stock": 0})
+                                if isinstance(bd, dict):
+                                    bd['stock'] = max(0, int(bd.get('stock', 0)) - qty)
+                                    v['branch_stock'][b_id_str] = bd
+                                else: 
+                                    v['branch_stock'][b_id_str] = {"stock": max(0, int(bd) - qty)}
+                            v_modified = True
+                            variation_updated = True
+                        
+                        if v_modified: break
+                    
+                    if v_modified:
+                        product.variants_json = json.dumps(variants)
+                except Exception as e:
+                    print(f"[REDUCE_STOCK] Variant JSON error for product #{product.id}: {e}")
+
+            # --- 2B. Standalone Sizes logic ---
+            if not variation_updated and item.size and product.sizes_json:
+                try:
+                    sizes = json.loads(product.sizes_json) if isinstance(product.sizes_json, str) else (product.sizes_json or [])
+                    target_s = item.size.strip().lower()
+                    s_modified = False
+                    for s in sizes:
+                        if s.get('name', '').strip().lower() == target_s:
+                            s['stock'] = max(0, int(s.get('stock', 0)) - qty)
+                            if b_id_str:
+                                if 'branch_stock' not in s: s['branch_stock'] = {}
+                                bd = s['branch_stock'].get(b_id_str, {"stock": 0})
+                                if isinstance(bd, dict):
+                                    bd['stock'] = max(0, int(bd.get('stock', 0)) - qty)
+                                    s['branch_stock'][b_id_str] = bd
+                                else: 
+                                    s['branch_stock'][b_id_str] = {"stock": max(0, int(bd) - qty)}
+                            s_modified = True
+                            break
+                    if s_modified:
+                        product.sizes_json = json.dumps(sizes)
+                except Exception as e:
+                    print(f"[REDUCE_STOCK] Size JSON error for product #{product.id}: {e}")
+
+            # 3. Final Master Global Stock Sync
+            # Decrement the total global stock count
+            product.stock = max(0, (product.stock or 0) - qty)
+            db.add(product)
+
+        db.commit()
+    except Exception as ge:
+        print(f"[REDUCE_STOCK] Fatal synchronization error for Order #{order_id}: {ge}")
+        db.rollback()
 
 @app.post("/api/orders", status_code=201)
 async def create_order(body: OrderCreate, request: Request, db: Session = Depends(get_db)):
@@ -7964,6 +8524,8 @@ async def get_orders(request: Request, db: Session = Depends(get_db)):
             "contact_name": o.contact_name,
             "contact_phone": o.contact_phone,
             "cancellation_reason": o.cancellation_reason,
+            "shipping_fee": o.shipping_fee,
+            "discount_amount": o.discount_amount,
             "created_at": str(o.created_at),
             "items": [{
                 "id": i.product_id,
@@ -7975,7 +8537,10 @@ async def get_orders(request: Request, db: Session = Depends(get_db)):
                 "image": i.image,
                 "business_id": db.query(Product.business_id).filter(Product.id == i.product_id).scalar(),
                 "serial_number": i.serial_number or f"HV-SN-{o.id}-{i.id}-{(int(o.created_at.timestamp()) % 10000)}"
-            } for i in items]
+            } for i in items],
+            "return_status": o.return_status,
+            "return_reason": o.return_reason,
+            "return_photos": o.return_photos
         })
     return {"orders": results}
 
@@ -9146,6 +9711,7 @@ async def request_order_return(order_id: int, body: dict, db: Session = Depends(
         raise HTTPException(status_code=400, detail="Only completed orders can be returned")
         
     reason = body.get("reason")
+    photos = body.get("photos") # List of URLs
     if not reason:
         raise HTTPException(status_code=400, detail="Reason is required")
         
@@ -9159,16 +9725,70 @@ async def request_order_return(order_id: int, body: dict, db: Session = Depends(
         customer_id=customer_id,
         clinic_id=order.clinic_id,
         reason=reason,
+        photos=json.dumps(photos) if photos else "[]",
         status="pending"
     )
     db.add(new_request)
+    
+    # Sync status to order for easy dashboard filtering
+    order.return_status = "Requested"
+    order.return_reason = reason
+    order.return_photos = json.dumps(photos) if photos else "[]"
     
     # Notify Clinic
     year = order.created_at.year if order.created_at else 2026
     add_notification(db, order.clinic_id, "System", "New Return Request", f"A customer is requesting a return for Order HV-{year}-{order.id:06d}.", "/dashboard/business/orders", role="business")
     
     db.commit()
+
+    # Gmail Notifications
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    clinic = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
+    if customer and clinic:
+        order_ref = f"HV-{year}-{order.id:06d}"
+        send_return_request_emails(
+            customer.email, 
+            customer.name or customer.first_name or "Valued Customer",
+            clinic.email,
+            clinic.clinic_name or "Clinic Owner",
+            order_ref,
+            reason
+        )
+
     return {"message": "Return request submitted successfully", "request_id": new_request.id}
+
+@app.patch("/api/business/orders/{order_id}/return-handle")
+async def handle_return_request(order_id: int, body: dict, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Business approves or rejects a return request."""
+    if current_user.get("role") != "business":
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    action = body.get("action") # Approved or Rejected
+    if action not in ["Approved", "Rejected", "Refunded"]:
+        raise HTTPException(status_code=400, detail="Invalid action")
+        
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    req = db.query(ReturnRequest).filter(ReturnRequest.order_id == order_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="No return request found")
+        
+    req.status = action.lower()
+    order.return_status = action
+    
+    # Fetch customer and items for email
+    customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
+    if customer:
+        order_items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
+        send_return_status_email(customer.email, customer.name, f"{order.id:06d}", action, order_items, req.reason)
+        
+    # Add notification for customer
+    add_notification(db, order.customer_id, "Logistics", f"Return {action}", f"Your return request for Order #{order.id} has been {action.lower()}.", "/dashboard/customer/orders", role="customer")
+    
+    db.commit()
+    return {"message": f"Return request {action.lower()} and customer notified"}
 
 # ─── Rider Specific Endpoints ───────────────────────────────────────────────
 
@@ -9302,6 +9922,55 @@ async def get_rider_earnings_history(db: Session = Depends(get_db), current_user
         })
 
     return {"history": history}
+
+@app.post("/api/rider/payout/request")
+async def request_rider_payout(
+    req: PayoutRequest, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db), 
+    current_user: dict = Depends(get_current_user)
+):
+    """Processes a rider's payout request via PayMongo (Simulated) and sends notification."""
+    if current_user.get("role") != "rider":
+        raise HTTPException(status_code=403, detail="Rider access required")
+        
+    rider = db.query(RiderProfile).filter(RiderProfile.id == int(current_user["sub"])).first()
+    if not rider:
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == int(current_user["sub"])).first()
+        
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider profile not found")
+        
+    wallet = db.query(RiderWallet).filter(RiderWallet.rider_id == rider.id).first()
+    if not wallet or wallet.balance < req.amount:
+        raise HTTPException(status_code=400, detail="Insufficient accumulated assets")
+        
+    if req.amount < 100:
+        raise HTTPException(status_code=400, detail="Minimum disbursement is ₱100.00")
+
+    # 1. Simulate PayMongo Disbursement Call
+    # In production, we'd use httpx to call PayMongo's Disbursement API here.
+    # payload = { "amount": int(req.amount * 100), "currency": "PHP", "method": req.method.lower(), ... }
+    
+    # 2. Reduce total accumulated asset (Wallet Balance)
+    wallet.balance -= req.amount
+    db.commit()
+    
+    # 3. Send professional humility-driven gmail notification
+    background_tasks.add_task(
+        send_rider_payout_email, 
+        rider.email, 
+        rider.name or f"{rider.first_name} {rider.last_name}", 
+        req.amount, 
+        req.method, 
+        wallet.balance
+    )
+    
+    return {
+        "status": "success", 
+        "message": "Disbursement finalized through the treasury network.",
+        "remaining_balance": wallet.balance
+    }
 
 @app.get("/api/rider/orders/analytics")
 async def get_rider_orders_analytics(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
@@ -9653,6 +10322,8 @@ async def accept_delivery_task(delivery_id: int, db: Session = Depends(get_db), 
         order.rider_id = rider.id
         order.status = "Processing"
         order.assigned_at = datetime.utcnow()
+        # Trigger inventory reduction immediately on acceptance
+        reduce_stock(db, order.id)
         
     db.commit()
     return {"message": "Task accepted", "pickup_pin": delivery.pickup_pin}
@@ -9686,6 +10357,7 @@ async def update_delivery_status(delivery_id: int, body: DeliveryStepUpdate, db:
         new_status = "out_for_delivery"
     elif new_status in ["Delivered", "Completed", "completed"]:
         new_status = "completed"
+    
 
     if new_status == "out_for_delivery":
         order = db.query(Order).filter(Order.id == delivery.order_id).first()
@@ -9721,15 +10393,18 @@ async def update_delivery_status(delivery_id: int, body: DeliveryStepUpdate, db:
         delivery.status = "completed"
         order = db.query(Order).filter(Order.id == delivery.order_id).first()
         if order:
-            if order.status != "Completed":
+            # Fallback: only reduce if it skipped all earlier processing triggers
+            if order.status == "Pending":
                 reduce_stock(db, order.id)
+            
+            if order.status != "Completed":
                 order.status = "Completed"
                 order.delivered_at = datetime.utcnow()
                 
                 # Update Wallet & Remittance
-                wallet = db.query(RiderWallet).filter(RiderWallet.rider_id == delivery.rider_id).first()
+                wallet = db.query(RiderWallet).filter(RiderWallet.rider_id == rider_id).first()
                 if not wallet:
-                    wallet = RiderWallet(rider_id=delivery.rider_id, balance=0.0, remittance_balance=0.0)
+                    wallet = RiderWallet(rider_id=rider_id, balance=0.0, remittance_balance=0.0)
                     db.add(wallet)
                 
                 # Ensure balances are not None
@@ -9740,23 +10415,21 @@ async def update_delivery_status(delivery_id: int, body: DeliveryStepUpdate, db:
                 # Earnings logic: shipping fee goes to rider
                 wallet.balance += fee
                 
-                # COD logic: if COD, rider owes the total amount (products + fee) to the clinic? 
-                if order.payment_method == "cod":
-                    wallet.remittance_balance += (order.total_amount - fee)
+                # COD logic
+                if order.payment_method and order.payment_method.lower() == "cod":
+                    wallet.remittance_balance += float(order.total_amount or 0.0)
                 
-                # Award points
-                biz = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
+                db.add(wallet)
+                
+                # Award loyalty points
                 items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
                 total_points = 0
                 for item in items:
                     prod = db.query(Product).filter(Product.id == item.product_id).first()
-                    # 1. Use points captured at order time
                     if item.loyalty_points and item.loyalty_points > 0:
                         total_points += item.loyalty_points * item.quantity
                     elif prod and prod.loyalty_points > 0:
-                        # 2. Current product points
                         total_points += prod.loyalty_points * item.quantity
-                    # No points if not in catalog
                 
                 if total_points > 0:
                     cust = db.query(Customer).filter(Customer.id == order.customer_id).first()
@@ -9765,6 +10438,9 @@ async def update_delivery_status(delivery_id: int, body: DeliveryStepUpdate, db:
                         cust.loyalty_points += total_points
                         year = order.created_at.year if order.created_at else 2026
                         db.add(LoyaltyHistory(customer_id=cust.id, description=f"Earned points from Order HV-{year}-{order.id:06d}", points=total_points))
+        
+        db.commit()
+        return {"message": "Order marked as completed"}
 
     db.commit()
     return {"message": f"Status updated to {new_status}", "delivery_status": delivery.status}

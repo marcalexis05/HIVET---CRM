@@ -257,7 +257,7 @@ const RiderDashboard = () => {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
-                showToast("Manifest accepted! Head to extraction point.", "success");
+                // Manifest accepted toast removed as per user request
                 fetchData();
             } else {
                 const err = await res.json();
@@ -290,7 +290,7 @@ const RiderDashboard = () => {
             });
 
             if (res.ok) {
-                showToast(`Logistics updated: ${pinModal.status}`, "success");
+                // Logistics updated toast removed as per user request
                 setPinModal({ isOpen: false, status: '', deliveryId: null });
                 setPinValue('');
                 fetchData();
@@ -322,7 +322,7 @@ const RiderDashboard = () => {
                 body: JSON.stringify({ new_status: status })
             });
             if (res.ok) {
-                showToast(`Status updated to ${status}`, "success");
+                // Success toast removed as per user request
                 fetchData();
             } else {
                 showToast("Failed to update status", "error");
@@ -592,17 +592,21 @@ const RiderDashboard = () => {
                                         <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-[0.25em] mb-3">Inventory Breakdown</p>
                                         <div className="space-y-3">
                                             {(activeOrder.items || []).map((item: any, idx: number) => (
-                                                <div key={idx} className="flex gap-4 items-center bg-[#FAF9F6] rounded-xl px-4 py-3 border border-accent-brown/5">
-                                                    <div className="w-12 h-12 bg-white rounded-lg border border-accent-brown/5 flex items-center justify-center overflow-hidden shrink-0">
+                                                <div key={idx} className="flex gap-4 items-center bg-accent-peach/5 rounded-2xl px-5 py-4 border border-accent-brown/5 group hover:bg-accent-peach/10 transition-all">
+                                                    <div className="w-14 h-14 bg-white rounded-xl border border-accent-brown/10 flex items-center justify-center overflow-hidden shrink-0 shadow-sm transition-transform group-hover:scale-105">
                                                         {item.image_url ? (
                                                             <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
                                                         ) : (
-                                                            <Package size={16} className="text-accent-brown/20" />
+                                                            <Package size={20} className="text-accent-brown/20" />
                                                         )}
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="text-xs font-black text-accent-brown leading-tight truncate">{item.name}</p>
-                                                        <p className="text-[10px] font-bold text-accent-brown/40 mt-0.5">Quantity: {item.quantity}</p>
+                                                        <p className="text-xs font-black text-accent-brown uppercase tracking-tight leading-none mb-1.5 truncate">{item.name}</p>
+                                                        <div className="flex items-center gap-3">
+                                                            <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest">Quantity: {item.quantity}</p>
+                                                            <div className="w-1 h-1 rounded-full bg-accent-brown/10" />
+                                                            <p className="text-[9px] font-black text-brand-dark uppercase tracking-widest">Verified</p>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             ))}
@@ -751,25 +755,35 @@ const RiderDashboard = () => {
 
                                                     {/* Content Area */}
                                                     <div className="px-6 py-5 space-y-5 flex-1">
-                                                        {/* Product Preview */}
-                                                        {order.items && order.items.length > 0 && (
-                                                            <div className="flex -space-x-4 overflow-hidden">
-                                                                {order.items.slice(0, 3).map((item: any, i: number) => (
-                                                                    <div key={i} className="inline-block h-12 w-12 rounded-xl ring-4 ring-white border border-accent-brown/5 bg-[#FAF9F6] overflow-hidden relative group/item">
-                                                                        {item.image_url ? (
-                                                                            <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
-                                                                        ) : (
-                                                                            <div className="h-full w-full flex items-center justify-center">
-                                                                                <Package size={14} className="text-accent-brown/20" />
+                                                        {/* Job Manifest (Detailed products) */}
+                                                        {order.items && order.items.length > 0 ? (
+                                                            <div className="space-y-3">
+                                                                <div className="flex items-center justify-between mb-2">
+                                                                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-brand">Job Manifest</p>
+                                                                    <p className="text-[9px] font-black text-accent-brown/20 uppercase tracking-widest">{order.items.length} Product{order.items.length > 1 ? 's' : ''}</p>
+                                                                </div>
+                                                                <div className="space-y-2 max-h-[160px] overflow-y-auto no-scrollbar pr-1">
+                                                                    {order.items.map((item: any, idx: number) => (
+                                                                        <div key={idx} className="flex items-center gap-3 bg-accent-peach/5 rounded-xl p-2.5 border border-accent-brown/5 hover:bg-accent-peach/10 transition-colors">
+                                                                            <div className="w-10 h-10 bg-white rounded-lg border border-accent-brown/5 flex items-center justify-center overflow-hidden shrink-0 shadow-sm text-accent-brown/20">
+                                                                                {item.image_url ? (
+                                                                                    <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                                                                                ) : (
+                                                                                    <Package size={14} />
+                                                                                )}
                                                                             </div>
-                                                                        )}
-                                                                    </div>
-                                                                ))}
-                                                                {order.items.length > 3 && (
-                                                                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-dark text-white text-[10px] font-black ring-4 ring-white shadow-lg">
-                                                                        +{order.items.length - 3}
-                                                                    </div>
-                                                                )}
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <p className="text-[11px] font-black text-accent-brown leading-none truncate mb-1">{item.name}</p>
+                                                                                <p className="text-[9px] font-bold text-accent-brown/40 uppercase tracking-widest">Qty: {item.quantity}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-3 p-3 bg-red-50/50 rounded-xl border border-red-100 italic">
+                                                                <AlertCircle size={12} className="text-red-400" />
+                                                                <p className="text-[10px] font-bold text-red-400/70">No items detected in manifest</p>
                                                             </div>
                                                         )}
 

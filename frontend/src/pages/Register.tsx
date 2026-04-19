@@ -50,6 +50,8 @@ const Register = () => {
     const [countdown, setCountdown] = useState(0);
     const [agreedToTerms, setAgreedToTerms] = useState(false);
     const [showLegalModal, setShowLegalModal] = useState(false);
+    const [showStudyModal, setShowStudyModal] = useState(false);
+    const [referralCode, setReferralCode] = useState('');
 
     useEffect(() => {
         if (countdown > 0) {
@@ -151,8 +153,8 @@ const Register = () => {
                 setError('A valid birthdate is required for identification');
                 return;
             }
-            if (age < 12) {
-                setError('Identification requires candidates 12 years and above');
+            if (age < 18) {
+                setError('Identification requires candidates 18 years and above');
                 return;
             }
             if (age > 120) {
@@ -219,13 +221,14 @@ const Register = () => {
                     phone,
                     birthdate,
                     gender,
-                    role: 'customer'
+                    role: 'customer',
+                    referral_code: referralCode
                 })
             });
             const data = await res.json();
-            if (res.ok && data.token) {
-                loginWithToken(data.token);
-                navigate('/dashboard/customer');
+            if (res.ok) {
+                // Redirect to login page with success message instead of auto-logging in
+                navigate('/login?msg=reg_success');
             } else {
                 setError(data.detail || 'Registration failed');
             }
@@ -282,6 +285,7 @@ const Register = () => {
                                 <div className="space-y-2">
                                     <label className="text-[11px] font-black uppercase tracking-widest text-accent-brown/40 block ml-1">Calculated Age</label>
                                     <div className="w-full bg-[#F7F6F2] py-4 px-6 rounded-2xl text-accent-brown font-black text-xl italic opacity-50">{calculateAge(birthdate) || '--'}</div>
+                                    <button type="button" onClick={() => setShowStudyModal(true)} className="text-[10px] font-black text-brand-dark uppercase tracking-[0.2em] hover:underline italic mt-2 ml-2 block text-left">Why 18+? View BAI Study</button>
                                 </div>
                             </div>
                             <CustomDropdown label="Sex" value={gender} isRequired={true} onChange={setGender} options={[{ label: 'Male', value: 'Male' }, { label: 'Female', value: 'Female' }, { label: 'Other', value: 'Other' }]} placeholder="Select" />
@@ -326,6 +330,15 @@ const Register = () => {
                                     </button>
                                 </div>
                             </div>
+
+                            <div className="group space-y-2">
+                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic font-brand italic">Referral Code <span className="text-[11px] lowercase opacity-50 font-bold italic not-uppercase tracking-normal">(Optional)</span></label>
+                                <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-sm">
+                                    <ArrowRight className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark" />
+                                    <input type="text" value={referralCode} onChange={e => setReferralCode(e.target.value.toUpperCase())} placeholder="HIVET-XXXX" className="w-full bg-[#F7F6F2] rounded-3xl py-5 pl-16 pr-8 text-accent-brown font-black outline-none shadow-inner tracking-widest placeholder:tracking-normal placeholder:font-bold" />
+                                </div>
+                            </div>
+
                             <div className="pt-2 px-6">
                                 <div className="flex items-center gap-3 group/terms cursor-pointer py-1" onClick={() => setAgreedToTerms(!agreedToTerms)}>
                                     <div className={`w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center ${agreedToTerms ? 'bg-brand-dark border-brand-dark shadow-lg shadow-brand-dark/30' : 'border-accent-brown/10 bg-white group-hover/terms:border-accent-brown/30'}`}>
@@ -478,6 +491,64 @@ const Register = () => {
                                     </div>
                                 </div>
                                 <button onClick={() => { setAgreedToTerms(true); setShowLegalModal(false); }} className="w-full bg-brand-dark text-white py-6 rounded-full font-black uppercase tracking-[0.4em] text-xs shadow-xl shadow-brand-dark/20 hover:shadow-brand-dark/40 hover:-translate-y-1 transition-all">Confirm Acknowledgement</button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {showStudyModal && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowStudyModal(false)} className="absolute inset-0 bg-accent-brown/80 backdrop-blur-xl" />
+                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-2xl bg-[#F7F6F2] rounded-[4rem] p-12 sm:p-20 shadow-2xl overflow-y-auto max-h-[90vh]">
+                            <button onClick={() => setShowStudyModal(false)} className="absolute top-12 right-12 text-accent-brown hover:rotate-90 transition-transform"><X className="w-8 h-8" /></button>
+                            
+                            <div className="space-y-12 text-left">
+                                <div className="space-y-6 md:pr-12">
+                                    <div className="inline-flex items-center gap-3 text-brand-dark uppercase tracking-[0.6em] text-[10px] font-black mb-2 italic">
+                                        <div className="w-10 h-[2px] bg-brand-dark" /> 
+                                        Regulatory Compliance
+                                    </div>
+                                    <h3 className="text-4xl md:text-5xl font-black text-accent-brown tracking-tighter uppercase leading-[0.9] italic">BAI Age Policy <br /><span className="text-brand-dark">Research Note</span></h3>
+                                </div>
+
+                                <div className="space-y-10">
+                                    <div className="space-y-4">
+                                        <h4 className="text-[11px] font-black uppercase tracking-[0.4em] text-accent-brown/40 italic">Overview</h4>
+                                        <p className="text-md text-accent-brown font-medium italic leading-[1.8] bg-white p-8 rounded-[2.5rem] shadow-sm border border-accent-brown/5">
+                                            Hi-Vet enforces a **18-year-old minimum age** requirement to align with the Bureau of Animal Industry (BAI) standards and the Animal Welfare Act (RA 8485).
+                                        </p>
+                                    </div>
+
+                                    <div className="grid md:grid-cols-2 gap-8">
+                                        <div className="space-y-3">
+                                            <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-brand-dark italic">Legal Capacity</h4>
+                                            <p className="text-sm text-accent-brown/70 italic leading-[1.7]">
+                                                Under Philippine law, legal personhood is attained at 18. This ensures every Hi-Vet user is capable of entering into binding service contracts for veterinary care.
+                                            </p>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-brand-dark italic">Accountability</h4>
+                                            <p className="text-sm text-accent-brown/70 italic leading-[1.7]">
+                                                The BAI requires accountable representatives for all animal-related transactions. This prevents legal slippage in animal welfare compliance.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="w-full h-[1px] bg-accent-brown/10" />
+
+                                    <div className="space-y-6">
+                                        <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-accent-brown/30 italic">Official References</h4>
+                                        <div className="flex flex-wrap gap-3">
+                                            {['BAI GUIDELINES', 'RA 8485', 'RA 10631', 'CIVIL CODE'].map(ref => (
+                                                <span key={ref} className="px-5 py-2 rounded-full border border-accent-brown/10 text-[10px] font-black text-accent-brown/40 uppercase tracking-widest">{ref}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button onClick={() => setShowStudyModal(false)} className="w-full bg-accent-brown text-white py-6 rounded-full font-black uppercase tracking-[0.4em] text-xs shadow-2xl hover:brightness-110 transition-all">Close Study</button>
                             </div>
                         </motion.div>
                     </div>

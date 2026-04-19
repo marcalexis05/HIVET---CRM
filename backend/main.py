@@ -37,8 +37,8 @@ from sqlalchemy import create_engine, Column, String, Text, DateTime, text, Inte
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from dateutil.relativedelta import relativedelta
 
-import traceback
 from fastapi.responses import JSONResponse
+import google.generativeai as genai
 
 # ---------------------------------------------------------------------------
 # Config
@@ -60,6 +60,12 @@ EMAIL_APP_PWD = "dpan oejd uzvs tepw"
 PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY", "test_key_placeholder")
 
 PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY", "test_key_placeholder")
+
+# Gemini AI Support (Reloaded)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+print(f"DEBUG: GEMINI_API_KEY loaded: {bool(GEMINI_API_KEY)}")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +141,33 @@ def run_migrations():
             with engine.connect() as conn:
                 conn.execute(text("ALTER TABLE reservations ADD COLUMN loyalty_points INTEGER DEFAULT 0"))
                 conn.commit()
+
+# ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
+def contains_profanity(text: str) -> bool:
+    """Checks if the input text contains common English or Tagalog profanity."""
+    if not text:
+        return False
+    
+    # Comprehensive bilingual profanity set
+    profane_words = {
+        # English
+        "fuck", "shit", "asshole", "bitch", "bastard", "cunt", "dick", "pussy", 
+        "faggot", "nigger", "whore", "slut", "damn", "hell", "retard",
+        # Tagalog / Filipino
+        "puta", "pukina", "tarantado", "gago", "tangina", "kupal", "puchu", 
+        "bobo", "ulol", "lintik", "hayup", "tanga", "pesti", "leche", "pokpok",
+        "kantot", "iyot", "jakol", "buru", "bayag", "burat", "tilapia", "tinggil"
+    }
+    
+    # Normalize text: lower case and remove common separators/spaces to catch bypasses
+    cleaned_lower = text.lower().replace(" ", "").replace("_", "").replace("-", "").replace(".", "")
+    
+    for word in profane_words:
+        if word in cleaned_lower:
+            return True
+    return False
 
 run_migrations()
 
@@ -1439,7 +1472,7 @@ class RevenueTrendData(BaseModel):
 class TopItemAnalytics(BaseModel):
     name: str
     sold: int
-    revenue: str
+    revenue: float
     pct: int
     delta: Optional[int] = 0
 
@@ -3729,6 +3762,13 @@ async def create_reservation(
     """Customer creates a new reservation with rigorous validation."""
     customer_id = int(current_user["sub"])
     
+    # 0. Profanity Filter for Pet Name
+    if contains_profanity(body.pet_name):
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid pet name. Please use a respectful name which aligns with our community guidelines."
+        )
+
     # 1. Parse and validate requested date and time
     try:
         # Expected formats: date="YYYY-MM-DD", time="09:00 AM"
@@ -5199,7 +5239,7 @@ async def get_business_analytics(
         p_list = sorted([{"name": k, **v} for k, v in p_map.items()], key=lambda x: x["revenue"], reverse=True)[:6]
         max_p = max([i["revenue"] for i in p_list]) if p_list and max([i["revenue"] for i in p_list]) > 0 else 1
         for i in p_list:
-            top_products.append({"name": i["name"], "sold": i["sold"], "revenue": f"₱{i['revenue']:,.0f}", "pct": int((i["revenue"]/max_p)*100), "delta": 5})
+            top_products.append({"name": i["name"], "sold": i["sold"], "revenue": i['revenue'], "pct": int((i["revenue"]/max_p)*100), "delta": 5})
     
         # Return empty list to trigger frontend placeholder
         pass
@@ -5216,7 +5256,7 @@ async def get_business_analytics(
         s_list = sorted([{"name": k, **v} for k, v in s_map.items()], key=lambda x: x["revenue"], reverse=True)[:6]
         max_s = max([i["revenue"] for i in s_list]) if s_list and max([i["revenue"] for i in s_list]) > 0 else 1
         for i in s_list:
-            top_services.append({"name": i["name"], "sold": i["sold"], "revenue": f"₱{i['revenue']:,.0f}", "pct": int((i['revenue']/max_s)*100), "delta": 5})
+            top_services.append({"name": i["name"], "sold": i["sold"], "revenue": i['revenue'], "pct": int((i['revenue']/max_s)*100), "delta": 5})
 
     # Return empty list to trigger frontend placeholder
     pass
@@ -10177,6 +10217,16 @@ async def get_available_jobs(db: Session = Depends(get_db), current_user: dict =
             elif diff.total_seconds() < 3600: time_str = f"{int(diff.total_seconds() // 60)}m ago"
             else: time_str = f"{int(diff.total_seconds() // 3600)}h ago"
 
+        # Fetch Order Items for the manifest
+        order_items = db.query(OrderItem).filter(OrderItem.order_id == o.id).all()
+        task_items = []
+        for item in order_items:
+            task_items.append({
+                "name": item.product_name,
+                "quantity": item.quantity,
+                "image_url": item.image
+            })
+
         results.append({
             "id": o.id,
             "total_amount": o.total_amount,
@@ -10191,7 +10241,8 @@ async def get_available_jobs(db: Session = Depends(get_db), current_user: dict =
             "pickup_lng": pickup_lng,
             "distance_km": round(distance, 1),
             "created_at": time_str,
-            "status": o.status
+            "status": o.status,
+            "items": task_items
         })
         
     # Sort by distance (nearest first)
@@ -10272,6 +10323,7 @@ async def get_ongoing_job(db: Session = Depends(get_db), current_user: dict = De
         item_list.append({
             "name": p.name if p else "Product", 
             "quantity": it.quantity,
+            "image_url": p.image if p else (it.image if hasattr(it, 'image') else None),
             "serial_number": it.serial_number or f"HV-SN-{order.id}-{it.id}-{(int(order.created_at.timestamp()) % 10000)}"
         })
 
@@ -10493,6 +10545,82 @@ async def delete_order(order_id: int, db: Session = Depends(get_db), current_use
     order.is_customer_deleted = True
     db.commit()
     return {"message": "Order purged from records"}
+
+# Help to get optional user for contextualized chat
+async def get_optional_user(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except:
+        return None
+
+# ---------------------------------------------------------------------------
+# Support Chatbot
+# ---------------------------------------------------------------------------
+class ChatMessage(BaseModel):
+    message: str
+    history: List[dict] = []
+
+@app.post("/api/support/chat")
+async def support_chat(data: ChatMessage, current_user: Optional[dict] = Depends(get_optional_user)):
+    global GEMINI_API_KEY
+    if not GEMINI_API_KEY:
+        load_dotenv(override=True)
+        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+        if GEMINI_API_KEY:
+            genai.configure(api_key=GEMINI_API_KEY)
+
+    if not GEMINI_API_KEY:
+        return {"response": "Support Chat is currently offline. Please try again later."}
+        
+    try:
+        # Build context prompt
+        system_context = """
+        You are 'Hi-Vet Assistant', the EXCLUSIVE intelligent support bot for Hi-Vet CRM (Veterinary Clinic & Logistics).
+        User Background: 
+        - Role: {role}
+        - Name: {name}
+        - Context: {context}
+
+        STRICT SCOPE ENFORCEMENT:
+        - Your ONLY purpose is to assist with Hi-Vet CRM platform navigation, order tracking, appointment booking, and basic pet care advice.
+        - NEVER provide programming code, scripts (Python, JS, etc.), or technical software engineering help.
+        - If asked for code or non-Hi-Vet help, politely refuse: "I apologize, but I am specialized solely in Hi-Vet customer support and pet care. I cannot provide programming or general technical assistance."
+        - Focus on helping users find their way around our dashboard, store, and clinic services.
+
+        Guidelines:
+        - Be friendly, professional, and concise.
+        - You help with: Order tracking, booking appointments, branch info, account issues, and veterinary advice (with disclaimers).
+        - If a user asks about a specific order, suggest they check their 'Orders' page.
+        - If they want to book, suggest the 'Reservations' page.
+        - Use emojis sparingly.
+        - NEVER share internal system secrets.
+        """.format(
+            role=current_user.get('role', 'guest') if current_user else 'guest',
+            name=current_user.get('name', 'Customer') if current_user else 'Customer',
+            context="The user is currently browsing the Hi-Vet platform dashboard."
+        )
+
+        # Use gemini-flash-latest for stability and pass system instructions correctly
+        model = genai.GenerativeModel(
+            model_name='gemini-flash-latest',
+            system_instruction=system_context
+        )
+        
+        # Build history from data.history if provided
+        chat = model.start_chat(history=[])
+        
+        response = chat.send_message(data.message)
+        return {"response": response.text}
+    except Exception as e:
+        import traceback
+        error_msg = f"Chat Error: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        return {"response": "I'm having trouble processing your request. Please try again later or contact us via email."}
 
 
 

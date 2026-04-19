@@ -8,10 +8,12 @@ import {
     LogOut, LayoutDashboard, ShoppingBag, Users, Settings, Bell,
     Calendar, Award, ShoppingCart, X, Plus, Minus, Wallet,
     BarChart2, UserCircle, Menu, Store, Truck, Check, MapPin,
-    ChevronRight, Search, Zap, HelpCircle, Clock, Package, Shield
+    ChevronRight, ChevronLeft, Search, Zap, HelpCircle, Clock, Package, Shield
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { Footer } from './Footer';
+import { AdminFooter } from './AdminFooter';
+import SupportBot from './SupportBot';
 
 const MotionLink = motion(Link);
 
@@ -33,6 +35,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem('hivet_sidebar_collapsed') === 'true');
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [notifications, setNotifications] = useState<any[]>([]);
 
@@ -179,6 +182,10 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
         navigate('/login');
     };
 
+    useEffect(() => {
+        localStorage.setItem('hivet_sidebar_collapsed', String(isCollapsed));
+    }, [isCollapsed]);
+
     const businessLinks = [
         { name: 'Dashboard', path: '/dashboard/business', icon: LayoutDashboard },
         { 
@@ -260,22 +267,34 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     // --- RENDER SIDEBAR LAYOUT (For Business/Admin/Rider) ---
     if (!isCustomer && user) {
         return (
-            <div className="min-h-screen bg-[#FAF9F6] flex">
-                <aside className="hidden lg:flex flex-col w-72 bg-white border-r border-accent-brown/5 fixed inset-y-0 left-0 z-50 overflow-hidden shadow-2xl shadow-accent-brown/5">
-                    <div className="p-8 pb-10">
-                        <div className="flex items-center gap-3.5 group">
-                            <div className="w-12 h-12 bg-white rounded-2xl shadow-xl shadow-brand/10 flex items-center justify-center p-2 border border-brand/5 group-hover:scale-105 transition-transform">
+            <div className="min-h-screen bg-[#FAF9F6] flex transition-all duration-300">
+                <aside className={`hidden lg:flex flex-col bg-white border-r border-accent-brown/5 fixed inset-y-0 left-0 z-50 overflow-hidden shadow-2xl shadow-accent-brown/5 transition-all duration-300 ${isCollapsed ? 'w-24' : 'w-72'}`}>
+                    {/* Collapse Toggle */}
+                    <button 
+                        onClick={() => setIsCollapsed(!isCollapsed)}
+                        className="absolute right-[-12px] top-12 w-8 h-8 bg-white border border-accent-brown/10 rounded-full flex items-center justify-center shadow-lg z-[60] text-black hover:bg-brand hover:text-white transition-all group"
+                    >
+                        <motion.div animate={{ rotate: isCollapsed ? 180 : 0 }}>
+                            <ChevronLeft size={16} className="group-hover:scale-110 transition-transform" />
+                        </motion.div>
+                    </button>
+
+                    <div className={`p-8 pb-10 transition-all ${isCollapsed ? 'px-4' : 'px-8'}`}>
+                        <div className={`flex items-center group ${isCollapsed ? 'justify-center' : 'gap-3.5'}`}>
+                            <div className="w-12 h-12 bg-white rounded-2xl shadow-xl shadow-brand/10 flex items-center justify-center p-2 border border-brand/5 group-hover:scale-105 transition-transform shrink-0">
                                 <Logo className="w-full h-full" />
                             </div>
-                            <div className="flex flex-col">
-                                <h2 className="text-2xl font-black text-accent-brown tracking-tighter leading-none mb-1">Hi-Vet</h2>
-                                <p className="text-[10px] font-black text-brand-dark transition-all opacity-60 uppercase tracking-widest leading-none">
-                                    {user?.role === 'super_admin' ? 'Super Admin' :
-                                        user?.role === 'system_admin' ? 'System Admin' :
-                                            user?.role === 'business' ? 'Partner Portal' :
-                                                'Rider Portal'}
-                                </p>
-                            </div>
+                            {!isCollapsed && (
+                                <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col overflow-hidden">
+                                    <h2 className="text-2xl font-black text-accent-brown tracking-tighter leading-none mb-1 whitespace-nowrap">Hi-Vet</h2>
+                                    <p className="text-[10px] font-black text-brand-dark transition-all opacity-60 uppercase tracking-widest leading-none whitespace-nowrap">
+                                        {user?.role === 'super_admin' ? 'Super Admin' :
+                                            user?.role === 'system_admin' ? 'System Admin' :
+                                                user?.role === 'business' ? 'Partner Portal' :
+                                                    'Rider Portal'}
+                                    </p>
+                                </motion.div>
+                            )}
                         </div>
                     </div>
 
@@ -297,14 +316,16 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                             }
                                         }}
                                         end={link.name === 'Dashboard'}
-                                        className={() => `flex items-center gap-3 px-4 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all group relative ${isParentActive ? 'bg-brand text-white shadow-lg shadow-brand/20 ml-2' : 'text-accent-brown hover:text-brand hover:bg-brand/5'}`}
+                                        className={() => `flex items-center rounded-2xl font-black text-xs uppercase tracking-widest transition-all group relative ${isCollapsed ? 'justify-center p-4' : 'gap-3 px-4 py-4'} ${isParentActive ? 'bg-brand text-white shadow-lg shadow-brand/20 ml-2' : 'text-accent-brown hover:text-brand hover:bg-brand/5'}`}
                                     >
                                         {() => (
                                             <>
-                                                <link.icon className={`w-5 h-5 transition-transform group-hover:scale-110 ${isParentActive ? 'text-white' : 'text-accent-brown/40 group-hover:text-brand'}`} />
-                                                <span>{link.name}</span>
-                                                {isParentActive && <motion.div layoutId="active-nav" className="absolute left-[-12px] top-1/2 -translate-y-1/2 w-1.5 h-8 bg-brand-dark rounded-r-full" />}
-                                                {hasSubmenus && (
+                                                <link.icon className={`w-5 h-5 transition-transform group-hover:scale-110 shrink-0 ${isParentActive ? 'text-white' : 'text-black group-hover:text-brand'}`} />
+                                                {!isCollapsed && (
+                                                    <motion.span initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} className="whitespace-nowrap">{link.name}</motion.span>
+                                                )}
+                                                {isParentActive && !isCollapsed && <motion.div layoutId="active-nav" className="absolute left-[-12px] top-1/2 -translate-y-1/2 w-1.5 h-8 bg-brand-dark rounded-r-full" />}
+                                                {hasSubmenus && !isCollapsed && (
                                                     <ChevronRight className={`w-4 h-4 ml-auto transition-transform ${isParentActive ? 'rotate-90 text-white/50' : 'text-accent-brown/30'}`} />
                                                 )}
                                             </>
@@ -312,7 +333,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                     </NavLink>
                                     
                                     <AnimatePresence>
-                                        {hasSubmenus && isParentActive && (
+                                        {hasSubmenus && isParentActive && !isCollapsed && (
                                             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                                                 <div className="ml-10 mt-2 mb-4 space-y-4 border-l-2 border-brand/20 pl-4 py-1">
                                                     {(link as any).submenus.map((sub: any) => {
@@ -360,26 +381,29 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                         })}
                     </nav>
 
-                    <div className="p-6 mt-auto">
-                        <div className="bg-accent-peach/5 p-4 rounded-3xl border border-accent-peach/10 relative group overflow-hidden">
+                    <div className={`mt-auto transition-all ${isCollapsed ? 'p-4' : 'p-6'}`}>
+                        <div className={`bg-accent-peach/5 p-4 rounded-3xl border border-accent-peach/10 relative group overflow-hidden ${isCollapsed ? 'flex justify-center' : ''}`}>
                             <div className="flex items-center gap-3 relative z-10">
-                                <div className="w-10 h-10 rounded-xl bg-white border border-brand/5 shadow-sm flex items-center justify-center text-accent-brown overflow-hidden">
+                                <div className="w-10 h-10 rounded-xl bg-white border border-brand/5 shadow-sm flex items-center justify-center text-accent-brown overflow-hidden shrink-0">
                                     {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : <UserCircle className="w-full h-full opacity-20 p-2" />}
                                 </div>
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-[11px] font-black text-accent-brown truncate leading-none mb-1 text-xs">{user?.clinic_name || user?.name || 'My Account'}</p>
-                                    <p className="text-[8px] font-bold text-accent-brown/40 uppercase tracking-widest truncate">{user?.email}</p>
-                                </div>
+                                {!isCollapsed && (
+                                    <motion.div initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} className="min-w-0 flex-1 overflow-hidden">
+                                        <p className="text-[11px] font-black text-accent-brown truncate leading-none mb-1 text-xs">{user?.clinic_name || user?.name || 'My Account'}</p>
+                                        <p className="text-[8px] font-bold text-accent-brown/40 uppercase tracking-widest truncate">{user?.email}</p>
+                                    </motion.div>
+                                )}
                             </div>
                             <div className="absolute inset-0 bg-brand/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
                         </div>
-                        <button onClick={() => setIsLogoutModalOpen(true)} className="w-full mt-4 py-4 rounded-2xl flex items-center justify-center gap-3 text-red-500 bg-red-50 hover:bg-red-500 hover:text-white transition-all font-black text-[10px] uppercase tracking-widest shadow-sm">
-                            <LogOut className="w-4 h-4" /> Log Out Portal
+                        <button onClick={() => setIsLogoutModalOpen(true)} className={`w-full mt-4 py-4 rounded-2xl flex items-center justify-center gap-3 text-red-500 bg-red-50 hover:bg-red-500 hover:text-white transition-all font-black text-[10px] uppercase tracking-widest shadow-sm ${isCollapsed ? 'px-0' : 'px-4'}`}>
+                            <LogOut className="w-4 h-4 shrink-0" /> 
+                            {!isCollapsed && <span>Log Out Portal</span>}
                         </button>
                     </div>
                 </aside>
 
-                <div className="flex-1 flex flex-col min-w-0 lg:ml-72">
+                <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isCollapsed ? 'lg:ml-24' : 'lg:ml-72'}`}>
                     <header className="h-20 bg-white/80 backdrop-blur-xl border-b border-accent-brown/5 sticky top-0 z-40 px-6 sm:px-10 flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <button className="lg:hidden p-2.5 bg-accent-peach/10 rounded-xl text-accent-brown" onClick={() => setIsMobileMenuOpen(true)}>
@@ -417,8 +441,17 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                             {children}
                         </motion.div>
                     </main>
+                    {!hideFooter && (
+                        (user?.role === 'rider' || user?.role === 'business') ? (
+                            <Footer variant={user.role as any} />
+                        ) : (user?.role === 'super_admin' || user?.role === 'system_admin') ? (
+                            <AdminFooter />
+                        ) : null
+                    )}
                 </div>
                 {/* Reuse Original Notifications logic for Sidebar (simplified) */}
+  {/* Support Bot Widget */}
+                <SupportBot />
                 <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} logout={handleLogout} />
             </div>
         );
@@ -704,6 +737,8 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                 )}
             </AnimatePresence>
 
+  {/* Support Bot Widget */}
+            <SupportBot />
             <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} logout={handleLogout} />
         </div>
     );

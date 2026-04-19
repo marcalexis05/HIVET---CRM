@@ -7815,3 +7815,820 @@ DETAIL:  Failing row contains (4, null, null, null, 1, defective items, null, pe
 [SQL: INSERT INTO return_requests (order_id, customer_id, clinic_id, reason, status, photos, created_at, updated_at) VALUES (%(order_id)s, %(customer_id)s, %(clinic_id)s, %(reason)s, %(status)s, %(photos)s, %(created_at)s, %(updated_at)s) RETURNING return_requests.id]
 [parameters: {'order_id': 177, 'customer_id': 1, 'clinic_id': 2, 'reason': 'defective items', 'status': 'pending', 'photos': '["http://localhost:8000/uploads/refunds/refund_33e4cb9c49d84e0c8c2508fd840dfe90.png"]', 'created_at': datetime.datetime(2026, 4, 19, 5, 56, 23, 599150), 'updated_at': datetime.datetime(2026, 4, 19, 5, 56, 23, 599150)}]
 (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+--- ERROR at 2026-04-19 15:44:29.786809 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:44:30.150771 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:44:34.722716 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:44:34.746829 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:44:35.105291 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:44:45.875692 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:44:45.910552 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:44:46.030076 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:44:47.025791 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:44:47.066274 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:44:47.360377 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:44:52.087924 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:44:57.417302 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:45:02.082539 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:45:07.416925 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:45:12.091591 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:45:17.422470 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:45:22.109403 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'
+
+--- ERROR at 2026-04-19 15:45:27.102748 ---
+URL: http://localhost:8000/api/rider/active-order
+Traceback (most recent call last):
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 101, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 355, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 243, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Apache24\htdocs\HIVET - CRM\backend\main.py", line 10286, in get_ongoing_job
+    "image_url": p.image_url if p else (it.image if hasattr(it, 'image') else None),
+                 ^^^^^^^^^^^
+AttributeError: 'Product' object has no attribute 'image_url'

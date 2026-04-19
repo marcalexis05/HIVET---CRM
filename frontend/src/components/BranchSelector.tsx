@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { MapPin, ChevronDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Branch {
     id: number;
@@ -25,6 +27,7 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
     const [branches, setBranches] = useState<Branch[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
+    const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
 
     useEffect(() => {
         const fetchBranches = async () => {
@@ -35,16 +38,13 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
                 const data = await resp.json();
                 setBranches(data);
                 
-                // Auto-select saved branch or fall back to Main branch
                 if (currentBranchId === null && data.length > 0) {
                     const saved = localStorage.getItem('hivet_selected_branch');
-                    
                     if (allowAllBranches && saved === 'all') {
                         onBranchChange(null);
                     } else {
                         const savedId = saved && saved !== 'all' ? parseInt(saved) : null;
                         const exists = savedId && data.some((b: Branch) => b.id === savedId);
-                        
                         if (exists) {
                             onBranchChange(savedId);
                         } else if (allowAllBranches && (saved === 'all' || !saved)) {
@@ -62,6 +62,29 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
         fetchBranches();
     }, [token, currentBranchId, onBranchChange, allowAllBranches]);
 
+    const updatePosition = () => {
+        if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            setDropdownPos({
+                top: rect.bottom + window.scrollY,
+                left: rect.left + window.scrollX,
+                width: rect.width
+            });
+        }
+    };
+
+    useEffect(() => {
+        if (isOpen) {
+            updatePosition();
+            window.addEventListener('scroll', updatePosition);
+            window.addEventListener('resize', updatePosition);
+        }
+        return () => {
+            window.removeEventListener('scroll', updatePosition);
+            window.removeEventListener('resize', updatePosition);
+        };
+    }, [isOpen]);
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -76,30 +99,29 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
 
     if (branches.length === 0) return null;
 
-    return (
-        <div className="relative" ref={containerRef}>
-            <button 
-                type="button"
-                onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3 bg-white hover:opacity-90 active:scale-95 rounded-2xl transition-all shadow-xl shadow-black/10 min-w-[160px] sm:min-w-[200px] font-brand group border border-accent-brown/5"
-            >
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand/10 shadow-sm flex items-center justify-center shrink-0">
-                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-brand" />
-                </div>
-                <div className="flex flex-col items-start overflow-hidden text-left">
-                    <span className="truncate w-full font-black text-black text-[10px] sm:text-[11px] uppercase tracking-widest">
-                        {currentBranchId === null && allowAllBranches ? 'All Branches' : currentBranch ? currentBranch.name : 'Initializing...'}
-                    </span>
-                    <span className="text-[8px] sm:text-[9px] text-black/50 font-black uppercase tracking-widest leading-none mt-1">
-                        {currentBranchId === null && allowAllBranches ? 'Global System' : currentBranch ? `${currentBranch.city}` : 'Branch Discovery'}
-                    </span>
-                </div>
-                <ChevronDown className={`w-3.5 h-3.5 text-black/30 group-hover:text-black ml-auto transition-transform duration-500 ${isOpen ? 'rotate-180 text-black' : ''}`} />
-            </button>
+    const dropdownWidth = window.innerWidth < 640 ? 280 : 320;
+    const calculatedLeft = Math.max(16, dropdownPos.left + dropdownPos.width - dropdownWidth);
 
+    const dropdownContent = (
+        <AnimatePresence>
             {isOpen && (
-                <div className="absolute top-full right-0 mt-4 w-72 sm:w-80 bg-white rounded-[2.5rem] shadow-2xl shadow-accent-brown/10 border border-accent-peach/10 p-4 z-[150] overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
-                    <div className="text-[9px] font-black uppercase tracking-[0.25em] text-black px-4 py-3 border-b border-accent-peach/10 mb-3">Select Clinic Branch</div>
+                <motion.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    style={{ 
+                        position: 'absolute',
+                        top: `${dropdownPos.top + 12}px`,
+                        left: `${calculatedLeft}px`,
+                        width: `${dropdownWidth}px`,
+                        zIndex: 99999
+                    }}
+                    className="bg-white rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] border border-accent-peach/20 p-4 overflow-hidden"
+                >
+                    <div className="text-[9px] font-black uppercase tracking-[0.25em] text-black px-4 py-3 border-b border-accent-peach/10 mb-3 flex items-center justify-between">
+                        <span>Select Clinic Branch</span>
+                        <div className="w-1.5 h-1.5 bg-brand rounded-full animate-pulse" />
+                    </div>
                     
                     <div className="max-h-[300px] overflow-y-auto no-scrollbar space-y-2">
                         {allowAllBranches && (
@@ -148,8 +170,33 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
                             </button>
                         ))}
                     </div>
-                </div>
+                </motion.div>
             )}
+        </AnimatePresence>
+    );
+
+    return (
+        <div className="relative inline-block" ref={containerRef}>
+            <button 
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3 bg-white hover:opacity-90 active:scale-95 rounded-2xl transition-all shadow-xl shadow-black/10 min-w-[160px] sm:min-w-[200px] font-brand group border border-accent-brown/5"
+            >
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand/10 shadow-sm flex items-center justify-center shrink-0">
+                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-brand" />
+                </div>
+                <div className="flex flex-col items-start overflow-hidden text-left">
+                    <span className="truncate w-full font-black text-black text-[10px] sm:text-[11px] uppercase tracking-widest leading-none">
+                        {currentBranchId === null && allowAllBranches ? 'All Branches' : currentBranch ? currentBranch.name : 'Initializing...'}
+                    </span>
+                    <span className="text-[8px] sm:text-[9px] text-black/50 font-black uppercase tracking-widest leading-none mt-1.5">
+                        {currentBranchId === null && allowAllBranches ? 'Global System' : currentBranch ? `${currentBranch.city}` : 'Branch Discovery'}
+                    </span>
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-black/30 group-hover:text-black ml-auto transition-transform duration-500 ${isOpen ? 'rotate-180 text-black' : ''}`} />
+            </button>
+
+            {createPortal(dropdownContent, document.body)}
         </div>
     );
 };

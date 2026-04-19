@@ -66,7 +66,7 @@ export const CustomDatePicker = ({ value, onChange, label, minDate, isRequired, 
     const years = useMemo(() => {
         const yFull = [];
         const thisY = new Date().getFullYear();
-        for (let y = thisY + 10; y >= thisY - 100; y--) yFull.push(y);
+        for (let y = thisY; y >= thisY - 100; y--) yFull.push(y);
         return yFull;
     }, []);
 
@@ -155,14 +155,18 @@ export const CustomDatePicker = ({ value, onChange, label, minDate, isRequired, 
                                         const isSelected = selectedDay === d;
                                         const dateObj = new Date(currentYear, currentMonth, d);
                                         const isPast = minDate ? dateObj < new Date(minDate) : false;
+                                        const today = new Date();
+                                        today.setHours(23, 59, 59, 999); // End of today
+                                        const isFuture = dateObj > today;
+                                        const isDisabled = isPast || isFuture;
 
                                         return (
                                             <button
                                                 key={d}
                                                 type="button"
-                                                disabled={isPast}
+                                                disabled={isDisabled}
                                                 onClick={() => handleDateSelect(d)}
-                                                className={`aspect-square rounded-2xl flex items-center justify-center text-[15px] font-black transition-all ${isSelected ? 'bg-brand text-white shadow-xl shadow-brand/30 scale-110' : isPast ? 'text-accent-brown/10' : 'text-accent-brown hover:bg-brand/10 hover:text-brand'}`}
+                                                className={`aspect-square rounded-2xl flex items-center justify-center text-[15px] font-black transition-all ${isSelected ? 'bg-brand text-white shadow-xl shadow-brand/30 scale-110' : isDisabled ? 'text-accent-brown/10 cursor-not-allowed' : 'text-accent-brown hover:bg-brand/10 hover:text-brand'}`}
                                             >
                                                 {d}
                                             </button>

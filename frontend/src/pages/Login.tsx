@@ -117,6 +117,16 @@ const Login = () => {
                                 </div>
                             )}
 
+                            {searchParams.get('msg') === 'reg_success' && (
+                                <div className="bg-brand-dark/5 text-brand-dark p-6 rounded-[2rem] text-xs font-black border border-brand/20 uppercase tracking-widest italic flex flex-col gap-3 shadow-[0_0_30px_rgba(242,107,33,0.05)] ring-1 ring-brand-dark/5">
+                                    <span className="flex items-center gap-3 text-brand-dark">
+                                        <div className="w-8 h-8 bg-brand-dark text-white rounded-xl flex items-center justify-center shadow-lg"><User className="w-4 h-4" /></div>
+                                        Registration Complete
+                                    </span>
+                                    <span className="text-[10px] opacity-70 font-bold normal-case leading-relaxed">Mission initialized successfully. Please enter your credentials to access the ecosystem.</span>
+                                </div>
+                            )}
+
                             <div className="space-y-4">
                                 <div className="group space-y-2">
                                     <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic transition-colors group-focus-within:text-brand-dark">Email Address <span className="text-brand-dark">*</span></label>

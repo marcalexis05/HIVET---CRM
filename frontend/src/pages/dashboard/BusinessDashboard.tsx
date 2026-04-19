@@ -426,7 +426,7 @@ const BusinessDashboard = () => {
                                     <div key={p.name} className="group">
                                         <div className="flex items-center justify-between mb-1">
                                             <p className="text-[10px] font-black text-accent-brown/70 truncate uppercase tracking-tight group-hover:text-brand transition-all">{p.name}</p>
-                                            <span className="text-[10px] font-black text-brand-dark">₱{p.revenue}</span>
+                                            <span className="text-[10px] font-black text-brand-dark">₱{Number(p.revenue).toLocaleString()}</span>
                                         </div>
                                         <div className="w-full h-1 bg-accent-peach/20 rounded-full overflow-hidden">
                                             <motion.div initial={{ width: 0 }} animate={{ width: `${p.pct}%` }} className="h-full bg-brand-dark" />

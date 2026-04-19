@@ -24,7 +24,7 @@ print(f"Password hash: {pwd_hash}")
 with engine.begin() as conn:
     # Check if already exists
     existing = conn.execute(
-        text("SELECT id FROM customer WHERE email = :email"),
+        text("SELECT id FROM super_admin_users WHERE email = :email"),
         {"email": EMAIL}
     ).fetchone()
 
@@ -32,34 +32,33 @@ with engine.begin() as conn:
         # Update existing account
         conn.execute(
             text("""
-                UPDATE customer
+                UPDATE super_admin_users
                 SET password_hash = :pwd_hash,
-                    role = :role,
+                    role = 'super_admin',
                     name = :name,
                     first_name = 'System',
                     last_name = 'Administrator'
                 WHERE email = :email
             """),
-            {"pwd_hash": pwd_hash, "role": ROLE, "name": NAME, "email": EMAIL}
+            {"pwd_hash": pwd_hash, "name": NAME, "email": EMAIL}
         )
-        print(f"✅ Updated existing account: {EMAIL} (role={ROLE})")
+        print(f"Updated existing account: {EMAIL}")
     else:
         # Insert new account
         conn.execute(
             text("""
-                INSERT INTO customer
+                INSERT INTO super_admin_users
                   (email, password_hash, name, first_name, last_name, role, created_at)
                 VALUES
-                  (:email, :pwd_hash, :name, 'System', 'Administrator', :role, :now)
+                  (:email, :pwd_hash, :name, 'System', 'Administrator', 'super_admin', :now)
             """),
             {
                 "email": EMAIL,
                 "pwd_hash": pwd_hash,
                 "name": NAME,
-                "role": ROLE,
                 "now": datetime.utcnow(),
             }
         )
-        print(f"✅ Created admin account: {EMAIL} (role={ROLE})")
+        print(f"Created admin account: {EMAIL}")
 
 print("Done. You can now log in at /login with these credentials.")

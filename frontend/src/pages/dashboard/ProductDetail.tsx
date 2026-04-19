@@ -77,15 +77,20 @@ const ProductDetail = () => {
                     const data = await pResp.json();
                     setProduct(data);
                     
-                    // Auto-select first size if available
-                    const sizes = data.sizes_json ? JSON.parse(data.sizes_json) : [];
-                    if (sizes.length > 0) {
-                        setSelectedSize(sizes[0].name);
-                    } else {
-                        setSelectedSize('');
-                    }
-
                     setSelectedVariant('');
+                    const baseSizes = data.sizes_json ? JSON.parse(data.sizes_json) : [];
+                    if (baseSizes.length > 0) {
+                        setSelectedSize(baseSizes[0].name);
+                    } else {
+                        const variants = data.variants_json ? JSON.parse(data.variants_json) : [];
+                        if (variants.length > 0 && variants[0].sizes?.length > 0) {
+                            setSelectedVariant(variants[0].name);
+                            setSelectedSize(variants[0].sizes[0].name);
+                        } else {
+                            setSelectedSize('');
+                        }
+                    }
+                    
                     setActiveImage(null);
                 }
                 if (rResp.ok) {
@@ -175,11 +180,31 @@ const ProductDetail = () => {
     const parsedVariants: any[] = useMemo(() => product?.variants_json ? JSON.parse(product.variants_json) : [], [product]);
     
     const parsedSizes: any[] = useMemo(() => {
+        let sizes = [];
         if (selectedVariant) {
             const v = parsedVariants.find(v => v.name === selectedVariant);
-            return v?.sizes || [];
+            sizes = v?.sizes || [];
+        } else {
+            sizes = product?.sizes_json ? JSON.parse(product.sizes_json) : [];
         }
-        return product?.sizes_json ? JSON.parse(product.sizes_json) : [];
+        // Filter out empty or invalid size names to prevent ghosts
+        const filtered = sizes.filter((s: any) => s.name && s.name.trim() !== '');
+        
+        // Custom sort to ensure 'Small' comes first, then 'Medium', 'Large', etc.
+        const sizeOrder: Record<string, number> = {
+            'small': 1, 's': 1,
+            'medium': 2, 'm': 2,
+            'large': 3, 'l': 3,
+            'xl': 4, 'extra large': 4,
+            'xxl': 5
+        };
+
+        return [...filtered].sort((a: any, b: any) => {
+            const priorityA = sizeOrder[a.name.toLowerCase()] || 99;
+            const priorityB = sizeOrder[b.name.toLowerCase()] || 99;
+            if (priorityA !== priorityB) return priorityA - priorityB;
+            return a.name.localeCompare(b.name);
+        });
     }, [product, selectedVariant, parsedVariants]);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -294,6 +319,19 @@ const ProductDetail = () => {
     const finalPrice = product ? (priceFromSize || priceFromVariant || product.price) : 0;
     const finalImage = activeImage || activeSiz?.image || activeVar?.image || product?.image;
 
+    const branchAvailability = useMemo(() => {
+        if (!product || !product.branch_availability) return [];
+        return product.branch_availability.map((b: any) => {
+            if (activeSiz && activeSiz.branch_stock) {
+                const bData = activeSiz.branch_stock[b.branch_id];
+                if (bData) {
+                    return { ...b, stock: bData.stock };
+                }
+            }
+            return b;
+        });
+    }, [product, activeSiz]);
+
     const allImages = useMemo(() => {
         const imgs = new Set<string>();
         if (product?.image) imgs.add(product.image);
@@ -305,6 +343,41 @@ const ProductDetail = () => {
     const currentIndexImg = useMemo(() => {
         return allImages.indexOf(finalImage);
     }, [allImages, finalImage]);
+
+    // Centralized Sync: Update variant/size when image changes
+    useEffect(() => {
+        if (!activeImage || !product) return;
+
+        // 1. Try matching with a variant
+        const vMatch = parsedVariants.find(v => v.image === activeImage);
+        if (vMatch) {
+            setSelectedVariant(vMatch.name);
+            if (vMatch.sizes && vMatch.sizes.length > 0) {
+                // If current size isn't in this variant, default to first
+                if (!vMatch.sizes.some((s: any) => s.name === selectedSize)) {
+                    setSelectedSize(vMatch.sizes[0].name);
+                }
+            }
+            return;
+        }
+
+        // 2. Try matching with a specific size (base sizes)
+        const baseSizes = product.sizes_json ? JSON.parse(product.sizes_json) : [];
+        const sMatch = baseSizes.find((s: any) => s.image === activeImage);
+        if (sMatch) {
+            setSelectedVariant('');
+            setSelectedSize(sMatch.name);
+            return;
+        }
+
+        // 3. If it's the main product image, reset variant
+        if (activeImage === product.image) {
+            setSelectedVariant('');
+            if (baseSizes.length > 0 && !baseSizes.some((s: any) => s.name === selectedSize)) {
+                setSelectedSize(baseSizes[0].name);
+            }
+        }
+    }, [activeImage, product, parsedVariants, selectedSize]);
 
     const handleImgNav = (direction: 'next' | 'prev') => {
         if (allImages.length <= 1) return;
@@ -318,14 +391,6 @@ const ProductDetail = () => {
 
         const img = allImages[newIndex];
         setActiveImage(img);
-        
-        // Try to find a matching variant or size to keep UI in sync
-        const variantMatch = parsedVariants.find(v => v.image === img);
-        if (variantMatch) setSelectedVariant(variantMatch.name);
-        
-        const sizeMatch = parsedSizes.find(s => s.image === img);
-        if (sizeMatch) setSelectedSize(sizeMatch.name);
-
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -510,7 +575,37 @@ const ProductDetail = () => {
                                 </div>
                             </div>
 
-                            <div className="space-y-8">
+                            <div className="space-y-10">
+                                {/* Variants */}
+                                {parsedVariants.length > 0 && (
+                                    <div className="space-y-4">
+                                        <div className="flex flex-wrap gap-3">
+                                            {parsedVariants.map((v: any) => (
+                                                <button 
+                                                    key={v.name} 
+                                                    onClick={() => {
+                                                        const isSelected = selectedVariant === v.name;
+                                                        if (isSelected) {
+                                                            setSelectedVariant('');
+                                                            const baseSizes = product.sizes_json ? JSON.parse(product.sizes_json) : [];
+                                                            if (baseSizes.length > 0) setSelectedSize(baseSizes[0].name);
+                                                        } else {
+                                                            setSelectedVariant(v.name);
+                                                            if (v.image) setActiveImage(v.image);
+                                                            if (v.sizes && v.sizes.length > 0) {
+                                                                setSelectedSize(v.sizes[0].name);
+                                                            }
+                                                        }
+                                                    }}
+                                                    className={`h-12 min-w-[100px] border-2 rounded-xl flex items-center justify-center px-6 transition-all ${selectedVariant === v.name ? 'bg-accent-brown border-accent-brown text-white shadow-xl scale-[1.02]' : 'bg-white border-gray-100 text-accent-brown hover:border-brand hover:text-brand'}`}
+                                                >
+                                                    <span className="text-[10px] font-black uppercase tracking-[0.1em]">{v.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Sizes */}
                                 {parsedSizes.length > 0 && (
                                     <div className="space-y-4">
@@ -599,7 +694,7 @@ const ProductDetail = () => {
                                     <p className="text-[9px] font-bold text-black uppercase tracking-widest">Physical verification points</p>
                                 </div>
                                 <div className="grid grid-cols-1 gap-3">
-                                    {(product.branch_availability || []).map((branch: any) => (
+                                    {(branchAvailability || []).map((branch: any) => (
                                         <div 
                                             key={branch.branch_id} 
                                             onClick={() => handleSwitchBranch(branch.branch_id)}

@@ -46,10 +46,25 @@ const BusinessDashboard = () => {
         return saved ? parseInt(saved) : null;
     });
 
-    const [stats, setStats] = useState<KPI[]>([]);
+    const [revenuePeriod, setRevenuePeriod] = useState(() => {
+        return localStorage.getItem('hivet_selected_period') || '30d';
+    });
 
+    // Persist filter changes
+    useEffect(() => {
+        if (branchId === null) {
+            localStorage.setItem('hivet_selected_branch', 'all');
+        } else {
+            localStorage.setItem('hivet_selected_branch', branchId.toString());
+        }
+    }, [branchId]);
+
+    useEffect(() => {
+        localStorage.setItem('hivet_selected_period', revenuePeriod);
+    }, [revenuePeriod]);
+
+    const [stats, setStats] = useState<KPI[]>([]);
     const [revenueData, setRevenueData] = useState<RevenueData>({ trend: '+21%', chartData: [] });
-    const [revenuePeriod, setRevenuePeriod] = useState('6m');
     const [revenueType, setRevenueType] = useState('all');
     const [topProducts, setTopProducts] = useState<any[]>([]);
     const [topServices, setTopServices] = useState<any[]>([]);
@@ -180,35 +195,39 @@ const BusinessDashboard = () => {
                 >
                     {stats.map((s, i) => {
                         const Icon = ICON_MAP[s.icon] || Zap;
+                        const isRevenue = s.label.toLowerCase().includes('revenue') || s.label.toLowerCase().includes('earnings');
+                        const isFeedback = s.label.toLowerCase().includes('feedback') || s.label.toLowerCase().includes('pulse') || s.icon === 'Star';
+                        
                         return (
                             <motion.div
                                 key={s.label}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.1 * i }}
-                                className={`bg-white rounded-[2rem] p-6 shadow-2xl shadow-accent-brown/5 border border-white flex flex-col justify-between group hover:border-brand/30 transition-all ${s.label === 'Inventory Status' ? 'cursor-pointer hover:shadow-brand/5' : ''}`}
+                                className={`bg-white p-7 rounded-[2rem] border transition-all group ${isRevenue ? 'border-brand/40 shadow-xl shadow-brand/5' : 'border-accent-brown/5 shadow-sm hover:shadow-xl hover:border-brand/20'}`}
                                 onClick={() => s.label === 'Inventory Status' && fetchLowStock()}
                             >
-                                <div className="flex justify-between items-start">
-                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${s.color} shadow-sm group-hover:scale-110 transition-transform`}>
-                                        <Icon className="w-6 h-6" />
+                                <div className="mb-6">
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${isRevenue ? 'bg-brand/10 text-brand' : 'bg-slate-50 text-accent-brown group-hover:bg-brand group-hover:text-white'}`}>
+                                        <Icon className="w-5 h-5" />
                                     </div>
                                 </div>
-                                <div className="mt-6">
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown leading-none">{s.label}</p>
+                                
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest leading-none mb-1">{s.label}</p>
+                                    <div className="flex items-center gap-1.5">
+                                        <h3 className="text-3xl font-black text-accent-brown tracking-tighter">
+                                            {(s.value === '₱0' || s.value === '0') ? '—' : s.value}
+                                        </h3>
+                                        {isFeedback && <span className="text-xl text-brand">★</span>}
                                     </div>
-                                    <div className="flex items-baseline gap-1 mt-2">
-                                        <p className="text-3xl font-black text-accent-brown tracking-tighter">
-                                            {(s.value === '₱0' || s.value === '0') ? 'No Data Available' : s.value}
-                                        </p>
-                                        {s.icon === 'Star' && (
-                                            <Star className="w-5 h-5 text-brand fill-brand" />
-                                        )}
-                                    </div>
-                                    <p className="text-[9px] font-bold text-accent-brown uppercase tracking-widest mt-1 italic">{s.change || 'System Validated'}</p>
                                 </div>
-                                {/* Sparklines removed as per user request */}
+
+                                <div className="mt-4 pt-4 border-t border-slate-50/50">
+                                    <p className="text-[10px] font-black text-accent-brown uppercase italic opacity-60 tracking-tight">
+                                        {s.change || (s.value === '0' || s.value === '₱0' ? 'No data' : 'Real-time validated')}
+                                    </p>
+                                </div>
                             </motion.div>
                         );
                     })}
@@ -407,7 +426,7 @@ const BusinessDashboard = () => {
                                     <div key={p.name} className="group">
                                         <div className="flex items-center justify-between mb-1">
                                             <p className="text-[10px] font-black text-accent-brown/70 truncate uppercase tracking-tight group-hover:text-brand transition-all">{p.name}</p>
-                                            <span className="text-[10px] font-black text-brand-dark">{p.revenue}</span>
+                                            <span className="text-[10px] font-black text-brand-dark">₱{p.revenue}</span>
                                         </div>
                                         <div className="w-full h-1 bg-accent-peach/20 rounded-full overflow-hidden">
                                             <motion.div initial={{ width: 0 }} animate={{ width: `${p.pct}%` }} className="h-full bg-brand-dark" />

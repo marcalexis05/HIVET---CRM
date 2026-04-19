@@ -21,8 +21,10 @@ import { CartProvider } from './context/CartContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import AdminDashboard from './pages/dashboard/AdminDashboard';
 import AdminBusinesses from './pages/dashboard/AdminBusinesses';
-import AdminCompliance from './pages/dashboard/AdminCompliance';
+import AdminClinicCompliance from './pages/dashboard/AdminClinicCompliance';
+import AdminRiderCompliance from './pages/dashboard/AdminRiderCompliance';
 import AdminRiders from './pages/dashboard/AdminRiders';
+import AdminCustomerRecords from './pages/dashboard/AdminCustomerRecords';
 import AdminCustomers from './pages/dashboard/AdminCustomers';
 import AdminAlerts from './pages/dashboard/AdminAlerts';
 import CustomerDashboard from './pages/dashboard/CustomerDashboard';
@@ -305,6 +307,14 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
+                   <Route
+                    path="/dashboard/admin/customer-records"
+                    element={
+                      <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
+                        <AdminCustomerRecords />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route
                     path="/dashboard/admin/users"
                     element={
@@ -529,10 +539,18 @@ function App() {
                   />
                   {/* Account Settings – shared across all roles */}
                   <Route
-                    path="/dashboard/admin/compliance"
+                    path="/dashboard/admin/compliance/clinics"
                     element={
                       <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
-                        <AdminCompliance />
+                        <AdminClinicCompliance />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/admin/compliance/riders"
+                    element={
+                      <ProtectedRoute allowedRoles={['super_admin', 'system_admin']}>
+                        <AdminRiderCompliance />
                       </ProtectedRoute>
                     }
                   />

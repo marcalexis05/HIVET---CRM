@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Plus, Edit2, Trash2, Package, X, Check, Loader2,
-    AlertCircle, Award, Upload, Star, MapPin, ChevronLeft,
+    AlertCircle, Award, Upload, Star, MapPin, ChevronLeft, ChevronRight,
     Eye, Settings, Layers, Box, Info, Image as ImageIcon, Save, Store
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
@@ -43,7 +43,7 @@ const EMPTY_FORM = {
     weight: '',
     loyalty_points: '',
     image: '/images/product_placeholder.png',
-    variants: [] as { name: string, price: string, image?: string, sizes: { name: string, price: string, stock: string }[] }[],
+    variants: [] as { name: string, price: string, image?: string, sizes: { name: string, price: string, stock: string, branch_stock?: Record<string, { price: string, stock: string }> }[] }[],
     sizes: [] as { name: string, price: string, stock: string, branch_stock?: Record<string, { price: string, stock: string }> }[],
     inventory_distribution: {} as Record<string, any>
 };
@@ -129,9 +129,9 @@ const BusinessProductEditor = () => {
                         if (typeof val !== 'object') {
                             acc[key] = { price: String(p.price), stock: String(val) };
                         } else {
-                            acc[key] = { 
-                                price: String(val.price || p.price), 
-                                stock: String(val.stock || 0) 
+                            acc[key] = {
+                                price: String(val.price || p.price),
+                                stock: String(val.stock || 0)
                             };
                         }
                         return acc;
@@ -197,14 +197,24 @@ const BusinessProductEditor = () => {
             const method = isEdit ? 'PUT' : 'POST';
 
             // If sizes exist, we use the first size price as the "base" for the catalog list
-            const finalPrice = hasSizes ? parseFloat(form.sizes[0].price) : parseFloat(form.price);
-            
+            const finalPrice = hasSizes ? parseFloat(String(form.sizes[0].price)) : parseFloat(String(form.price));
+
             // Total stock is sum of all branch stocks IF distribution has data, else base stock
-            const distEntries = Object.values(form.inventory_distribution);
-            const totalDistStock = distEntries.reduce((acc, curr: any) => acc + (parseInt(curr.stock) || 0), 0);
-            const finalStock = hasSizes 
-                ? form.sizes.reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0) 
-                : (totalDistStock > 0 ? totalDistStock : parseInt(form.stock));
+            const distEntries = Object.values(form.inventory_distribution || {});
+            const totalDistStock = distEntries.reduce((acc, curr: any) => {
+                const s = typeof curr === 'object' ? curr.stock : curr;
+                return acc + (parseInt(String(s)) || 0);
+            }, 0);
+            const finalStock = hasSizes
+                ? form.sizes.reduce((acc, s) => acc + (parseInt(String(s.stock)) || 0), 0)
+                : (totalDistStock > 0 ? totalDistStock : (parseInt(String(form.stock)) || 0));
+
+            // Sanitize variants and sizes to remove empty ghosts
+            const cleanSizes = form.sizes.filter(s => s.name && s.name.trim() !== '');
+            const cleanVariants = form.variants.filter(v => v.name && v.name.trim() !== '').map(v => ({
+                ...v,
+                sizes: (v.sizes || []).filter(s => s.name && s.name.trim() !== '')
+            }));
 
             const resp = await fetch(url, {
                 method,
@@ -224,8 +234,8 @@ const BusinessProductEditor = () => {
                     tag: form.tag,
                     weight: form.weight,
                     loyalty_points: parseInt(form.loyalty_points) || 0,
-                    variants_json: JSON.stringify(form.variants),
-                    sizes_json: JSON.stringify(form.sizes),
+                    variants_json: JSON.stringify(cleanVariants),
+                    sizes_json: JSON.stringify(cleanSizes),
                     inventory_distribution: form.inventory_distribution
                 })
             });
@@ -233,7 +243,7 @@ const BusinessProductEditor = () => {
             if (resp.ok) {
                 const data = await resp.json();
                 showToast(isEdit ? 'Product updated successfully' : 'Product created successfully');
-                
+
                 // If it was a new product, we navigate to its edit page to stay on "this" item
                 if (!isEdit && data.id) {
                     setTimeout(() => navigate(`/dashboard/business/catalog/product/${data.id}`), 1000);
@@ -250,25 +260,65 @@ const BusinessProductEditor = () => {
     };
 
     const displayPrice = useMemo(() => {
-        if (form.sizes.length > 0) {
-            const prices = form.sizes.map(s => parseFloat(s.price)).filter(p => !isNaN(p));
+        const allSizes = [
+            ...form.sizes,
+            ...form.variants.flatMap(v => v.sizes || [])
+        ];
+
+        if (allSizes.length > 0) {
+            const prices = allSizes.map(s => parseFloat(String(s.price))).filter(p => !isNaN(p));
             if (prices.length === 0) return '0.00';
             const min = Math.min(...prices);
             const max = Math.max(...prices);
             return min === max ? min.toLocaleString() : `${min.toLocaleString()} - ${max.toLocaleString()}`;
         }
-        // If simple product, check if there's a dominant branch price or stick to base
-        return parseFloat(form.price || '0').toLocaleString();
-    }, [form.price, form.sizes]);
+        return parseFloat(String(form.price || '0')).toLocaleString();
+    }, [form.price, form.sizes, form.variants]);
 
-    const displayStock = useMemo(() => {
-        if (form.sizes.length > 0) {
-            return form.sizes.reduce((acc, s) => acc + (parseInt(s.stock) || 0), 0);
+    const baseStockTotal = useMemo(() => {
+        const sizeStock = form.sizes.reduce((acc, s) => acc + (parseInt(String(s.stock)) || 0), 0);
+        if (sizeStock > 0) return sizeStock;
+
+        const totalDistStock = Object.values(form.inventory_distribution || {}).reduce((acc, curr: any) => {
+            const val = typeof curr === 'object' ? curr.stock : curr;
+            return acc + (parseInt(String(val)) || 0);
+        }, 0);
+        return totalDistStock > 0 ? totalDistStock : (parseInt(String(form.stock)) || 0);
+    }, [form.sizes, form.inventory_distribution, form.stock]);
+
+    const variantStockTotal = useMemo(() => {
+        return (form.variants || []).reduce((acc, v) => acc + (v.sizes?.reduce((sAcc, s) => sAcc + (parseInt(String(s.stock)) || 0), 0) || 0), 0);
+    }, [form.variants]);
+
+    const displayStock = useMemo(() => String(baseStockTotal + variantStockTotal), [baseStockTotal, variantStockTotal]);
+
+    const [previewImageIndex, setPreviewImageIndex] = useState(0);
+    const previewImages = useMemo(() => {
+        const imgs = [];
+        if (form.image) {
+            imgs.push({
+                url: form.image,
+                name: 'Original Product',
+                stock: baseStockTotal
+            });
         }
-        // Real-time calculation from branch distributions for simple products
-        const totalDistStock = Object.values(form.inventory_distribution).reduce((acc, curr: any) => acc + (parseInt(curr.stock) || 0), 0);
-        return totalDistStock > 0 ? totalDistStock : (parseInt(form.stock) || 0);
-    }, [form.stock, form.sizes, form.inventory_distribution]);
+        (form.variants || []).forEach((v, idx) => {
+            if (v.image) {
+                const vStock = v.sizes?.reduce((acc, s) => acc + (parseInt(String(s.stock)) || 0), 0) || 0;
+                imgs.push({
+                    url: v.image,
+                    name: v.name || `Variant ${idx + 1}`,
+                    stock: vStock
+                });
+            }
+        });
+        return imgs;
+    }, [form.image, form.variants, baseStockTotal]);
+
+    const previewStock = useMemo(() => {
+        if (previewImages.length === 0) return displayStock;
+        return String(previewImages[previewImageIndex]?.stock ?? displayStock);
+    }, [previewImageIndex, previewImages, displayStock]);
 
     if (loading) {
         return (
@@ -282,7 +332,7 @@ const BusinessProductEditor = () => {
     }
 
     return (
-        <DashboardLayout title={isEdit ? 'Edit Catalog Item' : 'Create Catalog Item'}>
+        <DashboardLayout title={isEdit ? '' : ''}>
             <div className="space-y-8">
                 {/* Toast */}
                 <AnimatePresence>
@@ -535,7 +585,7 @@ const BusinessProductEditor = () => {
                                                             <label className="text-[12px] font-black uppercase tracking-widest text-black block mb-2.5 ml-1">Base Price (₱)</label>
                                                             <div className="relative group/price">
                                                                 <span className="absolute left-8 top-1/2 -translate-y-1/2 text-xl font-black text-brand">$</span>
-                                                                <input type="number" readOnly value={form.price} 
+                                                                <input type="number" readOnly value={form.price}
                                                                     className="w-full bg-accent-peach/20 border-2 border-dashed border-accent-peach/30 rounded-[1.5rem] py-5 pl-16 pr-8 text-2xl font-black text-black outline-none shadow-inner cursor-not-allowed select-none" />
                                                             </div>
                                                             <p className="text-[11px] font-black text-brand uppercase mt-3 ml-1 italic opacity-80 flex items-center gap-2">
@@ -546,7 +596,7 @@ const BusinessProductEditor = () => {
                                                             <label className="text-[12px] font-black uppercase tracking-widest text-black block mb-2.5 ml-1">Global Total Stock</label>
                                                             <div className="relative group/total">
                                                                 <Package className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-brand" />
-                                                                <input type="number" readOnly value={displayStock} 
+                                                                <input type="number" readOnly value={displayStock}
                                                                     className="w-full bg-accent-peach/20 border-2 border-dashed border-accent-peach/30 rounded-[1.5rem] py-5 pl-16 pr-8 text-2xl font-black text-black outline-none shadow-inner cursor-not-allowed select-none" />
                                                                 <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-20 group-hover/total:opacity-100 transition-opacity">
                                                                     <Check className="w-5 h-5 text-green-600" />
@@ -570,7 +620,7 @@ const BusinessProductEditor = () => {
                                                             {allBranches.map(branch => {
                                                                 const branchData = form.inventory_distribution[branch.id] || { price: '', stock: '' };
                                                                 const hasStock = (parseInt(branchData.stock) || 0) > 0;
-                                                                
+
                                                                 return (
                                                                     <div key={branch.id} className="bg-white p-5 rounded-2xl border-2 border-accent-peach/10 flex items-center justify-between gap-4 shadow-sm hover:border-brand/20 transition-all group">
                                                                         <div className="min-w-0 flex-1">
@@ -642,6 +692,21 @@ const BusinessProductEditor = () => {
                                                 </div>
 
                                                 {/* Size Configuration List */}
+                                                <div className="flex items-center justify-between px-2 mb-2">
+                                                    <div className="space-y-1">
+                                                        <h4 className="text-[12px] font-black text-black uppercase tracking-[0.2em] flex items-center gap-2">
+                                                            <Layers className="w-4 h-4 text-brand" /> Original Product Sizes
+                                                        </h4>
+                                                        <p className="text-[10px] font-black text-black/30 uppercase tracking-widest">Define distinct unit options for the base product</p>
+                                                    </div>
+                                                    <button type="button" onClick={() => {
+                                                        const newSize = { name: '', price: form.price, stock: '0', branch_stock: {} };
+                                                        setForm(f => ({ ...f, sizes: [newSize, ...f.sizes] }));
+                                                    }} className="flex items-center gap-2 bg-brand text-white px-5 py-2.5 rounded-xl text-[10px] uppercase font-black hover:bg-black transition-all shadow-lg shadow-brand/20">
+                                                        <Plus className="w-3.5 h-3.5" /> Add Size Option
+                                                    </button>
+                                                </div>
+
                                                 {form.sizes.map((s, i) => {
                                                     const currentSizeBranchStock = s.branch_stock || {};
                                                     return (
@@ -666,7 +731,7 @@ const BusinessProductEditor = () => {
                                                                         <label className="text-[11px] font-black uppercase tracking-widest text-black block mb-2 ml-1 opacity-50">Combined Stock</label>
                                                                         <div className="relative group/combined">
                                                                             <Package className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-brand" />
-                                                                            <input type="number" readOnly value={s.stock || '0'} 
+                                                                            <input type="number" readOnly value={s.stock || '0'}
                                                                                 className="w-full bg-accent-peach/20 border-2 border-dashed border-accent-peach/30 rounded-2xl py-3.5 pl-12 pr-4 text-xl font-black text-black outline-none shadow-inner cursor-not-allowed select-none" />
                                                                         </div>
                                                                     </div>
@@ -696,17 +761,16 @@ const BusinessProductEditor = () => {
                                                                                 <div className="relative flex-1">
                                                                                     <div className="flex items-center justify-between bg-accent-peach/5 border-2 border-transparent rounded-xl py-2.5 px-4">
                                                                                         <p className="text-[10px] font-black text-black/30 uppercase tracking-widest">Local Stock</p>
-                                                                                        <input type="number" 
+                                                                                        <input type="number"
                                                                                             value={branchData.stock}
                                                                                             onChange={e => {
-                                                                                                const ns = [...form.sizes];
                                                                                                 const val = Math.max(0, parseInt(e.target.value) || 0);
+                                                                                                const ns = [...form.sizes];
                                                                                                 const bStock = { ...(ns[i].branch_stock || {}) };
                                                                                                 bStock[branch.id] = { ...(bStock[branch.id] || { price: s.price }), stock: val.toString() };
-                                                                                                ns[i].branch_stock = bStock;
-                                                                                                // Real-time calculation of combined stock for this size
+
                                                                                                 const total = Object.values(bStock).reduce((acc: number, curr: any) => acc + (parseInt(curr.stock) || 0), 0);
-                                                                                                ns[i].stock = total.toString();
+                                                                                                ns[i] = { ...ns[i], branch_stock: bStock, stock: total.toString() };
                                                                                                 setForm(f => ({ ...f, sizes: ns }));
                                                                                             }}
                                                                                             placeholder="0" min="0"
@@ -724,69 +788,69 @@ const BusinessProductEditor = () => {
                                                         </motion.div>
                                                     );
                                                 })}
-                                                    <div className="mt-8 pt-8 border-t-2 border-accent-peach/10 flex flex-col items-center gap-6">
-                                                        <div className="flex flex-col items-center justify-center w-full p-10 bg-accent-peach/5 rounded-[2.5rem] border-2 border-dashed border-accent-peach/20 text-center space-y-6">
-                                                            <div className="space-y-2">
-                                                                <p className="text-[14px] font-black text-brand uppercase tracking-[0.3em] italic mb-1">Multi-size mode active: Global Total calculated per location</p>
-                                                                <p className="text-[10px] font-bold text-black/30 uppercase tracking-widest">Advanced distribution logic is overriding base inventory values</p>
-                                                            </div>
-                                                            
-                                                            <div className="flex items-center gap-4">
-                                                                <button 
-                                                                    onClick={() => setShowResetConfirm(true)}
-                                                                    className="flex items-center gap-3 px-6 py-4 bg-white border-2 border-accent-peach/10 rounded-2xl text-[10px] font-black text-black uppercase tracking-widest hover:border-red-500 hover:text-red-500 transition-all shadow-sm group"
-                                                                >
-                                                                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                                                    Deactivate Sizes
-                                                                </button>
+                                                <div className="mt-8 pt-8 border-t-2 border-accent-peach/10 flex flex-col items-center gap-6">
+                                                    <div className="flex flex-col items-center justify-center w-full p-10 bg-accent-peach/5 rounded-[2.5rem] border-2 border-dashed border-accent-peach/20 text-center space-y-6">
+                                                        <div className="space-y-2">
+                                                            <p className="text-[14px] font-black text-brand uppercase tracking-[0.3em] italic mb-1">Multi-size mode active: Global Total calculated per location</p>
+                                                            <p className="text-[10px] font-bold text-black/30 uppercase tracking-widest">Advanced distribution logic is overriding base inventory values</p>
+                                                        </div>
 
-                                                                {/* Custom Confirmation Modal */}
-                                                                <AnimatePresence>
-                                                                    {showResetConfirm && (
-                                                                        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
-                                                                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowResetConfirm(false)}
-                                                                                className="absolute inset-0 bg-black/60 backdrop-blur-md" />
-                                                                            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                                                                                className="relative w-full max-w-md bg-white rounded-[3rem] p-10 shadow-2xl border border-white text-center space-y-8">
-                                                                                <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center text-red-500 mx-auto shadow-inner">
-                                                                                    <AlertCircle className="w-10 h-10" />
-                                                                                </div>
-                                                                                <div className="space-y-3">
-                                                                                    <h3 className="text-xl font-black text-black tracking-tight uppercase">Confirm Inventory Reset</h3>
-                                                                                    <p className="text-sm font-bold text-black/40 uppercase leading-relaxed tracking-wide">
-                                                                                        This will permanently remove all product size configurations and custom branch overrides. Are you sure you want to revert?
-                                                                                    </p>
-                                                                                </div>
-                                                                                <div className="flex gap-4">
-                                                                                    <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-4 bg-accent-peach/10 rounded-2xl text-xs font-black text-black uppercase tracking-widest hover:bg-accent-peach/20 transition-all">
-                                                                                        Cancel
-                                                                                    </button>
-                                                                                    <button onClick={() => { setForm(f => ({ ...f, sizes: [] })); setShowResetConfirm(false); }} 
-                                                                                        className="flex-1 py-4 bg-red-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-red-500/20">
-                                                                                        Reset Now
-                                                                                    </button>
-                                                                                </div>
-                                                                            </motion.div>
-                                                                        </div>
-                                                                    )}
-                                                                </AnimatePresence>
+                                                        <div className="flex items-center gap-4">
+                                                            <button
+                                                                onClick={() => setShowResetConfirm(true)}
+                                                                className="flex items-center gap-3 px-6 py-4 bg-white border-2 border-accent-peach/10 rounded-2xl text-[10px] font-black text-black uppercase tracking-widest hover:border-red-500 hover:text-red-500 transition-all shadow-sm group"
+                                                            >
+                                                                <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                                                Deactivate Sizes
+                                                            </button>
 
-                                                                <button 
-                                                                    onClick={handleSave}
-                                                                    disabled={saving}
-                                                                    className="flex items-center gap-4 px-12 py-5 bg-brand text-white rounded-[1.5rem] text-[12px] font-black uppercase tracking-[0.2em] hover:bg-black hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-brand/20 disabled:opacity-50 disabled:cursor-not-allowed group"
-                                                                >
-                                                                    {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />}
-                                                                    {saving ? 'Synchronizing...' : 'Save & Update Inventory'}
-                                                                </button>
-                                                            </div>
+                                                            {/* Custom Confirmation Modal */}
+                                                            <AnimatePresence>
+                                                                {showResetConfirm && (
+                                                                    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+                                                                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowResetConfirm(false)}
+                                                                            className="absolute inset-0 bg-black/60 backdrop-blur-md" />
+                                                                        <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                                                                            className="relative w-full max-w-md bg-white rounded-[3rem] p-10 shadow-2xl border border-white text-center space-y-8">
+                                                                            <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center text-red-500 mx-auto shadow-inner">
+                                                                                <AlertCircle className="w-10 h-10" />
+                                                                            </div>
+                                                                            <div className="space-y-3">
+                                                                                <h3 className="text-xl font-black text-black tracking-tight uppercase">Confirm Inventory Reset</h3>
+                                                                                <p className="text-sm font-bold text-black/40 uppercase leading-relaxed tracking-wide">
+                                                                                    This will permanently remove all product size configurations and custom branch overrides. Are you sure you want to revert?
+                                                                                </p>
+                                                                            </div>
+                                                                            <div className="flex gap-4">
+                                                                                <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-4 bg-accent-peach/10 rounded-2xl text-xs font-black text-black uppercase tracking-widest hover:bg-accent-peach/20 transition-all">
+                                                                                    Cancel
+                                                                                </button>
+                                                                                <button onClick={() => { setForm(f => ({ ...f, sizes: [] })); setShowResetConfirm(false); }}
+                                                                                    className="flex-1 py-4 bg-red-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-red-500/20">
+                                                                                    Reset Now
+                                                                                </button>
+                                                                            </div>
+                                                                        </motion.div>
+                                                                    </div>
+                                                                )}
+                                                            </AnimatePresence>
+
+                                                            <button
+                                                                onClick={handleSave}
+                                                                disabled={saving}
+                                                                className="flex items-center gap-4 px-12 py-5 bg-brand text-white rounded-[1.5rem] text-[12px] font-black uppercase tracking-[0.2em] hover:bg-black hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-brand/20 disabled:opacity-50 disabled:cursor-not-allowed group"
+                                                            >
+                                                                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />}
+                                                                {saving ? 'Synchronizing...' : 'Save & Update Inventory'}
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            )}
-                                        </section>
-                                    </motion.div>
-                                )}
+                                            </div>
+                                        )}
+                                    </section>
+                                </motion.div>
+                            )}
 
                             {activeTab === 'variants' && (
                                 <motion.div
@@ -805,7 +869,7 @@ const BusinessProductEditor = () => {
                                                 </h3>
                                                 <p className="text-sm font-bold text-accent-brown/30 uppercase mt-1">Unique visuals and pricing for different model versions</p>
                                             </div>
-                                            <button type="button" onClick={() => setForm(f => ({ ...f, variants: [...(f.variants || []), { name: '', price: '', image: '', sizes: [] }] }))}
+                                            <button type="button" onClick={() => setForm(f => ({ ...f, variants: [{ name: '', price: '', image: '', sizes: [] }, ...(f.variants || [])] }))}
                                                 className="flex items-center gap-2 bg-brand/10 text-brand px-5 py-2.5 rounded-xl text-sm uppercase font-black hover:bg-brand hover:text-white transition-all shadow-sm">
                                                 <Plus className="w-4 h-4" /> Add New Variant
                                             </button>
@@ -843,22 +907,12 @@ const BusinessProductEditor = () => {
                                                             </div>
                                                         </div>
                                                         <div className="md:col-span-8 space-y-6">
-                                                            <div className="grid grid-cols-2 gap-4">
-                                                                <div>
-                                                                    <label className="text-xs font-black uppercase tracking-widest text-accent-brown/40 block mb-2 ml-1">Variant Name</label>
-                                                                    <input value={v.name} onChange={e => { const nv = [...form.variants]; nv[i].name = e.target.value; setForm(f => ({ ...f, variants: nv })); }} placeholder="e.g. Chicken Flavor"
-                                                                        className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-6 text-base font-bold text-accent-brown outline-none shadow-sm" />
-                                                                </div>
-                                                                <div>
-                                                                    <label className="text-xs font-black uppercase tracking-widest text-accent-brown/40 block mb-2 ml-1">Base Price Adjustment</label>
-                                                                    <div className="relative">
-                                                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-accent-brown/40">₱</span>
-                                                                        <input type="number" value={v.price} onChange={e => { const nv = [...form.variants]; nv[i].price = e.target.value; setForm(f => ({ ...f, variants: nv })); }} placeholder="0"
-                                                                            className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 pl-8 pr-4 text-sm font-black text-brand-dark outline-none shadow-sm placeholder:text-accent-brown/20" />
-                                                                    </div>
-                                                                </div>
+                                                            <div>
+                                                                <label className="text-xs font-black uppercase tracking-widest text-accent-brown/40 block mb-2 ml-1">Variant Name</label>
+                                                                <input value={v.name} onChange={e => { const nv = [...form.variants]; nv[i] = { ...nv[i], name: e.target.value }; setForm(f => ({ ...f, variants: nv })); }} placeholder="e.g. Chicken Flavor"
+                                                                    className="w-full bg-white border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-6 text-base font-bold text-accent-brown outline-none shadow-sm" />
                                                             </div>
-                                                            
+
                                                             <div className="bg-white/50 p-8 rounded-[2rem] border-2 border-white shadow-inner space-y-6">
                                                                 <div className="flex items-center justify-between mb-2">
                                                                     <div className="space-y-1">
@@ -870,7 +924,7 @@ const BusinessProductEditor = () => {
                                                                     <button type="button" onClick={() => {
                                                                         const nv = [...form.variants];
                                                                         const newSize = { name: '', price: form.price, stock: '0', branch_stock: {} };
-                                                                        nv[i] = { ...nv[i], sizes: [...(nv[i].sizes || []), newSize] };
+                                                                        nv[i] = { ...nv[i], sizes: [newSize, ...(nv[i].sizes || [])] };
                                                                         setForm(f => ({ ...f, variants: nv }));
                                                                     }} className="flex items-center gap-2 bg-brand text-white px-5 py-2.5 rounded-xl text-[10px] uppercase font-black hover:bg-black transition-all shadow-lg shadow-brand/20">
                                                                         <Plus className="w-3.5 h-3.5" /> Add Size Option
@@ -879,7 +933,7 @@ const BusinessProductEditor = () => {
 
                                                                 <div className="space-y-6">
                                                                     {v.sizes?.map((vs, si) => {
-                                                                        const currentVsBranchStock = (vs as any).branch_stock || {};
+                                                                        const currentVsBranchStock = vs.branch_stock || {};
                                                                         return (
                                                                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={`vs-${i}-${si}`} className="p-10 bg-white rounded-[3rem] border-2 border-accent-peach/5 space-y-10 relative group/size shadow-sm hover:shadow-2xl transition-all">
                                                                                 <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-end">
@@ -888,14 +942,14 @@ const BusinessProductEditor = () => {
                                                                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                                                                                             <div className="space-y-3">
                                                                                                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-black/40 ml-1">Size Option Name</label>
-                                                                                                <input value={vs.name} onChange={e => { const nv = [...form.variants]; nv[i].sizes[si].name = e.target.value; setForm(f => ({ ...f, variants: nv })); }} placeholder="e.g. Small"
+                                                                                                <input value={vs.name} onChange={e => { const nv = [...form.variants]; const ns = [...(nv[i].sizes || [])]; ns[si] = { ...ns[si], name: e.target.value }; nv[i] = { ...nv[i], sizes: ns }; setForm(f => ({ ...f, variants: nv })); }} placeholder="e.g. Small"
                                                                                                     className="w-full bg-accent-peach/5 border-2 border-transparent focus:border-brand/20 rounded-2xl py-4 px-6 text-sm font-black text-black outline-none transition-all italic" />
                                                                                             </div>
                                                                                             <div className="space-y-3">
                                                                                                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-black/40 ml-1">Base Size Price</label>
                                                                                                 <div className="relative">
                                                                                                     <span className="absolute left-6 top-1/2 -translate-y-1/2 text-black/20 font-black">₱</span>
-                                                                                                    <input type="number" value={vs.price} onChange={e => { const nv = [...form.variants]; nv[i].sizes[si].price = e.target.value; setForm(f => ({ ...f, variants: nv })); }} placeholder="0"
+                                                                                                    <input type="number" value={vs.price} onChange={e => { const nv = [...form.variants]; const ns = [...(nv[i].sizes || [])]; ns[si] = { ...ns[si], price: e.target.value }; nv[i] = { ...nv[i], sizes: ns }; setForm(f => ({ ...f, variants: nv })); }} placeholder="0"
                                                                                                         className="w-full bg-accent-peach/5 border-2 border-transparent focus:border-brand/20 rounded-[1.25rem] py-4 pl-12 pr-6 text-sm font-black text-black outline-none transition-all" />
                                                                                                 </div>
                                                                                             </div>
@@ -905,7 +959,7 @@ const BusinessProductEditor = () => {
                                                                                                     <div className="absolute left-6 top-1/2 -translate-y-1/2">
                                                                                                         <Box className="w-5 h-5 text-brand" />
                                                                                                     </div>
-                                                                                                    <input readOnly value={vs.stock} 
+                                                                                                    <input readOnly value={vs.stock}
                                                                                                         className="w-full bg-brand/5 border-2 border-brand/10 rounded-[1.25rem] py-4 pl-14 pr-6 text-xl font-black text-brand outline-none shadow-inner cursor-not-allowed tabular-nums" />
                                                                                                 </div>
                                                                                             </div>
@@ -914,7 +968,7 @@ const BusinessProductEditor = () => {
 
                                                                                     {/* Form Actions (2/12) */}
                                                                                     <div className="md:col-span-2 flex justify-end">
-                                                                                        <button type="button" onClick={() => { const nv = [...form.variants]; nv[i].sizes.splice(si, 1); setForm(f => ({ ...f, variants: nv })); }}
+                                                                                        <button type="button" onClick={() => { const nv = [...form.variants]; const ns = [...(nv[i].sizes || [])]; ns.splice(si, 1); nv[i] = { ...nv[i], sizes: ns }; setForm(f => ({ ...f, variants: nv })); }}
                                                                                             className="w-14 h-14 bg-red-50 text-red-400 rounded-2xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm">
                                                                                             <Trash2 className="w-5 h-5" />
                                                                                         </button>
@@ -936,19 +990,22 @@ const BusinessProductEditor = () => {
                                                                                                 <div className="space-y-3">
                                                                                                     <div className="relative flex-1">
                                                                                                         <span className="absolute left-0 top-[2px] text-[7px] font-black text-black/20 uppercase tracking-tighter italic">Local Stock</span>
-                                                                                                        <input 
-                                                                                                            type="number" 
+                                                                                                        <input
+                                                                                                            type="number"
                                                                                                             value={bData.stock}
                                                                                                             onChange={e => {
                                                                                                                 const val = Math.max(0, parseInt(e.target.value) || 0);
                                                                                                                 const nv = [...form.variants];
-                                                                                                                const updatedBranchStock = { ...currentVsBranchStock, [branch.id]: { ...bData, stock: val.toString() } };
-                                                                                                                
-                                                                                                                // Calculate total for this variant size
+                                                                                                                const ns = [...(nv[i].sizes || [])];
+                                                                                                                const updatedSize = { ...ns[si] };
+                                                                                                                const updatedBranchStock = { ...(updatedSize.branch_stock || {}), [branch.id]: { ...bData, stock: val.toString() } };
+
                                                                                                                 const total = Object.values(updatedBranchStock).reduce((acc: number, curr: any) => acc + (parseInt(curr.stock) || 0), 0);
-                                                                                                                
-                                                                                                                (nv[i].sizes[si] as any).branch_stock = updatedBranchStock;
-                                                                                                                nv[i].sizes[si].stock = String(total);
+
+                                                                                                                updatedSize.branch_stock = updatedBranchStock;
+                                                                                                                updatedSize.stock = String(total);
+                                                                                                                ns[si] = updatedSize;
+                                                                                                                nv[i] = { ...nv[i], sizes: ns };
                                                                                                                 setForm(f => ({ ...f, variants: nv }));
                                                                                                             }}
                                                                                                             placeholder="0" min="0"
@@ -1008,8 +1065,26 @@ const BusinessProductEditor = () => {
                             {/* Catalog Card Preview */}
                             <div className="bg-white rounded-[2.5rem] p-6 shadow-2xl shadow-accent-brown/10 border-2 border-brand/5 group flex flex-col relative overflow-hidden max-w-sm mx-auto">
                                 <div className="aspect-square rounded-[2rem] bg-accent-peach/10 mb-6 relative overflow-hidden flex items-center justify-center p-8">
-                                    {form.image && form.image !== '/images/product_placeholder.png' ? (
-                                        <img src={form.image} alt="Preview" className="w-full h-full object-contain" />
+                                    {previewImages.length > 0 ? (
+                                        <div className="relative w-full h-full group/preview">
+                                            <img src={previewImages[previewImageIndex].url} alt="Preview" className="w-full h-full object-contain transition-all duration-500" />
+
+                                            {previewImages.length > 1 && (
+                                                <>
+                                                    <button onClick={() => setPreviewImageIndex(i => (i - 1 + previewImages.length) % previewImages.length)}
+                                                        className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/80 backdrop-blur-md rounded-full flex items-center justify-center text-black border border-accent-peach/20 opacity-0 group-hover/preview:opacity-100 transition-all shadow-sm hover:bg-brand hover:text-white">
+                                                        <ChevronLeft className="w-4 h-4" />
+                                                    </button>
+                                                    <button onClick={() => setPreviewImageIndex(i => (i + 1) % previewImages.length)}
+                                                        className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/80 backdrop-blur-md rounded-full flex items-center justify-center text-black border border-accent-peach/20 opacity-0 group-hover/preview:opacity-100 transition-all shadow-sm hover:bg-brand hover:text-white">
+                                                        <ChevronRight className="w-4 h-4" />
+                                                    </button>
+                                                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/20">
+                                                        <p className="text-[8px] font-black text-white uppercase tracking-widest leading-none">{previewImages[previewImageIndex].name}</p>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
                                     ) : (
                                         <Package className="w-16 h-16 text-brand-dark/10" />
                                     )}
@@ -1023,11 +1098,15 @@ const BusinessProductEditor = () => {
                                 <div className="flex flex-col flex-1">
                                     <div className="flex items-center justify-between mb-3">
                                         <p className="text-xs font-black text-brand-dark uppercase tracking-widest">{form.type} • {form.category}</p>
-                                        <span className={`text-sm uppercase font-black tracking-widest px-2 py-0.5 rounded-full ${!displayStock || displayStock === 0 ? 'bg-red-100 text-red-500' : displayStock <= 10 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                                            {!displayStock || displayStock === 0 ? 'Out' : `In Stock: ${displayStock}`}
+                                        <span className={`text-sm uppercase font-black tracking-widest px-2 py-0.5 rounded-full ${Number(previewStock) <= 0 ? 'bg-red-100 text-red-500' : Number(previewStock) <= 10 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                                            {Number(previewStock) <= 0 ? 'Out' : `In Stock: ${previewStock}`}
                                         </span>
                                     </div>
-                                    <h4 className="font-black text-accent-brown text-lg leading-tight tracking-tight mb-2 line-clamp-2">{form.name || 'Product Name'}</h4>
+                                    <h4 className="font-black text-accent-brown text-lg leading-tight tracking-tight mb-2 line-clamp-2">
+                                        {previewImages[previewImageIndex]?.name === 'Original Product'
+                                            ? (form.name || 'Product Name')
+                                            : (previewImages[previewImageIndex]?.name)}
+                                    </h4>
                                     <div className="flex items-center gap-1 mb-4 h-4">
                                         <Star className="w-3 h-3 text-brand fill-brand" />
                                         <Star className="w-3 h-3 text-brand fill-brand" />
@@ -1057,15 +1136,29 @@ const BusinessProductEditor = () => {
                                 <h4 className="text-xs font-black text-accent-brown uppercase tracking-widest border-b border-accent-brown/5 pb-2">Configuration Summary</h4>
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center text-sm font-bold uppercase tracking-wide">
-                                        <span className="text-accent-brown/40">Variants</span>
+                                        <span className="text-accent-brown/40">Total Availability</span>
+                                        <span className="text-brand font-black">{displayStock} Units</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2 border-t border-accent-brown/5 pt-3">
+                                        <div className="bg-accent-peach/5 p-3 rounded-2xl border border-accent-peach/10">
+                                            <p className="text-[8px] font-black text-accent-brown/40 uppercase tracking-widest mb-1">Base Product</p>
+                                            <p className="text-sm font-black text-accent-brown">{baseStockTotal} <span className="text-[10px] opacity-40">Stock</span></p>
+                                        </div>
+                                        <div className="bg-accent-peach/5 p-3 rounded-2xl border border-accent-peach/10">
+                                            <p className="text-[8px] font-black text-accent-brown/40 uppercase tracking-widest mb-1">All Variants</p>
+                                            <p className="text-sm font-black text-accent-brown">{variantStockTotal} <span className="text-[10px] opacity-40">Stock</span></p>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest border-t border-accent-brown/5 pt-3">
+                                        <span className="text-accent-brown/40">Variants Count</span>
                                         <span className="text-accent-brown">{form.variants.length} Models</span>
                                     </div>
-                                    <div className="flex justify-between items-center text-sm font-bold uppercase tracking-wide">
+                                    <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
                                         <span className="text-accent-brown/40">Size Options</span>
                                         <span className="text-accent-brown">{form.sizes.length} Options</span>
                                     </div>
-                                    <div className="flex justify-between items-center text-sm font-bold uppercase tracking-wide">
-                                        <span className="text-accent-brown/40">Distribution</span>
+                                    <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest pb-1">
+                                        <span className="text-accent-brown/40">Active Channels</span>
                                         <span className="text-accent-brown">{Object.keys(form.inventory_distribution).length} Branches</span>
                                     </div>
                                 </div>

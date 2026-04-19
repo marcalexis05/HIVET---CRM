@@ -130,7 +130,7 @@ const AdminCustomers = () => {
                                 placeholder="Search by name or email..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 bg-accent-peach/20 rounded-xl border border-transparent focus:border-brand/30 outline-none text-xs font-bold text-accent-brown placeholder:text-accent-brown/40 transition-all"
+                                className="w-full pl-10 pr-4 py-2.5 bg-accent-peach/20 rounded-xl border border-transparent focus:border-brand/30 outline-none text-sm font-bold text-accent-brown placeholder:text-accent-brown/40 transition-all"
                             />
                         </div>
                         <button className="w-10 h-10 bg-accent-peach/30 rounded-xl flex items-center justify-center text-accent-brown/60 hover:text-brand-dark hover:bg-accent-peach/60 transition-colors shrink-0">
@@ -146,7 +146,7 @@ const AdminCustomers = () => {
                                     setActiveTab(tab);
                                     setCurrentPage(1);
                                 }}
-                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap w-[calc(50%-0.35rem)] md:w-auto shrink-0 ${activeTab === tab ? 'bg-brand text-white shadow-md shadow-brand/20' : 'text-accent-brown/50 hover:bg-accent-peach/30 hover:text-accent-brown'}`}
+                                className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap w-[calc(50%-0.35rem)] md:w-auto shrink-0 ${activeTab === tab ? 'bg-brand text-white shadow-md shadow-brand/20' : 'text-accent-brown/50 hover:bg-accent-peach/30 hover:text-accent-brown'}`}
                             >
                                 {tab}
                             </button>
@@ -160,11 +160,11 @@ const AdminCustomers = () => {
                     <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="border-b border-accent-brown/5 text-[9px] font-black uppercase tracking-widest text-accent-brown/40">
-                                    <th className="px-6 py-5 whitespace-nowrap">User Info</th>
-                                    <th className="px-6 py-5 whitespace-nowrap">Role</th>
-                                    <th className="px-6 py-5 whitespace-nowrap">Status</th>
-                                    <th className="px-6 py-5 whitespace-nowrap text-right">Actions</th>
+                                <tr className="border-b border-accent-brown/5 text-xs font-black uppercase tracking-widest text-accent-brown/40">
+                                    <th className="px-6 py-6 whitespace-nowrap">User Info</th>
+                                    <th className="px-6 py-6 whitespace-nowrap">Role</th>
+                                    <th className="px-6 py-6 whitespace-nowrap">Status</th>
+                                    <th className="px-6 py-6 whitespace-nowrap text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -198,22 +198,22 @@ const AdminCustomers = () => {
                                                         {u.name.charAt(0)}
                                                     </div>
                                                     <div>
-                                                        <span className="block font-bold text-accent-brown text-sm group-hover:text-brand-dark transition-colors">{u.name}</span>
-                                                        <div className="flex items-center gap-1.5 mt-0.5 text-xs font-medium text-accent-brown/50">
-                                                            <Mail className="w-3 h-3 flex-shrink-0" />
-                                                            <span className="truncate max-w-[150px]">{u.email}</span>
+                                                        <span className="block font-bold text-accent-brown text-base group-hover:text-brand-dark transition-colors">{u.name}</span>
+                                                        <div className="flex items-center gap-1.5 mt-1 text-sm font-medium text-accent-brown/50">
+                                                            <Mail className="w-4 h-4 flex-shrink-0" />
+                                                            <span className="truncate max-w-[200px]">{u.email}</span>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${getRoleStyle(u.role)}`}>
+                                                <span className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${getRoleStyle(u.role)}`}>
                                                     {getRoleIcon(u.role)}
                                                     {u.role}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <span className={`text-[9px] font-black uppercase tracking-widest ${
+                                                <span className={`text-[10px] font-black uppercase tracking-widest ${
                                                     u.status === 'Active' ? 'text-green-600' : 
                                                     u.status === 'Pending' ? 'text-orange-500' :
                                                     'text-red-500'

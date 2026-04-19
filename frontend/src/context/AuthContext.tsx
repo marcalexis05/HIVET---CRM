@@ -53,6 +53,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (payload && typeof payload.exp === 'number' && payload.exp * 1000 > Date.now()) {
                 let role = payload.role as Role;
                 if ((payload.role as string) === 'user') role = 'customer';
+                if ((payload.role as string) === 'admin') role = 'super_admin';
                 setUser({
                     id: payload.id as number | undefined,
                     email: payload.email as string,
@@ -88,6 +89,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.setItem('hivet_token', token);
         let role = (payload.role as Role) ?? 'customer';
         if ((payload.role as string) === 'user') role = 'customer';
+        if ((payload.role as string) === 'admin') role = 'super_admin';
         setUser({
             id: payload.id as number | undefined,
             email: payload.email as string,

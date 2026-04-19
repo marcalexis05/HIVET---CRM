@@ -69,7 +69,7 @@ const AdminDashboard = () => {
     const statCards = [
         { 
             title: 'Active Partners', 
-            value: stats.partners.toLocaleString(), 
+            value: (stats.partners || 0).toLocaleString(), 
             icon: Store, 
             trend: stats.partners_trend,
             data: stats.details.partners,
@@ -77,7 +77,7 @@ const AdminDashboard = () => {
         },
         { 
             title: 'Registered Riders', 
-            value: stats.riders.toLocaleString(), 
+            value: (stats.riders || 0).toLocaleString(), 
             icon: Bike, 
             trend: stats.riders_trend,
             data: stats.details.riders,
@@ -85,7 +85,7 @@ const AdminDashboard = () => {
         },
         { 
             title: 'Active Customers', 
-            value: stats.customers.toLocaleString(), 
+            value: (stats.customers || 0).toLocaleString(), 
             icon: Users, 
             trend: stats.customers_trend,
             data: stats.details.customers,
@@ -93,7 +93,7 @@ const AdminDashboard = () => {
         },
         { 
             title: 'Overall Population', 
-            value: stats.end_users.toLocaleString(), 
+            value: (stats.end_users || 0).toLocaleString(), 
             icon: Activity, 
             trend: stats.end_users_trend,
             data: stats.details.end_users,

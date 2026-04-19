@@ -1,13 +1,23 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, Users, ShoppingBag, Award, ArrowUp, ArrowDown, LayoutGrid, Package, ChevronRight, MapPin, BarChart2 } from 'lucide-react';
+import {
+    TrendingUp, Users, ShoppingBag, Award, ArrowUp, ArrowDown,
+    LayoutGrid, Package, ChevronRight, MapPin, BarChart2,
+    Activity, Zap, Globe, Star, Wallet, Calendar, HeartPulse,
+    Eye, ShoppingCart, DollarSign
+} from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { Loader2 } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, BarChart, Bar, LineChart, Line, Legend } from 'recharts';
+import {
+    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    PieChart, Pie, Cell, Tooltip as RechartsTooltip, BarChart, Bar, LineChart, Line, Legend
+} from 'recharts';
 import BranchSelector from '../../components/BranchSelector';
+import Sparkline from '../../components/Sparkline';
 
-const ICON_MAP: Record<string, any> = { TrendingUp, Users, ShoppingBag, Award, LayoutGrid, Package };
+
+const ICON_MAP: Record<string, any> = { TrendingUp, Users, ShoppingBag, Award, LayoutGrid, Package, Activity, Zap, Globe, Star, Wallet, Calendar, HeartPulse, Eye, ShoppingCart, DollarSign };
 
 const BusinessAnalytics = () => {
     const { user } = useAuth();
@@ -17,45 +27,97 @@ const BusinessAnalytics = () => {
         if (saved === 'all') return null;
         return saved ? parseInt(saved) : null;
     });
+
+    // Analytics States
     const [kpiList, setKpiList] = useState<any[]>([]);
     const [revenueTrend, setRevenueTrend] = useState<any[]>([]);
+    const [comparisonData, setComparisonData] = useState<any[]>([]);
+    const [distributionData, setDistributionData] = useState<any[]>([]);
     const [topProducts, setTopProducts] = useState<any[]>([]);
     const [topServices, setTopServices] = useState<any[]>([]);
     const [branchPerformance, setBranchPerformance] = useState<any[]>([]);
+    const [allBranchesTrend, setAllBranchesTrend] = useState<any[]>([]);
+
+    // Intelligence States
+    const [petStats, setPetStats] = useState<any>(null);
+    const [marketMatrix, setMarketMatrix] = useState<any[]>([]);
+    const [serviceDNA, setServiceDNA] = useState<any[]>([]);
     const [retentionRate, setRetentionRate] = useState(0);
     const [retentionChange, setRetentionChange] = useState('');
-    const [distributionData, setDistributionData] = useState<any[]>([]);
-    const [allBranchesTrend, setAllBranchesTrend] = useState<any[]>([]);
-    const [comparisonData, setComparisonData] = useState<any[]>([]);
 
     const [revenueType, setRevenueType] = useState('all');
+    const [revenuePeriod, setRevenuePeriod] = useState(() => {
+        return localStorage.getItem('hivet_selected_period') || '30d';
+    });
+
+    // Persist filter changes
+    useEffect(() => {
+        if (branchId === null) {
+            localStorage.setItem('hivet_selected_branch', 'all');
+        } else {
+            localStorage.setItem('hivet_selected_branch', branchId.toString());
+        }
+    }, [branchId]);
+
+    useEffect(() => {
+        localStorage.setItem('hivet_selected_period', revenuePeriod);
+    }, [revenuePeriod]);
 
     useEffect(() => {
         if (user?.token) {
             fetchAnalytics();
         }
-    }, [user?.token, revenueType, branchId]);
+    }, [user?.token, revenueType, branchId, revenuePeriod]);
 
     const fetchAnalytics = async () => {
         setLoading(true);
         try {
-            let url = `http://localhost:8000/api/business/dashboard/analytics?data_type=${revenueType}`;
+            let url = `http://localhost:8000/api/business/dashboard/analytics?data_type=${revenueType}&period=${revenuePeriod}`;
             if (branchId) url += `&branch_id=${branchId}`;
-            
+
             const resp = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${user?.token}` }
             });
             const data = await resp.json();
+
             setKpiList(data.kpis || []);
             setRevenueTrend(data.revenue_trend?.chartData || []);
+            setComparisonData(data.comparison_data || []);
+            setDistributionData(data.distribution_data || []);
             setTopProducts(data.top_products || []);
             setTopServices(data.top_services || []);
             setBranchPerformance(data.branch_performance || []);
+            
+            // Filter and rename branches for the comparison chart
+            const rawBranchesTrend = data.all_branches_trend || [];
+            const filteredBranchesTrend = rawBranchesTrend.map((item: any) => {
+                const newItem: any = { name: item.name };
+                
+                // Map Branch 7 -> Main Branch, or keep Main Branch if already named that way
+                if (item['Branch 7'] !== undefined) {
+                    newItem['Main Branch'] = item['Branch 7'];
+                } else if (item['Main Branch'] !== undefined) {
+                    newItem['Main Branch'] = item['Main Branch'];
+                }
+
+                // Keep any branch containing "Ruby"
+                Object.keys(item).forEach(k => {
+                    if (k.toLowerCase().includes('ruby')) {
+                        // Rename nicely if it's truncated or just use the existing key if preferred
+                        newItem['Ruby St. Branch'] = item[k]; 
+                    }
+                });
+
+                return newItem;
+            });
+            setAllBranchesTrend(filteredBranchesTrend);
+
+            setPetStats(data.pet_stats || null);
+            setMarketMatrix(data.market_matrix || []);
+            setServiceDNA(data.service_dna || []);
             setRetentionRate(data.retention_rate || 0);
             setRetentionChange(data.retention_change || '');
-            setDistributionData(data.distribution_data || []);
-            setAllBranchesTrend(data.all_branches_trend || []);
-            setComparisonData(data.comparison_data || []);
+
         } catch (err) {
             console.error('Error fetching analytics:', err);
         } finally {
@@ -65,479 +127,368 @@ const BusinessAnalytics = () => {
 
     const currentBranchInfo = branchPerformance.find(b => b.id === branchId || b.branch_id === branchId);
 
+    // Simplification Mappings
+    const chartColors = {
+        primary: '#FB8500', // Brand Orange
+        secondary: '#219EBC', // Sky Blue
+        neutral: '#8D6E63', // Slate Brown
+        comparison: '#64748B', // Slate Blue (Modified for better contrast)
+        success: '#10B981',
+        danger: '#EF4444'
+    };
+
     return (
-        <DashboardLayout 
-            title="Business Analytics" 
-            branchContext={branchId ? { id: branchId, name: currentBranchInfo?.branch || 'Branch', address: currentBranchInfo?.address } : undefined}
-        >
-            <div className="space-y-12">
-                
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-                    <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-brown/40">Performance Cycle</span>
-                        <div className="flex items-center gap-2">
-                            <h2 className="text-xl font-black text-accent-brown uppercase tracking-tighter">Real-time Analytics</h2>
-                            {kpiList.some(k => k.change.includes('(30d Snapshot)')) && (
-                                <span className="bg-brand/10 text-brand-dark px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest animate-pulse border border-brand/20">
-                                    Snapshot Active (Last 30D)
-                                </span>
-                            )}
-                        </div>
+        <DashboardLayout title="Business Analytics">
+            <div className="space-y-8 pb-10">
+
+                {/* Header Controls (Branch Selector & Period) */}
+                <div className="flex flex-wrap items-center justify-end gap-3 mb-4">
+                    <div className="bg-white p-1 rounded-xl border border-accent-brown/5 shadow-sm flex items-center gap-1">
+                        {['7d', '30d', '6m', '1y'].map((p) => (
+                            <button
+                                key={p}
+                                onClick={() => setRevenuePeriod(p)}
+                                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${revenuePeriod === p
+                                        ? 'bg-brand text-white shadow-md'
+                                        : 'text-accent-brown/40 hover:bg-slate-50'
+                                    }`}
+                            >
+                                {p}
+                            </button>
+                        ))}
                     </div>
                     {user?.token && <BranchSelector token={user.token} onBranchChange={setBranchId} currentBranchId={branchId} allowAllBranches={true} />}
                 </div>
 
-                {/* Monthly Comparison Chart - Current vs Previous */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-                    className="bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/5 border border-white relative overflow-hidden">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-                        <div>
-                            <h3 className="text-lg font-black text-accent-brown tracking-tight">Monthly Comparison</h3>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mt-1">Current vs Previous Period</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-brand-dark" />
-                                <span className="text-[9px] font-black text-accent-brown/60 uppercase">Current</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-accent-peach" />
-                                <span className="text-[9px] font-black text-accent-brown/60 uppercase">Previous</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="h-[200px] w-full">
-                        {loading ? (
-                            <div className="h-full flex flex-col items-center justify-center opacity-20">
-                                <Loader2 className="w-6 h-6 animate-spin mb-2" />
-                                <p className="text-[10px] font-black uppercase tracking-widest">Loading...</p>
-                            </div>
-                        ) : comparisonData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={comparisonData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAE0D5" opacity={0.3} />
-                                    <XAxis 
-                                        dataKey="name" 
-                                        axisLine={false}
-                                        tickLine={false}
-                                        tick={{ fill: '#8D6E63', fontSize: 10, fontWeight: 800 }}
-                                        dy={10}
-                                    />
-                                    <YAxis 
-                                        hide={true}
-                                        domain={['dataMin', 'auto']}
-                                    />
-                                    <Tooltip 
-                                        content={({ active, payload }) => {
-                                            if (active && payload && payload.length) {
-                                                return (
-                                                    <div className="bg-white/90 backdrop-blur-md p-3 rounded-xl border-2 border-accent-brown/5 shadow-xl">
-                                                        <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest mb-2">
-                                                            {payload[0].payload.name}
-                                                        </p>
-                                                        <div className="space-y-1">
-                                                            {payload.map((entry: any, idx: number) => (
-                                                                <div key={idx} className="flex items-center justify-between gap-4">
-                                                                    <div className="flex items-center gap-1">
-                                                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                                                                        <span className="text-[9px] font-bold text-accent-brown/60">{entry.dataKey === 'value' ? 'Current' : 'Previous'}</span>
-                                                                    </div>
-                                                                    <span className="text-sm font-black text-accent-brown">₱{entry.value?.toLocaleString()}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }
-                                            return null;
-                                        }}
-                                    />
-                                    <Line 
-                                        type="monotone" 
-                                        dataKey="value" 
-                                        stroke="#FB8500" 
-                                        strokeWidth={3}
-                                        dot={{ r: 4, fill: '#FB8500' }}
-                                        activeDot={{ r: 6 }}
-                                    />
-                                    <Line 
-                                        type="monotone" 
-                                        dataKey="previous" 
-                                        stroke="#8D6E63" 
-                                        strokeWidth={2}
-                                        strokeDasharray="5 5"
-                                        dot={{ r: 3, fill: '#8D6E63' }}
-                                        activeDot={{ r: 5 }}
-                                    />
-                                </LineChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center opacity-20">
-                                <BarChart2 className="w-6 h-6 mb-2" />
-                                <p className="text-[10px] font-black uppercase tracking-widest">No Data</p>
-                            </div>
-                        )}
-                    </div>
-                </motion.div>
+                
 
-                {/* All Branches Comparison Chart - April 2026 */}
-                {!branchId && allBranchesTrend.length > 0 && (
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-                        className="bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/5 border border-white relative overflow-hidden">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-                            <div>
-                                <h3 className="text-lg font-black text-accent-brown tracking-tight">All Branches Comparison</h3>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mt-1">April 2026 Format</p>
-                            </div>
-                        </div>
-                        <div className="h-[280px] w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={allBranchesTrend} margin={{ top: 10, right: 30, left: 20, bottom: 10 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAE0D5" opacity={0.3} />
-                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#8D6E63', fontSize: 10, fontWeight: 800 }} dy={10} />
-                                    <YAxis hide={false} axisLine={false} tickLine={false} tick={{ fill: '#8D6E63', fontSize: 9, fontWeight: 600 }} tickFormatter={(v) => `₱${(v/1000).toFixed(0)}k`} />
-                                    <Tooltip 
-                                        content={({ active, payload, label }) => {
-                                            if (active && payload && payload.length) {
-                                                return (
-                                                    <div className="bg-white/95 backdrop-blur-md p-4 rounded-xl border-2 border-accent-brown/5 shadow-xl">
-                                                        <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest mb-2">{label}</p>
-                                                        {payload.map((entry: any, idx: number) => (
-                                                            <div key={idx} className="flex items-center justify-between gap-4 text-xs">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                                                                    <span className="font-bold text-accent-brown">{entry.dataKey}</span>
-                                                                </div>
-                                                                <span className="font-black text-accent-brown">₱{entry.value?.toLocaleString()}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                );
-                                            }
-                                            return null;
-                                        }}
-                                    />
-                                    <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ paddingBottom: 10 }} />
-                                    {(() => {
-                                        const colors = ["#FB8500", "#219EBC", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444", "#EC4899", "#06B6D4"];
-                                        const firstEntry = allBranchesTrend[0] || {};
-                                        const branchKeys = Object.keys(firstEntry).filter(k => k !== "name");
-                                        return branchKeys.map((key, idx) => (
-                                            <Line 
-                                                key={key}
-                                                type="monotone" 
-                                                dataKey={key} 
-                                                stroke={colors[idx % colors.length]} 
-                                                strokeWidth={2} 
-                                                dot={{ r: 4 }} 
-                                                activeDot={{ r: 6 }} 
-                                            />
-                                        ));
-                                    })()}
-                                </LineChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </motion.div>
-                )}
+                {/* Section 1: Key Numbers */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {(kpiList.length > 0 ? kpiList : [
+                        { label: 'Total Earnings', value: '₱0', change: '+0%', icon: 'Wallet', sub: 'Gross Revenue' },
+                        { label: 'Total Patients', value: '0', change: 'Stable', icon: 'HeartPulse', sub: 'Unique Pets' },
+                        { label: 'Booking Success', value: '0', change: 'Real-time', icon: 'Calendar', sub: 'Confirmed visits' },
+                        { label: 'Brand Loyalty', value: '0', change: 'Healthy', icon: 'Star', sub: 'Repeat Customers' }
+                    ]).map((k, i) => {
+                        const Icon = ICON_MAP[k.icon] || Zap;
+                        const isRevenue = k.label.toLowerCase().includes('revenue') || k.label.toLowerCase().includes('earnings');
+                        const isFeedback = k.label.toLowerCase().includes('feedback') || k.label.toLowerCase().includes('loyalty');
 
-                <div className="grid lg:grid-cols-3 gap-8">
-                    {/* Revenue Trend - tall chart */}
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-                        className="lg:col-span-2 bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white relative overflow-hidden group">
-                        <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-8 gap-4 relative z-10">
-                            <div>
-                                <h3 className="text-xl font-black text-accent-brown tracking-tight">Revenue Trend</h3>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mt-1">Real-time performance cycle</p>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-1 bg-accent-brown/5 p-1.5 rounded-2xl">
-                                    {[
-                                        { id: 'all', label: 'All' },
-                                        { id: 'products', label: 'Products' },
-                                        { id: 'services', label: 'Services' },
-                                    ].map((type) => (
-                                        <button
-                                            key={type.id}
-                                            onClick={() => setRevenueType(type.id)}
-                                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                                                revenueType === type.id 
-                                                ? 'bg-brand-dark text-white shadow-lg shadow-brand/20' 
-                                                : 'text-accent-brown/40 hover:text-accent-brown'
-                                            }`}
-                                        >
-                                            {type.label}
-                                        </button>
-                                    ))}
+                        return (
+                            <motion.div
+                                key={k.label}
+                                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                                className={`bg-white p-7 rounded-[2rem] border transition-all group ${isRevenue ? 'border-brand/40 shadow-xl shadow-brand/5' : 'border-accent-brown/5 shadow-sm hover:shadow-xl hover:border-brand/20'}`}
+                            >
+                                <div className="mb-6">
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${isRevenue ? 'bg-brand/10 text-brand' : 'bg-slate-50 text-accent-brown group-hover:bg-brand group-hover:text-white'}`}>
+                                        <Icon className="w-5 h-5" />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest">{k.label}</p>
+                                    <div className="flex items-center gap-1.5">
+                                        <h3 className="text-3xl font-black text-accent-brown tracking-tighter transition-transform group-hover:scale-105 origin-left">
+                                            {k.value}
+                                        </h3>
+                                        {isFeedback && <span className="text-xl text-brand group-hover:animate-pulse">★</span>}
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 pt-4 border-t border-slate-50/50">
+                                    <p className="text-[10px] font-black text-accent-brown uppercase italic opacity-60 tracking-tight">
+                                        {k.change}
+                                    </p>
+                                </div>
+                            </motion.div>
+                        );
+                    })}
+                </div>
+
+                {/* Section 2: Earnings & Growth */}
+                <div className="w-full">
+                    {/* Main Sales Trend */}
+                    <div className="w-full">
+                        <div className="bg-white p-8 rounded-[2.5rem] border border-accent-brown/5 shadow-sm">
+                            <div className="mb-8 flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-xl font-black text-accent-brown tracking-tight">Earnings Trend</h3>
+                                    <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest">Revenue performance over time</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full bg-brand shadow-lg" />
+                                    <span className="text-[10px] font-black text-accent-brown tracking-tight">Earnings (₱)</span>
                                 </div>
                             </div>
-                        </div>
-                        <div className="h-[300px] w-full mt-4">
-                            {loading ? (
-                                <div className="h-full flex flex-col items-center justify-center opacity-20">
-                                    <Loader2 className="w-8 h-8 animate-spin mb-4" />
-                                    <p className="text-[10px] font-black uppercase tracking-widest">Aggregating Sales...</p>
-                                </div>
-                            ) : revenueTrend.length > 0 ? (
+                            <div className="h-[300px] w-full" >
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart 
-                                        data={revenueTrend}
-                                        margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                                    >
+                                    <AreaChart data={revenueTrend}>
                                         <defs>
-                                            <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#FB8500" stopOpacity={0.15} />
-                                                <stop offset="95%" stopColor="#FB8500" stopOpacity={0} />
+                                            <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor={chartColors.primary} stopOpacity={0.4} />
+                                                <stop offset="95%" stopColor={chartColors.primary} stopOpacity={0.0} />
                                             </linearGradient>
                                         </defs>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAE0D5" opacity={0.3} />
-                                        <XAxis 
-                                            dataKey="name" 
-                                            axisLine={false}
-                                            tickLine={false}
-                                            tick={{ fill: '#8D6E63', fontSize: 10, fontWeight: 800 }}
-                                            dy={15}
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAE0D5" opacity={0.5} />
+                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#94A3B8' }} />
+                                        <YAxis hide domain={['auto', 'auto']} />
+                                        <Tooltip
+                                            contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.2)' }}
+                                            formatter={(val: any) => [`₱${val.toLocaleString()}`, 'Earnings']}
                                         />
-                                        <YAxis 
-                                            hide={true}
-                                            domain={['dataMin', 'auto']}
-                                        />
-                                        <Tooltip 
-                                            content={({ active, payload }) => {
-                                                if (active && payload && payload.length) {
-                                                    return (
-                                                        <div className="bg-white/90 backdrop-blur-md p-4 rounded-2xl border-2 border-accent-brown/5 shadow-2xl">
-                                                            <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest mb-1">
-                                                                {payload[0].payload.name}
-                                                            </p>
-                                                            <p className="text-xl font-black text-accent-brown tracking-tighter">
-                                                                ₱{payload[0].value?.toLocaleString()}
-                                                            </p>
-                                                        </div>
-                                                    );
-                                                }
-                                                return null;
-                                            }}
-                                        />
-                                        <Area 
-                                            type="monotone" 
-                                            dataKey="value" 
-                                            stroke="#FB8500" 
-                                            strokeWidth={4}
-                                            fillOpacity={1} 
-                                            fill="url(#colorRevenue)" 
-                                            animationDuration={1500}
-                                        />
+                                        <Area type="monotone" dataKey="value" stroke={chartColors.primary} strokeWidth={6} fillOpacity={1} fill="url(#colorRev)"  />
                                     </AreaChart>
                                 </ResponsiveContainer>
-                            ) : (
-                                <div className="h-full flex flex-col items-center justify-center opacity-20">
-                                    <p className="text-[10px] font-black uppercase tracking-widest">No Trend Data Found</p>
-                                </div>
-                            )}
-                        </div>
-                        {/* Decorative element */}
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-brand/5 rounded-full blur-[100px] -mr-32 -mt-32" />
-                    </motion.div>
-
-                    {/* Branch Performance Breakdown */}
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
-                        className="bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col relative overflow-hidden">
-                        <h3 className="text-xl font-black text-accent-brown tracking-tight mb-2">Branch Performance</h3>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mb-8">
-                            Revenue distribution by location
-                        </p>
-                        <div className="space-y-6 flex-1 relative z-10">
-                            {(branchId ? branchPerformance.filter(b => b.id === branchId || b.branch_id === branchId) : branchPerformance).map((b, i) => (
-                                <div key={b.branch} className="group/item">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded-xl bg-accent-peach/20 flex items-center justify-center">
-                                                <MapPin className="w-4 h-4 text-brand-dark" />
-                                            </div>
-                                            <div>
-                                                <span className="text-xs font-black text-accent-brown block leading-none">{b.branch}</span>
-                                                <span className="text-[9px] font-bold text-accent-brown/30">₱{b.revenue.toLocaleString()}</span>
-                                            </div>
-                                        </div>
-                                        <span className="text-xs font-black text-brand-dark bg-brand/10 px-2 py-1 rounded-lg">{b.pct}%</span>
-                                    </div>
-                                    <div className="w-full h-2 bg-accent-peach/10 rounded-full overflow-hidden">
-                                        <motion.div initial={{ width: 0 }} animate={{ width: `${b.pct}%` }} transition={{ duration: 0.6, delay: 0.5 + i * 0.1 }}
-                                            className="h-full rounded-full bg-brand-dark shadow-sm" />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="mt-8 pt-6 border-t border-accent-brown/5 text-center relative z-10">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 flex items-center justify-center gap-1">
-                                Customer Health <ChevronRight className="w-3 h-3" />
-                            </p>
-                            <div className="flex items-center justify-center gap-4 mt-2">
-                                <div>
-                                    <p className="text-4xl font-black text-accent-brown tracking-tighter">{retentionRate}%</p>
-                                    <p className="text-[9px] font-bold text-green-600 mt-0.5">{retentionChange}</p>
-                                </div>
                             </div>
                         </div>
-                        <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-accent-peach/5 to-transparent pointer-events-none" />
-                    </motion.div>
+                    </div>
+                </div>
 
-                    {/* Operations Mix - Pie Chart */}
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-                        className="bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col relative overflow-hidden">
-                        <h3 className="text-xl font-black text-accent-brown tracking-tight mb-2">Operations Mix</h3>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mb-8">
-                            Volume ratio: Products vs Services
-                        </p>
-                        <div className="h-48 w-full relative z-10">
-                            {loading ? (
-                                <div className="h-full flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-accent-brown/20" /></div>
-                            ) : distributionData.length > 0 && distributionData.some(d => d.value > 0) ? (
+                {/* Section 3: Popular Items & Services */}
+                <div className="grid lg:grid-cols-2 gap-6">
+                    {/* Operations Mix */}
+                    <div>
+                        <div className="bg-white p-8 rounded-[2.5rem] border border-accent-brown/5 shadow-sm">
+                            <div className="flex items-center justify-between mb-8">
+                                <h3 className="text-xl font-black text-accent-brown tracking-tight">Sales Breakdown</h3>
+                                <ShoppingCart className="w-5 h-5 text-accent-brown/20" />
+                            </div>
+                            <div className="h-[250px] w-full flex items-center" >
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie data={distributionData} innerRadius={60} outerRadius={90} paddingAngle={4} dataKey="value" stroke="none">
+                                            {distributionData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={[chartColors.primary, chartColors.secondary, chartColors.neutral, chartColors.comparison][index % 4]}  />
+                                            ))}
+                                        </Pie>
+                                        <RechartsTooltip contentStyle={{ borderRadius: '1rem', border: 'none' }} />
+                                        <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Regional Contribution */}
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-accent-brown/5 shadow-sm">
+                        <div className="flex items-center justify-between mb-8">
+                            <h3 className="text-xl font-black text-accent-brown tracking-tight">Sales by Branch</h3>
+                            <MapPin className="w-5 h-5 text-accent-brown/20" />
+                        </div>
+                        <div className="h-[250px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={branchPerformance} layout="vertical" margin={{ left: 20 }}>
+                                    <XAxis type="number" hide />
+                                    <YAxis dataKey="branch" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748B' }} width={100} />
+                                    <Tooltip />
+                                    <Bar dataKey="revenue" fill={chartColors.primary} radius={[0, 4, 4, 0]} barSize={20} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Section 4: Patient Insights */}
+                <div className="grid lg:grid-cols-3 gap-6">
+                    {/* Species Pie */}
+                    <div>
+                        <div className="bg-white p-8 rounded-[2.5rem] border border-accent-brown/5 shadow-sm">
+                            <h3 className="text-lg font-black text-accent-brown tracking-tight mb-1">What Pets?</h3>
+                            <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest mb-6">Patient species mix</p>
+                            <div className="h-[200px] w-full" >
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
-                                            data={distributionData}
-                                            innerRadius={60}
-                                            outerRadius={80}
-                                            paddingAngle={5}
+                                            data={petStats?.species?.slice(0, 3) || [{ name: 'Dog', value: 70 }, { name: 'Cat', value: 30 }]}
                                             dataKey="value"
+                                            outerRadius={80}
+                                            stroke="none"
                                         >
-                                            {distributionData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                                            ))}
+                                            <Cell fill={chartColors.primary}  />
+                                            <Cell fill={chartColors.secondary}  />
+                                            <Cell fill={chartColors.neutral}  />
                                         </Pie>
-                                        <RechartsTooltip 
-                                            content={({ active, payload }) => {
-                                                if (active && payload && payload.length) {
-                                                    return (
-                                                        <div className="bg-white px-3 py-2 rounded-xl shadow-xl border border-accent-brown/5">
-                                                            <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 mb-1">{payload[0].name}</p>
-                                                            <p className="text-sm font-black text-accent-brown">{payload[0].value} units</p>
-                                                        </div>
-                                                    );
-                                                }
-                                                return null;
-                                            }}
-                                        />
+                                        <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none' }} />
                                     </PieChart>
                                 </ResponsiveContainer>
-                            ) : (
-                                <div className="h-full flex flex-col items-center justify-center opacity-20">
-                                    <BarChart2 className="w-8 h-8 mb-2" />
-                                    <p className="text-[9px] font-black uppercase tracking-widest text-center">No Data Available</p>
-                                </div>
-                            )}
+                            </div>
+                            <div className="flex flex-wrap justify-center gap-4 mt-4">
+                                {(petStats?.species || [{ name: 'Dog', value: 70 }, { name: 'Cat', value: 30 }]).slice(0, 3).map((s: any, idx: number) => (
+                                    <div key={idx} className="flex items-center gap-1.5">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: [chartColors.primary, chartColors.secondary, chartColors.neutral][idx] }} />
+                                        <span className="text-[10px] font-bold text-accent-brown uppercase">{s.name} ({s.value})</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                        <div className="flex justify-center gap-6 mt-6 pb-2">
-                            {distributionData.map((d) => (
-                                <div key={d.name} className="flex items-center gap-2">
-                                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
-                                    <span className="text-[10px] font-black text-accent-brown uppercase tracking-widest opacity-60">{d.name}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </motion.div>
+                    </div>
 
-                    {/* Service Performance - Bar Chart */}
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.42 }}
-                        className="lg:col-span-2 bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col relative overflow-hidden">
-                        <h3 className="text-xl font-black text-accent-brown tracking-tight mb-2">Service Performance</h3>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mb-8">
-                            Top performing services by completed sessions
-                        </p>
-                        <div className="flex-1 w-full min-h-[250px] relative z-10">
-                            {loading ? (
-                                <div className="h-full flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-accent-brown/20" /></div>
-                            ) : topServices?.length > 0 && topServices[0]?.name !== "No services yet" ? (
+                    {/* Breed Leaderboard */}
+                    <div className="lg:col-span-2">
+                        <div className="bg-white p-8 rounded-[2.5rem] border border-accent-brown/5 shadow-sm">
+                            <h3 className="text-lg font-black text-accent-brown tracking-tight mb-1">Top Breeds</h3>
+                            <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest mb-6">Most frequent clinical visitors</p>
+                            <div className="h-[250px] w-full" >
+                                {petStats?.breeds ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={petStats.breeds.slice(0, 5)} layout="vertical">
+                                            <XAxis type="number" hide />
+                                            <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748B' }} width={120} />
+                                            <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none' }} />
+                                            <Bar dataKey="value" fill={chartColors.primary} radius={[0, 6, 6, 0]} barSize={24}  />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="h-full flex items-center justify-center opacity-20"><Activity className="w-10 h-10" /></div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Section 5: Feedback & Satisfaction (The simplified Radars) */}
+                <div className="grid lg:grid-cols-2 gap-6">
+                    {/* Market Matrix -> Feedback Bar */}
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-accent-brown/5 shadow-sm">
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h3 className="text-xl font-black text-accent-brown tracking-tight">Product Reviews</h3>
+                                <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest">Average rating per product</p>
+                            </div>
+                            <Star className="w-5 h-5 text-brand fill-brand" />
+                        </div>
+                        <div className="h-[250px] w-full flex items-center justify-center">
+                            {marketMatrix.length > 0 ? (
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={topServices} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#EAE0D5" opacity={0.3} />
-                                        <XAxis type="number" hide />
-                                        <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#8D6E63', fontSize: 10, fontWeight: 800 }} width={120} />
-                                        <RechartsTooltip 
-                                            cursor={{ fill: 'transparent' }}
-                                            content={({ active, payload }) => {
-                                                if (active && payload && payload.length) {
-                                                    return (
-                                                        <div className="bg-white px-3 py-2 rounded-xl shadow-xl border border-accent-brown/5">
-                                                            <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/40 mb-1">{payload[0].payload.name}</p>
-                                                            <p className="text-sm font-black text-accent-brown">{payload[0].value} sessions</p>
-                                                            <p className="text-[10px] font-bold text-accent-brown/30 mt-1">Revenue: {payload[0].payload.revenue}</p>
-                                                        </div>
-                                                    );
-                                                }
-                                                return null;
-                                            }}
-                                        />
-                                        <Bar dataKey="sold" fill="#219EBC" radius={[0, 4, 4, 0]} barSize={24} animationDuration={1500}>
-                                            {topServices.map((_, index) => (
-                                                <Cell key={`cell-${index}`} fill={index === 0 ? "#FFB703" : "#219EBC"} />
-                                            ))}
-                                        </Bar>
+                                    <BarChart data={marketMatrix} margin={{ left: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                                        <XAxis dataKey="subject" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700, fill: '#64748B' }} />
+                                        <YAxis domain={[0, 5]} ticks={[1, 2, 3, 4, 5]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#94A3B8' }} />
+                                        <Tooltip />
+                                        <Bar dataKey="A" name="Rating" fill={chartColors.secondary} radius={[4, 4, 0, 0]} barSize={30} />
                                     </BarChart>
                                 </ResponsiveContainer>
                             ) : (
-                                <div className="h-full flex flex-col items-center justify-center opacity-20">
-                                    <BarChart2 className="w-8 h-8 mb-2" />
-                                    <p className="text-[9px] font-black uppercase tracking-widest text-center">No Data Available</p>
+                                <div className="text-center opacity-20">
+                                    <Star className="w-10 h-10 mx-auto mb-2" />
+                                    <p className="text-[10px] font-black uppercase tracking-widest">No Reviews Recorded</p>
                                 </div>
                             )}
                         </div>
-                    </motion.div>
-                </div>
+                    </div>
 
-                {/* Top Products table */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
-                    className="bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white">
-                    <div className="flex items-center justify-between mb-8">
-                        <div>
-                            <h3 className="text-xl font-black text-accent-brown tracking-tight">
-                                Product Sales
-                            </h3>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 mt-1">Sorted by total revenue contribution</p>
+                    {/* Service DNA -> Popular Services Bar */}
+                    <div>
+                        <div className="bg-white p-8 rounded-[2.5rem] border border-accent-brown/5 shadow-sm">
+                            <div className="flex items-center justify-between mb-6">
+                                <div>
+                                    <h3 className="text-xl font-black text-accent-brown tracking-tight">Popular Services</h3>
+                                    <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest">Which services are most used?</p>
+                                </div>
+                                <Activity className="w-5 h-5 text-brand" />
+                            </div>
+                            <div className="h-[250px] w-full flex items-center justify-center" >
+                                {serviceDNA.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={serviceDNA} margin={{ left: 20 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAE0D5" opacity={0.5} />
+                                            <XAxis dataKey="subject" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 700, fill: '#64748B' }} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#94A3B8' }} />
+                                            <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none' }} />
+                                            <Bar dataKey="value" name="Usage" fill={chartColors.primary} radius={[6, 6, 0, 0]} barSize={36}  />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="text-center opacity-20">
+                                        <Activity className="w-10 h-10 mx-auto mb-2" />
+                                        <p className="text-[10px] font-black uppercase tracking-widest">No Service Usage</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
-                    <div className="overflow-x-auto no-scrollbar">
-                        <table className="w-full min-w-[500px]">
-                            <thead>
-                                <tr className="border-b border-accent-brown/5">
-                                    {[revenueType === 'services' ? 'Service' : 'Product', revenueType === 'services' ? 'Sessions' : 'Units Sold', 'Revenue', 'Change', 'Growth'].map(h => (
-                                        <th key={h} className="text-left text-[9px] font-black uppercase tracking-widest text-accent-brown/30 pb-4">{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {loading ? (
-                                    <tr>
-                                        <td colSpan={5} className="py-20 text-center opacity-30">
-                                            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
-                                            <p className="text-[10px] uppercase font-black">Decrypting performance data...</p>
-                                        </td>
-                                    </tr>
-                                ) : topProducts.map((p, i) => (
-                                    <tr key={p.name} className="border-b border-accent-brown/5 hover:bg-accent-peach/10 transition-colors group">
-                                        <td className="py-5">
-                                            <div className="font-black text-accent-brown text-sm group-hover:text-brand-dark transition-colors">{p.name}</div>
-                                        </td>
-                                        <td className="py-5 text-sm font-black text-accent-brown/40">{p.sold}</td>
-                                        <td className="py-5 font-black text-accent-brown">{p.revenue}</td>
-                                        <td className="py-5">
-                                            <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-lg ${p.delta >= 0 ? 'text-green-600 bg-green-50' : 'text-red-500 bg-red-50'}`}>
-                                                {p.delta >= 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />} {Math.abs(p.delta)}%
+                </div>
+
+                {/* Section 6: Retention & Performance Sync */}
+                <div className="grid lg:grid-cols-2 gap-6 items-stretch">
+                    {/* Top Products Rankings */}
+                    <div>
+                        <div className="bg-white p-8 rounded-[2.5rem] border border-accent-brown/5 shadow-sm h-full flex flex-col">
+                            <div className="flex items-center gap-3 mb-8">
+                                <Star className="w-5 h-5 text-brand" />
+                                <h3 className="text-xl font-black text-accent-brown tracking-tighter">Top Performance</h3>
+                            </div>
+                            <div className="flex flex-col gap-6 flex-1 justify-center relative">
+                                {topProducts.length > 0 ? topProducts.slice(0, 6).map((product, index) => (
+                                    <div key={index} className="flex flex-col gap-1.5 w-full">
+                                        <div className="flex justify-between items-end">
+                                            <span className="text-[10px] font-black text-accent-brown uppercase tracking-widest leading-none">
+                                                {product.name}
                                             </span>
-                                        </td>
-                                        <td className="py-5 w-48">
-                                            <div className="w-full h-1.5 bg-accent-peach/20 rounded-full overflow-hidden">
-                                                <motion.div initial={{ width: 0 }} animate={{ width: `${p.pct}%` }} transition={{ duration: 0.6, delay: 0.5 + i * 0.1 }}
-                                                    className="h-full bg-brand-dark rounded-full shadow-sm" />
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                            <span className="text-[11px] font-black text-brand leading-none">
+                                                ₱{Number(product.revenue).toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-brand/5 h-1 relative overflow-hidden">
+                                            <motion.div 
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${product.pct}%` }}
+                                                transition={{ duration: 1, ease: 'easeOut', delay: index * 0.1 }}
+                                                className="absolute inset-y-0 left-0 bg-brand"
+                                            />
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <div className="flex flex-col items-center justify-center opacity-20 absolute inset-0">
+                                        <Star className="w-10 h-10 mb-2" />
+                                        <p className="text-[10px] font-black uppercase tracking-widest">No Data</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
-                </motion.div>
+
+                    {/* Regional Correlation Line Chart */}
+                    <div className="w-full h-full flex">
+                        <div className="bg-white p-8 rounded-[2.5rem] border border-accent-brown/5 shadow-sm w-full">
+                            <div className="flex items-center justify-between mb-8">
+                                <div>
+                                    <h3 className="text-xl font-black text-accent-brown tracking-tight">Branch Comparison</h3>
+                                    <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-widest">How all branches sync over time</p>
+                                </div>
+                            </div>
+                            <div className="h-[250px] w-full flex items-center justify-center" >
+                                {allBranchesTrend.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={allBranchesTrend}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAE0D5" opacity={0.5} />
+                                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 700 }} />
+                                            <YAxis hide />
+                                            <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none' }} />
+                                            {Object.keys(allBranchesTrend[0]).filter(k => k !== 'name').map((key, idx) => (
+                                                <Line
+                                                    key={idx}
+                                                    type="monotone"
+                                                    dataKey={key}
+                                                    stroke={[chartColors.primary, chartColors.secondary, chartColors.neutral, '#8b5cf6'][idx % 4]}
+                                                    strokeWidth={6}
+                                                    dot={false}
+                                                    
+                                                />
+                                            ))}
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="text-center opacity-20">
+                                        <Globe className="w-10 h-10 mx-auto mb-2" />
+                                        <p className="text-[10px] font-black uppercase tracking-widest">No Comparative Data</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
             </div>
         </DashboardLayout>
@@ -545,3 +496,7 @@ const BusinessAnalytics = () => {
 };
 
 export default BusinessAnalytics;
+
+
+
+

@@ -2266,6 +2266,7 @@ def send_return_status_email(email: str, user_name: str, order_id: str, status: 
                     <p>{message}</p>
                     <div class="status-container">
                         <span class="status-label">{status_label}</span>
+                        <p style="font-size: 13px; font-weight: 700; color: #262626; margin: 15px 0 0 0; opacity: 0.4; letter-spacing: 1px;">{order_id}</p>
                         <span class="status-sub">Refund Status Update</span>
                     </div>
                     {items_html}
@@ -8123,7 +8124,7 @@ def send_clinic_reservation_receipt(db: Session, reservation_id: int):
                     <span class="section-label">Your Clinic</span>
                     <div class="info-block">
                         <h4 class="info-title">{clinic_name}</h4>
-                        <p class="info-subtitle">Reservation: #RV-{res.id:04d}</p>
+                        <p class="info-subtitle">Reservation: {res.tracking_id or f'#RV-{res.id:04d}'}</p>
                     </div>
                     
                     <span class="section-label">Pet Information</span>
@@ -8166,7 +8167,7 @@ def send_clinic_reservation_receipt(db: Session, reservation_id: int):
                 </div>
                 
                 <div class="footer-info">
-                    <p class="ref-text">REF: #RV-{res.id:04d}</p>
+                    <p class="ref-text">REF: {res.tracking_id or f'#RV-{res.id:04d}'}</p>
                     <p class="copyright">HI-VET &bull; COMPANION HEALTH SYSTEMS &copy; 2026</p>
                 </div>
             </div>
@@ -8179,7 +8180,7 @@ def send_clinic_reservation_receipt(db: Session, reservation_id: int):
         msg = MIMEMultipart()
         msg['From'] = f"{clinic_name} <{clinic_email}>"
         msg['To'] = customer.email
-        msg['Subject'] = f"Success! Your Reservation at {clinic_name} (#RV-{res.id:04d})"
+        msg['Subject'] = f"Success! Your Reservation at {clinic_name} ({res.tracking_id or f'#RV-{res.id:04d}'})"
         msg.attach(MIMEText(html, 'html'))
         
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
@@ -9782,7 +9783,9 @@ async def handle_return_request(order_id: int, body: dict, db: Session = Depends
     customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
     if customer:
         order_items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
-        send_return_status_email(customer.email, customer.name, f"{order.id:06d}", action, order_items, req.reason)
+        # Generate full Order ID: HV-2026-000178
+        full_order_id = f"HV-{order.created_at.year}-{order.id:06d}"
+        send_return_status_email(customer.email, customer.name, full_order_id, action, order_items, req.reason)
         
     # Add notification for customer
     add_notification(db, order.customer_id, "Logistics", f"Return {action}", f"Your return request for Order #{order.id} has been {action.lower()}.", "/dashboard/customer/orders", role="customer")
@@ -9991,7 +9994,7 @@ async def get_rider_orders_analytics(db: Session = Depends(get_db), current_user
     # Active Threads
     active_count = db.query(Delivery).filter(
         Delivery.rider_id == rider.id, 
-        Delivery.status.in_(["pending", "out_for_delivery"])
+        Delivery.status.in_(["pending", "out_for_delivery", "pending_pickup", "processing"])
     ).count()
 
     # Avg Fulfillment (in minutes)
@@ -10036,22 +10039,22 @@ async def get_rider_orders_all(db: Session = Depends(get_db), current_user: dict
     if not rider:
         rider = db.query(RiderProfile).filter(RiderProfile.customer_id == int(current_user["sub"])).first()
 
-    # 1. Available Orders (Processing, no rider assigned in either Order or Delivery table)
-    available = db.query(Order).filter(
+    # 1. Available Orders (Processing/Pending, no rider assigned)
+    # We check both Order and Delivery records
+    available_orders_query = db.query(Order).filter(
         Order.fulfillment_method == "delivery",
-        Order.status == "Processing",
+        Order.status.in_(["Processing", "Pending"]),
         Order.rider_id.is_(None)
     ).all()
-
-    # 2. Rider's own Deliveries (Active and History)
-    my_deliveries = db.query(Delivery).filter(Delivery.rider_id == rider.id).all()
     
     all_orders = []
-    
-    # Process available
-    for o in available:
-        # Check if a delivery record already exists for this order (to avoid duplicates if status mismatch)
-        if db.query(Delivery).filter(Delivery.order_id == o.id).first():
+    processed_order_ids = set()
+
+    # Process available from Order table
+    for o in available_orders_query:
+        # Check if it has a delivery record already claimed by someone else
+        d_rec = db.query(Delivery).filter(Delivery.order_id == o.id).first()
+        if d_rec and d_rec.rider_id is not None:
             continue
             
         all_orders.append({
@@ -10061,6 +10064,11 @@ async def get_rider_orders_all(db: Session = Depends(get_db), current_user: dict
             "delivery_address": o.delivery_address,
             "can_accept": True
         })
+        processed_order_ids.add(o.id)
+
+    # 2. Rider's own Deliveries (Active and History)
+    my_deliveries = db.query(Delivery).filter(Delivery.rider_id == rider.id).all()
+    
 
     # Process my deliveries
     for d in my_deliveries:
@@ -10441,6 +10449,27 @@ async def update_delivery_status(delivery_id: int, body: DeliveryStepUpdate, db:
         
         db.commit()
         return {"message": "Order marked as completed"}
+
+    elif new_status == "release":
+        # Rider releases the task back to the pool
+        delivery.rider_id = None
+        delivery.status = "pending_pickup"
+        order = db.query(Order).filter(Order.id == delivery.order_id).first()
+        if order:
+            order.rider_id = None
+            order.status = "Processing"
+        db.commit()
+        return {"message": "Task released back to pool"}
+
+    elif new_status == "pending_pickup":
+        # Undo pickup - move status back from 'Picked Up' to 'Processing'
+        delivery.status = "pending_pickup"
+        order = db.query(Order).filter(Order.id == delivery.order_id).first()
+        if order:
+            order.status = "Processing"
+            order.picked_up_at = None
+        db.commit()
+        return {"message": "Pickup status reverted"}
 
     db.commit()
     return {"message": f"Status updated to {new_status}", "delivery_status": delivery.status}

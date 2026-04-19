@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { Award, Gift, TrendingUp, Sparkles, Star, Copy, Check, Loader2, AlertCircle, TrendingDown, CheckCircle } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 
@@ -74,6 +74,7 @@ const VOUCHER_COLORS: Record<string, string> = {
 };
 
 const CustomerLoyalty = () => {
+    const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [loyalty, setLoyalty] = useState<LoyaltyData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -81,7 +82,33 @@ const CustomerLoyalty = () => {
     const [redeeming, setRedeeming] = useState(false);
     const [copied, setCopied] = useState(false);
     const [copiedVoucher, setCopiedVoucher] = useState<number | null>(null);
-    const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+    // 3D Tilt Values
+    const x = useMotionValue(0);
+    const y = useMotionValue(0);
+
+    const mouseXSpring = useSpring(x);
+    const mouseYSpring = useSpring(y);
+
+    const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["10deg", "-10deg"]);
+    const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-10deg", "10deg"]);
+
+    const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const xPct = (mouseX / width) - 0.5;
+        const yPct = (mouseY / height) - 0.5;
+        x.set(xPct);
+        y.set(yPct);
+    };
+
+    const handleMouseLeave = () => {
+        x.set(0);
+        y.set(0);
+    };
 
     const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
         setToast({ msg, type });
@@ -202,11 +229,18 @@ const CustomerLoyalty = () => {
                     )}
                 </AnimatePresence>
 
-                {/* Hero Membership Card (Shrunken & Refined) */}
+                {/* Hero Membership Card (3D Animated) */}
                 <motion.div
                     initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="relative rounded-[2.5rem] overflow-hidden bg-brand shadow-2xl shadow-brand/20 flex items-center p-8 md:p-12 lg:p-14"
+                    onMouseMove={handleMouseMove}
+                    onMouseLeave={handleMouseLeave}
+                    style={{
+                        rotateX,
+                        rotateY,
+                        transformStyle: "preserve-3d",
+                    }}
+                    className="relative rounded-[2.5rem] overflow-hidden bg-brand shadow-2xl shadow-brand/20 flex items-center p-8 md:p-12 lg:p-14 transition-all duration-200"
                 >
                     <div className="absolute inset-0 overflow-hidden pointer-events-none">
                         <div className={`absolute -top-40 -right-40 w-[800px] h-[800px] bg-gradient-to-br ${currentTierData.gradient} opacity-[0.15] blur-[150px] rounded-full`} />
@@ -218,12 +252,15 @@ const CustomerLoyalty = () => {
                     <div className="relative z-10 w-full flex flex-col lg:flex-row lg:items-center justify-between gap-12 lg:gap-24">
                         <div className="flex-1 space-y-10">
                             <div className="flex items-center gap-6">
-                                <div className={`w-20 h-20 rounded-[2rem] bg-gradient-to-br ${currentTierData.gradient} p-0.5 shadow-2xl shadow-black/30`}>
+                                <motion.div 
+                                    style={{ transform: "translateZ(50px)" }}
+                                    className={`w-20 h-20 rounded-[2rem] bg-gradient-to-br ${currentTierData.gradient} p-0.5 shadow-2xl shadow-black/30`}
+                                >
                                     <div className="w-full h-full bg-white/20 backdrop-blur-md rounded-[1.9rem] flex items-center justify-center border border-white/20">
                                         <Award className="w-10 h-10 text-white drop-shadow-md" />
                                     </div>
-                                </div>
-                                <div className="space-y-1.5">
+                                </motion.div>
+                                <div style={{ transform: "translateZ(30px)" }} className="space-y-1.5">
                                     <div className="flex items-center gap-3">
                                         <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
                                         <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white">Active Membership</span>
@@ -247,8 +284,11 @@ const CustomerLoyalty = () => {
                             </div>
                         </div>
 
-                        {/* Status Hub (Compact) */}
-                        <div className="lg:w-[320px] bg-white/5 backdrop-blur-xl rounded-3xl p-8 border border-white/10 shadow-2xl flex flex-col gap-6">
+                        {/* Status Hub (3D Layered) */}
+                        <div 
+                            style={{ transform: "translateZ(40px)" }}
+                            className="lg:w-[320px] bg-white/5 backdrop-blur-xl rounded-3xl p-8 border border-white/10 shadow-2xl flex flex-col gap-6"
+                        >
                             <div className="flex justify-between items-end">
                                 <div className="space-y-1">
                                     <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white">Target Tier</span>
@@ -304,14 +344,22 @@ const CustomerLoyalty = () => {
                                     initial={{ opacity: 0, y: 15 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: i * 0.1 }}
-                                    className="bg-white rounded-[2rem] p-8 border border-accent-brown/5 shadow-sm hover:shadow-xl hover:border-brand/40 transition-all group"
+                                    whileHover={{ 
+                                        scale: 1.05,
+                                        rotateX: 5,
+                                        rotateY: -5,
+                                        z: 10
+                                    }}
+                                    className="bg-white rounded-[2rem] p-8 border border-accent-brown/5 shadow-sm hover:shadow-2xl hover:border-brand/40 transition-all group perspective-1000"
                                 >
-                                    <div className="w-12 h-12 rounded-2xl bg-accent-brown/5 flex items-center justify-center text-accent-brown mb-6 group-hover:bg-brand group-hover:text-white transition-all">
+                                    <div style={{ transform: "translateZ(20px)" }} className="w-12 h-12 rounded-2xl bg-accent-brown/5 flex items-center justify-center text-accent-brown mb-6 group-hover:bg-brand group-hover:text-white transition-all">
                                         <item.icon className="w-6 h-6 group-hover:scale-110 transition-transform" />
                                     </div>
-                                    <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-black mb-2">{item.title}</h4>
-                                    <p className="text-lg font-black text-accent-brown mb-1.5">{item.pts}</p>
-                                    <p className="text-[10px] font-medium text-black leading-relaxed uppercase">{item.desc}</p>
+                                    <div style={{ transform: "translateZ(10px)" }}>
+                                        <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-black mb-2">{item.title}</h4>
+                                        <p className="text-lg font-black text-accent-brown mb-1.5">{item.pts}</p>
+                                        <p className="text-[10px] font-medium text-black leading-relaxed uppercase">{item.desc}</p>
+                                    </div>
                                 </motion.div>
                             ))}
                         </div>
@@ -329,8 +377,14 @@ const CustomerLoyalty = () => {
                                     {loyalty.my_vouchers.map((mv) => (
                                         <motion.div
                                             key={mv.id}
-                                            whileHover={{ y: -5 }}
-                                            className="bg-white rounded-[2.5rem] p-8 border border-accent-brown/10 shadow-sm flex flex-col gap-8 relative group transition-all"
+                                            whileHover={{ 
+                                                y: -10, 
+                                                rotateX: 5, 
+                                                rotateY: -5,
+                                                scale: 1.02
+                                            }}
+                                            style={{ transformStyle: "preserve-3d" }}
+                                            className="bg-white rounded-[2.5rem] p-8 border border-accent-brown/10 shadow-sm flex flex-col gap-8 relative group transition-all perspective-1000"
                                         >
                                             <div className="flex justify-between items-start">
                                                 <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${VOUCHER_COLORS[mv.type] || 'bg-accent-brown/5 text-black'}`}>
@@ -375,8 +429,14 @@ const CustomerLoyalty = () => {
                                 {loyalty.vouchers.map((voucher) => (
                                     <motion.div
                                         key={voucher.id}
-                                        whileHover={voucher.active ? { y: -4, scale: 1.01 } : {}}
-                                        className={`bg-white rounded-[2.5rem] p-8 border transition-all relative overflow-hidden group flex flex-col ${voucher.active ? 'border-accent-brown/10 shadow-sm hover:shadow-2xl hover:border-accent-brown/30' : 'border-accent-brown/5 opacity-50 grayscale'}`}
+                                        whileHover={voucher.active ? { 
+                                            y: -10, 
+                                            rotateX: 10, 
+                                            rotateY: -10,
+                                            scale: 1.02
+                                        } : {}}
+                                        style={{ transformStyle: "preserve-3d" }}
+                                        className={`bg-white rounded-[2.5rem] p-8 border transition-all relative overflow-hidden group flex flex-col perspective-1000 ${voucher.active ? 'border-accent-brown/10 shadow-sm hover:shadow-2xl hover:border-accent-brown/30' : 'border-accent-brown/5 opacity-50 grayscale'}`}
                                     >
                                         <div className="flex items-start justify-between mb-8">
                                             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${VOUCHER_COLORS[voucher.type] ?? 'bg-accent-brown/5 text-black'}`}>

@@ -27,8 +27,8 @@ const BusinessCatalog = () => {
     const navigate = useNavigate();
     const [branchId, setBranchId] = useState<number | null>(() => {
         const saved = localStorage.getItem('hivet_selected_branch');
-        if (saved === 'all') return null;
-        return saved ? parseInt(saved) : null;
+        if (!saved || saved === 'all') return null;
+        return parseInt(saved);
     });
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
@@ -63,10 +63,12 @@ const BusinessCatalog = () => {
     }, [token, branchId]);
 
     const fetchProducts = async () => {
-        if (!token || branchId === null) return;
+        if (!token) return;
         setLoading(true);
         try {
-            const url = `http://localhost:8000/api/business/catalog?branch_id=${branchId}`;
+            const url = branchId !== null
+                ? `http://localhost:8000/api/business/catalog?branch_id=${branchId}`
+                : `http://localhost:8000/api/business/catalog`;
             const resp = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -179,6 +181,7 @@ const BusinessCatalog = () => {
                                     token={token}
                                     currentBranchId={branchId}
                                     onBranchChange={setBranchId}
+                                    allowAllBranches={true}
                                 />
                             </div>
                         )}

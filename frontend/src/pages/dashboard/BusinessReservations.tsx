@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Calendar, Clock, MapPin, User, Scissors, CheckCircle,
@@ -227,6 +228,9 @@ const EMPTY_SERVICE = {
 };
 
 export default function BusinessReservations() {
+    const location = useLocation();
+    const navigate = useNavigate();
+    
     const [tab, setTab] = useState<'reservations' | 'hours' | 'special' | 'services'>('reservations');
     const [branchId, setBranchId] = useState<number | null>(() => {
         const saved = localStorage.getItem('hivet_selected_branch');
@@ -383,6 +387,21 @@ export default function BusinessReservations() {
         setShowSelectionModal(false);
         setShowServicePickerModal(false);
     };
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const urlTab = params.get('tab');
+        if (urlTab && ['reservations', 'hours', 'special', 'services'].includes(urlTab)) {
+            setTab(urlTab as any);
+        }
+        
+        const action = params.get('action');
+        if (action === 'launch' && urlTab === 'services') {
+            openServiceModal();
+            // Clear the action so it doesn't trigger on every re-render
+            navigate('/dashboard/business/reservations?tab=services', { replace: true });
+        }
+    }, [location.search, navigate]);
 
     const togglePackageItem = (name: string) => {
         const current = serviceForm.package_items_json ? JSON.parse(serviceForm.package_items_json) : [];

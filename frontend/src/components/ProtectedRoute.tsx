@@ -40,6 +40,7 @@ export const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) 
 
     let effectiveRole = user?.role ?? (getTokenPayload()?.role as string | undefined);
     if (effectiveRole === 'user') effectiveRole = 'customer';
+    if (effectiveRole === 'admin') effectiveRole = 'super_admin';
 
     if (!effectiveRole) {
         return <Navigate to="/login" state={{ from: location }} replace />;

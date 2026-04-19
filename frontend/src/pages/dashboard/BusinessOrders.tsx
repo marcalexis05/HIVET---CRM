@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Map, AdvancedMarker } from '@vis.gl/react-google-maps';
-import { Search, Eye, CheckCircle, XCircle, Clock, Loader2, ChevronDown, ChevronUp, MapPin, Truck, Store, X, Navigation, ShieldCheck, ShoppingBag, Users, Banknote, Bike } from 'lucide-react';
+import { Search, Eye, CheckCircle, XCircle, Clock, Loader2, ChevronDown, ChevronUp, MapPin, Truck, Store, X, Navigation, ShieldCheck, ShoppingBag, Users, Banknote, Bike, ShieldAlert } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { CustomDropdown } from '../../components/CustomDropdown';
@@ -14,6 +14,10 @@ const STATUS_STYLES: Record<string, string> = {
     Processing: 'bg-blue-100 text-blue-700',
     Pending: 'bg-yellow-100 text-yellow-700',
     Cancelled: 'bg-red-100 text-red-500',
+    Requested: 'bg-orange-100 text-orange-700 animate-pulse',
+    Approved: 'bg-emerald-100 text-emerald-700',
+    Rejected: 'bg-slate-100 text-slate-500',
+    Refunded: 'bg-purple-100 text-purple-700',
 };
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
@@ -21,9 +25,13 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
     Processing: <Loader2 className="w-3 h-3 animate-spin" />,
     Pending: <Clock className="w-3 h-3" />,
     Cancelled: <XCircle className="w-3 h-3" />,
+    Requested: <ShieldAlert className="w-3 h-3" />,
+    Approved: <CheckCircle className="w-3 h-3" />,
+    Rejected: <XCircle className="w-3 h-3" />,
+    Refunded: <Banknote className="w-3 h-3" />,
 };
 
-const STATUS_FILTERS = ['All', 'Completed', 'Processing', 'Pending', 'Cancelled'];
+const STATUS_FILTERS = ['All', 'Completed', 'Processing', 'Pending', 'Cancelled', 'Refunds'];
 const FULFILLMENT_FILTERS = ['All', 'Delivery', 'Pickup'];
 
 const BusinessOrders = () => {
@@ -41,6 +49,7 @@ const BusinessOrders = () => {
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 6;
+    const [processingAction, setProcessingAction] = useState<Record<string, string>>({});
 
     // Street View State
     const [showStreetView, setShowStreetView] = useState(false);
@@ -77,7 +86,15 @@ const BusinessOrders = () => {
     };
 
     const filtered = orders.filter(o => {
-        const matchStatus = statusFilter === 'All' || o.status === statusFilter;
+        let matchStatus = statusFilter === 'All' || o.status === statusFilter;
+        if (statusFilter === 'Refunds') {
+            matchStatus = o.return_status && ['Requested', 'Approved', 'Rejected', 'Refunded'].includes(o.return_status);
+        } else if (statusFilter === 'All') {
+            matchStatus = true;
+        } else {
+            matchStatus = o.status === statusFilter;
+        }
+
         const matchFulfillment = fulfillmentFilter === 'All' ||
             (fulfillmentFilter === 'Delivery' && o.fulfillment_method === 'delivery') ||
             (fulfillmentFilter === 'Pickup' && o.fulfillment_method === 'pickup');
@@ -244,8 +261,8 @@ const BusinessOrders = () => {
                                         )}
                                         {/* Status Floating Badge */}
                                         <div className="absolute top-4 right-4 z-10">
-                                            <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg backdrop-blur-md ${STATUS_STYLES[o.status]}`}>
-                                                {STATUS_ICONS[o.status]} {o.status}
+                                            <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg backdrop-blur-md ${o.return_status ? STATUS_STYLES[o.return_status] : STATUS_STYLES[o.status]}`}>
+                                                {o.return_status ? STATUS_ICONS[o.return_status] : STATUS_ICONS[o.status]} {o.return_status || o.status}
                                             </span>
                                         </div>
                                         <div className="absolute bottom-4 left-4 bg-white/80 backdrop-blur-md px-3 py-1 rounded-lg border border-white/50 shadow-sm">
@@ -320,7 +337,7 @@ const BusinessOrders = () => {
                                                                         console.error('Failed to update status', err);
                                                                     }
                                                                 }}
-                                                                options={STATUS_FILTERS.slice(1).map(s => ({
+                                                                options={['Completed', 'Processing', 'Pending', 'Cancelled'].map(s => ({
                                                                     label: s,
                                                                     value: s,
                                                                     icon: STATUS_ICONS[s]
@@ -341,6 +358,92 @@ const BusinessOrders = () => {
                                                         </div>
                                                     </div>
 
+                                                    {o.return_status === 'Requested' && (
+                                                        <div className="bg-white p-6 rounded-[2rem] border-2 border-orange-100 space-y-4 shadow-xl shadow-orange-500/5">
+                                                            <div className="flex items-center justify-between">
+                                                                <p className="text-[10px] font-black uppercase text-orange-600 tracking-widest">Return Request Details</p>
+                                                                <ShieldAlert className="w-4 h-4 text-orange-500" />
+                                                            </div>
+                                                            <p className="text-sm font-bold text-accent-brown/80 italic">"{o.return_reason}"</p>
+                                                            
+                                                            {o.return_photos && (() => {
+                                                                try {
+                                                                    const photos = JSON.parse(o.return_photos);
+                                                                    if (!Array.isArray(photos)) return null;
+                                                                    return (
+                                                                        <div className="grid grid-cols-4 gap-2">
+                                                                            {photos.map((url: string, pi: number) => (
+                                                                                <a key={pi} href={url} target="_blank" rel="noreferrer" className="aspect-square rounded-xl overflow-hidden border border-accent-peach/20 hover:border-brand transition-all">
+                                                                                    <img src={url} className="w-full h-full object-cover" />
+                                                                                </a>
+                                                                            ))}
+                                                                        </div>
+                                                                    );
+                                                                } catch (e) {
+                                                                    return null;
+                                                                }
+                                                            })()}
+
+                                                            <div className="flex gap-3 pt-2">
+                                                                <button 
+                                                                    disabled={!!processingAction[`${o.order_id}-approve`] || !!processingAction[`${o.order_id}-reject`]}
+                                                                    onClick={async () => {
+                                                                        setProcessingAction(prev => ({ ...prev, [`${o.order_id}-approve`]: 'processing' }));
+                                                                        try {
+                                                                            const res = await fetch(`http://localhost:8000/api/business/orders/${o.order_id}/return-handle`, {
+                                                                                method: 'PATCH',
+                                                                                headers: {
+                                                                                    'Content-Type': 'application/json',
+                                                                                    'Authorization': `Bearer ${user?.token}`
+                                                                                },
+                                                                                body: JSON.stringify({ action: 'Approved' })
+                                                                            });
+                                                                            if (res.ok) fetchOrders();
+                                                                        } finally {
+                                                                            setProcessingAction(prev => {
+                                                                                const next = { ...prev };
+                                                                                delete next[`${o.order_id}-approve`];
+                                                                                return next;
+                                                                            });
+                                                                        }
+                                                                    }}
+                                                                    className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-2 disabled:opacity-50"
+                                                                >
+                                                                    {processingAction[`${o.order_id}-approve`] ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                                                                    {processingAction[`${o.order_id}-approve`] ? 'Processing...' : 'Approve'}
+                                                                </button>
+                                                                <button 
+                                                                    disabled={!!processingAction[`${o.order_id}-approve`] || !!processingAction[`${o.order_id}-reject`]}
+                                                                    onClick={async () => {
+                                                                        setProcessingAction(prev => ({ ...prev, [`${o.order_id}-reject`]: 'processing' }));
+                                                                        try {
+                                                                            const res = await fetch(`http://localhost:8000/api/business/orders/${o.order_id}/return-handle`, {
+                                                                                method: 'PATCH',
+                                                                                headers: {
+                                                                                    'Content-Type': 'application/json',
+                                                                                    'Authorization': `Bearer ${user?.token}`
+                                                                                },
+                                                                                body: JSON.stringify({ action: 'Rejected' })
+                                                                            });
+                                                                            if (res.ok) fetchOrders();
+                                                                        } finally {
+                                                                            setProcessingAction(prev => {
+                                                                                const next = { ...prev };
+                                                                                delete next[`${o.order_id}-reject`];
+                                                                                return next;
+                                                                            });
+                                                                        }
+                                                                    }}
+                                                                    className="flex-1 py-3 bg-rose-500 text-white rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/10 flex items-center justify-center gap-2 disabled:opacity-50"
+                                                                >
+                                                                    {processingAction[`${o.order_id}-reject`] ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                                                                    {processingAction[`${o.order_id}-reject`] ? 'Processing...' : 'Reject'}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+
                                                     {o.serial_number && (
                                                         <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
                                                             <p className="text-[8px] font-black uppercase text-orange-400 mb-1 tracking-widest">Verification Serial</p>
@@ -350,16 +453,27 @@ const BusinessOrders = () => {
 
                                                     {o.fulfillment_method === 'delivery' && !o.delivery_status && (
                                                         <button
+                                                            disabled={!!processingAction[`${o.order_id}-broadcast`]}
                                                             onClick={async () => {
-                                                                const res = await fetch(`http://localhost:8000/api/business/deliveries/${o.order_id}/broadcast`, {
-                                                                    method: 'POST',
-                                                                    headers: { 'Authorization': `Bearer ${user?.token}` }
-                                                                });
-                                                                if (res.ok) fetchOrders();
+                                                                setProcessingAction(prev => ({ ...prev, [`${o.order_id}-broadcast`]: 'processing' }));
+                                                                try {
+                                                                    const res = await fetch(`http://localhost:8000/api/business/deliveries/${o.order_id}/broadcast`, {
+                                                                        method: 'POST',
+                                                                        headers: { 'Authorization': `Bearer ${user?.token}` }
+                                                                    });
+                                                                    if (res.ok) fetchOrders();
+                                                                } finally {
+                                                                    setProcessingAction(prev => {
+                                                                        const next = { ...prev };
+                                                                        delete next[`${o.order_id}-broadcast`];
+                                                                        return next;
+                                                                    });
+                                                                }
                                                             }}
-                                                            className="w-full py-3 bg-brand text-white rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-brand/80 transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand/10"
+                                                            className="w-full py-3 bg-brand text-white rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-brand/80 transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand/10 disabled:opacity-50"
                                                         >
-                                                            <Truck className="w-3.5 h-3.5" /> Broadcast to Rider
+                                                            {processingAction[`${o.order_id}-broadcast`] ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
+                                                            {processingAction[`${o.order_id}-broadcast`] ? 'Broadcasting...' : 'Broadcast to Rider'}
                                                         </button>
                                                     )}
                                                 </div>

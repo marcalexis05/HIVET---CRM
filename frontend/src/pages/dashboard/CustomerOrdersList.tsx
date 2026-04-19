@@ -9,7 +9,7 @@ import {
     User, Phone, ShieldCheck, X, MessageSquare,
     ShieldAlert, Clock, CreditCard, Tag, Loader2,
     Activity, Trophy, Search, Filter, ArrowRight,
-    Map as MapIcon, Navigation, Trash2
+    Map as MapIcon, Navigation, Trash2, RotateCcw, Image as ImageIcon, Upload, Send
 } from 'lucide-react';
 import { APIProvider, useMap, AdvancedMarker, InfoWindow, Map } from '@vis.gl/react-google-maps';
 import ModernModal from '../../components/ModernModal';
@@ -52,6 +52,9 @@ interface Order {
     voucher_code?: string;
     discount_amount?: number;
     shipping_fee?: number;
+    return_status?: string;
+    return_reason?: string;
+    return_photos?: string;
 }
 
 const MapBoundsHandler = ({ points, id, padding }: { points: { lat: number; lng: number }[], id?: string, padding?: number | google.maps.Padding }) => {
@@ -118,6 +121,64 @@ const CustomerOrders = () => {
     const [activeTab, setActiveTab] = useState('All');
     const [fulfillmentFilter, setFulfillmentFilter] = useState<'All' | 'delivery' | 'pickup'>('All');
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+    const [showReturnModal, setShowReturnModal] = useState(false);
+    const [returnReason, setReturnReason] = useState('');
+    const [returnPhotos, setReturnPhotos] = useState<string[]>([]);
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const [submittingReturn, setSubmittingReturn] = useState(false);
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploadingImage(true);
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const resp = await fetch(`${API}/api/orders/refund/upload`, {
+                method: 'POST',
+                body: formData
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                setReturnPhotos(prev => [...prev, data.url]);
+            }
+        } catch (err) {
+            console.error('Upload failed', err);
+        } finally {
+            setUploadingImage(false);
+        }
+    };
+
+    const submitReturnRequest = async () => {
+        if (!selectedOrder || !returnReason) return;
+        setSubmittingReturn(true);
+        try {
+            const resp = await fetch(`${API}/api/orders/${selectedOrder.id}/return`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('hivet_token')}`
+                },
+                body: JSON.stringify({
+                    reason: returnReason,
+                    photos: returnPhotos
+                })
+            });
+            if (resp.ok) {
+                setShowReturnModal(false);
+                setReturnReason('');
+                setReturnPhotos([]);
+                fetchOrders();
+            }
+        } catch (err) {
+            console.error('Failed to submit return', err);
+        } finally {
+            setSubmittingReturn(false);
+        }
+    };
+
     const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
     const [cancelReason, setCancelReason] = useState('');
     const [isCancelling, setIsCancelling] = useState(false);
@@ -140,7 +201,7 @@ const CustomerOrders = () => {
     const [qrData, setQrData] = useState('');
     const [qrStatus, setQrStatus] = useState<'pending' | 'succeeded' | 'expired' | 'processing'>('pending');
 
-    const tabs = ['All', 'Pending', 'Processing', 'Completed', 'Cancelled', 'Payment Pending'];
+    const tabs = ['All', 'Pending', 'Processing', 'Completed', 'Cancelled', 'Payment Pending', 'Returns'];
 
     const fetchOrders = async () => {
         setLoading(true);
@@ -217,7 +278,11 @@ const CustomerOrders = () => {
     };
 
     const filteredOrders = orders.filter(o => {
-        const matchesStatus = activeTab === 'All' || o.status === activeTab;
+        let matchesStatus = activeTab === 'All' || o.status === activeTab;
+        if (activeTab === 'Returns') {
+            matchesStatus = !!o.return_status;
+        }
+
         const matchesFulfillment = fulfillmentFilter === 'All' || o.fulfillment_method === fulfillmentFilter;
         const matchesSearch = searchQuery === '' ||
             `HV-2026-${o.id.toString().padStart(6, '0')}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -297,11 +362,18 @@ const CustomerOrders = () => {
                         <div className="flex flex-wrap items-center gap-3 mt-6 pt-6 border-t border-accent-brown/5 overflow-x-auto no-scrollbar">
                             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-black mr-4">Filter by Status:</span>
                             {tabs.map((tab) => {
-                                const count = tab === 'All' ? orders.length : orders.filter(o => o.status === tab).length;
+                                const count = tab === 'All'
+                                    ? orders.length
+                                    : tab === 'Returns'
+                                        ? orders.filter(o => !!o.return_status).length
+                                        : orders.filter(o => o.status === tab).length;
                                 return (
                                     <button
                                         key={tab}
-                                        onClick={() => setActiveTab(tab)}
+                                        onClick={() => {
+                                            setActiveTab(tab);
+                                            setCurrentPage(1);
+                                        }}
                                         className={`px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-3 ${activeTab === tab
                                             ? 'bg-brand text-white shadow-md shadow-brand/20'
                                             : 'bg-white text-black border border-accent-brown/5 hover:border-brand/20 hover:text-brand'
@@ -468,6 +540,29 @@ const CustomerOrders = () => {
                                                             Resolve Payment
                                                         </motion.button>
                                                     )}
+                                                    {order.status === 'Completed' && !order.return_status && (
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.05 }}
+                                                            whileTap={{ scale: 0.95 }}
+                                                            onClick={(e) => { 
+                                                                e.stopPropagation(); 
+                                                                setSelectedOrder(order);
+                                                                setShowReturnModal(true);
+                                                            }}
+                                                            className="h-14 px-8 bg-black text-white rounded-2xl flex items-center gap-3 shadow-xl text-[10px] font-black uppercase tracking-widest"
+                                                        >
+                                                            <RotateCcw className="w-4 h-4" />
+                                                            Request Return
+                                                        </motion.button>
+                                                    )}
+
+                                                    {order.return_status && (
+                                                        <div className="h-14 px-8 bg-accent-peach/20 border-2 border-accent-peach/30 text-accent-brown rounded-2xl flex items-center gap-3 text-[10px] font-black uppercase tracking-widest opacity-80 cursor-default">
+                                                            <ShieldAlert className="w-4 h-4" />
+                                                            {order.return_status}
+                                                        </div>
+                                                    )}
+
                                                     <div className="h-14 px-10 bg-brand text-white rounded-2xl flex items-center gap-3 shadow-2xl shadow-brand/20 text-[10px] font-black uppercase tracking-widest hover:bg-brand-dark transition-all cursor-pointer">
                                                         Order Details
                                                         <ArrowRight className="w-4 h-4" />
@@ -754,6 +849,89 @@ const CustomerOrders = () => {
                             );
                         })()}
                     </AnimatePresence>,
+                    document.body
+                )}
+
+                {/* Refund/Return Modal */}
+                {showReturnModal && createPortal(
+                    <div className="fixed inset-0 z-[5000] flex items-center justify-center p-6">
+                        <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowReturnModal(false)}
+                            className="absolute inset-0 bg-black/40 backdrop-blur-md"
+                        />
+                        <motion.div 
+                            initial={{ scale: 0.9, opacity: 0, y: 30 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 30 }}
+                            className="bg-white rounded-[4rem] w-full max-w-2xl p-16 shadow-3xl overflow-hidden relative z-10 border border-white"
+                        >
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-brand/5 rounded-full -mr-32 -mt-32" />
+                            
+                            <h2 className="text-4xl font-black text-accent-brown tracking-tighter mb-2 relative">Request a Return</h2>
+                            <p className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.3em] mb-12 relative">Order HV-{new Date(selectedOrder?.created_at || '').getFullYear()}-{selectedOrder?.id.toString().padStart(6, '0')}</p>
+
+                            <div className="space-y-10 relative">
+                                <div>
+                                    <label className="text-[11px] font-black uppercase tracking-[0.2em] text-black block mb-4 ml-2">Reason for Request</label>
+                                    <textarea 
+                                        value={returnReason}
+                                        onChange={e => setReturnReason(e.target.value)}
+                                        placeholder="Please provide a detailed explanation..."
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-[2.5rem] p-8 text-sm font-bold text-accent-brown outline-none focus:border-brand/50 transition-all min-h-[160px] resize-none shadow-inner"
+                                    />
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between items-center mb-4 px-2">
+                                        <label className="text-[11px] font-black uppercase tracking-[0.2em] text-black block">Evidence Photos</label>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 bg-accent-peach/5 px-4 py-1.5 rounded-full border border-accent-peach/10">{returnPhotos.length} / 4 Slots</span>
+                                    </div>
+                                    <div className="grid grid-cols-4 gap-4">
+                                        {returnPhotos.map((url, i) => (
+                                            <div key={i} className="aspect-square rounded-[2rem] border-2 border-slate-100 overflow-hidden relative group shadow-lg">
+                                                <img src={url} className="w-full h-full object-cover" />
+                                                <button 
+                                                    onClick={() => setReturnPhotos(prev => prev.filter((_, idx) => idx !== i))}
+                                                    className="absolute inset-0 bg-red-500/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-[2px]"
+                                                >
+                                                    <X className="w-6 h-6" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {returnPhotos.length < 4 && (
+                                            <label className="aspect-square rounded-[2rem] border-4 border-dashed border-slate-100 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-brand/40 hover:bg-brand/5 transition-all group active:scale-95">
+                                                <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-brand/10 group-hover:text-brand transition-all">
+                                                    {uploadingImage ? <Loader2 className="w-6 h-6 animate-spin" /> : <Upload className="w-6 h-6" />}
+                                                </div>
+                                                <span className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-300 group-hover:text-brand transition-all">Upload</span>
+                                                <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" disabled={uploadingImage} />
+                                            </label>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-6 pt-6 items-center">
+                                    <button 
+                                        onClick={() => setShowReturnModal(false)}
+                                        className="flex-1 py-6 rounded-[2rem] font-black text-[11px] uppercase tracking-[0.2em] text-black border-2 border-slate-100 hover:bg-slate-50 transition-all active:scale-95"
+                                    >
+                                        Dismiss
+                                    </button>
+                                    <button 
+                                        onClick={submitReturnRequest}
+                                        disabled={!returnReason || returnPhotos.length === 0 || submittingReturn}
+                                        className="flex-[2] py-6 px-12 bg-black text-white rounded-[2rem] font-black text-[11px] uppercase tracking-[0.2em] hover:bg-brand-dark transition-all disabled:opacity-30 disabled:grayscale flex items-center justify-center gap-3 shadow-2xl active:scale-[0.98]"
+                                    >
+                                        {submittingReturn ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                        {submittingReturn ? 'Processing...' : 'Finalize Request'}
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>,
                     document.body
                 )}
 

@@ -24,7 +24,7 @@ interface GranularAddress {
 
 const DetailInput: React.FC<{ label: string, value: string, onChange: (v: string) => void, placeholder: string }> = ({ label, value, onChange, placeholder }) => (
     <div className="space-y-2 group">
-        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 pl-1 group-focus-within:text-[#EE4D2D] transition-colors">{label}</label>
+        <label className="text-xs font-semibold text-slate-500 pl-1 group-focus-within:text-[#EE4D2D] transition-colors">{label}</label>
         <input 
             type="text" 
             value={value} 
@@ -76,12 +76,12 @@ const DetailSelect: React.FC<{
     if (readOnly) {
         return (
             <div className="space-y-2 group">
-                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 pl-1">{label}</label>
+                <label className="text-xs font-semibold text-slate-500 pl-1">{label}</label>
                 <div className="w-full bg-[#f8f8f8] border-2 border-gray-50 rounded-[1.25rem] py-4 px-5 text-[13px] font-black text-gray-800 cursor-default select-none flex items-center justify-between">
                     <span className={displayName ? 'text-gray-800' : 'text-gray-300'}>
                         {loading ? `Loading ${label}...` : (displayName || `—`)}
                     </span>
-                    <span className="text-gray-300 text-[9px] font-black uppercase tracking-[0.15em]">Auto-filled</span>
+                    <span className="text-slate-400 text-[11px] font-medium">Auto-filled</span>
                 </div>
             </div>
         );
@@ -89,7 +89,7 @@ const DetailSelect: React.FC<{
 
     return (
         <div className="space-y-2 relative" ref={dropdownRef}>
-            <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 pl-1 group-focus-within:text-[#EE4D2D] transition-colors">{label}</label>
+            <label className="text-xs font-semibold text-slate-500 pl-1 group-focus-within:text-[#EE4D2D] transition-colors">{label}</label>
             <div className="relative">
                 <button
                     type="button"
@@ -149,7 +149,7 @@ const DetailSelect: React.FC<{
                                     <div className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-3">
                                         <Search size={16} className="text-gray-200" />
                                     </div>
-                                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">No Results for "{search}"</p>
+                                    <p className="text-xs font-medium text-slate-400">No results for "{search}"</p>
                                 </div>
                             )}
                         </div>
@@ -516,7 +516,7 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
                                 </div>
                             </div>
                             <div className="flex-grow overflow-y-auto no-scrollbar">
-                                <div className="p-4 bg-[#F5F5F5] text-[10px] font-black text-gray-400 uppercase tracking-widest">Select Region</div>
+                                <div className="p-4 bg-[#F5F5F5] text-xs font-bold text-slate-500">Select Region</div>
                                 {loadingRegions && <div className="p-12 flex flex-col items-center gap-4 justify-center"><div className="w-8 h-8 border-4 border-orange-100 border-t-orange-500 rounded-full animate-spin" /></div>}
                                 {regions.filter(r => r.name.toLowerCase().includes(searchQuery.toLowerCase())).map((r) => (
                                     <button key={r.code} onClick={() => { setSelectedRegion(r.code); updateField('region', r.name); setStep('details'); }} className="w-full p-5 text-left border-b border-gray-100 flex items-center justify-between hover:bg-[#EE4D2D]/5 group transition-all active:scale-[0.99]">
@@ -553,13 +553,13 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
                                 <div className="flex-grow min-w-0">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
-                                            <h4 className="text-[10px] font-black uppercase text-orange-500 tracking-[0.3em]">Precision Location</h4>
+                                            <h4 className="text-xs font-bold text-orange-500">Precision Location</h4>
                                             <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                                         </div>
                                         {nearestLandmark && (
                                             <div className="bg-gray-900/5 px-3 py-1 rounded-full flex items-center gap-1.5 border border-gray-900/5">
                                                 <div className="w-1 h-1 bg-gray-400 rounded-full" />
-                                                <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest truncate max-w-[140px]">
+                                                <p className="text-xs font-medium text-slate-600 truncate max-w-[140px]">
                                                     {nearestLandmark.distance === 0
                                                         ? `On ${nearestLandmark.name}`
                                                         : `${nearestLandmark.distance}m · ${nearestLandmark.name}`
@@ -587,11 +587,11 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
 
                         {/* Drag hint */}
                         <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-                            <div className="bg-black/50 backdrop-blur-sm text-white px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest opacity-70">
+                            <div className="bg-black/50 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-medium opacity-80">
                                 Drag map to move pin · or use street view
                             </div>
                         </div>
-                        <button onClick={() => setShowStreetView(!showStreetView)} className={`absolute bottom-28 left-6 px-6 h-14 rounded-[1.25rem] shadow-2xl flex items-center gap-3 font-black text-[10px] uppercase tracking-widest transition-all z-20 active:scale-95 ${showStreetView ? 'bg-[#EE4D2D] text-white hover:bg-[#d43d22]' : 'bg-white text-gray-600 border border-gray-100 hover:bg-[#EE4D2D] hover:text-white hover:border-transparent'}`}>
+                        <button onClick={() => setShowStreetView(!showStreetView)} className={`absolute bottom-28 left-6 px-6 h-14 rounded-2xl shadow-xl flex items-center gap-3 font-bold text-xs transition-all z-20 active:scale-95 ${showStreetView ? 'bg-[#EE4D2D] text-white hover:bg-[#d43d22]' : 'bg-white text-slate-600 border border-gray-100 hover:bg-[#EE4D2D] hover:text-white hover:border-transparent'}`}>
                             {showStreetView ? <MapIcon size={18} /> : <Eye size={18} />} {showStreetView ? 'Exit Street View' : 'Street View'}
                         </button>
 
@@ -622,7 +622,7 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
                                 <div className="absolute top-5 left-5 right-5 z-40 flex items-center justify-between gap-3 pointer-events-none">
                                     <button 
                                         onClick={() => { setShowStreetView(false); streetViewInstance.current = null; }} 
-                                        className="px-6 py-4 bg-white rounded-2xl shadow-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-[#EE4D2D] hover:text-white active:scale-95 transition-all pointer-events-auto"
+                                        className="px-5 py-3 bg-white rounded-xl shadow-md font-bold text-xs flex items-center gap-2 hover:bg-[#EE4D2D] hover:text-white active:scale-95 transition-all pointer-events-auto"
                                     >
                                         <ChevronLeft size={16}/> Back to Map
                                     </button>
@@ -640,13 +640,13 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
                                                 streetViewInstance.current = null;
                                             }
                                         }}
-                                        className="px-8 py-4 bg-[#EE4D2D] text-white rounded-2xl shadow-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-[#d43d22] hover:shadow-xl active:scale-95 transition-all pointer-events-auto"
+                                        className="px-6 py-3 bg-[#EE4D2D] text-white rounded-xl shadow-md font-bold text-xs flex items-center gap-2 hover:bg-[#d43d22] hover:shadow-lg active:scale-95 transition-all pointer-events-auto"
                                     >
                                         <MapPin size={14}/> Pin This Location
                                     </button>
                                 </div>
                                 <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
-                                    <div className="bg-black/60 backdrop-blur-sm text-white px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-widest">
+                                    <div className="bg-black/60 backdrop-blur-sm text-white px-4 py-1.5 rounded-full text-xs font-medium">
                                         Walk around · tap "Pin This Location" to drop pin
                                     </div>
                                 </div>
@@ -654,9 +654,9 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
                         )}
 
                         <div className="p-6 bg-white border-t border-gray-100 flex items-center gap-4 z-40">
-                            <button onClick={() => setStep('details')} className="px-6 py-5 bg-gray-50 rounded-2xl font-black text-[10px] text-gray-400 uppercase tracking-widest flex items-center gap-2 hover:bg-[#EE4D2D]/10 hover:text-[#EE4D2D] active:scale-95 transition-all"><ChevronLeft size={16}/> BACK</button>
-                            <div className="flex-grow text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Verify & Save Exactly on Google Maps</div>
-                            <button onClick={() => { onSelection(address, markerLocation.lat, markerLocation.lng, components, granular); onClose(); }} className="px-12 py-5 bg-[#EE4D2D] text-white rounded-[1.25rem] font-black text-xs uppercase tracking-[0.3em] shadow-xl shadow-orange-500/20 hover:scale-[1.02] active:scale-95 transition-all">Confirm & Save</button>
+                            <button onClick={() => setStep('details')} className="px-5 py-3.5 bg-gray-50 rounded-2xl font-bold text-xs text-slate-600 flex items-center gap-2 hover:bg-[#EE4D2D]/10 hover:text-[#EE4D2D] active:scale-95 transition-all"><ChevronLeft size={16}/> Back</button>
+                            <div className="flex-grow text-xs font-bold text-slate-500 text-center">Verify & Save Exactly on Google Maps</div>
+                            <button onClick={() => { onSelection(address, markerLocation.lat, markerLocation.lng, components, granular); onClose(); }} className="px-8 py-3.5 bg-[#EE4D2D] text-white rounded-2xl font-bold text-sm shadow-xl shadow-orange-500/20 hover:scale-[1.02] active:scale-95 transition-all">Confirm & Save</button>
                         </div>
                     </div>
                 );
@@ -669,7 +669,7 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
                         </div>
                         <div className="flex-grow overflow-y-auto p-8 space-y-8 no-scrollbar">
                             <div className="space-y-6">
-                                <h4 className="text-[10px] font-black text-gray-300 uppercase tracking-[0.3em]">PSGC Standardized Area</h4>
+                                <h4 className="text-xs font-bold text-slate-400">PSGC Standardized Area</h4>
                                 <div className="grid grid-cols-2 gap-6">
                                     <DetailSelect label="Region" options={regions} value={selectedRegion} readOnly={true} onChange={(v, n) => { setSelectedRegion(v); updateField('region', n); }} />
                                     <DetailSelect label="Province" options={selectedRegion === '1300000000' ? [{ code: 'NCR', name: 'Metro Manila' }] : provinces} value={selectedRegion === '1300000000' ? 'NCR' : selectedProvince} disabled={!selectedRegion || selectedRegion === '1300000000'} loading={loadingPSGC.provinces} onChange={(v, n) => { setSelectedProvince(v); setSelectedCity(''); updateField('province', n); }} />
@@ -680,7 +680,7 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
                                 </div>
                             </div>
                             <div className="space-y-6">
-                                <h4 className="text-[10px] font-black text-gray-300 uppercase tracking-[0.3em]">Building & Street Details</h4>
+                                <h4 className="text-xs font-bold text-slate-400">Building & Street Details</h4>
                                 <div className="grid grid-cols-2 gap-6">
                                     <DetailInput label="HOUSE NUMBER / FLOOR" value={granular.houseNumber} onChange={v => updateField('houseNumber', v)} placeholder="e.g. 123" />
                                     <DetailInput label="BLOCK & LOT" value={granular.blockNumber} onChange={v => updateField('blockNumber', v)} placeholder="Blk 1 Lot 2" />
@@ -697,7 +697,7 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
                             </div>
                         </div>
                         <div className="p-8 border-t border-gray-50 flex bg-white">
-                            <button onClick={() => setStep('map')} className="flex-grow bg-[#EE4D2D] text-white py-5 rounded-[1.25rem] font-black text-xs uppercase tracking-[0.3em] shadow-2xl shadow-orange-500/30 transition-all hover:bg-[#d43d22] hover:shadow-xl active:scale-[0.99]">Verify Exact Google Map Location</button>
+                            <button onClick={() => setStep('map')} className="flex-grow bg-[#EE4D2D] text-white py-4 rounded-2xl font-bold text-sm shadow-xl shadow-orange-500/30 transition-all hover:bg-[#d43d22] hover:shadow-xl active:scale-[0.99]">Verify Exact Google Map Location</button>
                         </div>
                     </div>
                 );

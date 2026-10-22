@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Heart, Zap, Users, Shield, Award, Sparkles } from 'lucide-react';
+import { Zap, Users, Shield, Award, Sparkles } from 'lucide-react';
 
 const pillars = [
     {
@@ -36,11 +36,11 @@ export function AboutSection() {
                         className="flex-1 space-y-8"
                     >
                         <div className="space-y-4">
-                            <div className="inline-flex items-center gap-3 text-brand-dark uppercase tracking-[0.5em] text-[10px] font-black">
+                            <div className="inline-flex items-center gap-3 text-brand-dark text-xs font-bold">
                                 <div className="w-12 h-[2px] bg-brand-dark" />
                                 Our Heritage
                             </div>
-                            <h2 className="text-5xl sm:text-6xl lg:text-7xl font-black text-accent-brown tracking-tighter leading-[0.9] uppercase">
+                            <h2 className="text-5xl sm:text-6xl lg:text-7xl font-black text-accent-brown tracking-tight leading-tight">
                                 Built for <span className="text-brand-dark">Pets,</span><br />
                                 Driven by <span className="italic font-outfit">Love.</span>
                             </h2>
@@ -53,13 +53,6 @@ export function AboutSection() {
                             <p className="text-lg text-accent-brown/50 font-medium leading-relaxed">
                                 By integrating deep veterinary expertise with cutting-edge logistics technology, we ensure every interaction is precise, rewarding, and deeply personal.
                             </p>
-                        </div>
-
-                        <div className="pt-4">
-                            <div className="inline-flex items-center gap-4 px-6 py-3 bg-white rounded-full shadow-sm border border-accent-brown/5">
-                                <Heart className="w-5 h-5 text-brand-dark fill-brand-dark" />
-                                <span className="text-xs font-black uppercase tracking-widest text-accent-brown/60">Legacy of care and commitment</span>
-                            </div>
                         </div>
                     </motion.div>
 
@@ -108,7 +101,7 @@ export function AboutSection() {
                             <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-8 border shadow-inner group-hover:scale-110 transition-transform ${p.color.includes('bg-white') ? 'bg-accent-peach/20 border-brand/20' : 'bg-current border-white/20'}`}>
                                 <p.icon className={`w-8 h-8 ${p.color.includes('text-white') ? 'text-white' : 'text-accent-brown'}`} />
                             </div>
-                            <h4 className="text-2xl font-black text-accent-brown uppercase tracking-tighter mb-4">{p.title}</h4>
+                            <h4 className="text-2xl font-black text-accent-brown tracking-tight mb-4">{p.title}</h4>
                             <p className="text-accent-brown/50 font-medium leading-relaxed italic">
                                 "{p.desc}"
                             </p>

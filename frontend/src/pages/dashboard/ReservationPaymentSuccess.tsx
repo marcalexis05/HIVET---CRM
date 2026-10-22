@@ -73,7 +73,7 @@ const ReservationPaymentSuccess = () => {
                 </motion.div>
 
                 {/* Sparkles badge */}
-                <div className="inline-flex items-center gap-1.5 bg-brand/10 text-accent-brown px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4">
+                <div className="inline-flex items-center gap-1.5 bg-brand/10 text-accent-brown px-3 py-1 rounded-full text-xs font-bold mb-4">
                     <Sparkles className="w-3 h-3" />
                     Payment Successful
                 </div>
@@ -93,20 +93,22 @@ const ReservationPaymentSuccess = () => {
                     <div className="mb-6 px-5 py-3 bg-accent-peach/20 rounded-2xl border border-accent-peach/30 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <CalendarCheck className="w-4 h-4 text-brand" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-black">Reservation ID</span>
+                            <span className="text-xs font-semibold text-slate-700">Reservation ID</span>
                         </div>
-                        <span className="font-black text-accent-brown text-sm">HV-2026-{String(reservationId).padStart(6, '0')}</span>
+                        <span className="font-black text-accent-brown text-sm">
+                            {String(reservationId).replace(/^HV-2026-/i, '').replace(/^HV-/i, '')}
+                        </span>
                     </div>
                 )}
 
                 {/* Countdown */}
                 <div className="mb-8 px-6 py-4 bg-brand-dark/5 rounded-[2rem] border border-accent-brown/5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black mb-1">
+                    <p className="text-xs font-semibold text-slate-700 mb-1">
                         Redirecting to Reservations
                     </p>
                     <div className="flex items-center justify-center gap-2">
                         <span className="text-2xl font-black text-accent-brown">{seconds}</span>
-                        <span className="text-[10px] font-bold text-black uppercase tracking-widest">seconds remaining</span>
+                        <span className="text-xs font-medium text-slate-500">seconds remaining</span>
                     </div>
                 </div>
 
@@ -114,14 +116,14 @@ const ReservationPaymentSuccess = () => {
                 <div className="space-y-3">
                     <button
                         onClick={() => navigate('/dashboard/customer/reservations')}
-                        className="w-full bg-brand-dark text-white py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-black transition-all shadow-lg shadow-brand/20 text-[10px] cursor-pointer"
+                        className="w-full bg-brand-dark text-white py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-black transition-all shadow-md shadow-brand/20 cursor-pointer"
                     >
                         View My Reservations
                         <ArrowRight className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => navigate('/dashboard/customer')}
-                        className="w-full py-4 text-black font-black uppercase tracking-widest text-[9px] transition-colors cursor-pointer"
+                        className="w-full py-3 text-slate-600 font-bold text-xs transition-colors cursor-pointer"
                     >
                         Back to Customer Hub
                     </button>
@@ -129,7 +131,7 @@ const ReservationPaymentSuccess = () => {
 
                 {/* Footer note */}
                 <div className="mt-8 pt-6 border-t border-brand/10">
-                    <p className="text-[10px] text-black font-bold uppercase tracking-widest">
+                    <p className="text-xs text-slate-500 font-medium">
                         {confirmed
                             ? 'Payment confirmed. A confirmation has been sent to your notification center.'
                             : 'Processing confirmation...'}

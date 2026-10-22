@@ -1,9 +1,9 @@
 import React from 'react';
 import { Shield, Activity } from 'lucide-react';
 
-export const AdminFooter = () => {
+export const AdminFooter = ({ className = '' }: { className?: string }) => {
     return (
-        <footer className="footer-admin px-10 py-8 border-t border-white/5 bg-[#0A0A0A] text-white">
+        <footer className={`footer-admin hidden lg:block px-10 py-8 border-t border-white/5 bg-[#0A0A0A] text-white ${className}`}>
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="flex flex-col gap-1 text-center md:text-left">
                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/60 leading-none">

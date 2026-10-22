@@ -20,6 +20,8 @@ interface CustomDropdownProps {
     icon?: React.ReactNode;
     isRequired?: boolean;
     isOptional?: boolean;
+    buttonClassName?: string;
+    labelClassName?: string;
 }
 
 export const CustomDropdown = ({ 
@@ -31,7 +33,9 @@ export const CustomDropdown = ({
     placeholder = "Select Option...",
     icon,
     isRequired = false,
-    isOptional = false
+    isOptional = false,
+    buttonClassName,
+    labelClassName
 }: CustomDropdownProps) => {
     const [isOpen, setIsOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
@@ -53,7 +57,7 @@ export const CustomDropdown = ({
     return (
         <div className={`relative w-full ${className}`} ref={ref}>
             {label && (
-                <label className="text-[10px] font-black uppercase tracking-[0.25em] text-accent-brown/40 block mb-3 ml-1">
+                <label className={labelClassName || "text-xs font-semibold text-slate-700 block mb-2 ml-1"}>
                     {label} 
                     {isRequired && <span className="text-brand ml-1">*</span>}
                     {isOptional && (
@@ -64,7 +68,7 @@ export const CustomDropdown = ({
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full bg-accent-peach/20 border-2 transition-all duration-300 rounded-2xl py-4 px-6 text-sm font-black text-accent-brown flex items-center justify-between outline-none group ${
+                className={buttonClassName ? `${buttonClassName} ${isOpen ? 'border-brand bg-white ring-2 ring-brand/20 shadow-md' : ''}` : `w-full bg-accent-peach/20 border-2 transition-all duration-300 rounded-2xl py-4 px-6 text-sm font-black text-accent-brown flex items-center justify-between outline-none group ${
                     isOpen 
                         ? 'border-brand bg-white shadow-2xl shadow-brand/5 ring-4 ring-brand/5' 
                         : 'border-transparent hover:border-accent-peach/50 hover:bg-white'
@@ -99,7 +103,7 @@ export const CustomDropdown = ({
                                     type="button"
                                     disabled={isDisabled}
                                     onClick={() => { if (!isDisabled) { onChange(val); setIsOpen(false); } }}
-                                    className={`w-full px-5 py-3 text-left text-xs font-black uppercase tracking-widest transition-all relative flex items-center justify-between group/item ${
+                                    className={`w-full px-5 py-3 text-left text-xs font-semibold transition-all relative flex items-center justify-between group/item ${
                                         isDisabled 
                                             ? 'text-accent-brown/20 bg-accent-peach/5 cursor-not-allowed italic font-medium' 
                                             : isSelected 
@@ -113,7 +117,7 @@ export const CustomDropdown = ({
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
                                         {badge && (
-                                            <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${isDisabled ? 'bg-accent-brown/5 text-accent-brown/20' : isSelected ? 'bg-brand/10 text-brand-dark' : 'bg-accent-peach/30 text-accent-brown/40'}`}>
+                                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${isDisabled ? 'bg-accent-brown/5 text-accent-brown/20' : isSelected ? 'bg-brand/10 text-brand-dark' : 'bg-accent-peach/30 text-accent-brown/40'}`}>
                                                 {badge}
                                             </span>
                                         )}

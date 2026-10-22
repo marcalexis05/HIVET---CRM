@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Hero } from './components/Hero';
 import { Features } from './components/Features';
 import { CatalogPreview } from './components/CatalogPreview';
@@ -8,7 +8,7 @@ import { ReservationsSection } from './components/ReservationsSection';
 import { LoyaltySection } from './components/LoyaltySection';
 import { AboutSection } from './components/AboutSection';
 import { Logo } from './components/Logo';
-import { ShoppingCart, Menu, X } from 'lucide-react';
+import { ShoppingCart, Menu, X, Home, ShoppingBag, Package, Award, Info, Zap, LayoutGrid, Shield, Sparkles, FileText } from 'lucide-react';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -62,6 +62,9 @@ function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const location = useLocation();
+  const shouldReduceMotion = useReducedMotion();
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const firstLinkRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -70,6 +73,51 @@ function Navigation() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Back button, Escape, Resize, and Body Scroll Lock
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    // Push state so back button closes the menu without leaving the page
+    window.history.pushState({ mobileMenu: true }, '');
+
+    const handlePopState = () => {
+      setIsMenuOpen(false);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsMenuOpen(false);
+      }
+    };
+
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleResize);
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    // Focus the first link
+    const focusTimer = setTimeout(() => {
+      firstLinkRef.current?.focus();
+    }, 60);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleResize);
+      document.body.style.overflow = prevOverflow;
+      clearTimeout(focusTimer);
+      menuButtonRef.current?.focus();
+    };
+  }, [isMenuOpen]);
 
   // Hide public navbar on auth pages and dashboard portals
   const shouldShowNavbar = !['/login', '/login/business', '/login/rider', '/register', '/register/business', '/register/rider', '/forgot-password', '/catalog'].includes(location.pathname) && !location.pathname.startsWith('/dashboard');
@@ -94,6 +142,48 @@ function Navigation() {
     setIsMenuOpen(false);
   };
 
+  const handleAnchorClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    setIsMenuOpen(false);
+    if (location.pathname === '/' || href.startsWith('#')) {
+      const targetId = href.replace('/#', '').replace('#', '');
+      const elem = document.getElementById(targetId);
+      if (elem) {
+        e.preventDefault();
+        elem.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  };
+
+  const menuItems = isBusinessLanding ? [
+    { name: 'Features', href: '#features', type: 'anchor', icon: Zap },
+    { name: 'CRM & BI', href: '#capabilities', type: 'anchor', icon: LayoutGrid },
+    { name: 'Security', href: '#security', type: 'anchor', icon: Shield }
+  ] : isRiderLanding ? [
+    { name: 'Benefits', href: '#benefits', type: 'anchor', icon: Award },
+    { name: 'Perks', href: '#perks', type: 'anchor', icon: Sparkles },
+    { name: 'Requirements', href: '#requirements', type: 'anchor', icon: FileText }
+  ] : [
+    { name: 'Home', href: '/', type: 'link', icon: Home },
+    { name: 'Store', href: '/catalog', type: 'link', icon: ShoppingBag },
+    { name: 'Orders', href: '/#orders', type: 'anchor', icon: Package },
+    { name: 'Loyalty', href: '/#loyalty', type: 'anchor', icon: Award },
+    { name: 'About', href: '/#about', type: 'anchor', icon: Info },
+  ];
+
+  const isItemActive = (item: { href: string; type: string }) => {
+    if (item.href === '/') {
+      return location.pathname === '/' && !location.hash;
+    }
+    if (item.type === 'link') {
+      return location.pathname === item.href;
+    }
+    if (item.type === 'anchor') {
+      const hash = item.href.replace('/', '');
+      return location.hash === hash;
+    }
+    return false;
+  };
+
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${isTransparent ? 'py-4' : 'py-0'}`}>
       <div className={`w-full transition-all duration-500 flex items-center justify-between px-6 sm:px-12 h-16 sm:h-20 ${navBackground}`}>
@@ -106,7 +196,7 @@ function Navigation() {
           </Link>
         </div>
 
-        <div className={`hidden lg:flex items-center gap-8 xl:gap-10 font-black text-xs xl:text-sm uppercase tracking-widest ${linkColor}`}>
+        <div className={`hidden lg:flex items-center gap-8 xl:gap-10 font-bold text-xs xl:text-sm uppercase tracking-widest ${linkColor}`}>
           {isBusinessLanding ? (
             <>
               <a href="#features" className="hover:text-brand-dark transition-colors">Features</a>
@@ -142,25 +232,25 @@ function Navigation() {
 
           {isBusinessLanding ? (
             <div className="hidden sm:flex items-center gap-4 xs:gap-6">
-              <Link to="/login/business" className={`text-xs xs:text-sm font-black transition-colors uppercase tracking-widest ${isTransparent ? 'text-white/80 hover:text-white' : 'text-accent-brown/80 hover:text-brand'}`}>
+              <Link to="/login/business" className={`text-xs xs:text-sm font-bold transition-colors uppercase tracking-widest ${isTransparent ? 'text-white/80 hover:text-white' : 'text-accent-brown/80 hover:text-brand'}`}>
                 Partner Login
               </Link>
-              <Link to="/register/business" className="bg-brand-dark text-white hover:bg-brand px-6 xs:px-8 py-2.5 xs:py-3 rounded-full text-[10px] xs:text-xs font-black transition-colors uppercase tracking-widest shadow-md">
+              <Link to="/register/business" className="bg-brand-dark text-white hover:bg-brand px-6 xs:px-8 py-2.5 xs:py-3 rounded-full text-[10px] xs:text-xs font-bold transition-colors uppercase tracking-widest shadow-md">
                 Register Clinic
               </Link>
             </div>
           ) : isRiderLanding ? (
             <div className="hidden sm:flex items-center gap-4 xs:gap-6">
-              <Link to="/login/rider" className={`text-xs xs:text-sm font-black transition-colors uppercase tracking-widest ${isTransparent ? 'text-white/80 hover:text-white' : 'text-accent-brown/80 hover:text-brand'}`}>
+              <Link to="/login/rider" className={`text-xs xs:text-sm font-bold transition-colors uppercase tracking-widest ${isTransparent ? 'text-white/80 hover:text-white' : 'text-accent-brown/80 hover:text-brand'}`}>
                 Rider Login
               </Link>
-              <Link to="/register/rider" className="bg-brand-dark text-white hover:bg-brand px-6 xs:px-8 py-2.5 xs:py-3 rounded-full text-[10px] xs:text-xs font-black transition-colors uppercase tracking-widest shadow-md">
+              <Link to="/register/rider" className="bg-brand-dark text-white hover:bg-brand px-6 xs:px-8 py-2.5 xs:py-3 rounded-full text-[10px] xs:text-xs font-bold transition-colors uppercase tracking-widest shadow-md">
                 Apply to Drive
               </Link>
             </div>
           ) : (
             <div className="hidden sm:flex items-center gap-6">
-              <Link to="/login" className={`text-xs xs:text-sm font-black transition-colors uppercase tracking-widest ${isTransparent ? 'text-white/70 hover:text-white' : 'text-accent-brown/60 hover:text-brand'}`}>
+              <Link to="/login" className={`text-xs xs:text-sm font-bold transition-colors uppercase tracking-widest ${isTransparent ? 'text-white/70 hover:text-white' : 'text-accent-brown/60 hover:text-brand'}`}>
                 Login
               </Link>
               <Link to="/register" className="btn-primary !px-6 xs:!px-8 !py-2.5 xs:!py-3 !text-[10px] xs:!text-xs !rounded-full">
@@ -170,8 +260,12 @@ function Navigation() {
           )}
 
           <button
+            ref={menuButtonRef}
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className={`lg:hidden w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isTransparent ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-accent-peach/50 text-accent-brown hover:bg-brand/20'}`}
+            aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={isMenuOpen}
+            aria-controls="mobile-navigation-menu"
+            className={`lg:hidden w-10 h-10 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl transition-all ${isTransparent ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-accent-peach/50 text-accent-brown hover:bg-brand/20'}`}
           >
             {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -180,68 +274,141 @@ function Navigation() {
 
       <AnimatePresence>
         {isMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, x: '100%' }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed inset-0 bg-white z-[50] pt-24 pb-12 px-6 flex flex-col justify-between"
-          >
-            <div className="space-y-6">
-              {(isBusinessLanding ? [
-                { name: 'Features', href: '#features', type: 'anchor' },
-                { name: 'CRM & BI', href: '#capabilities', type: 'anchor' },
-                { name: 'Security', href: '#security', type: 'anchor' }
-              ] : isRiderLanding ? [
-                { name: 'Benefits', href: '#benefits', type: 'anchor' },
-                { name: 'Perks', href: '#perks', type: 'anchor' },
-                { name: 'Requirements', href: '#requirements', type: 'anchor' }
-              ] : [
-                { name: 'Home', href: '/', type: 'link' },
-                { name: 'Store', href: '/catalog', type: 'link' },
-                { name: 'Orders', href: '/#orders', type: 'anchor' },
-                { name: 'Loyalty', href: '/#loyalty', type: 'anchor' },
-                { name: 'About', href: '/#about', type: 'anchor' },
-              ]).map((item) => (
-                item.type === 'link' ? (
-                  <Link
-                    key={item.href}
-                    to={item.href}
-                    onClick={(e) => item.href === '/' ? handleHomeClick(e) : setIsMenuOpen(false)}
-                    className="block text-2xl font-black text-accent-brown uppercase tracking-widest hover:text-brand transition-colors"
-                  >
-                    {item.name}
-                  </Link>
-                ) : (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setIsMenuOpen(false)}
-                    className="block text-2xl font-black text-accent-brown uppercase tracking-widest hover:text-brand transition-colors"
-                  >
-                    {item.name}
-                  </a>
-                )
-              ))}
-            </div>
+          <>
+            {/* Light Backdrop with NO blur */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: shouldReduceMotion ? 0.1 : 0.2 }}
+              onClick={() => setIsMenuOpen(false)}
+              className="fixed inset-0 top-16 sm:top-20 bg-black/[0.08] z-40 lg:hidden"
+              aria-hidden="true"
+            />
 
-            {isBusinessLanding ? (
-              <div className="space-y-4">
-                <Link to="/login/business" onClick={() => setIsMenuOpen(false)} className="block w-full text-center py-4 rounded-2xl font-black text-accent-brown/80 uppercase tracking-widest bg-brand/10 border border-brand/20">Partner Login</Link>
-                <Link to="/register/business" onClick={() => setIsMenuOpen(false)} className="block w-full text-center py-5 rounded-2xl font-black text-white uppercase tracking-widest bg-brand-dark shadow-lg shadow-brand/20">Register Clinic</Link>
+            {/* Compact Dropdown Panel directly below header */}
+            <motion.div
+              initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -12 }}
+              animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+              exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -12 }}
+              transition={{ duration: shouldReduceMotion ? 0.1 : 0.22, ease: [0.16, 1, 0.3, 1] }}
+              id="mobile-navigation-menu"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Mobile navigation"
+              className="absolute top-full left-0 right-0 z-50 px-3 sm:px-6 pt-2 pb-4 lg:hidden pointer-events-none"
+            >
+              <div className="w-full max-w-md mx-auto bg-white rounded-b-[20px] sm:rounded-b-[24px] shadow-[0_20px_40px_rgba(45,34,27,0.14)] border-x border-b border-accent-brown/10 overflow-hidden pointer-events-auto flex flex-col max-h-[calc(85vh-5rem)]">
+                {/* Scrollable links list */}
+                <div className="overflow-y-auto divide-y divide-slate-100 py-1">
+                  {menuItems.map((item, idx) => {
+                    const active = isItemActive(item);
+                    const linkContent = (
+                      <div className={`flex items-center gap-3.5 px-4 py-3 min-h-[52px] transition-all group ${
+                        active ? 'bg-brand/5 text-brand' : 'hover:bg-slate-50 text-accent-brown'
+                      }`}>
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                          active ? 'bg-brand/10 text-brand' : 'bg-slate-100 text-slate-500 group-hover:bg-brand/10 group-hover:text-brand'
+                        }`}>
+                          <item.icon className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />
+                        </div>
+                        <span className={`text-base leading-none transition-colors ${
+                          active ? 'font-bold text-brand' : 'font-medium text-accent-brown'
+                        }`}>
+                          {item.name}
+                        </span>
+                        {active && (
+                          <span className="ml-auto w-2 h-2 rounded-full bg-brand" aria-hidden="true" />
+                        )}
+                      </div>
+                    );
+
+                    return (
+                      <div key={item.name}>
+                        {item.type === 'link' ? (
+                          <Link
+                            ref={idx === 0 ? firstLinkRef : undefined}
+                            to={item.href}
+                            onClick={(e) => item.href === '/' ? handleHomeClick(e) : setIsMenuOpen(false)}
+                            aria-current={active ? 'page' : undefined}
+                            className="block focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand/30"
+                          >
+                            {linkContent}
+                          </Link>
+                        ) : (
+                          <a
+                            ref={idx === 0 ? firstLinkRef : undefined}
+                            href={item.href}
+                            onClick={(e) => handleAnchorClick(e, item.href)}
+                            aria-current={active ? 'page' : undefined}
+                            className="block focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand/30"
+                          >
+                            {linkContent}
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Buttons Area */}
+                <div className="p-3.5 sm:p-4 border-t border-slate-100 bg-slate-50/60 shrink-0">
+                  {isBusinessLanding ? (
+                    <div className="grid grid-cols-1 xs:grid-cols-2 gap-2.5 sm:gap-3">
+                      <Link
+                        to="/login/business"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="h-12 min-h-[48px] rounded-xl border-2 border-brand text-brand hover:bg-brand/5 font-bold text-sm flex items-center justify-center transition-all active:scale-[0.98] bg-white"
+                      >
+                        Partner Login
+                      </Link>
+                      <Link
+                        to="/register/business"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="h-12 min-h-[48px] rounded-xl bg-brand hover:bg-brand-dark text-white font-bold text-sm shadow-md shadow-brand/20 flex items-center justify-center transition-all active:scale-[0.98]"
+                      >
+                        Register Clinic
+                      </Link>
+                    </div>
+                  ) : isRiderLanding ? (
+                    <div className="grid grid-cols-1 xs:grid-cols-2 gap-2.5 sm:gap-3">
+                      <Link
+                        to="/login/rider"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="h-12 min-h-[48px] rounded-xl border-2 border-brand text-brand hover:bg-brand/5 font-bold text-sm flex items-center justify-center transition-all active:scale-[0.98] bg-white"
+                      >
+                        Rider Login
+                      </Link>
+                      <Link
+                        to="/register/rider"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="h-12 min-h-[48px] rounded-xl bg-brand hover:bg-brand-dark text-white font-bold text-sm shadow-md shadow-brand/20 flex items-center justify-center transition-all active:scale-[0.98]"
+                      >
+                        Apply to Drive
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 xs:grid-cols-2 gap-2.5 sm:gap-3">
+                      <Link
+                        to="/login"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="h-12 min-h-[48px] rounded-xl border-2 border-brand text-brand hover:bg-brand/5 font-bold text-sm flex items-center justify-center transition-all active:scale-[0.98] bg-white"
+                      >
+                        Login
+                      </Link>
+                      <Link
+                        to="/register"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="h-12 min-h-[48px] rounded-xl bg-brand hover:bg-brand-dark text-white font-bold text-sm shadow-md shadow-brand/20 flex items-center justify-center transition-all active:scale-[0.98]"
+                      >
+                        Register Now
+                      </Link>
+                    </div>
+                  )}
+                </div>
               </div>
-            ) : isRiderLanding ? (
-              <div className="space-y-4">
-                <Link to="/login/rider" onClick={() => setIsMenuOpen(false)} className="block w-full text-center py-4 rounded-2xl font-black text-accent-brown/80 uppercase tracking-widest bg-brand/10 border border-brand/20">Rider Login</Link>
-                <Link to="/register/rider" onClick={() => setIsMenuOpen(false)} className="block w-full text-center py-4 rounded-2xl font-black text-white uppercase tracking-widest bg-brand-dark shadow-lg shadow-brand-dark/20">Apply to Drive</Link>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Link to="/login" onClick={() => setIsMenuOpen(false)} className="block w-full text-center py-4 rounded-2xl font-black text-accent-brown/60 uppercase tracking-widest bg-accent-peach/30">Login</Link>
-                <Link to="/register" onClick={() => setIsMenuOpen(false)} className="block w-full text-center py-5 rounded-2xl font-black text-white uppercase tracking-widest bg-brand-dark shadow-lg shadow-brand/20">Register Now</Link>
-              </div>
-            )}
-          </motion.div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </nav>

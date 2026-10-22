@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, PawPrint, Bone, ChevronRight, ChevronLeft, Building2, Car, ArrowRight } from 'lucide-react';
+import { ShoppingCart, PawPrint, ChevronRight, ChevronLeft, Building2, Car, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 // New Cinematic Images
@@ -10,7 +10,6 @@ import heroRider from '../assets/hero_rider.png';
 
 const SLIDES = [
     {
-        tag: "Exclusive Pet Experience",
         title: "Treat Your Best Friend to the Best",
         subtitle: "From gourmet snacks to cozy beds, we've got the wags covered. Register now for a world of premium care.",
         primaryBtn: "Start Health Journey",
@@ -23,7 +22,6 @@ const SLIDES = [
         witty: "More Treats, Less Zoomies."
     },
     {
-        tag: "Veterinary Excellence",
         title: "Precision Care for Every Patient",
         subtitle: "Empowering clinics with seamless CRM and logistics. We handle the tech, you handle the tails.",
         primaryBtn: "Partner with Us",
@@ -36,7 +34,6 @@ const SLIDES = [
         witty: "Professional Paws, Reliable Care."
     },
     {
-        tag: "Fast & Reliable Delivery",
         title: "The Fastest Paws in the City",
         subtitle: "Reliability that makes tails wag and owners smile. Apply as a driver and be the hero every pet awaits.",
         primaryBtn: "Apply to Drive",
@@ -100,16 +97,11 @@ export const Hero = () => {
                             transition={{ duration: 0.8 }}
                             className="space-y-6 sm:space-y-8"
                         >
-                            <div className="inline-flex items-center gap-3 bg-brand-dark text-white px-6 py-2 rounded-full text-[12px] font-black uppercase tracking-[0.3em] shadow-lg">
-                                <PawPrint className="w-4 h-4" />
-                                {SLIDES[current].tag}
-                            </div>
-
                             <div className="space-y-4">
-                                <h1 className="text-white text-5xl sm:text-7xl xl:text-8xl font-black leading-[0.9] tracking-tighter uppercase drop-shadow-2xl">
+                                <h1 className="text-white text-5xl sm:text-7xl xl:text-8xl font-black leading-tight tracking-tight drop-shadow-2xl">
                                     {SLIDES[current].title}
                                 </h1>
-                                <div className="text-brand-dark text-2xl sm:text-3xl font-black italic tracking-widest uppercase font-outfit">
+                                <div className="text-brand-dark text-2xl sm:text-3xl font-black font-outfit tracking-normal">
                                     {SLIDES[current].witty}
                                 </div>
                             </div>
@@ -121,7 +113,7 @@ export const Hero = () => {
                             <div className="flex flex-col sm:flex-row gap-5 pt-4">
                                 <Link 
                                     to={SLIDES[current].primaryLink} 
-                                    className="group bg-brand-dark text-white px-10 py-5 rounded-full font-black flex items-center justify-center gap-4 text-sm uppercase tracking-[0.15em] shadow-xl shadow-brand/20 hover:bg-brand-dark/90 transition-all transform hover:-translate-y-1 active:scale-95"
+                                    className="group bg-brand-dark text-white px-10 py-5 rounded-full font-black flex items-center justify-center gap-4 text-sm  shadow-xl shadow-brand/20 hover:bg-brand-dark/90 transition-all transform hover:-translate-y-1 active:scale-95"
                                 >
                                     {SLIDES[current].icon}
                                     {SLIDES[current].primaryBtn}
@@ -129,7 +121,7 @@ export const Hero = () => {
                                 </Link>
                                 <Link 
                                     to={SLIDES[current].secondaryLink} 
-                                    className="bg-white/10 backdrop-blur-md text-white border-2 border-white/20 px-10 py-5 rounded-full font-black flex items-center justify-center gap-4 text-sm uppercase tracking-[0.15em] hover:bg-white/20 transition-all shadow-xl"
+                                    className="bg-white/10 backdrop-blur-md text-white border-2 border-white/20 px-10 py-5 rounded-full font-black flex items-center justify-center gap-4 text-sm  hover:bg-white/20 transition-all shadow-xl"
                                 >
                                     {SLIDES[current].secondaryBtn}
                                 </Link>

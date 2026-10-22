@@ -118,7 +118,7 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
                     }}
                     className="bg-white rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] border border-accent-peach/20 p-4 overflow-hidden"
                 >
-                    <div className="text-[9px] font-black uppercase tracking-[0.25em] text-black px-4 py-3 border-b border-accent-peach/10 mb-3 flex items-center justify-between">
+                    <div className="text-xs font-bold text-slate-700 px-4 py-3 border-b border-accent-peach/10 mb-3 flex items-center justify-between">
                         <span>Select Clinic Branch</span>
                         <div className="w-1.5 h-1.5 bg-brand rounded-full animate-pulse" />
                     </div>
@@ -135,12 +135,12 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
                                 className={`w-full text-left p-4 rounded-2xl transition-all flex items-center justify-between group ${currentBranchId === null ? 'bg-brand text-white shadow-xl shadow-brand/20' : 'text-black hover:bg-accent-peach/10'}`}
                             >
                                 <div className="flex flex-col overflow-hidden pr-4">
-                                    <span className="font-black truncate uppercase tracking-widest text-[10px]">All Branches</span>
-                                    <span className={`text-[8px] truncate font-black uppercase tracking-widest mt-1 ${currentBranchId === null ? 'text-white/40' : 'text-black'}`}>
+                                    <span className="font-bold truncate text-xs">All Branches</span>
+                                    <span className={`text-xs truncate font-medium mt-1 ${currentBranchId === null ? 'text-white/60' : 'text-slate-500'}`}>
                                         View complete metrics
                                     </span>
                                 </div>
-                                <span className={`text-[8px] uppercase tracking-widest shrink-0 font-black px-2 py-1 rounded-lg ${currentBranchId === null ? 'bg-white/10 text-white' : 'bg-accent-peach/30 text-accent-brown/40'}`}>
+                                <span className={`text-[11px] shrink-0 font-bold px-2 py-0.5 rounded-lg ${currentBranchId === null ? 'bg-white/10 text-white' : 'bg-accent-peach/30 text-accent-brown/60'}`}>
                                     Global
                                 </span>
                             </button>
@@ -157,13 +157,13 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
                                 className={`w-full text-left p-4 rounded-2xl transition-all flex items-center justify-between group ${currentBranchId === b.id ? 'bg-brand text-white shadow-xl shadow-brand/20' : 'text-black hover:bg-accent-peach/10'}`}
                             >
                                 <div className="flex flex-col overflow-hidden pr-4">
-                                    <span className="font-black truncate uppercase tracking-widest text-[10px]">{b.name}</span>
-                                    <span className={`text-[8px] truncate font-black uppercase tracking-widest mt-1 ${currentBranchId === b.id ? 'text-white/40' : 'text-black'}`}>
+                                    <span className="font-bold truncate text-xs">{b.name}</span>
+                                    <span className={`text-xs truncate font-medium mt-1 ${currentBranchId === b.id ? 'text-white/60' : 'text-slate-500'}`}>
                                         {b.city} Location
                                     </span>
                                 </div>
                                 {b.is_main && (
-                                    <span className={`text-[8px] uppercase tracking-widest shrink-0 font-black px-2 py-1 rounded-lg ${currentBranchId === b.id ? 'bg-white/10 text-white' : 'bg-brand/10 text-brand-dark'}`}>
+                                    <span className={`text-[11px] shrink-0 font-bold px-2 py-0.5 rounded-lg ${currentBranchId === b.id ? 'bg-white/10 text-white' : 'bg-brand/10 text-brand-dark'}`}>
                                         Core
                                     </span>
                                 )}
@@ -186,10 +186,10 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
                     <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-brand" />
                 </div>
                 <div className="flex flex-col items-start overflow-hidden text-left">
-                    <span className="truncate w-full font-black text-black text-[10px] sm:text-[11px] uppercase tracking-widest leading-none">
+                    <span className="truncate w-full font-bold text-slate-800 text-xs sm:text-sm leading-none">
                         {currentBranchId === null && allowAllBranches ? 'All Branches' : currentBranch ? currentBranch.name : 'Initializing...'}
                     </span>
-                    <span className="text-[8px] sm:text-[9px] text-black/50 font-black uppercase tracking-widest leading-none mt-1.5">
+                    <span className="text-xs text-slate-500 font-medium leading-none mt-1.5">
                         {currentBranchId === null && allowAllBranches ? 'Global System' : currentBranch ? `${currentBranch.city}` : 'Branch Discovery'}
                     </span>
                 </div>

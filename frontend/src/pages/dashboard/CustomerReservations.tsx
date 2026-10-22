@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Package, MapPin, Calendar, Clock, ChevronRight, Plus, X, AlertCircle, CheckCircle, Loader2, CalendarX, Clock3, CreditCard, Banknote, ShieldCheck, Gift, Sparkles, QrCode, Wallet, Smartphone, Activity, Trophy, Eye, Tag } from 'lucide-react';
 import { APIProvider, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { useNavigate } from 'react-router-dom';
@@ -8,7 +8,9 @@ import DashboardLayout from '../../components/DashboardLayout';
 import { CustomDatePicker } from '../../components/CustomDatePicker';
 import { CustomDropdown } from '../../components/CustomDropdown';
 import QrCodeModal from '../../components/QrCodeModal';
+import Pagination from '../../components/Pagination';
 import { useAuth } from '../../context/AuthContext';
+import { toTitleCase, toSentenceCase, formatName } from '../../utils/textFormatters';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -77,6 +79,13 @@ const STATUS_STYLES: Record<string, string> = {
     'Cancelled': 'bg-red-100 text-red-500',
 };
 
+// Format reservation number display without HV-2026- prefix
+export const formatReservationNumber = (id: string | number | undefined | null) => {
+    if (!id) return '';
+    const str = String(id).trim();
+    return str.replace(/^HV-2026-/i, '').replace(/^HV-/i, '');
+};
+
 const CustomerReservations = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -89,6 +98,21 @@ const CustomerReservations = () => {
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [activeStatus, setActiveStatus] = useState('All');
+    const filterTabsContainerRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll selected status chip into view
+    useEffect(() => {
+        if (!filterTabsContainerRef.current) return;
+        const activeBtn = filterTabsContainerRef.current.querySelector<HTMLElement>(`[data-tab="${activeStatus}"]`);
+        if (activeBtn) {
+            const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            activeBtn.scrollIntoView({
+                behavior: prefersReducedMotion ? 'auto' : 'smooth',
+                inline: 'center',
+                block: 'nearest'
+            });
+        }
+    }, [activeStatus]);
     
     // Action State
     const [cancellingId, setCancellingId] = useState<number | null>(null);
@@ -127,13 +151,75 @@ const CustomerReservations = () => {
     const [qrStatus, setQrStatus] = useState<'pending' | 'succeeded' | 'expired' | 'processing'>('pending');
     const pollingInterval = useRef<any>(null);
 
-    // HI-VET ARCHITECTURE NOIR: Modal State Observer
+    const shouldReduceMotion = useReducedMotion();
+    const lastActiveElementRef = useRef<HTMLElement | null>(null);
+    const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+
+    // Smoothly lock body scroll when receipt modal is open without wiping header/nav layout
     useEffect(() => {
-        const isActive = !!selectedDetail || showQrModal || showMethodSelector;
+        if (!selectedDetail) return;
+        const originalOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = originalOverflow;
+        };
+    }, [selectedDetail]);
+
+    // Focus close button on open
+    useEffect(() => {
+        if (selectedDetail) {
+            setTimeout(() => {
+                closeButtonRef.current?.focus();
+            }, 60);
+        }
+    }, [selectedDetail]);
+
+    // Close Receipt Modal handler with browser back button restoration
+    const closeReceiptModal = useCallback(() => {
+        setSelectedDetail(null);
+        if (typeof window !== 'undefined' && window.history.state?.hivetReceiptModal) {
+            window.history.back();
+        }
+        setTimeout(() => {
+            lastActiveElementRef.current?.focus();
+        }, 50);
+    }, []);
+
+    // Hardware/Browser Back button and Escape key support for Receipt Modal
+    useEffect(() => {
+        if (!selectedDetail) return;
+
+        window.history.pushState({ hivetReceiptModal: true }, '');
+
+        const handlePopState = () => {
+            setSelectedDetail(null);
+            setTimeout(() => {
+                lastActiveElementRef.current?.focus();
+            }, 50);
+        };
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                closeReceiptModal();
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        window.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            window.removeEventListener('popstate', handlePopState);
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [selectedDetail, closeReceiptModal]);
+
+    // Modal state observer for full-screen dialogs (QR / Method selector)
+    useEffect(() => {
+        const isActive = showQrModal || showMethodSelector;
         if (isActive) document.body.classList.add('map-modal-active');
         else document.body.classList.remove('map-modal-active');
         return () => document.body.classList.remove('map-modal-active');
-    }, [selectedDetail, showQrModal, showMethodSelector]);
+    }, [showQrModal, showMethodSelector]);
 
     const startPolling = (intentId: string) => {
         if (pollingInterval.current) clearInterval(pollingInterval.current);
@@ -206,7 +292,7 @@ const CustomerReservations = () => {
             const data = await res.json();
             if (method === 'qrph' && data.qr_code) {
                 setQrData(data.qr_code);
-                setQrReference(resObj?.tracking_id || `HV-${reservationDbId}`);
+                setQrReference(formatReservationNumber(resObj?.tracking_id || resObj?.id || `RV-${reservationDbId}`));
                 setQrAmount(resObj?.total || 0);
                 setShowQrModal(true);
                 startPolling(data.intent_id);
@@ -291,7 +377,7 @@ const CustomerReservations = () => {
 
     return (
         <DashboardLayout title="" hideHeader={!!selectedDetail || showQrModal || showMethodSelector}>
-            <div className="space-y-8">
+            <div className="space-y-4 sm:space-y-6 pb-28 sm:pb-24 lg:pb-16 px-1 sm:px-2">
 
                 {/* Toast */}
                 <AnimatePresence>
@@ -306,58 +392,56 @@ const CustomerReservations = () => {
 
                 {/* HI-VET ARCHITECTURE NOIR: CINEMATIC HEADER */}
                 <div className="relative">
-                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 sm:gap-6 md:gap-8 mb-6 sm:mb-8">
                         <div className="relative z-10">
-                            <motion.div
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                className="flex items-center gap-3 mb-4"
-                            >
-                            </motion.div>
                             <motion.h1
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.1 }}
-                                className="text-5xl sm:text-7xl font-black text-accent-brown tracking-tighter leading-[0.9]"
+                                className="text-3xl sm:text-4xl lg:text-5xl font-black text-accent-brown tracking-tighter leading-tight"
                             >
-                                Pet <br /> <span className="text-brand">Reservations</span>
+                                Pet <span className="text-brand">Reservations</span>
                             </motion.h1>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-4 relative z-10">
-                            {[
-                                { label: 'Active', count: activeCount, color: 'text-brand', icon: Activity },
-                                { label: 'Settling', count: pendingPaymentCount, color: 'text-blue-500', icon: CreditCard },
-                                { label: 'Done', count: completedCount, color: 'text-emerald-500', icon: Trophy }
-                            ].map((stat, i) => (
-                                <motion.div
-                                    key={stat.label}
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.2 + (i * 0.1) }}
-                                    className="bg-white px-6 py-4 rounded-[2rem] shadow-xl shadow-accent-brown/5 border border-white flex items-center gap-4 min-w-[140px]"
-                                >
-                                    <div className={`p-2 rounded-xl bg-slate-50 ${stat.color}`}>
-                                        <stat.icon className="w-4 h-4" />
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-black leading-none mb-1">{stat.label}</p>
-                                        <p className="text-xl font-black text-accent-brown leading-none">{stat.count}</p>
-                                    </div>
-                                </motion.div>
-                            ))}
+                        <div className="flex flex-col sm:flex-col md:flex-row items-stretch md:items-center gap-3 sm:gap-4 relative z-10 w-full md:w-auto">
+                            {/* 3 Counters in 1 row on screens >= 340px */}
+                            <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full md:w-auto">
+                                {[
+                                    { label: 'Active', count: activeCount, color: 'text-brand', icon: Activity },
+                                    { label: 'Settling', count: pendingPaymentCount, color: 'text-blue-500', icon: CreditCard },
+                                    { label: 'Done', count: completedCount, color: 'text-emerald-500', icon: Trophy }
+                                ].map((stat, i) => (
+                                    <motion.div
+                                        key={stat.label}
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.2 + (i * 0.1) }}
+                                        className="bg-white p-2.5 sm:p-3.5 md:px-5 md:py-3.5 rounded-2xl md:rounded-[1.75rem] shadow-md shadow-accent-brown/5 border border-accent-brown/5 flex items-center gap-2 sm:gap-3 justify-center md:justify-start"
+                                    >
+                                        <div className={`p-1.5 sm:p-2 rounded-xl bg-slate-50 ${stat.color} shrink-0 hidden min-[380px]:flex`}>
+                                            <stat.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-bold text-black leading-none mb-1 truncate">{stat.label}</p>
+                                            <p className="text-lg sm:text-xl font-black text-accent-brown leading-none">{stat.count}</p>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
+
                             <motion.button
-                                whileHover={{ scale: 1.05, backgroundColor: '#000' }}
-                                whileTap={{ scale: 0.95 }}
-                                initial={{ opacity: 0, scale: 0.9 }}
+                                whileHover={{ scale: 1.03, backgroundColor: '#000' }}
+                                whileTap={{ scale: 0.97 }}
+                                initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: 0.5 }}
-                                 onClick={() => {
+                                transition={{ delay: 0.4 }}
+                                onClick={() => {
                                     navigate('/dashboard/customer/reservations/checkout');
                                 }}
-                                className="bg-brand-dark text-white h-[68px] px-8 rounded-[2rem] font-black text-[10px] uppercase tracking-widest flex items-center gap-3 shadow-2xl shadow-brand-dark/20 ml-auto sm:ml-0"
+                                className="bg-brand-dark text-white min-h-[48px] h-[50px] md:h-[54px] px-6 rounded-2xl md:rounded-[1.75rem] font-bold text-xs flex items-center justify-center gap-2.5 shadow-xl shadow-brand-dark/20 cursor-pointer w-full md:w-auto"
                             >
-                                <Plus className="w-5 h-5" /> New Appointment
+                                <Plus className="w-4 h-4 sm:w-5 sm:h-5" /> New Appointment
                             </motion.button>
                         </div>
                     </div>
@@ -369,7 +453,7 @@ const CustomerReservations = () => {
                 {/* Loading / Error States */}
                 {loading && <div className="flex flex-col items-center justify-center py-32 gap-4">
                     <Loader2 className="w-10 h-10 text-brand animate-spin" />
-                    <p className="text-[10px] font-black uppercase tracking-widest text-black">Synchronizing records...</p>
+                    <p className="text-xs font-medium text-black">Synchronizing records...</p>
                 </div>}
 
                 {!loading && error && (
@@ -378,7 +462,7 @@ const CustomerReservations = () => {
                             <AlertCircle className="w-7 h-7" />
                         </div>
                         <div>
-                            <p className="font-black uppercase tracking-widest text-[10px] mb-1">Access Error</p>
+                            <p className="font-bold text-xs mb-1">Access Error</p>
                             <p className="font-bold text-sm">{error}</p>
                         </div>
                     </motion.div>
@@ -386,28 +470,33 @@ const CustomerReservations = () => {
 
                 {/* HI-VET ARCHITECTURE NOIR: FILTER TABS */}
                 {!loading && !error && reservations.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-3 pb-8">
+                    <div 
+                        ref={filterTabsContainerRef}
+                        className="flex md:flex-wrap items-center gap-2 overflow-x-auto md:overflow-visible no-scrollbar snap-x snap-mandatory pb-4 sm:pb-6 -mx-1 px-1 scroll-smooth"
+                    >
                         {tabs.map((tab, i) => {
                             const count = tab === 'All' ? reservations.length : reservations.filter(r => r.status === tab).length;
+                            const isSelected = activeStatus === tab;
                             return (
                                 <motion.button
                                     key={tab}
+                                    data-tab={tab}
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.1 + (i * 0.05) }}
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
+                                    transition={{ delay: 0.1 + (i * 0.04) }}
+                                    whileHover={{ scale: 1.03 }}
+                                    whileTap={{ scale: 0.97 }}
                                     onClick={() => {
                                         setActiveStatus(tab);
                                         setCurrentPage(1);
                                     }}
-                                    className={`group px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-3 cursor-pointer ${activeStatus === tab
-                                        ? 'bg-brand text-white shadow-xl shadow-brand/20'
+                                    className={`shrink-0 snap-start min-h-[44px] px-5 py-2.5 rounded-full text-xs font-bold transition-all flex items-center gap-2.5 cursor-pointer select-none ${isSelected
+                                        ? 'bg-brand text-white shadow-lg shadow-brand/25'
                                         : 'bg-white text-black hover:text-accent-brown border border-accent-brown/5 shadow-sm'
                                         }`}
                                 >
-                                    {tab}
-                                    <span className={`px-2 py-0.5 rounded-lg text-[9px] ${activeStatus === tab ? 'bg-white/20 text-white' : 'bg-slate-50 text-black border border-accent-brown/5'}`}>
+                                    <span>{tab}</span>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isSelected ? 'bg-white/25 text-white' : 'bg-slate-100 text-black border border-accent-brown/5'}`}>
                                         {count}
                                     </span>
                                 </motion.button>
@@ -425,19 +514,19 @@ const CustomerReservations = () => {
                                     key="empty-filter"
                                     initial={{ opacity: 0, scale: 0.95 }}
                                     animate={{ opacity: 1, scale: 1 }}
-                                    className="bg-white rounded-[3rem] p-24 flex flex-col items-center gap-6 text-center shadow-2xl shadow-accent-brown/5 border border-white"
+                                    className="bg-white rounded-[2rem] sm:rounded-[3rem] p-12 sm:p-24 flex flex-col items-center gap-6 text-center shadow-2xl shadow-accent-brown/5 border border-white"
                                 >
-                                    <div className="w-20 h-20 bg-accent-peach/10 rounded-full flex items-center justify-center text-black stroke-[1]">
-                                        <CalendarX className="w-10 h-10" />
+                                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-accent-peach/10 rounded-full flex items-center justify-center text-black stroke-[1]">
+                                        <CalendarX className="w-8 h-8 sm:w-10 sm:h-10" />
                                     </div>
                                     <div>
-                                        <h4 className="font-black text-accent-brown text-2xl tracking-tighter mb-2">No {activeStatus} Records</h4>
-                                        <p className="text-black text-sm font-medium max-w-xs mx-auto">We couldn't find any appointments matching your current filter selection.</p>
+                                        <h4 className="font-black text-accent-brown text-xl sm:text-2xl tracking-tighter mb-2">No {activeStatus} Records</h4>
+                                        <p className="text-black text-xs sm:text-sm font-medium max-w-xs mx-auto">We couldn't find any appointments matching your current filter selection.</p>
                                     </div>
-                                    <button onClick={() => setActiveStatus('All')} className="px-8 py-3 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-accent-brown rounded-full hover:bg-accent-peach/20 transition-all cursor-pointer">Reset Filters</button>
+                                    <button onClick={() => setActiveStatus('All')} className="min-h-[44px] px-8 py-3 bg-slate-50 text-xs font-bold text-accent-brown rounded-full hover:bg-accent-peach/20 transition-all cursor-pointer">Reset Filters</button>
                                 </motion.div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                                     {paginatedReservations.map((res, i) => (
                                         <motion.div
                                             key={res.id}
@@ -445,95 +534,111 @@ const CustomerReservations = () => {
                                             initial={{ opacity: 0, y: 20 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             transition={{ delay: i * 0.05 }}
-                                            className="group relative bg-white rounded-3xl p-6 shadow-xl shadow-accent-brown/5 border border-white hover:border-brand/20 transition-all flex flex-col h-full cursor-pointer overflow-hidden"
-                                            onClick={() => setSelectedDetail(res)}
+                                            className="group relative bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl shadow-accent-brown/5 border border-white hover:border-brand/20 transition-all flex flex-col h-full cursor-pointer overflow-hidden"
+                                            onClick={(e) => {
+                                                lastActiveElementRef.current = e.currentTarget;
+                                                setSelectedDetail(res);
+                                            }}
                                         >
-                                            {/* Header */}
-                                            <div className="flex items-start justify-between gap-4 mb-8 relative z-10">
-                                                <div className="w-16 h-16 bg-slate-50 rounded-[1.2rem] flex flex-col items-center justify-center border border-accent-brown/5 group-hover:bg-brand/5 group-hover:border-brand/10 transition-colors shrink-0 shadow-inner">
-                                                    <p className="text-[10px] font-black uppercase tracking-widest text-black group-hover:text-brand/40 transition-colors mb-0.5">
+                                            {/* Header: Date Block + Status Badge */}
+                                            <div className="flex items-center justify-between gap-3 relative z-10">
+                                                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-50 rounded-2xl flex flex-col items-center justify-center border border-accent-brown/5 group-hover:bg-brand/5 group-hover:border-brand/10 transition-colors shrink-0 shadow-inner">
+                                                    <p className="text-[11px] font-bold text-black group-hover:text-brand/60 transition-colors mb-0.5">
                                                         {new Date(res.date).toLocaleDateString('en-US', { month: 'short' })}
                                                     </p>
-                                                    <p className="text-2xl font-black text-accent-brown tracking-tighter leading-none group-hover:text-brand transition-colors">
+                                                    <p className="text-xl sm:text-2xl font-black text-accent-brown tracking-tighter leading-none group-hover:text-brand transition-colors">
                                                         {new Date(res.date).getDate()}
                                                     </p>
                                                 </div>
-                                                <div className="flex flex-col items-end text-right">
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-brand mb-1">HV-2026-{String(res.id).padStart(6, '0')}</span>
-                                                    <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${STATUS_STYLES[res.status] || 'bg-slate-100 text-slate-500'}`}>
-                                                        {res.status}
+                                                <div className="flex items-center">
+                                                    <span className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-full ${STATUS_STYLES[res.status] || 'bg-slate-100 text-slate-600'}`}>
+                                                        {toTitleCase(res.status)}
                                                     </span>
                                                 </div>
                                             </div>
 
+                                            {/* Reservation ID on its own line */}
+                                            <div className="mt-3 mb-2 flex items-center gap-1.5 relative z-10">
+                                                <span className="text-[10px] font-bold text-black/50">ID:</span>
+                                                <span className="text-xs font-black text-brand tracking-wider break-all">
+                                                    {formatReservationNumber(res.id)}
+                                                </span>
+                                            </div>
+
                                             {/* Body Focus */}
-                                            <div className="flex-1 flex flex-col relative z-10 mb-8">
-                                                <h3 className="text-2xl font-black text-accent-brown tracking-tighter leading-none mb-2">
+                                            <div className="flex-1 flex flex-col relative z-10 mb-4">
+                                                <h3 className="text-lg sm:text-xl font-black text-accent-brown tracking-tight leading-snug mb-2 line-clamp-2">
                                                     {res.service}
                                                 </h3>
-                                                <div className="flex items-center gap-2 mb-6">
-                                                    <span className="text-[10px] font-bold text-black uppercase tracking-widest">For</span>
-                                                    <span className="text-[10px] font-black tracking-widest uppercase text-brand bg-brand/10 px-2 py-0.5 rounded-md">{res.pet_name}</span>
+                                                <div className="flex items-center gap-2 mb-4">
+                                                    <span className="text-xs font-medium text-black">For</span>
+                                                    <span className="text-xs font-bold text-brand bg-brand/10 px-2.5 py-0.5 rounded-lg">
+                                                        {formatName(res.pet_name)}
+                                                    </span>
                                                 </div>
                                                 
-                                                <div className="flex flex-col gap-2 text-[10px] font-bold text-black uppercase tracking-[0.2em] mt-auto">
-                                                    <span className="flex items-center gap-3">
-                                                        <Clock className="w-3.5 h-3.5 text-brand shrink-0" /> <span className="truncate">{res.time} Arrival</span>
+                                                <div className="flex flex-col gap-2 text-xs font-medium text-black mt-auto">
+                                                    <span className="flex items-center gap-2.5">
+                                                        <Clock className="w-4 h-4 text-brand shrink-0" />
+                                                        <span className="truncate">{res.time} arrival</span>
                                                     </span>
-                                                    <span className="flex items-center gap-3 text-black">
-                                                        <MapPin className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{res.location || "Main Clinic"}</span>
+                                                    <span className="flex items-center gap-2.5 text-black">
+                                                        <MapPin className="w-4 h-4 shrink-0 text-brand/70" />
+                                                        <span className="truncate">{formatName(res.location || "Main Clinic")}</span>
                                                     </span>
                                                 </div>
                                             </div>
 
                                             {/* Action Stack (Bottom) */}
-                                            <div className="border-t border-accent-brown/5 pt-6 flex items-center justify-between gap-4 mt-auto relative z-10">
+                                            <div className="border-t border-accent-brown/5 pt-4 flex items-center justify-between gap-3 mt-auto relative z-10">
                                                 <div>
-                                                    <p className="text-[9px] font-black uppercase tracking-widest text-black mb-1 leading-none">Total Value</p>
-                                                    <p className="text-xl font-black italic text-accent-brown tracking-tighter leading-none">₱{res.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                                                    <p className="text-[10px] font-bold text-black mb-1 leading-none">Total value</p>
+                                                    <p className="text-lg sm:text-xl font-black italic text-accent-brown tracking-tight leading-none">₱{res.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
                                                 </div>
 
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 shrink-0">
                                                     {res.status === 'Payment Pending' && res.payment_status === 'unpaid' && (
                                                         <motion.button
-                                                            whileHover={{ scale: 1.05 }}
-                                                            whileTap={{ scale: 0.95 }}
+                                                            whileHover={{ scale: 1.04 }}
+                                                            whileTap={{ scale: 0.96 }}
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 setPaymentSelectionId(res.db_id);
                                                                 setShowMethodSelector(true);
                                                             }}
                                                             disabled={payNowLoading === res.db_id}
-                                                            className="h-10 px-4 rounded-xl bg-blue-600 text-white font-black text-[9px] uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center gap-2 disabled:opacity-50"
+                                                            className="min-h-[44px] h-11 px-4 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                                                         >
-                                                            {payNowLoading === res.db_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CreditCard className="w-3 h-3" />}
+                                                            {payNowLoading === res.db_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CreditCard className="w-3.5 h-3.5" />}
                                                             Pay
                                                         </motion.button>
                                                     )}
 
                                                     {['Pending', 'Confirmed', 'Payment Pending'].includes(res.status) ? (
                                                         <motion.button
-                                                            whileHover={{ scale: 1.05 }}
-                                                            whileTap={{ scale: 0.95 }}
+                                                            whileHover={{ scale: 1.04 }}
+                                                            whileTap={{ scale: 0.96 }}
                                                             onClick={(e) => { e.stopPropagation(); handleCancel(res.db_id); }}
                                                             disabled={cancellingId === res.db_id}
-                                                            className="w-10 h-10 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center shadow-sm cursor-pointer"
+                                                            className="min-h-[44px] h-11 min-w-[44px] w-11 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center shadow-sm cursor-pointer"
+                                                            title="Cancel reservation"
                                                         >
-                                                            {cancellingId === res.db_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-4 h-4" />}
+                                                            {cancellingId === res.db_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
                                                         </motion.button>
                                                     ) : res.status === 'Cancelled' ? (
                                                         <motion.button
-                                                            whileHover={{ scale: 1.05, rotate: 90 }}
-                                                            whileTap={{ scale: 0.95 }}
+                                                            whileHover={{ scale: 1.04, rotate: 90 }}
+                                                            whileTap={{ scale: 0.96 }}
                                                             onClick={(e) => { e.stopPropagation(); handleDeleteReservation(res.db_id); }}
-                                                            className="w-10 h-10 bg-accent-brown text-white rounded-xl flex items-center justify-center hover:bg-black transition-all shadow-md shadow-accent-brown/20 cursor-pointer"
+                                                            className="min-h-[44px] h-11 min-w-[44px] w-11 bg-accent-brown text-white rounded-xl flex items-center justify-center hover:bg-black transition-all shadow-md shadow-accent-brown/20 cursor-pointer"
+                                                            title="Delete reservation"
                                                         >
                                                             <X className="w-4 h-4" />
                                                         </motion.button>
                                                     ) : (
                                                         <motion.button
-                                                            whileHover={{ x: 4 }}
-                                                            className="p-2.5 bg-slate-50 text-black hover:text-brand rounded-xl border border-accent-brown/5 transition-all"
+                                                            whileHover={{ x: 3 }}
+                                                            className="min-h-[44px] h-11 min-w-[44px] w-11 bg-slate-50 text-black hover:text-brand rounded-xl border border-accent-brown/5 transition-all flex items-center justify-center"
                                                         >
                                                             <ChevronRight className="w-4 h-4" />
                                                         </motion.button>
@@ -551,234 +656,273 @@ const CustomerReservations = () => {
 
                         {/* Pagination Controls */}
                         {filteredReservations.length > 0 && (
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-6 py-8 border-t border-accent-brown/5">
-                                <div className="text-left">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black mb-1">Index Summary</p>
-                                    <p className="text-[11px] font-black text-black uppercase tracking-widest">
-                                        Showing <span className="text-accent-brown">{(currentPage - 1) * ITEMS_PER_PAGE + 1} – {Math.min(currentPage * ITEMS_PER_PAGE, filteredReservations.length)}</span> of {filteredReservations.length} records
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <motion.button
-                                        whileHover={currentPage > 1 ? { scale: 1.05, border: '1px solid rgba(255,159,28,0.5)' } : {}}
-                                        whileTap={currentPage > 1 ? { scale: 0.95 } : {}}
-                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                        disabled={currentPage === 1}
-                                        className="h-10 px-5 rounded-xl text-[9px] font-black uppercase tracking-widest bg-white text-black border border-accent-brown/5 hover:bg-white hover:text-brand transition-all disabled:opacity-30 disabled:hover:border-accent-brown/5 cursor-pointer"
-                                    >
-                                        Prev
-                                    </motion.button>
-
-                                    <div className="flex items-center gap-2">
-                                        {[...Array(totalPages)].map((_, i) => {
-                                            const page = i + 1;
-                                            return (
-                                                <motion.button
-                                                    key={page}
-                                                    whileHover={{ scale: 1.1 }}
-                                                    whileTap={{ scale: 0.9 }}
-                                                    onClick={() => setCurrentPage(page)}
-                                                    className={`w-10 h-10 rounded-xl text-[10px] font-black transition-all ${currentPage === page ? 'bg-brand text-white shadow-xl shadow-brand/20' : 'bg-white text-black border border-accent-brown/5 hover:bg-slate-50'}`}
-                                                >
-                                                    {page}
-                                                </motion.button>
-                                            );
-                                        })}
-                                    </div>
-
-                                    <motion.button
-                                        whileHover={currentPage < totalPages ? { scale: 1.05, border: '1px solid rgba(255,159,28,0.5)' } : {}}
-                                        whileTap={currentPage < totalPages ? { scale: 0.95 } : {}}
-                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                        disabled={currentPage === totalPages}
-                                        className="h-10 px-5 rounded-xl text-[9px] font-black uppercase tracking-widest bg-white text-black border border-accent-brown/5 hover:bg-white hover:text-brand transition-all disabled:opacity-30 disabled:hover:border-accent-brown/5 cursor-pointer"
-                                    >
-                                        Next
-                                    </motion.button>
-                                </div>
-                            </motion.div>
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                onPageChange={setCurrentPage}
+                                scrollToTop={true}
+                                className="mt-8 pt-6 border-t border-accent-brown/5"
+                            />
                         )}
                     </div>
                 )}
             </div>
 
-            {/* ── View Details Side Panel ───────────────────────── */}
+            {/* ── View Details / Receipt Summary Modal ───────────────────────── */}
             <AnimatePresence>
                 {selectedDetail && (
                     <>
+                        {/* Backdrop */}
                         <motion.div
                             key="detail-backdrop"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            onClick={() => setSelectedDetail(null)}
-                            className="fixed inset-0 bg-accent-brown/20 backdrop-blur-sm z-50 cursor-pointer"
+                            transition={{ duration: shouldReduceMotion ? 0.1 : 0.2 }}
+                            onClick={closeReceiptModal}
+                            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] cursor-pointer"
+                            aria-hidden="true"
                         />
-                        <motion.div
-                            key="detail-panel"
-                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                            transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-                            className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8 pt-20 sm:pt-24"
-                            onClick={() => setSelectedDetail(null)}
-                        >
-                            <div
-                                className="w-full max-w-4xl bg-white rounded-[2.5rem] shadow-2xl border border-brand/10 flex flex-col md:flex-row max-h-[90vh] overflow-hidden relative"
-                                onClick={e => e.stopPropagation()}
-                            >
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-brand/5 rounded-full -mr-32 -mt-32 blur-3xl pointer-events-none z-0" />
 
-                                {/* Left Side: Informational Details */}
-                                <div className="flex-1 p-8 md:p-12 overflow-y-auto no-scrollbar relative z-10 border-b md:border-b-0 md:border-r border-brand/5 space-y-10">
-                                    {/* Header */}
-                                    <div className="flex items-start justify-between">
+                        {/* Modal Dialog Container */}
+                        <div
+                            className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 pointer-events-none"
+                        >
+                            <motion.div
+                                key="detail-panel"
+                                role="dialog"
+                                aria-modal="true"
+                                aria-labelledby="receipt-summary-title"
+                                aria-describedby="receipt-summary-res-number"
+                                initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 35, scale: 0.98 }}
+                                animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+                                exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 35, scale: 0.98 }}
+                                transition={shouldReduceMotion ? { duration: 0.1 } : { type: 'spring', damping: 28, stiffness: 320 }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-full sm:max-w-xl bg-white rounded-t-[24px] sm:rounded-[24px] shadow-2xl border border-slate-200/90 flex flex-col max-h-[92dvh] sm:max-h-[90vh] overflow-hidden relative pointer-events-auto select-text"
+                            >
+                                {/* Ambient glow */}
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-brand/5 rounded-full -mr-32 -mt-32 blur-3xl pointer-events-none z-0" aria-hidden="true" />
+
+                                {/* Fixed Top Header - Always visible with title & close button */}
+                                <div className="sticky top-0 bg-white z-20 px-5 sm:px-7 py-4 sm:py-5 border-b border-slate-100 flex items-start justify-between gap-4 shrink-0">
+                                    <div className="min-w-0 pr-2">
+                                        <h3 id="receipt-summary-title" className="text-2xl sm:text-3xl font-black italic tracking-tight text-brand-dark leading-tight break-words">
+                                            Receipt Summary
+                                        </h3>
+                                        <span id="receipt-summary-res-number" className="text-xs font-bold text-brand block mt-1 tracking-normal">
+                                            {formatReservationNumber(selectedDetail.tracking_id || selectedDetail.id)}
+                                        </span>
+                                    </div>
+                                    <button
+                                        ref={closeButtonRef}
+                                        type="button"
+                                        onClick={closeReceiptModal}
+                                        aria-label="Close receipt summary"
+                                        className="w-11 h-11 shrink-0 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 hover:text-black flex items-center justify-center transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                                    >
+                                        <X className="w-5 h-5 stroke-[2.2]" />
+                                    </button>
+                                </div>
+
+                                {/* Scrollable Content Body */}
+                                <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 sm:px-7 py-5 sm:py-6 space-y-6 overscroll-contain relative z-10">
+                                    {/* Patient Information */}
+                                    <div>
+                                        <span className="text-xs font-bold text-slate-500 block mb-1.5">
+                                            Patient information
+                                        </span>
                                         <div>
-                                            <h3 className="text-4xl font-black italic tracking-tighter text-brand-dark mb-1">Receipt Summary</h3>
-                                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-black block">
-                                                {selectedDetail.tracking_id || selectedDetail.id}
+                                            <h4 className="font-bold text-lg sm:text-xl text-accent-brown leading-snug break-words">
+                                                {formatName(selectedDetail.pet_name)}
+                                            </h4>
+                                            <p className="text-sm font-medium text-slate-600 mt-0.5 break-words">
+                                                {toTitleCase(selectedDetail.pet_type)}
+                                                {selectedDetail.pet_breed ? ` • ${toTitleCase(selectedDetail.pet_breed)}` : ''}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Visit Details: Status & Schedule */}
+                                    <div className="border-t border-slate-100 pt-5 space-y-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            {/* Current status */}
+                                            <div>
+                                                <span className="text-xs font-bold text-slate-500 block mb-2">
+                                                    Current status
+                                                </span>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${STATUS_STYLES[selectedDetail.status] || 'bg-gray-100 text-gray-700'}`}>
+                                                        {toTitleCase(selectedDetail.status)}
+                                                    </span>
+                                                    {selectedDetail.payment_status === 'paid' ? (
+                                                        <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-600 flex items-center gap-1 border border-emerald-100/50">
+                                                            <CheckCircle className="w-3.5 h-3.5" /> Paid
+                                                        </span>
+                                                    ) : selectedDetail.payment_status === 'unpaid' ? (
+                                                        <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-red-50 text-red-500 border border-red-100/50">
+                                                            Unpaid
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                            </div>
+
+                                            {/* Date & time */}
+                                            <div>
+                                                <span className="text-xs font-bold text-slate-500 block mb-2">
+                                                    Date & time
+                                                </span>
+                                                <div>
+                                                    <h4 className="font-bold text-sm text-accent-brown">
+                                                        {new Date(selectedDetail.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                                    </h4>
+                                                    <p className="text-xs font-medium text-slate-600 mt-0.5">
+                                                        {selectedDetail.time} arrival
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Service location */}
+                                        {selectedDetail.location && (
+                                            <div className="border-t border-slate-100 pt-4">
+                                                <span className="text-xs font-bold text-slate-500 block mb-1">
+                                                    Service location
+                                                </span>
+                                                <h4 className="font-bold text-sm text-accent-brown leading-relaxed break-words">
+                                                    {formatName(selectedDetail.location)}
+                                                </h4>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Your Service Card */}
+                                    <div className="space-y-2">
+                                        <span className="text-xs font-bold text-slate-500 block">
+                                            Your service
+                                        </span>
+                                        <div className="bg-slate-50 border border-slate-200/70 p-4 sm:p-5 rounded-2xl space-y-3">
+                                            {selectedDetail.service && selectedDetail.service.includes(',') ? (
+                                                selectedDetail.service.split(',').map((svc, idx) => (
+                                                    <div key={idx} className="flex items-start justify-between gap-3 text-left">
+                                                        <h4 className="font-bold text-sm sm:text-base text-accent-brown leading-snug break-words flex-1 line-clamp-3">
+                                                            {toTitleCase(svc.trim())}
+                                                        </h4>
+                                                        {idx === 0 && (
+                                                            <span
+                                                                className="font-black text-base sm:text-lg tabular-nums text-accent-brown shrink-0 whitespace-nowrap ml-3"
+                                                                aria-label={`${selectedDetail.total.toFixed(2)} pesos`}
+                                                            >
+                                                                ₱{selectedDetail.total.toFixed(2)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="flex items-start justify-between gap-3 text-left">
+                                                    <h4 className="font-bold text-sm sm:text-base text-accent-brown leading-snug break-words flex-1 line-clamp-3">
+                                                        {toTitleCase(selectedDetail.service || 'Service')}
+                                                    </h4>
+                                                    <span
+                                                        className="font-black text-base sm:text-lg tabular-nums text-accent-brown shrink-0 whitespace-nowrap ml-3"
+                                                        aria-label={`${selectedDetail.total.toFixed(2)} pesos`}
+                                                    >
+                                                        ₱{selectedDetail.total.toFixed(2)}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Payment Details */}
+                                    <div className="border-t border-slate-100 pt-4 space-y-3">
+                                        {selectedDetail.voucher_code && (
+                                            <div className="flex items-center justify-between gap-3">
+                                                <span className="text-xs font-bold text-slate-500">Applied voucher</span>
+                                                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-md">
+                                                    {selectedDetail.voucher_code}
+                                                </span>
+                                            </div>
+                                        )}
+                                        <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-1 xs:gap-3">
+                                            <span className="text-xs font-bold text-slate-500 shrink-0">
+                                                Payment mode
+                                            </span>
+                                            <span className="text-sm font-bold text-brand-dark xs:text-right break-words">
+                                                {selectedDetail.payment_method || (selectedDetail.payment_status === 'paid' ? 'Online (PayMongo)' : 'Pay At Clinic (Cash/Card)')}
                                             </span>
                                         </div>
                                     </div>
 
-                                    {/* Patient Info */}
-                                    <div className="space-y-4 border-t border-brand/5 pt-8">
-                                        <span className="text-[11px] font-black uppercase text-black tracking-[0.3em] block mb-2">Patient Information</span>
-                                        <div>
-                                            <h4 className="font-black text-lg tracking-wider mb-0.5 text-accent-brown">{selectedDetail.pet_name}</h4>
-                                            <p className="text-xs font-bold text-black tracking-widest truncate">{selectedDetail.pet_type} {selectedDetail.pet_breed ? `• ${selectedDetail.pet_breed}` : ''}</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10 border-t border-brand/5 pt-8">
-                                        {/* Status */}
-                                        <div className="space-y-4">
-                                            <span className="text-[11px] font-black uppercase text-black tracking-[0.3em] block mb-2">Current Status</span>
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full ${STATUS_STYLES[selectedDetail.status] || 'bg-gray-100 text-gray-500'}`}>
-                                                    {selectedDetail.status}
-                                                </span>
+                                    {/* Total Settlement */}
+                                    <div className="border-t border-slate-100 pt-5">
+                                        <p className="text-xs font-bold text-slate-500 mb-2">Total settlement</p>
+                                        <div className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+                                            <h2
+                                                className="text-3xl xs:text-4xl sm:text-5xl font-black italic tracking-tight text-brand-dark leading-none tabular-nums"
+                                                aria-label={`${selectedDetail.total.toLocaleString('en-US', { minimumFractionDigits: 2 })} pesos`}
+                                            >
+                                                ₱{selectedDetail.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                            </h2>
+                                            <div className="flex items-center gap-1.5 shrink-0" aria-label={selectedDetail.payment_status === 'paid' ? 'Payment secured and paid' : 'Payment pending settlement'}>
                                                 {selectedDetail.payment_status === 'paid' ? (
-                                                    <span className="text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-600 flex items-center gap-1 border border-emerald-100/50">
-                                                        <CheckCircle className="w-3 h-3" /> Paid
-                                                    </span>
-                                                ) : selectedDetail.payment_status === 'unpaid' ? (
-                                                    <span className="text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full bg-red-50 text-red-500 border border-red-100/50">
-                                                        Unpaid
-                                                    </span>
-                                                ) : null}
-                                            </div>
-                                        </div>
-
-                                        {/* Visit */}
-                                        <div className="space-y-4">
-                                            <span className="text-[11px] font-black uppercase text-black tracking-[0.3em] block mb-2">Date & Time</span>
-                                            <div>
-                                                <h4 className="font-black text-[13px] tracking-wider text-accent-brown mb-1.5">{new Date(selectedDetail.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</h4>
-                                                <p className="text-[11px] font-bold text-black tracking-widest">{selectedDetail.time} Arrival</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Location */}
-                                    {selectedDetail.location && (
-                                    <div className="space-y-4 border-t border-brand/5 pt-8">
-                                        <span className="text-[11px] font-black uppercase text-black tracking-[0.3em] block mb-2">Service Location</span>
-                                        <div>
-                                            <h4 className="font-black text-sm tracking-wider text-accent-brown leading-relaxed">{selectedDetail.location}</h4>
-                                        </div>
-                                    </div>
-                                    )}
-                                </div>
-
-                                {/* Right Side: Checkout / Actions */}
-                                <div className="w-full md:w-[380px] shrink-0 bg-slate-50 flex flex-col relative z-10">
-                                    <div className="p-8 md:p-10 flex-1 overflow-y-auto no-scrollbar flex flex-col justify-between">
-                                        <div className="flex justify-end mb-8 md:mb-0">
-                                            <button onClick={() => setSelectedDetail(null)} className="w-10 h-10 flex items-center justify-center bg-white text-black hover:text-red-500 rounded-full transition-all cursor-pointer border border-accent-brown/5 hover:scale-110 hover:shadow-lg absolute top-8 right-8 md:relative md:top-0 md:right-0 z-20">
-                                                <X className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                        
-                                        <div className="space-y-10 mt-14 md:mt-0 flex-1">
-                                            {/* Service & Price */}
-                                            <div className="space-y-4">
-                                                <span className="text-[11px] font-black uppercase text-black tracking-[0.3em] block">Your Service</span>
-                                                <div className="flex justify-between items-center bg-white p-5 rounded-2xl border border-brand/5 shadow-sm">
-                                                    <div className="min-w-0 pr-4">
-                                                        <h4 className="font-black text-sm tracking-wider text-accent-brown leading-snug">{selectedDetail.service}</h4>
-                                                    </div>
-                                                    <span className="font-black text-lg tabular-nums text-accent-brown shrink-0">₱{selectedDetail.total.toFixed(2)}</span>
-                                                </div>
-                                            </div>
-
-                                            {/* Payment Details */}
-                                            <div className="space-y-2.5 px-1 py-4 border-t border-b border-brand/5">
-                                                {selectedDetail.voucher_code && (
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-black">Applied Voucher</span>
-                                                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-[6px]">{selectedDetail.voucher_code}</span>
-                                                    </div>
+                                                    <>
+                                                        <ShieldCheck className="w-8 h-8 sm:w-10 sm:h-10 text-emerald-500 shrink-0" aria-hidden="true" />
+                                                        <span className="sr-only">Payment secured and paid</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <ShieldCheck className="w-8 h-8 sm:w-10 sm:h-10 text-brand/35 shrink-0" aria-hidden="true" />
+                                                        <span className="sr-only">Payment pending settlement</span>
+                                                    </>
                                                 )}
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-black">Payment Mode</span>
-                                                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-brand">{selectedDetail.payment_method || (selectedDetail.payment_status === 'paid' ? 'Online (PayMongo)' : 'Pay At Clinic (Cash/Card)')}</span>
-                                                </div>
                                             </div>
-
-                                            {/* Total Settlement */}
-                                            <div>
-                                                <p className="text-[10px] font-black text-black uppercase tracking-[0.3em] mb-2">Total Settlement</p>
-                                                <div className="flex items-center gap-4">
-                                                    <h2 className="text-5xl font-black tracking-tighter italic text-brand-dark leading-none">₱{selectedDetail.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</h2>
-                                                    {selectedDetail.payment_status === 'paid' ? <ShieldCheck className="w-10 h-10 text-emerald-400 shrink-0" /> : <ShieldCheck className="w-10 h-10 text-brand/10 shrink-0" />}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Footer actions */}
-                                        <div className="pt-10 space-y-3 mt-auto">
-                                            {selectedDetail.status === 'Payment Pending' && (
-                                                <motion.button
-                                                    whileHover={{ scale: 1.02 }}
-                                                    whileTap={{ scale: 0.98 }}
-                                                    onClick={() => {
-                                                        if (selectedDetail) {
-                                                            const dbId = selectedDetail.db_id;
-                                                            setSelectedDetail(null);
-                                                            handlePayExisting(dbId, 'gcash');
-                                                        }
-                                                    }}
-                                                    disabled={payNowLoading === selectedDetail.db_id}
-                                                    className="w-full bg-blue-600 text-white py-4 rounded-[1rem] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-blue-700 transition-all flex items-center justify-center gap-2 shadow-xl shadow-blue-500/20 cursor-pointer disabled:opacity-60"
-                                                >
-                                                    {payNowLoading === selectedDetail.db_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
-                                                    Pay Now
-                                                </motion.button>
-                                            )}
-                                            {(selectedDetail.status === 'Pending' || selectedDetail.status === 'Confirmed') && (
-                                                <motion.button
-                                                    whileHover={{ scale: 1.02 }}
-                                                    whileTap={{ scale: 0.98 }}
-                                                    onClick={() => {
-                                                        if (selectedDetail) {
-                                                            handleCancel(selectedDetail.db_id);
-                                                            setSelectedDetail(null);
-                                                        }
-                                                    }}
-                                                    disabled={cancellingId === selectedDetail.db_id}
-                                                    className="w-full bg-red-50 text-red-500 border border-red-100 py-4 rounded-[1rem] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-red-100 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 mt-1"
-                                                >
-                                                    {cancellingId === selectedDetail.db_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                                                    Cancel Reservation
-                                                </motion.button>
-                                            )}
                                         </div>
                                     </div>
+
+                                    {/* Footer Actions / Bottom Clearance */}
+                                    <div className="pt-2 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] space-y-3">
+                                        {selectedDetail.status === 'Payment Pending' && (
+                                            <motion.button
+                                                whileHover={shouldReduceMotion ? {} : { scale: 1.01 }}
+                                                whileTap={shouldReduceMotion ? {} : { scale: 0.98 }}
+                                                onClick={() => {
+                                                    if (selectedDetail) {
+                                                        const dbId = selectedDetail.db_id;
+                                                        closeReceiptModal();
+                                                        handlePayExisting(dbId, 'gcash');
+                                                    }
+                                                }}
+                                                disabled={payNowLoading === selectedDetail.db_id}
+                                                className="w-full min-h-[48px] bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white py-3.5 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 cursor-pointer disabled:opacity-60"
+                                            >
+                                                {payNowLoading === selectedDetail.db_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                                                Pay Now
+                                            </motion.button>
+                                        )}
+                                        {(selectedDetail.status === 'Pending' || selectedDetail.status === 'Confirmed') && (
+                                            <motion.button
+                                                whileHover={shouldReduceMotion ? {} : { scale: 1.01 }}
+                                                whileTap={shouldReduceMotion ? {} : { scale: 0.98 }}
+                                                onClick={() => {
+                                                    if (selectedDetail) {
+                                                        const dbId = selectedDetail.db_id;
+                                                        closeReceiptModal();
+                                                        handleCancel(dbId);
+                                                    }
+                                                }}
+                                                disabled={cancellingId === selectedDetail.db_id}
+                                                className="w-full min-h-[48px] bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-600 border border-red-200 py-3.5 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                                            >
+                                                {cancellingId === selectedDetail.db_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                                                Cancel Reservation
+                                            </motion.button>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        </motion.div>
-                        </>
+                            </motion.div>
+                        </div>
+                    </>
                 )}
             </AnimatePresence>
 
@@ -817,7 +961,7 @@ const CustomerReservations = () => {
                                             <X className="w-4 h-4" />
                                         </button>
                                     </div>
-                                    <p className="text-xs font-bold text-black uppercase tracking-widest mb-8">Choose your preferred provider</p>
+                                    <p className="text-xs font-medium text-black mb-8">Choose your preferred provider</p>
 
                                     <div className="space-y-4">
                                         {[
@@ -839,8 +983,8 @@ const CustomerReservations = () => {
                                                     <m.icon className="w-6 h-6" style={{ color: m.color }} />
                                                 </div>
                                                 <div className="text-left flex-1">
-                                                    <p className="font-black text-accent-brown text-sm">{m.name}</p>
-                                                    <p className="text-[10px] font-bold text-black uppercase tracking-tight">{m.sub}</p>
+                                                    <p className="font-bold text-accent-brown text-sm">{m.name}</p>
+                                                    <p className="text-xs font-medium text-black">{m.sub}</p>
                                                 </div>
                                                 <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-accent-brown transition-colors" />
                                             </button>
@@ -849,7 +993,7 @@ const CustomerReservations = () => {
                                 </div>
                                 <div className="p-6 bg-slate-50 flex items-center gap-3">
                                     <ShieldCheck className="w-5 h-5 text-emerald-500" />
-                                    <p className="text-[10px] font-bold text-black uppercase tracking-widest leading-none">Secure Transaction</p>
+                                    <p className="text-xs font-bold text-black leading-none">Secure transaction</p>
                                 </div>
                             </motion.div>
                         </div>

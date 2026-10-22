@@ -665,7 +665,7 @@ const Checkout = () => {
                                 <s.icon className={`transition-all duration-500 ${currentStep === s.step ? 'w-5 h-5' : 'w-4 h-4'}`} />
                             </motion.button>
                             <div className="absolute top-16 left-1/2 -translate-x-1/2 whitespace-nowrap">
-                                <span className={`text-[8px] font-black uppercase tracking-[0.3em] transition-all duration-500 ${currentStep === s.step ? 'text-accent-brown opacity-100' : 'text-black opacity-60'
+                                <span className={`text-xs font-bold transition-all duration-300 ${currentStep === s.step ? 'text-accent-brown opacity-100' : 'text-slate-500 opacity-60'
                                     }`}>
                                     {s.label}
                                 </span>
@@ -702,7 +702,7 @@ const Checkout = () => {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8 relative z-10">
                                         <div className="space-y-4">
-                                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown ml-1">Full Legal Name</label>
+                                            <label className="text-xs font-semibold text-slate-700 ml-1">Full Legal Name</label>
                                             <div className="relative group">
                                                 <input
                                                     type="text"
@@ -717,7 +717,7 @@ const Checkout = () => {
                                             </div>
                                         </div>
                                         <div className="space-y-4">
-                                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown ml-1">Secure Contact Number</label>
+                                            <label className="text-xs font-semibold text-slate-700 ml-1">Secure Contact Number</label>
                                             <div className="relative group">
                                                 <input
                                                     type="tel"
@@ -760,7 +760,7 @@ const Checkout = () => {
                                             </div>
                                         </div>
                                         <div className="space-y-4 md:col-span-2 opacity-60 mt-4">
-                                            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown ml-1">Registered Channel</label>
+                                            <label className="text-xs font-semibold text-slate-700 ml-1">Registered Channel</label>
                                             <div className="relative group">
                                                 <input
                                                     type="email"
@@ -788,7 +788,7 @@ const Checkout = () => {
                                             }
                                             setCurrentStep(2);
                                         }}
-                                        className="px-10 py-4 bg-brand-dark text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-brand-dark/20 flex items-center gap-3 group"
+                                        className="px-8 py-3.5 bg-brand-dark text-white rounded-2xl font-bold text-sm hover:bg-black transition-all shadow-xl shadow-brand-dark/20 flex items-center gap-3 group"
                                     >
                                         Shipping Details
                                         <div className="w-5 h-5 bg-white/10 rounded-lg flex items-center justify-center group-hover:bg-brand transition-colors">
@@ -820,8 +820,8 @@ const Checkout = () => {
                                                     <Truck className="w-6 h-6" />
                                                 </div>
                                                 <div className="text-center">
-                                                    <span className={`text-[10px] font-black uppercase tracking-[0.25em] block mb-1 ${fulfillmentMethod === 'delivery' ? 'text-accent-brown' : 'text-black'}`}>Doorstep Delivery</span>
-                                                    <p className={`text-[8px] font-bold uppercase tracking-widest ${fulfillmentMethod === 'delivery' ? 'text-brand' : 'text-black'}`}>Express Logistic Channel</p>
+                                                    <span className={`text-sm font-bold block mb-1 ${fulfillmentMethod === 'delivery' ? 'text-accent-brown' : 'text-slate-800'}`}>Doorstep Delivery</span>
+                                                    <p className={`text-xs font-medium ${fulfillmentMethod === 'delivery' ? 'text-brand' : 'text-slate-500'}`}>Express Logistic Channel</p>
                                                 </div>
                                             </div>
                                         </button>
@@ -834,8 +834,8 @@ const Checkout = () => {
                                                     <Store className="w-6 h-6" />
                                                 </div>
                                                 <div className="text-center">
-                                                    <span className={`text-[10px] font-black uppercase tracking-[0.25em] block mb-1 ${fulfillmentMethod === 'pickup' ? 'text-accent-brown' : 'text-black'}`}>Direct Pickup</span>
-                                                    <p className={`text-[8px] font-bold uppercase tracking-widest ${fulfillmentMethod === 'pickup' ? 'text-brand' : 'text-black'}`}>Partner Clinic Settlement</p>
+                                                    <span className={`text-sm font-bold block mb-1 ${fulfillmentMethod === 'pickup' ? 'text-accent-brown' : 'text-slate-800'}`}>Direct Pickup</span>
+                                                    <p className={`text-xs font-medium ${fulfillmentMethod === 'pickup' ? 'text-brand' : 'text-slate-500'}`}>Partner Clinic Settlement</p>
                                                 </div>
                                             </div>
                                         </button>
@@ -856,7 +856,7 @@ const Checkout = () => {
                                                 {allAddresses.length > 0 && (
                                                     <button
                                                         onClick={() => setShowAddrModal(true)}
-                                                        className="px-4 py-2 bg-brand/10 hover:bg-brand text-brand-dark hover:text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-sm"
+                                                        className="px-4 py-2 bg-brand/10 hover:bg-brand text-brand-dark hover:text-white rounded-xl font-bold text-xs transition-all shadow-sm"
                                                     >
                                                         Change
                                                     </button>
@@ -867,7 +867,7 @@ const Checkout = () => {
                                                 {loadingData ? (
                                                     <div className="flex flex-col items-center justify-center py-10 opacity-30">
                                                         <Loader2 className="w-8 h-8 animate-spin mb-2" />
-                                                        <p className="text-[10px] font-black uppercase tracking-widest">Loading delivery details...</p>
+                                                        <p className="text-xs font-medium text-slate-500">Loading delivery details...</p>
                                                     </div>
                                                 ) : (
                                                     <>
@@ -877,14 +877,14 @@ const Checkout = () => {
                                                                     <MapPin className="w-5 h-5" />
                                                                 </div>
                                                                 <div>
-                                                                    <p className="text-xs font-black uppercase tracking-widest text-red-500 leading-none mb-1">No saved address found</p>
+                                                                    <p className="text-xs font-bold text-red-500 leading-none mb-1">No saved address found</p>
                                                                     <p className="text-[10px] font-medium text-red-500/60">Please add a delivery address in your account settings to proceed.</p>
                                                                 </div>
                                                             </div>
                                                         )}
                                                         <div className="space-y-4">
                                                             <div className="space-y-2">
-                                                                <label className="text-[10px] font-black uppercase tracking-widest text-black">Delivery Address</label>
+                                                                <label className="text-xs font-semibold text-slate-700">Delivery Address</label>
                                                                 <div className="relative">
                                                                     <input
                                                                         type="text"
@@ -895,7 +895,7 @@ const Checkout = () => {
                                                                     />
                                                                     <button
                                                                         onClick={() => setShowPickerModal(true)}
-                                                                        className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-brand-dark text-white rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-black transition-all"
+                                                                        className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-brand-dark text-white rounded-lg font-bold text-xs hover:bg-black transition-all"
                                                                     >
                                                                         Edit
                                                                     </button>
@@ -924,7 +924,7 @@ const Checkout = () => {
                                                                     <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-md rounded-xl px-4 py-2 shadow-lg border border-white/20">
                                                                         <div className="flex items-center gap-2">
                                                                             <CheckCircle className="w-4 h-4 text-emerald-500" />
-                                                                            <p className="text-[10px] font-black text-brand-dark uppercase tracking-widest">Precision Verified</p>
+                                                                            <p className="text-xs font-bold text-brand-dark">Precision Verified</p>
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -957,7 +957,7 @@ const Checkout = () => {
                                                         <Info className="w-4 h-4" />
                                                     </div>
                                                     <div className="flex-1">
-                                                        <h4 className="text-[11px] font-black text-amber-800 uppercase tracking-wider mb-1">Logistics Optimization Note</h4>
+                                                        <h4 className="text-xs font-bold text-amber-800 mb-1">Logistics Optimization Note</h4>
                                                         <p className="text-[10px] font-medium text-amber-700/70 leading-relaxed">
                                                             Your cart contains items from different partner clinics. If you proceed with pickup, you may need to visit multiple locations.
                                                             <button
@@ -973,7 +973,7 @@ const Checkout = () => {
 
                                             <div className="space-y-4">
                                                 <div className="space-y-2">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-black">Clinic Branch</label>
+                                                    <label className="text-xs font-semibold text-slate-700">Clinic Branch</label>
                                                     <div className="grid grid-cols-1 gap-2">
                                                         {clinics
                                                             .filter(c => {
@@ -1016,13 +1016,13 @@ const Checkout = () => {
                                                                         </div>
                                                                         <div className="flex-1 min-w-0">
                                                                             <div className="flex items-center gap-2 mb-1">
-                                                                                <span className="text-[11px] font-black text-accent-brown uppercase italic tracking-tighter leading-none">{c.name}</span>
+                                                                                <span className="text-sm font-bold text-accent-brown leading-none">{c.name}</span>
                                                                                 {b.is_main && (
-                                                                                    <span className="text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-accent-brown text-white">Central Hub</span>
+                                                                                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-accent-brown text-white">Central Hub</span>
                                                                                 )}
                                                                             </div>
-                                                                            <p className="text-[10px] font-bold text-black uppercase tracking-widest truncate">{b.address_line1}</p>
-                                                                            <p className="text-[9px] font-black text-brand uppercase tracking-widest mt-1 opacity-60">Verified Logistics Branch</p>
+                                                                            <p className="text-xs font-medium text-slate-600 truncate">{b.address_line1}</p>
+                                                                            <p className="text-xs font-medium text-brand mt-1 opacity-75">Verified Logistics Branch</p>
                                                                         </div>
                                                                         <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-brand border-brand' : 'border-gray-100'}`}>
                                                                             {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
@@ -1100,7 +1100,7 @@ const Checkout = () => {
                                                                             {showBranchStreetView ? (
                                                                                 <>
                                                                                     <MapPin className="w-4 h-4" />
-                                                                                    <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">Back to Map</span>
+                                                                                    <span className="text-xs font-bold whitespace-nowrap">Back to Map</span>
                                                                                 </>
                                                                             ) : (
                                                                                 <Eye className="w-5 h-5" />
@@ -1176,7 +1176,7 @@ const Checkout = () => {
                                                                                     )}
                                                                                 </Map>
                                                                                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent p-3">
-                                                                                    <p className="text-[8px] font-black text-white uppercase tracking-widest text-center">Route Preview</p>
+                                                                                    <p className="text-xs font-bold text-white text-center">Route Preview</p>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
@@ -1194,7 +1194,7 @@ const Checkout = () => {
                                 <div className="flex justify-between items-center pt-4">
                                     <button
                                         onClick={() => setCurrentStep(1)}
-                                        className="py-4 px-8 rounded-xl font-black text-[10px] uppercase tracking-widest text-black hover:text-accent-brown transition-colors"
+                                        className="py-3 px-6 rounded-xl font-bold text-xs text-slate-700 hover:text-accent-brown transition-colors"
                                     >
                                         Back to Identity
                                     </button>
@@ -1220,7 +1220,7 @@ const Checkout = () => {
                                             }
                                             setCurrentStep(3);
                                         }}
-                                        className="px-10 py-4 bg-brand text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-brand-dark transition-all shadow-xl shadow-brand/20 flex items-center gap-3 group"
+                                        className="px-8 py-3.5 bg-brand text-white rounded-2xl font-bold text-sm hover:bg-brand-dark transition-all shadow-xl shadow-brand/20 flex items-center gap-3 group"
                                     >
                                         Payment Method
                                         <div className="w-5 h-5 bg-white/10 rounded-lg flex items-center justify-center group-hover:bg-white transition-colors group-hover:text-brand">
@@ -1270,8 +1270,8 @@ const Checkout = () => {
                                                             <method.icon className={`w-6 h-6 ${method.color}`} />
                                                         </div>
                                                         <div className="text-center">
-                                                            <span className={`text-[10px] font-black uppercase tracking-[0.2em] block mb-0.5 ${isActive ? 'text-accent-brown' : 'text-black'}`}>{method.label}</span>
-                                                            <p className={`text-[7px] font-bold uppercase tracking-widest ${isActive ? 'text-brand opacity-100' : 'opacity-0'}`}>Encrypted Channel</p>
+                                                            <span className={`text-sm font-bold block mb-0.5 ${isActive ? 'text-accent-brown' : 'text-slate-800'}`}>{method.label}</span>
+                                                            <p className={`text-xs font-medium ${isActive ? 'text-brand opacity-100' : 'opacity-0'}`}>Encrypted Channel</p>
                                                         </div>
                                                     </div>
                                                     {isActive && (
@@ -1313,7 +1313,7 @@ const Checkout = () => {
                                                     <Gift className="w-6 h-6" />
                                                 </div>
                                                 <div>
-                                                    <p className="text-[10px] font-black uppercase tracking-widest text-brand-dark mb-0.5">Applied Reward</p>
+                                                    <p className="text-xs font-bold text-brand-dark mb-0.5">Applied Reward</p>
                                                     <p className="font-black text-accent-brown text-sm">{appliedVoucher.title}</p>
                                                 </div>
                                             </div>
@@ -1332,7 +1332,7 @@ const Checkout = () => {
                                                         type="text"
                                                         placeholder="Enter voucher code"
                                                         id="voucher-input-step3"
-                                                        className="w-full bg-accent-peach/10 border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-4 outline-none text-accent-brown font-black text-xs uppercase tracking-widest transition-all"
+                                                        className="w-full bg-accent-peach/10 border-2 border-accent-brown/5 focus:border-brand/30 rounded-xl px-4 py-3 outline-none text-accent-brown font-bold text-sm transition-all"
                                                         onKeyDown={(e) => {
                                                             if (e.key === 'Enter') {
                                                                 handleApplyVoucher((e.target as HTMLInputElement).value);
@@ -1346,7 +1346,7 @@ const Checkout = () => {
                                                         handleApplyVoucher(input.value);
                                                     }}
                                                     disabled={applyingVoucher}
-                                                    className="px-8 py-4 bg-brand-dark text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-lg flex items-center gap-2"
+                                                    className="px-6 py-3 bg-brand-dark text-white rounded-xl font-bold text-xs hover:bg-black transition-all shadow-md flex items-center gap-2"
                                                 >
                                                     {applyingVoucher ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
                                                 </button>
@@ -1362,7 +1362,7 @@ const Checkout = () => {
                                                             <Gift className="w-4 h-4 text-brand group-hover:scale-110 transition-transform" />
                                                             <div>
                                                                 <p className="text-[10px] font-black text-accent-brown leading-tight">{v.title}</p>
-                                                                <p className="text-[8px] font-bold text-black uppercase tracking-widest">{v.code}</p>
+                                                                <p className="text-xs font-bold text-slate-800">{v.code}</p>
                                                             </div>
                                                         </button>
                                                     ))}
@@ -1375,14 +1375,14 @@ const Checkout = () => {
                                 <div className="flex justify-between items-center pt-4">
                                     <button
                                         onClick={() => setCurrentStep(2)}
-                                        className="py-4 px-8 rounded-xl font-black text-[10px] uppercase tracking-widest text-black hover:text-accent-brown transition-colors"
+                                        className="py-3 px-6 rounded-xl font-bold text-xs text-slate-700 hover:text-accent-brown transition-colors"
                                     >
                                         Back to Shipment
                                     </button>
                                     <button
                                         onClick={handlePlaceOrder}
                                         disabled={isPlacingOrder || items.length === 0}
-                                        className="px-12 py-5 bg-emerald-600 text-white rounded-3xl font-black text-xs uppercase tracking-[0.2em] hover:bg-emerald-700 transition-all shadow-2xl shadow-emerald-500/20 flex items-center gap-4 group active:scale-95"
+                                        className="px-10 py-4 bg-emerald-600 text-white rounded-2xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-500/20 flex items-center gap-4 group active:scale-95"
                                     >
                                         {isPlacingOrder ? (
                                             <><Loader2 className="w-5 h-5 animate-spin" /> Finalizing...</>
@@ -1431,7 +1431,7 @@ const Checkout = () => {
                                 ))}
                             </div>
 
-                            <div className="space-y-4 pt-8 border-t border-white/20 text-[10px] font-black uppercase tracking-[0.2em] mb-10">
+                            <div className="space-y-4 pt-8 border-t border-white/20 text-xs font-bold mb-10">
                                 <div className="flex justify-between text-white">
                                     <span>Subtotal</span>
                                     <span className="text-white">₱{totalAmount.toLocaleString()}</span>
@@ -1452,7 +1452,7 @@ const Checkout = () => {
 
                             <div className="flex justify-between items-end mb-10 border-b border-white/20 pb-8">
                                 <div>
-                                    <p className="text-[9px] font-black text-white uppercase tracking-[0.3em] mb-1">Total Settlement</p>
+                                    <p className="text-xs font-bold text-white mb-1">Total Settlement</p>
                                     <h2 className="text-4xl font-black tracking-tighter italic text-white leading-none">₱{grandTotal.toLocaleString()}</h2>
                                 </div>
                             </div>
@@ -1497,7 +1497,7 @@ const Checkout = () => {
                                     }
                                 }}
                                 disabled={isPlacingOrder || items.length === 0}
-                                className="w-full py-5 bg-white text-brand rounded-2xl font-black uppercase tracking-[0.25em] text-[11px] hover:bg-black hover:text-white transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-3 disabled:opacity-50 transition-all duration-500"
+                                className="w-full py-4 bg-white text-brand rounded-2xl font-bold text-sm hover:bg-black hover:text-white transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-3 disabled:opacity-50 transition-all duration-300"
                             >
                                 {isPlacingOrder ? (
                                     <><Loader2 className="w-5 h-5 animate-spin" /> Finalizing Transact</>
@@ -1560,9 +1560,9 @@ const Checkout = () => {
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-sm font-black text-accent-brown group-hover:text-brand-dark transition-colors">{addr.full_name}</span>
                                                     {addr.is_default && (
-                                                        <span className="px-2 py-0.5 bg-brand-dark text-white text-[8px] font-black uppercase tracking-widest rounded-full">Default</span>
+                                                        <span className="px-2 py-0.5 bg-brand-dark text-white text-[11px] font-bold rounded-full">Default</span>
                                                     )}
-                                                    <span className="px-2 py-0.5 bg-accent-peach/30 text-black text-[8px] font-black uppercase tracking-widest rounded-full">{addr.label}</span>
+                                                    <span className="px-2 py-0.5 bg-accent-peach/30 text-black text-[11px] font-bold rounded-full">{addr.label}</span>
                                                 </div>
                                                 <span className="text-[10px] font-bold text-black">{addr.phone}</span>
                                             </div>
@@ -1577,13 +1577,13 @@ const Checkout = () => {
                                 <div className="mt-8 flex gap-4">
                                     <button
                                         onClick={() => setShowAddrModal(false)}
-                                        className="flex-1 py-4 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest text-black hover:text-accent-brown transition-colors"
+                                        className="flex-1 py-3 px-6 rounded-xl font-bold text-xs text-slate-700 hover:text-accent-brown transition-colors"
                                     >
                                         Cancel
                                     </button>
                                     <Link
                                         to="/dashboard/customer/account"
-                                        className="flex-1 py-4 px-6 bg-brand-dark text-white rounded-xl font-black text-[10px] uppercase tracking-widest text-center shadow-lg shadow-brand/20 hover:bg-black hover:shadow-xl transition-all"
+                                        className="flex-1 py-3 px-6 bg-brand-dark text-white rounded-xl font-bold text-xs text-center shadow-md hover:bg-black hover:shadow-lg transition-all"
                                     >
                                         Add New Address
                                     </Link>
@@ -1642,7 +1642,7 @@ const Checkout = () => {
                                             setFulfillmentMethod('delivery');
                                             setShowMixedModal(false);
                                         }}
-                                        className="w-full py-4 bg-brand text-white font-black uppercase tracking-widest text-[10px] rounded-2xl hover:bg-brand-dark transition-all shadow-lg shadow-brand/20 flex items-center justify-center gap-2"
+                                        className="w-full py-3.5 bg-brand text-white font-bold text-xs rounded-2xl hover:bg-brand-dark transition-all shadow-md flex items-center justify-center gap-2"
                                     >
                                         <Truck className="w-4 h-4" /> Switch to Home Delivery
                                     </button>
@@ -1651,7 +1651,7 @@ const Checkout = () => {
                                             setHasAcknowledgedMixed(true);
                                             setShowMixedModal(false);
                                         }}
-                                        className="w-full py-4 bg-accent-peach/10 text-accent-brown/40 font-black uppercase tracking-widest text-[10px] rounded-2xl hover:bg-accent-peach/20 transition-all"
+                                        className="w-full py-3 bg-accent-peach/10 text-accent-brown/60 font-bold text-xs rounded-2xl hover:bg-accent-peach/20 transition-all"
                                     >
                                         I Understand, Continue
                                     </button>
@@ -1684,12 +1684,12 @@ const Checkout = () => {
                                 <div className="w-24 h-24 bg-brand rounded-[2.25rem] flex items-center justify-center mx-auto mb-10 shadow-2xl shadow-brand/30">
                                     <ShieldCheck className="w-12 h-12 text-white" />
                                 </div>
-                                <h2 className="text-4xl font-black text-accent-brown tracking-tighter mb-4 italic uppercase leading-none">Order Placed!</h2>
-                                <p className="text-accent-brown/40 font-bold text-sm leading-relaxed max-w-[280px] mx-auto mb-10 uppercase tracking-wide">
+                                <h2 className="text-3xl font-black text-accent-brown tracking-tight mb-3 leading-none">Order Placed!</h2>
+                                <p className="text-slate-500 font-medium text-sm leading-relaxed max-w-[280px] mx-auto mb-8">
                                     Your order has been successfully sent to our clinic. Redirecting to your terminal...
                                 </p>
                                 <div className="flex justify-center items-center gap-4">
-                                    <span className="text-[10px] font-black text-brand uppercase tracking-[0.4em]">Redirecting</span>
+                                    <span className="text-xs font-bold text-brand">Redirecting</span>
                                     <motion.div
                                         animate={{ rotate: 360 }}
                                         transition={{ duration: 1, repeat: Infinity, ease: "linear" }}

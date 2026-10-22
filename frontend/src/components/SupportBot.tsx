@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-    X, Send, RefreshCw, MessageCircle
+    X, Send, RefreshCw
 } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -14,7 +14,11 @@ interface Message {
     options?: string[];
 }
 
-const SupportBot = () => {
+interface SupportBotProps {
+    hideFloating?: boolean;
+}
+
+const SupportBot: React.FC<SupportBotProps> = ({ hideFloating = true }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
@@ -28,6 +32,12 @@ const SupportBot = () => {
         "Account & Security",
         "Talk to AI Assistant"
     ];
+
+    useEffect(() => {
+        const handleOpen = () => setIsOpen(true);
+        window.addEventListener('open-support-bot', handleOpen);
+        return () => window.removeEventListener('open-support-bot', handleOpen);
+    }, []);
 
     useEffect(() => {
         if (messages.length === 0) {
@@ -146,39 +156,33 @@ const SupportBot = () => {
 
     return (
         <>
-            {/* FAB */}
-            <motion.button
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => setIsOpen(!isOpen)}
-                className="fixed bottom-8 right-8 w-16 h-16 bg-brand text-white rounded-full shadow-2xl flex items-center justify-center z-[100] cursor-pointer"
-            >
-                {isOpen ? <X size={28} /> : <MessageCircle size={28} />}
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse" />
-            </motion.button>
-
-            {/* Chat Window */}
+            {/* Chat Window (Triggered via More Menu -> Chat Support or CustomEvent) */}
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9, y: 20, x: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 20, x: 20 }}
-                        className="fixed bottom-28 right-8 w-[90vw] max-w-[400px] h-[70vh] max-h-[600px] bg-white/90 backdrop-blur-2xl rounded-[2.5rem] shadow-[-20px_20px_60px_rgba(0,0,0,0.1)] border border-white/50 z-[100] flex flex-col overflow-hidden"
+                        className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] lg:bottom-28 right-3 sm:right-4 lg:right-8 w-[calc(100vw-1.5rem)] sm:w-[400px] h-[70vh] max-h-[600px] bg-white/95 backdrop-blur-2xl rounded-3xl sm:rounded-[2.5rem] shadow-[-20px_20px_60px_rgba(0,0,0,0.15)] border border-slate-200 z-[100] flex flex-col overflow-hidden"
                     >
                         <div className="p-6 bg-brand-dark flex items-center justify-between text-white">
                             <div className="flex items-center gap-3">
                                 <div>
-                                    <h3 className="font-black italic uppercase tracking-tighter text-sm">Hi-Vet Assistant</h3>
+                                    <h3 className="font-black italic text-sm">Hi-Vet Assistant</h3>
                                     <div className="flex items-center gap-1.5">
                                         <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-                                        <p className="text-[9px] font-bold uppercase tracking-widest opacity-60">Always Online</p>
+                                        <p className="text-xs font-bold opacity-70">Always Online</p>
                                     </div>
                                 </div>
                             </div>
-                            <button onClick={() => setMessages([])} title="Reset Chat" className="text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 transition-opacity">
-                                Reset
-                            </button>
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setMessages([])} title="Reset Chat" className="text-xs font-bold opacity-60 hover:opacity-100 transition-opacity">
+                                    Reset
+                                </button>
+                                <button onClick={() => setIsOpen(false)} title="Close Chat" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
 
                         {/* Messages Area */}
@@ -200,7 +204,7 @@ const SupportBot = () => {
                                                 <button
                                                     key={opt}
                                                     onClick={() => handleOptionClick(opt)}
-                                                    className="px-4 py-2 bg-white border border-slate-200 rounded-full text-[11px] font-black uppercase tracking-widest text-slate-500 hover:border-brand hover:text-brand hover:bg-brand/5 transition-all shadow-sm"
+                                                    className="px-4 py-2 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-600 hover:border-brand hover:text-brand hover:bg-brand/5 transition-all shadow-sm cursor-pointer"
                                                 >
                                                     {opt}
                                                 </button>
@@ -212,7 +216,7 @@ const SupportBot = () => {
                             
                             {isLoading && (
                                 <div className="flex items-center gap-2 text-slate-400 p-2">
-                                    <span className="text-[10px] font-black uppercase tracking-widest">Hi-Vet is thinking...</span>
+                                    <span className="text-xs font-bold">Hi-Vet is thinking...</span>
                                 </div>
                             )}
                         </div>
@@ -238,17 +242,17 @@ const SupportBot = () => {
                                 </form>
                             ) : (
                                 <div className="text-center bg-white/50 p-3 rounded-2xl border border-dashed border-slate-200">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select an option above to begin</p>
+                                    <p className="text-xs font-bold text-slate-400">Select an option above to begin</p>
                                     <button 
                                         onClick={() => setMode('ai')}
-                                        className="mt-2 text-[10px] font-black text-brand uppercase tracking-widest hover:underline"
+                                        className="mt-2 text-xs font-bold text-brand hover:underline cursor-pointer"
                                     >
                                         Or unlock free-chat with AI
                                     </button>
                                 </div>
                             )}
-                            <div className="mt-4 flex items-center justify-center gap-1.5 opacity-20">
-                                <span className="text-[8px] font-black uppercase tracking-widest space-x-2">Secure Care Support</span>
+                            <div className="mt-4 flex items-center justify-center gap-1.5 opacity-40">
+                                <span className="text-[10px] font-bold text-slate-500">Secure Care Support</span>
                             </div>
                         </div>
                     </motion.div>

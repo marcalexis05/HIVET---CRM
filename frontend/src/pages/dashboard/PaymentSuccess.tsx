@@ -68,17 +68,17 @@ const PaymentSuccess = () => {
                 </p>
 
                 <div className="mb-8 px-6 py-4 bg-brand-dark/5 rounded-[2rem] border border-accent-brown/5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-black mb-1">Redirecting to Dashboard</p>
+                    <p className="text-xs font-semibold text-slate-700 mb-1">Redirecting to Dashboard</p>
                     <div className="flex items-center justify-center gap-2">
                         <span className="text-2xl font-black text-accent-brown">{seconds}</span>
-                        <span className="text-[10px] font-bold text-black uppercase tracking-widest">seconds remaining</span>
+                        <span className="text-xs font-medium text-slate-500">seconds remaining</span>
                     </div>
                 </div>
                 
                 <div className="space-y-3">
                     <button 
                         onClick={() => navigate('/dashboard/customer/orders')}
-                        className="w-full bg-brand-dark text-white py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-black transition-all shadow-lg shadow-brand/20 text-[10px] cursor-pointer"
+                        className="w-full bg-brand-dark text-white py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-black transition-all shadow-md shadow-brand/20 cursor-pointer"
                     >
                         View My Orders
                         <ArrowRight className="w-4 h-4" />
@@ -86,7 +86,7 @@ const PaymentSuccess = () => {
                     
                     <button 
                         onClick={() => navigate('/dashboard/customer/catalog')}
-                        className="w-full bg-brand/10 text-accent-brown py-4 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-brand/20 transition-all text-[10px] cursor-pointer"
+                        className="w-full bg-brand/10 text-accent-brown py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-brand/20 transition-all cursor-pointer"
                     >
                         <ShoppingBag className="w-4 h-4" />
                         Continue Shopping
@@ -94,14 +94,14 @@ const PaymentSuccess = () => {
 
                     <button 
                         onClick={() => navigate('/dashboard/customer')}
-                        className="w-full py-4 text-black font-black uppercase tracking-widest text-[9px] transition-colors cursor-pointer"
+                        className="w-full py-3 text-slate-600 font-bold text-xs transition-colors cursor-pointer"
                     >
                         Back to Customer Hub
                     </button>
                 </div>
                 
                 <div className="mt-8 pt-8 border-t border-brand/10">
-                    <p className="text-[10px] text-black font-bold uppercase tracking-widest">
+                    <p className="text-xs text-slate-500 font-medium">
                         A confirmation receipt has been sent to your email.
                     </p>
                 </div>

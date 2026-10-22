@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import LoyaltyAnimation from '../../components/LoyaltyAnimation';
+import { toTitleCase, toSentenceCase, formatName } from '../../utils/textFormatters';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -112,14 +113,14 @@ const DashboardProductCard = ({ p, navigate, triggerFlyAnimation, addToCart }: {
                         <ShoppingBag className="w-5 h-5 text-brand" />
                     </div>
                     <div className="min-w-0">
-                        <p className="text-[9px] font-black text-brand uppercase tracking-widest leading-none mb-1 text-left">Clinic Provider</p>
-                        <p className="text-[11px] font-black text-black uppercase truncate text-left">{p.clinic_name || 'Hivet Partner'}</p>
+                        <p className="text-[10px] font-bold text-brand leading-none mb-1 text-left">Clinic Provider</p>
+                        <p className="text-xs font-black text-black truncate text-left">{formatName(p.clinic_name) || 'Hi-Vet Partner'}</p>
                     </div>
                 </div>
 
                 {p.tag && (
-                    <div className="absolute top-6 left-6 bg-accent-brown/90 backdrop-blur-md px-4 py-1.5 rounded-full shadow-lg z-20">
-                        <span className="text-[9px] font-black text-white uppercase tracking-widest">{p.tag}</span>
+                    <div className="absolute top-4 left-4 bg-accent-brown/90 backdrop-blur-md px-2.5 py-1 rounded-full shadow-sm z-20">
+                        <span className="text-[8px] font-black text-white">{toTitleCase(p.tag)}</span>
                     </div>
                 )}
             </div>
@@ -127,11 +128,11 @@ const DashboardProductCard = ({ p, navigate, triggerFlyAnimation, addToCart }: {
             {/* Info Section */}
             <div className="mb-8 flex-1">
                 <div className="flex items-center gap-3 mb-3">
-                    <span className="text-[10px] font-black text-brand uppercase tracking-widest italic">{p.category || 'Dogs'}</span>
+                    <span className="text-xs font-bold text-brand italic">{toTitleCase(p.category || 'Dogs')}</span>
                     <div className="w-1.5 h-1.5 rounded-full bg-accent-brown/10" />
-                    <span className="text-[10px] font-black text-black/40 uppercase tracking-widest">{p.type || 'Food'}</span>
+                    <span className="text-xs font-bold text-black/50">{toTitleCase(p.type || 'Food')}</span>
                 </div>
-                <h4 className="text-xl font-black text-brand tracking-tighter leading-tight group-hover:scale-[1.02] origin-left transition-transform line-clamp-2 uppercase italic">
+                <h4 className="text-xl font-black text-brand tracking-tight leading-tight group-hover:scale-[1.02] origin-left transition-transform line-clamp-2 italic">
                     {p.name}
                 </h4>
             </div>
@@ -139,10 +140,10 @@ const DashboardProductCard = ({ p, navigate, triggerFlyAnimation, addToCart }: {
             {/* Footer Section */}
             <div className="mt-auto pt-8 border-t border-accent-brown/5 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
                 <div>
-                    <p className="text-[9px] font-black text-black/30 uppercase tracking-[0.3em] mb-2">Retail Price</p>
+                    <p className="text-xs font-bold text-black/40 mb-1">Retail price</p>
                     <div className="flex items-baseline gap-1 font-black text-accent-brown">
-                        <span className="text-xs uppercase">₱</span>
-                        <span className="text-3xl tracking-tighter italic">{p.price.toLocaleString()}</span>
+                        <span className="text-xs">₱</span>
+                        <span className="text-3xl tracking-tight italic">{p.price.toLocaleString()}</span>
                     </div>
                 </div>
 
@@ -287,6 +288,14 @@ const CustomerDashboard = () => {
         return 0;
     };
 
+    const formatItemSummary = (summary?: string) => {
+        if (!summary) return 'Order items';
+        return summary.replace(/\((\d+)\s+items?\)/gi, (_, count) => {
+            const n = parseInt(count, 10);
+            return `(${n} ${n === 1 ? 'item' : 'items'})`;
+        });
+    };
+
     if (loading) {
         return (
             <DashboardLayout title="">
@@ -306,182 +315,209 @@ const CustomerDashboard = () => {
 
     return (
         <DashboardLayout title="" hideHeader={false}>
-            <div className="space-y-6 w-full -mt-4 lg:-mt-6">
+            <div className="space-y-4 sm:space-y-6 w-full -mt-4 lg:-mt-6 pb-28 sm:pb-24 lg:pb-16 px-1 sm:px-2">
 
-                {/* Top Desktop Bento Grid: User Summary, Active Session, Loyalty */}
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                {/* Top Desktop Bento Grid: User Summary (~60%) and Order Status (~40%) */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6">
 
                     {/* 1. Identity & Quick Overview */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="lg:col-span-2 bg-white rounded-[2.5rem] p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col justify-between relative overflow-hidden group"
+                        className="md:col-span-7 lg:col-span-7 bg-white rounded-3xl sm:rounded-[2.5rem] p-4 sm:p-6 lg:p-7 shadow-xl shadow-accent-brown/5 border border-white flex flex-col justify-between relative overflow-hidden group"
                     >
-                        <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:scale-110 transition-transform">
+                        <div className="absolute -top-4 -right-4 p-8 opacity-[0.03] group-hover:scale-105 transition-transform pointer-events-none select-none">
                             <Heart size={140} className="fill-brand text-brand" />
                         </div>
 
-                        <div className="relative z-10 flex items-start justify-between">
-                            <div>
-                                <div className="inline-flex items-center gap-2 bg-orange-50 px-3 py-1 rounded-full mb-4">
-                                    <Award className="w-3.5 h-3.5 text-brand" />
-                                    <span className="text-[9px] font-black text-brand uppercase tracking-[0.2em]">
-                                        {stats?.loyalty?.tier || 'BRONZE'} Elite Member
+                        <div>
+                            {/* Member Badge & Rewards Points in ONE row at the top */}
+                            <div className="relative z-10 flex items-center justify-between gap-3 mb-4 sm:mb-5">
+                                <div className="inline-flex items-center gap-1.5 bg-orange-50/90 border border-brand/10 px-3 py-1.5 rounded-full shrink-0">
+                                    <Award className="w-3.5 h-3.5 text-brand shrink-0" />
+                                    <span className="text-xs font-black text-brand">
+                                        {toTitleCase(stats?.loyalty?.tier || 'Bronze')} Elite Member
                                     </span>
                                 </div>
-                                <h1 className="text-4xl sm:text-5xl font-black text-accent-brown tracking-tighter leading-[0.9] mb-4">
-                                    Welcome back, <br />
-                                    <span className="text-brand uppercase italic">{user?.name || 'Partner'}.</span>
-                                </h1>
-                                <p className="text-xs font-bold text-black/40 uppercase tracking-widest italic">Personal Dashboard</p>
-                            </div>
-                            <div className="flex flex-col items-end">
-                                <span className="text-[10px] font-black uppercase text-black/40 tracking-[0.2em] mb-1">Rewards</span>
-                                <div className="flex items-baseline gap-1">
-                                    <span className="text-4xl font-black text-accent-brown">{stats?.loyalty?.points || 0}</span>
-                                    <span className="text-[10px] font-black text-black/40 uppercase">Pts</span>
+                                <div 
+                                    className="flex items-baseline gap-1 shrink-0 whitespace-nowrap" 
+                                    aria-label={`${stats?.loyalty?.points || 0} points`}
+                                >
+                                    <span className="text-xs font-bold text-black/40 hidden xs:inline">Rewards:</span>
+                                    <span className="text-2xl sm:text-3xl font-black text-accent-brown tabular-nums leading-none">
+                                        {stats?.loyalty?.points || 0}
+                                    </span>
+                                    <span className="text-xs font-bold text-black/50 ml-0.5">pts</span>
                                 </div>
+                            </div>
+
+                            {/* Scaling Greeting below the top row */}
+                            <div className="relative z-10 w-full mb-6 sm:mb-8">
+                                <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-accent-brown tracking-tight leading-tight">
+                                    Welcome back,{' '}
+                                    <span className="text-brand italic block sm:inline text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight break-words">
+                                        {formatName(user?.name) || 'Partner'}.
+                                    </span>
+                                </h1>
+                                <p className="text-xs font-bold text-black/50 mt-1.5">
+                                    Personal dashboard
+                                </p>
                             </div>
                         </div>
 
                         {/* Pet Profiles - Essential CRM Feature */}
-                        <div className="mt-10">
-                            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-black/40 mb-4">Your Family</h3>
-                            <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-                                {myPets.map((pet, idx) => (
-                                    <div key={idx} className="flex-shrink-0 bg-accent-peach/5 border border-accent-brown/5 rounded-[1.5rem] p-4 flex items-center gap-4 w-48 hover:border-brand/30 transition-all cursor-pointer group hover:bg-white hover:shadow-lg hover:shadow-accent-brown/5">
-                                        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-brand shadow-sm border border-accent-brown/5 group-hover:scale-110 transition-transform">
-                                            <span className="text-2xl">{pet.icon}</span>
+                        <div className="relative z-10 mt-2 sm:mt-4">
+                            <h3 className="text-xs font-black text-black/50 mb-3">Your family</h3>
+                            <div 
+                                tabIndex={0}
+                                aria-label="Your pet profiles"
+                                className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-3 overflow-x-auto md:overflow-visible no-scrollbar pb-1 -mx-1 px-1 md:mx-0 md:px-0 snap-x snap-mandatory focus:outline-none focus:ring-2 focus:ring-brand/20 rounded-2xl"
+                            >
+                                {myPets.map((pet, idx) => {
+                                    const isSinglePet = myPets.length <= 1;
+                                    return (
+                                        <div 
+                                            key={idx} 
+                                            tabIndex={0}
+                                            role="button"
+                                            aria-label={`Pet: ${pet.name}, Next appointment: ${pet.next !== 'None' ? formatDateReadable(pet.next) : 'None'}`}
+                                            className={`shrink-0 snap-start bg-accent-peach/5 border border-accent-brown/10 rounded-2xl p-3 sm:p-3.5 flex items-center gap-3 hover:border-brand/30 transition-all cursor-pointer group hover:bg-white hover:shadow-md min-h-[64px] focus:outline-none focus:ring-2 focus:ring-brand/30 ${
+                                                isSinglePet ? 'w-[calc(100%-3.5rem)] xs:w-[calc(100%-4rem)] md:w-auto' : 'w-[78%] xs:w-[80%] md:w-auto'
+                                            }`}
+                                        >
+                                            <div className="w-11 h-11 bg-white rounded-xl flex items-center justify-center text-brand shadow-sm border border-accent-brown/5 group-hover:scale-105 transition-transform shrink-0">
+                                                <span className="text-xl">{pet.icon}</span>
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-black text-accent-brown line-clamp-2 leading-tight break-words">{pet.name}</p>
+                                                <p className="text-xs font-bold text-black/50 line-clamp-2 leading-tight break-words mt-0.5">
+                                                    Next: {pet.next !== 'None' ? formatDateReadable(pet.next) : 'None'}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-black text-accent-brown truncate">{pet.name}</p>
-                                            <p className="text-[10px] font-bold text-black/40 truncate">Next: {pet.next !== 'None' ? formatDateReadable(pet.next) : 'None'}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                                <button className="flex-shrink-0 w-12 h-12 border-2 border-dashed border-accent-brown/10 rounded-2xl flex items-center justify-center text-accent-brown/40 hover:text-brand hover:border-brand transition-all hover:bg-brand/5">
+                                    );
+                                })}
+                                <button 
+                                    type="button"
+                                    aria-label="Add new pet"
+                                    className="shrink-0 snap-start min-h-[64px] w-12 md:w-full border-2 border-dashed border-accent-brown/10 rounded-2xl flex items-center justify-center text-accent-brown/40 hover:text-brand hover:border-brand transition-all hover:bg-brand/5 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                                >
                                     <Plus className="w-5 h-5" />
                                 </button>
                             </div>
                         </div>
                     </motion.div>
 
-                    {/* 2. Active Shipment / Activity - Compact */}
+                    {/* 2. Order Status Card */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
-                        className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-accent-brown/5 border border-white relative overflow-hidden flex flex-col"
+                        className="md:col-span-5 lg:col-span-5 bg-white rounded-3xl sm:rounded-[2.5rem] p-4 sm:p-6 lg:p-7 shadow-xl shadow-accent-brown/5 border border-white relative overflow-hidden flex flex-col justify-between"
                     >
-                        <div className="flex items-center justify-between mb-8">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-orange-50 rounded-2xl flex items-center justify-center text-brand">
-                                    <Truck className="w-5 h-5" />
-                                </div>
-                                <h2 className="text-lg font-black text-accent-brown tracking-tight">Order Status</h2>
-                            </div>
-                            <button
-                                onClick={() => navigate('/dashboard/customer/orders')}
-                                className="text-[10px] font-black text-brand uppercase tracking-widest hover:underline"
-                            >
-                                Details
-                            </button>
-                        </div>
-
-                        {stats?.recent_order ? (
-                            <div className="space-y-6 flex-1 flex flex-col justify-center">
-                                <div className="p-5 bg-accent-peach/5 rounded-[1.5rem] border border-accent-brown/5">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <div className={`w-2 h-2 rounded-full animate-pulse ${getStatusColor(stats.recent_order.status).includes('green') ? 'bg-green-500' : 'bg-brand'}`} />
-                                        <span className="text-[10px] font-black text-accent-brown uppercase tracking-widest truncate">{stats.recent_order.id}</span>
-                                    </div>
-                                    <h4 className="text-sm font-black text-accent-brown truncate mb-2 leading-tight">{stats.recent_order.item_summary}</h4>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <p className="text-[10px] font-bold text-black/40 uppercase tracking-widest">{stats.recent_order.status}</p>
-                                        <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-[0.1em]">
-                                            {formatDateReadable(stats.recent_order.created_at)}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-[8px] font-black uppercase tracking-widest text-accent-brown/50">
-                                        <span>Status</span>
-                                        <span>{((getProgressIndex(stats?.recent_order?.status || '') + 1) / 4 * 100)}%</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 px-1">
-                                        {[0, 1, 2, 3].map((idx) => (
-                                            <div
-                                                key={idx}
-                                                className={`h-1.5 flex-1 rounded-full transition-all duration-700 ${idx <= getProgressIndex(stats?.recent_order?.status || '')
-                                                    ? 'bg-brand'
-                                                    : 'bg-accent-brown/5'
-                                                    }`}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center text-center opacity-10">
-                                <Package size={48} strokeWidth={1} />
-                                <p className="text-[10px] font-black uppercase mt-4 tracking-widest">Everything Delivered</p>
-                            </div>
-                        )}
-                    </motion.div>
-
-                    {/* 3. Loyalty & Action Hub */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                        className="bg-[#0A0A0A] rounded-[2.5rem] p-8 shadow-2xl border border-white/5 text-white flex flex-col justify-between"
-                    >
-                        <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Loyalty Perk</span>
-                        </div>
-
-                        <div className="flex-1 flex items-center justify-center">
-                            <LoyaltyAnimation />
-                        </div>
-
                         <div>
-                            <p className="text-sm font-bold text-white/80 italic mb-8 leading-relaxed">
-                                "{stats?.insight || "Unlock exclusive rewards for your pets."}"
-                            </p>
-                            <button
-                                onClick={() => navigate('/dashboard/customer/loyalty')}
-                                className="w-full py-5 bg-brand text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:brightness-110 shadow-xl shadow-brand/20 transition-all flex items-center justify-center gap-3 active:scale-95"
-                            >
-                                Redeem Points <ArrowRight className="w-4 h-4" />
-                            </button>
+                            {/* Card Header */}
+                            <div className="flex items-center justify-between mb-4 sm:mb-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-orange-50 rounded-2xl flex items-center justify-center text-brand shrink-0">
+                                        <Truck className="w-5 h-5" />
+                                    </div>
+                                    <h2 className="text-lg font-black text-accent-brown tracking-tight">Order Status</h2>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/dashboard/customer/orders')}
+                                    className="min-h-[44px] min-w-[44px] px-3 py-2 -mr-2 rounded-xl flex items-center justify-center text-xs font-bold text-brand hover:underline"
+                                >
+                                    Details
+                                </button>
+                            </div>
+
+                            {stats?.recent_order ? (
+                                <div className="space-y-4 sm:space-y-5">
+                                    {/* Order Box */}
+                                    <div className="p-4 sm:p-5 bg-accent-peach/5 rounded-2xl sm:rounded-[1.5rem] border border-accent-brown/5">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className={`w-2 h-2 rounded-full shrink-0 ${getStatusColor(stats.recent_order.status).includes('green') ? 'bg-green-500' : 'bg-brand'}`} />
+                                            <span className="text-xs font-black text-accent-brown">{stats.recent_order.id}</span>
+                                        </div>
+                                        <h4 className="text-sm font-black text-accent-brown line-clamp-2 leading-snug mb-3 break-words">
+                                            {formatItemSummary(stats.recent_order.item_summary)}
+                                        </h4>
+                                        <div className="flex flex-wrap items-center justify-between gap-1.5 pt-2.5 border-t border-accent-brown/10">
+                                            <span className="text-xs font-black text-brand">
+                                                {toTitleCase(stats.recent_order.status)}
+                                            </span>
+                                            <span className="text-xs font-bold text-black/50">
+                                                {formatDateReadable(stats.recent_order.created_at)}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Progress Bar */}
+                                    <div className="space-y-2 pt-1">
+                                        <div className="flex items-center justify-between text-xs font-black">
+                                            <span className="flex items-center gap-1.5 text-black/60">
+                                                <span>Status:</span>
+                                                <span className="text-brand font-black">{toTitleCase(stats.recent_order.status || 'Pending')}</span>
+                                            </span>
+                                            <span className="text-xs font-black text-accent-brown tabular-nums">
+                                                {Math.round(((getProgressIndex(stats?.recent_order?.status || '') + 1) / 4) * 100)}%
+                                            </span>
+                                        </div>
+                                        <div 
+                                            className="flex items-center gap-1.5"
+                                            role="progressbar"
+                                            aria-valuenow={Math.round(((getProgressIndex(stats?.recent_order?.status || '') + 1) / 4) * 100)}
+                                            aria-valuemin={0}
+                                            aria-valuemax={100}
+                                            aria-label={`Order status: ${stats.recent_order.status || 'Pending'}, ${Math.round(((getProgressIndex(stats?.recent_order?.status || '') + 1) / 4) * 100)}% complete`}
+                                        >
+                                            {[0, 1, 2, 3].map((idx) => (
+                                                <div
+                                                    key={idx}
+                                                    className={`h-2 min-h-[6px] flex-1 rounded-full transition-all duration-700 ${
+                                                        idx <= getProgressIndex(stats?.recent_order?.status || '')
+                                                            ? 'bg-brand shadow-sm shadow-brand/20'
+                                                            : 'bg-accent-brown/10'
+                                                    }`}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="py-12 flex flex-col items-center justify-center text-center opacity-30">
+                                    <Package size={48} strokeWidth={1} />
+                                    <p className="text-xs font-bold mt-4 text-slate-700">Everything Delivered</p>
+                                </div>
+                            )}
                         </div>
                     </motion.div>
                 </div>
 
-                {/* Second Row: Health Pulse & Alerts */}
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-
-                    {/* 4. Health Pulse (CRM Schedule focus) */}
+                {/* Second Row: Health Pulse / Checkup (Full Width) */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6">
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3 }}
-                        className="lg:col-span-3 bg-white rounded-[2.5rem] p-8 shadow-xl shadow-accent-brown/5 border border-white"
+                        transition={{ delay: 0.2 }}
+                        className="col-span-12 bg-white rounded-3xl sm:rounded-[2.5rem] p-4 sm:p-6 lg:p-7 shadow-xl shadow-accent-brown/5 border border-white"
                     >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-10">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500">
-                                    <Activity className="w-6 h-6" />
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
+                            <div className="flex items-center gap-3 sm:gap-4">
+                                <div className="w-11 h-11 sm:w-12 sm:h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 shrink-0">
+                                    <Activity className="w-5 h-5 sm:w-6 sm:h-6" />
                                 </div>
                                 <div>
-                                    <h2 className="text-xl font-black text-accent-brown tracking-tight">Checkup</h2>
-                                    <p className="text-[10px] font-black text-black/40 uppercase tracking-[0.2em]">Pet Schedule</p>
+                                    <h2 className="text-lg sm:text-xl font-black text-accent-brown tracking-tight">Checkup</h2>
+                                    <p className="text-xs font-semibold text-slate-500">Pet Schedule</p>
                                 </div>
                             </div>
                             <button
+                                type="button"
                                 onClick={() => navigate('/dashboard/customer/reservations')}
-                                className="px-6 py-4 bg-accent-peach/10 hover:bg-brand hover:text-white rounded-2xl text-[10px] font-black text-accent-brown uppercase tracking-widest transition-all flex items-center justify-center gap-3 shadow-sm border border-accent-brown/5"
+                                className="min-h-[44px] px-5 py-2.5 bg-accent-peach/10 hover:bg-brand hover:text-white rounded-2xl text-xs font-bold text-accent-brown transition-all flex items-center justify-center gap-2.5 shadow-sm border border-accent-brown/5 active:scale-95"
                             >
                                 Schedule Visit <Plus className="w-4 h-4" />
                             </button>
@@ -489,96 +525,138 @@ const CustomerDashboard = () => {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {stats?.clinic_checkup ? (
-                                <div className="lg:col-span-2 p-5 bg-brand/5 border border-brand/10 rounded-[1.5rem] flex items-center gap-6 group hover:bg-white hover:shadow-xl hover:shadow-brand/5 transition-all">
-                                    <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-brand shadow-sm border border-brand/10 group-hover:scale-110 transition-transform">
-                                        <Calendar className="w-7 h-7" />
+                                <div className="lg:col-span-2 p-4 sm:p-5 bg-brand/5 border border-brand/10 rounded-2xl sm:rounded-[1.5rem] flex items-center gap-4 sm:gap-6 group hover:bg-white hover:shadow-xl hover:shadow-brand/5 transition-all">
+                                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white rounded-2xl flex items-center justify-center text-brand shadow-sm border border-brand/10 group-hover:scale-105 transition-transform shrink-0">
+                                        <Calendar className="w-6 h-6 sm:w-7 sm:h-7" />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <span className="text-[8px] font-black text-brand uppercase tracking-widest bg-brand/10 px-2 py-0.5 rounded-full inline-block mb-2">Confirmed Booking</span>
-                                        <h4 className="text-base font-black text-accent-brown truncate leading-none mb-1">{stats.clinic_checkup.service}</h4>
-                                        <p className="text-[11px] font-bold text-black/40 uppercase tracking-widest mb-1 truncate">{stats.clinic_checkup.clinic_name}</p>
-                                        <p className="text-[10px] font-black text-accent-brown tracking-widest uppercase">
+                                        <span className="text-xs font-bold text-brand bg-brand/10 px-2 py-0.5 rounded-full inline-block mb-1.5">Confirmed booking</span>
+                                        <h4 className="text-sm sm:text-base font-black text-accent-brown truncate leading-none mb-1">{stats.clinic_checkup.service}</h4>
+                                        <p className="text-xs font-bold text-black/50 mb-1 truncate">{formatName(stats.clinic_checkup.clinic_name)}</p>
+                                        <p className="text-xs font-black text-accent-brown">
                                             {formatDateReadable(stats.clinic_checkup.date)} • {stats.clinic_checkup.time}
                                         </p>
                                     </div>
-                                    <button className="w-10 h-10 rounded-full hover:bg-brand hover:text-white flex items-center justify-center text-accent-brown/20 transition-all">
+                                    <button 
+                                        type="button"
+                                        aria-label="View appointment details"
+                                        onClick={() => navigate('/dashboard/customer/reservations')}
+                                        className="w-10 h-10 rounded-full hover:bg-brand hover:text-white flex items-center justify-center text-accent-brown/30 transition-all shrink-0 cursor-pointer"
+                                    >
                                         <ChevronRight className="w-5 h-5" />
                                     </button>
                                 </div>
                             ) : (
-                                <div className="lg:col-span-2 p-6 bg-accent-peach/5 border border-dashed border-accent-brown/10 rounded-[1.5rem] flex flex-col items-center justify-center text-center py-10">
-                                    <div className="w-12 h-12 rounded-full border border-accent-brown/10 flex items-center justify-center mb-4 opacity-30">
+                                <div className="lg:col-span-2 p-6 bg-accent-peach/5 border border-dashed border-accent-brown/10 rounded-2xl sm:rounded-[1.5rem] flex flex-col items-center justify-center text-center py-8 sm:py-10">
+                                    <div className="w-12 h-12 rounded-full border border-accent-brown/10 flex items-center justify-center mb-3 opacity-30">
                                         <Calendar className="w-6 h-6" />
                                     </div>
-                                    <p className="text-[10px] font-black text-black/40 uppercase tracking-widest">No upcoming visits</p>
+                                    <p className="text-xs font-bold text-black/50">No upcoming visits</p>
                                 </div>
                             )}
 
                             {/* Rapid Insights Grid */}
-                            <div className="grid grid-cols-1 gap-4">
-                                <div className="p-5 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col justify-center">
-                                    <span className="text-[9px] font-black text-black/40 uppercase tracking-widest mb-1">Total Appointments</span>
+                            <div className="grid grid-cols-2 md:grid-cols-1 gap-3 sm:gap-4">
+                                <div className="p-4 sm:p-5 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col justify-center">
+                                    <span className="text-xs font-bold text-black/50 mb-1">Total appointments</span>
                                     <div className="flex items-baseline gap-1">
-                                        <span className="text-2xl font-black text-accent-brown tracking-tight">
+                                        <span className="text-xl sm:text-2xl font-black text-accent-brown tracking-tight">
                                             {stats?.medical_metrics?.total_visits || '0'}
                                         </span>
-                                        <span className="text-[10px] font-bold text-black/40 uppercase tracking-widest">Total</span>
+                                        <span className="text-[10px] font-bold text-black/40">Total</span>
                                     </div>
                                 </div>
-                                <div className="p-5 bg-brand/5 border border-brand/5 rounded-2xl flex flex-col justify-center">
-                                    <span className="text-[9px] font-black text-brand uppercase tracking-widest mb-1">Successful Visits</span>
+                                <div className="p-4 sm:p-5 bg-brand/5 border border-brand/5 rounded-2xl flex flex-col justify-center">
+                                    <span className="text-xs font-bold text-brand mb-1">Successful visits</span>
                                     <div className="flex items-baseline gap-1">
-                                        <span className="text-2xl font-black text-brand tracking-tight">
+                                        <span className="text-xl sm:text-2xl font-black text-brand tracking-tight">
                                             {stats?.medical_metrics?.completed_visits || '0'}
                                         </span>
-                                        <span className="text-[10px] font-bold text-brand/40 uppercase tracking-widest">Done</span>
+                                        <span className="text-[10px] font-bold text-brand/40">Done</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </motion.div>
+                </div>
 
-                    {/* 5. Alerts Center - Compact Scrollable */}
+                {/* Third Row: Loyalty Perk Hub and Alerts Center */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6">
+                    {/* 3. Loyalty & Action Hub */}
                     <motion.div
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.4 }}
-                        className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col max-h-[400px]"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="col-span-12 md:col-span-6 bg-[#0A0A0A] rounded-3xl sm:rounded-[2.5rem] p-4 sm:p-6 lg:p-7 shadow-2xl border border-white/5 text-white flex flex-col justify-between"
                     >
-                        <div className="flex items-center justify-between mb-8">
-                            <div className="flex items-center gap-3">
-                                <Bell className="w-5 h-5 text-brand" />
-                                <h2 className="text-lg font-black text-accent-brown tracking-tight">Alerts</h2>
-                            </div>
-                            <span className="px-3 py-1 bg-black text-white text-[10px] font-black rounded-full leading-none">
-                                {stats?.unread_count || 0}
-                            </span>
+                        <div className="flex items-center justify-between mb-4">
+                            <span className="text-xs font-bold text-white/60">Loyalty perk</span>
                         </div>
 
-                        <div className="flex-1 space-y-5 overflow-y-auto no-scrollbar pr-1">
-                            {stats?.alerts && stats.alerts.length > 0 ? (
-                                stats.alerts.map((alert, i) => (
-                                    <div key={alert.id} className="flex gap-4 group cursor-pointer hover:translate-x-1 transition-transform">
-                                        <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${alert.type === 'System' ? 'bg-orange-500' : 'bg-blue-500 shadow-lg shadow-blue-500/20'}`} />
-                                        <div className="min-w-0">
-                                            <h4 className="font-black text-xs text-accent-brown leading-tight group-hover:text-brand transition-colors truncate mb-1">
-                                                {alert.title}
-                                            </h4>
-                                            <p className="text-[10px] font-medium text-black/40 line-clamp-1 truncate">{alert.desc}</p>
-                                        </div>
+                        <div className="flex-1 flex items-center justify-center py-4">
+                            <LoyaltyAnimation />
+                        </div>
+
+                        <div className="mt-4">
+                            <p className="text-xs sm:text-sm font-bold text-white/80 italic mb-6 leading-relaxed">
+                                "{stats?.insight || "Unlock exclusive rewards for your pets."}"
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => navigate('/dashboard/customer/loyalty')}
+                                className="w-full min-h-[44px] py-4 bg-brand text-white rounded-2xl font-black text-xs hover:brightness-110 shadow-xl shadow-brand/20 transition-all flex items-center justify-center gap-2.5 active:scale-95 cursor-pointer"
+                            >
+                                Redeem Points <ArrowRight className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </motion.div>
+
+                    {/* 4. Alerts Center - Compact Scrollable */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                        className="col-span-12 md:col-span-6 bg-white rounded-3xl sm:rounded-[2.5rem] p-4 sm:p-6 lg:p-7 shadow-xl shadow-accent-brown/5 border border-white flex flex-col justify-between"
+                    >
+                        <div>
+                            <div className="flex items-center justify-between mb-4 sm:mb-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-orange-50 rounded-2xl flex items-center justify-center text-brand shrink-0">
+                                        <Bell className="w-5 h-5 text-brand" />
                                     </div>
-                                ))
-                            ) : (
-                                <div className="flex-1 flex flex-col items-center justify-center opacity-10 py-10">
-                                    <Bell size={48} strokeWidth={1} />
-                                    <p className="mt-4 font-black text-[10px] uppercase tracking-[0.2em]">All Caught Up</p>
+                                    <h2 className="text-lg font-black text-accent-brown tracking-tight">Alerts</h2>
                                 </div>
-                            )}
+                                <span className="px-3 py-1 bg-black text-white text-xs font-black rounded-full leading-none">
+                                    {stats?.unread_count || 0}
+                                </span>
+                            </div>
+
+                            <div className="space-y-4 max-h-[280px] overflow-y-auto no-scrollbar pr-1">
+                                {stats?.alerts && stats.alerts.length > 0 ? (
+                                    stats.alerts.map((alert) => (
+                                        <div key={alert.id} className="flex gap-3.5 group cursor-pointer hover:translate-x-1 transition-transform">
+                                            <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${alert.type === 'System' ? 'bg-orange-500' : 'bg-blue-500 shadow-md shadow-blue-500/20'}`} />
+                                            <div className="min-w-0 flex-1">
+                                                <h4 className="font-black text-xs text-accent-brown leading-tight group-hover:text-brand transition-colors truncate mb-1">
+                                                    {alert.title}
+                                                </h4>
+                                                <p className="text-xs font-medium text-black/50 line-clamp-1 truncate">{alert.desc}</p>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="py-8 flex flex-col items-center justify-center opacity-30 text-center">
+                                        <Bell size={40} strokeWidth={1} />
+                                        <p className="mt-3 font-bold text-xs text-black/50">All caught up</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <button
+                            type="button"
                             onClick={() => navigate('/dashboard/customer/alerts')}
-                            className="mt-6 pt-6 border-t border-accent-brown/5 text-[10px] font-black text-accent-brown/40 uppercase tracking-widest hover:text-brand transition-all text-center w-full"
+                            className="mt-6 pt-4 border-t border-accent-brown/10 text-xs font-bold text-accent-brown/60 hover:text-brand transition-all text-center w-full min-h-[44px] flex items-center justify-center cursor-pointer"
                         >
                             View All Activity
                         </button>
@@ -598,8 +676,8 @@ const CustomerDashboard = () => {
                                 <ShoppingBag className="w-6 h-6" />
                             </div>
                             <div>
-                                <h2 className="text-2xl font-black text-accent-brown tracking-tighter uppercase italic">Our <span className="text-brand">Stores</span></h2>
-                                <p className="text-[10px] font-black text-black/40 uppercase tracking-widest">Premium supplies for your family</p>
+                                <h2 className="text-2xl font-black text-accent-brown tracking-tight italic">Our <span className="text-brand">Stores</span></h2>
+                                <p className="text-xs font-medium text-black/50">Premium supplies for your family</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-6">
@@ -614,7 +692,7 @@ const CustomerDashboard = () => {
                             </div>
                             <button
                                 onClick={() => navigate('/dashboard/customer/catalog')}
-                                className="text-[11px] font-black text-brand uppercase tracking-widest flex items-center gap-3 hover:gap-4 transition-all pb-1"
+                                className="text-xs font-bold text-brand flex items-center gap-2 hover:gap-3 transition-all pb-1 cursor-pointer"
                             >
                                 Full Store <ArrowRight className="w-4 h-4" />
                             </button>
@@ -653,7 +731,7 @@ const CustomerDashboard = () => {
                                                 <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-brand shadow-sm mb-4 group-hover:scale-110 transition-transform">
                                                     <ArrowRight className="w-8 h-8" />
                                                 </div>
-                                                <p className="text-[10px] font-black text-accent-brown uppercase tracking-widest leading-loose">View All<br />Products</p>
+                                                <p className="text-xs font-bold text-accent-brown leading-tight">View All<br />Products</p>
                                             </motion.div>
                                         </div>
                                     </>

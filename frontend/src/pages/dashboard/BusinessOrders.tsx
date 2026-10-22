@@ -6,6 +6,7 @@ import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { CustomDropdown } from '../../components/CustomDropdown';
 import BranchSelector from '../../components/BranchSelector';
+import Pagination from '../../components/Pagination';
 
 // ALL_ORDERS moved to state
 
@@ -507,34 +508,12 @@ const BusinessOrders = () => {
                 </div>
 
                 {/* Pagination Controls */}
-                {!loading && totalPages > 1 && (
-                    <div className="flex justify-center items-center gap-4 py-8">
-                        <button
-                            disabled={currentPage === 1}
-                            onClick={() => setCurrentPage(p => p - 1)}
-                            className="w-11 h-11 rounded-xl bg-white border border-accent-peach/20 flex items-center justify-center text-accent-brown hover:bg-brand-dark hover:text-white transition-all disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-accent-brown shadow-xl shadow-accent-brown/5"
-                        >
-                            <ChevronDown className="w-5 h-5 rotate-90" />
-                        </button>
-                        <div className="flex items-center gap-2">
-                            {[...Array(totalPages)].map((_, pi) => (
-                                <button
-                                    key={pi}
-                                    onClick={() => setCurrentPage(pi + 1)}
-                                    className={`w-11 h-11 rounded-xl font-black text-xs transition-all ${currentPage === pi + 1 ? 'bg-brand shadow-lg shadow-brand/20 text-white' : 'bg-white text-accent-brown border border-accent-peach/10 hover:border-brand/50'}`}
-                                >
-                                    {pi + 1}
-                                </button>
-                            ))}
-                        </div>
-                        <button
-                            disabled={currentPage === totalPages}
-                            onClick={() => setCurrentPage(p => p + 1)}
-                            className="w-11 h-11 rounded-xl bg-white border border-accent-peach/20 flex items-center justify-center text-accent-brown hover:bg-brand-dark hover:text-white transition-all disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-accent-brown shadow-xl shadow-accent-brown/5"
-                        >
-                            <ChevronDown className="w-5 h-5 -rotate-90" />
-                        </button>
-                    </div>
+                {!loading && (
+                    <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                    />
                 )}
 
                 {filtered.length === 0 && (

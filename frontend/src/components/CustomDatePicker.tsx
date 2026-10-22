@@ -11,9 +11,20 @@ interface CustomDatePickerProps {
     minDate?: string;
     isRequired?: boolean;
     onModalOpenChange?: (open: boolean) => void;
+    buttonClassName?: string;
+    labelClassName?: string;
 }
 
-export const CustomDatePicker = ({ value, onChange, label, minDate, isRequired, onModalOpenChange }: CustomDatePickerProps) => {
+export const CustomDatePicker = ({ 
+    value, 
+    onChange, 
+    label, 
+    minDate, 
+    isRequired, 
+    onModalOpenChange,
+    buttonClassName,
+    labelClassName
+}: CustomDatePickerProps) => {
     const [isOpen, setIsOpen] = useState(false);
     
     const setOpenState = (open: boolean) => {
@@ -75,14 +86,14 @@ export const CustomDatePicker = ({ value, onChange, label, minDate, isRequired, 
     return (
         <div className="relative w-full">
             {label && (
-                <label className="text-[12px] font-black uppercase tracking-[0.3em] text-accent-brown/70 block mb-5 ml-2 italic">
+                <label className={labelClassName || "text-xs font-semibold text-slate-700 block mb-2 ml-1"}>
                     {label} {isRequired && <span className="text-brand ml-1">*</span>}
                 </label>
             )}
             <button
                 type="button"
                 onClick={() => setOpenState(true)}
-                className={`w-full bg-[#FAFAFA] border-2 transition-all rounded-[2.5rem] py-5 px-8 text-base font-bold flex items-center justify-between text-left ${isOpen ? 'border-brand/40 bg-white ring-4 ring-brand/5 shadow-2xl' : 'border-brand/5 text-accent-brown hover:border-brand/20 shadow-sm italic'}`}
+                className={buttonClassName ? `${buttonClassName} ${isOpen ? 'border-brand/40 bg-white ring-2 ring-brand/10 shadow-md' : ''}` : `w-full bg-[#FAFAFA] border-2 transition-all rounded-[2.5rem] py-5 px-8 text-base font-bold flex items-center justify-between text-left ${isOpen ? 'border-brand/40 bg-white ring-4 ring-brand/5 shadow-2xl' : 'border-brand/5 text-accent-brown hover:border-brand/20 shadow-sm italic'}`}
             >
                 <span className={!value ? 'text-accent-brown/20' : ''}>
                     {value ? new Date(value).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : `Select ${label || 'Date'}`}
@@ -103,12 +114,12 @@ export const CustomDatePicker = ({ value, onChange, label, minDate, isRequired, 
                             {/* Left Side: Summary & Action */}
                             <div className="md:w-1/3 bg-[#F7F6F2] p-10 sm:p-14 flex flex-col justify-between border-b md:border-b-0 md:border-r border-accent-brown/5">
                                 <div className="flex-1 flex flex-col items-center justify-center space-y-12">
-                                    <h4 className="text-4xl font-black text-accent-brown tracking-tighter leading-none italic uppercase text-center">Select Date</h4>
+                                    <h4 className="text-2xl font-bold text-accent-brown tracking-tight leading-none text-center">Select Date</h4>
                                     
                                     <div className="relative w-40 h-40 bg-brand rounded-[3.5rem] flex items-center justify-center shadow-2xl shadow-brand/30">
                                         <div className="absolute -top-4 left-10 w-5 h-10 bg-brand-dark rounded-full" />
                                         <div className="absolute -top-4 right-10 w-5 h-10 bg-brand-dark rounded-full" />
-                                        <span className="text-6xl font-black text-white mt-2 uppercase italic tracking-tighter">{previewDay}</span>
+                                        <span className="text-5xl font-black text-white mt-2 tracking-tight">{previewDay}</span>
                                     </div>
                                 </div>
 
@@ -116,7 +127,7 @@ export const CustomDatePicker = ({ value, onChange, label, minDate, isRequired, 
                                     type="button"
                                     onClick={handleConfirm}
                                     disabled={selectedDay === null}
-                                    className="w-full bg-brand text-white py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] shadow-2xl shadow-brand/20 hover:brightness-110 transition-all italic mt-12 disabled:opacity-20 disabled:cursor-not-allowed"
+                                    className="w-full bg-brand text-white py-4 rounded-2xl font-bold text-sm shadow-xl shadow-brand/20 hover:brightness-110 transition-all mt-8 disabled:opacity-20 disabled:cursor-not-allowed"
                                 >
                                     Finalize Selection
                                 </button>

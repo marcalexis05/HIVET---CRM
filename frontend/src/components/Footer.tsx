@@ -1,18 +1,35 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, X, Shield, Lock, FileText, Globe, HelpCircle, ArrowUpRight, Copy, Check } from 'lucide-react';
+import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, X, Shield, Lock, FileText, Globe, HelpCircle, ArrowUpRight, Copy, Check, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Logo } from './Logo';
 
 interface FooterProps {
     variant?: 'main' | 'business' | 'rider';
+    className?: string;
 }
 
 type LegalSection = 'Help Center' | 'FAQs' | 'About' | 'Customer Support' | 'Technical Support' | 'Safety Center' | 'Terms of Service' | 'Security' | 'Privacy Policy' | 'Cookies' | 'Direct Line' | null;
 
-export function Footer({ variant = 'main' }: FooterProps) {
+export function Footer({ variant = 'main', className = '' }: FooterProps) {
     const [activeSection, setActiveSection] = useState<LegalSection>(null);
     const [isCopied, setIsCopied] = useState(false);
+    const [showFloatingTop, setShowFloatingTop] = useState(false);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            setShowFloatingTop(window.scrollY > 300);
+        };
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    const scrollToTop = () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const isDashboard = typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboard');
+    const showFloating = showFloatingTop && !isDashboard;
     const isBusiness = variant === 'business';
     const isRider = variant === 'rider';
 
@@ -47,49 +64,41 @@ export function Footer({ variant = 'main' }: FooterProps) {
     }, [activeSection]);
 
     return (
-        <footer className="bg-[#0A0A0A] text-white rounded-t-[4rem] relative overflow-hidden">
+        <footer className={`block bg-[#0A0A0A] text-white rounded-t-[2rem] sm:rounded-t-[3rem] relative overflow-hidden ${className}`}>
             {/* Background Accent */}
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand/5 rounded-full blur-[120px] -z-0" />
+            <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-brand/5 rounded-full blur-[100px] -z-0 pointer-events-none" />
             
-            <div className="container mx-auto px-8 pt-16 pb-8 relative z-10">
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-16 mb-12">
+            <div className="container mx-auto px-6 sm:px-8 pt-8 sm:pt-10 pb-6 relative z-10">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-10 mb-8">
                     {/* Prestigious Branding */}
-                    <div className="md:col-span-5 space-y-6">
-                        <div className="space-y-4">
-                            <Link to="/" className="flex items-center gap-4 group w-fit">
-                                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center p-2.5 group-hover:rotate-6 transition-transform shadow-2xl">
-                                    <Logo className="w-full h-full text-brand-dark" />
-                                </div>
-                                <div className="space-y-0.5">
-                                    <span className="text-2xl font-black tracking-tighter uppercase whitespace-nowrap">{brandName}</span>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-brand animate-pulse" />
-                                        <span className="text-[10px] font-black tracking-[0.4em] uppercase text-white/30">Network Live</span>
-                                    </div>
-                                </div>
-                            </Link>
-                            <p className="text-white/40 text-sm font-medium leading-relaxed max-w-sm italic">
-                                "{description}"
-                            </p>
-                        </div>
+                    <div className="md:col-span-5 space-y-3 sm:space-y-4">
+                        <Link to="/" className="flex items-center gap-3 group w-fit">
+                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center p-2 group-hover:rotate-6 transition-transform shadow-lg">
+                                <Logo className="w-full h-full text-brand-dark" />
+                            </div>
+                            <span className="text-xl sm:text-2xl font-black tracking-tight whitespace-nowrap">{brandName}</span>
+                        </Link>
+                        <p className="text-white/40 text-xs sm:text-sm font-medium leading-relaxed max-w-sm italic">
+                            "{description}"
+                        </p>
                         
-                        <div className="flex gap-3">
+                        <div className="flex gap-2.5 pt-1">
                             {[Facebook, Twitter, Instagram, Youtube].map((Icon, i) => (
-                                <button key={i} className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white text-brand-dark transition-all border border-white/10 group">
-                                    <Icon className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                <button key={i} className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center hover:bg-white text-white/80 hover:text-brand-dark transition-all border border-white/10 group">
+                                    <Icon className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
                                 </button>
                             ))}
                         </div>
                     </div>
 
                     {/* Navigation Columns */}
-                    <div className="md:col-span-7 grid grid-cols-2 md:grid-cols-3 gap-8">
-                        <div className="space-y-6">
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-brand">Ecosystem</h4>
-                            <ul className="space-y-4">
+                    <div className="md:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-6">
+                        <div className="space-y-3">
+                            <h4 className="text-xs font-bold text-brand">Ecosystem</h4>
+                            <ul className="space-y-2.5">
                                 {['About', 'Help Center', 'Safety Center'].map((item) => (
                                     <li key={item}>
-                                        <button onClick={() => setActiveSection(item as LegalSection)} className="text-white/40 hover:text-white text-xs font-black uppercase tracking-widest transition-colors flex items-center gap-2 group">
+                                        <button onClick={() => setActiveSection(item as LegalSection)} className="text-white/40 hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5 group">
                                             {item}
                                             <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                                         </button>
@@ -97,12 +106,12 @@ export function Footer({ variant = 'main' }: FooterProps) {
                                 ))}
                             </ul>
                         </div>
-                        <div className="space-y-6">
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-brand">Protocols</h4>
-                            <ul className="space-y-4">
+                        <div className="space-y-3">
+                            <h4 className="text-xs font-bold text-brand">Protocols</h4>
+                            <ul className="space-y-2.5">
                                 {['Terms of Service', 'Security', 'Privacy Policy'].map((item) => (
                                     <li key={item}>
-                                        <button onClick={() => setActiveSection(item as LegalSection)} className="text-white/40 hover:text-white text-xs font-black uppercase tracking-widest transition-colors flex items-center gap-2 group">
+                                        <button onClick={() => setActiveSection(item as LegalSection)} className="text-white/40 hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5 group">
                                             {item}
                                             <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                                         </button>
@@ -110,23 +119,23 @@ export function Footer({ variant = 'main' }: FooterProps) {
                                 ))}
                             </ul>
                         </div>
-                        <div className="col-span-2 md:col-span-1 space-y-6">
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-brand">Direct Sync</h4>
-                            <div className="space-y-6">
-                                <a href={`mailto:${globalEmail}`} className="block border-l-2 border-brand/20 pl-4 py-1 hover:border-brand transition-colors">
-                                    <p className="text-[9px] font-black uppercase tracking-widest text-white/20 mb-1">Electronic Mail</p>
-                                    <p className="text-sm font-bold text-white/70">{globalEmail}</p>
+                        <div className="col-span-2 sm:col-span-1 space-y-3">
+                            <h4 className="text-xs font-bold text-brand">Direct Sync</h4>
+                            <div className="space-y-2.5">
+                                <a href={`mailto:${globalEmail}`} className="block border-l-2 border-brand/30 pl-3 py-0.5 hover:border-brand transition-colors">
+                                    <p className="text-[10px] text-white/40">Email</p>
+                                    <p className="text-xs font-semibold text-white/80 truncate">{globalEmail}</p>
                                 </a>
                                 <button 
                                     onClick={() => setActiveSection('Direct Line')} 
-                                    className="block w-full text-left border-l-2 border-brand/20 pl-4 py-1 hover:border-brand transition-colors cursor-pointer"
+                                    className="block w-full text-left border-l-2 border-brand/30 pl-3 py-0.5 hover:border-brand transition-colors cursor-pointer"
                                 >
-                                    <p className="text-[9px] font-black uppercase tracking-widest text-white/20 mb-1">Direct Line</p>
-                                    <p className="text-sm font-bold text-white/70">{globalPhone}</p>
+                                    <p className="text-[10px] text-white/40">Direct Line</p>
+                                    <p className="text-xs font-semibold text-white/80">{globalPhone}</p>
                                 </button>
-                                <div className="block border-l-2 border-brand/20 pl-4 py-1">
-                                    <p className="text-[9px] font-black uppercase tracking-widest text-white/20 mb-1">HQ Distribution</p>
-                                    <p className="text-[11px] font-medium text-white/40 leading-relaxed uppercase tracking-tight">{globalAddress}</p>
+                                <div className="block border-l-2 border-brand/30 pl-3 py-0.5">
+                                    <p className="text-[10px] text-white/40">Address</p>
+                                    <p className="text-[11px] text-white/50 leading-tight">{globalAddress}</p>
                                 </div>
                             </div>
                         </div>
@@ -134,29 +143,26 @@ export function Footer({ variant = 'main' }: FooterProps) {
                 </div>
 
                 {/* Bottom Bar */}
-                <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
-                    <div className="flex items-center gap-6">
-                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/10">
-                            © 2026 HI-VET INFRASTRUCTURE SOLUTIONS.
-                        </p>
-                    </div>
-                    <div className="flex gap-10">
+                <div className="pt-4 sm:pt-5 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-3 text-center sm:text-left">
+                    <p className="text-[11px] font-medium text-white/20">
+                        © 2026 Hi-Vet Infrastructure Solutions. All rights reserved.
+                    </p>
+                    <div className="flex gap-6">
                         {['Cookies', 'Technical Support'].map((item) => (
-                            <button key={item} onClick={() => setActiveSection(item as LegalSection)} className="text-[10px] font-black uppercase tracking-[0.3em] text-white/10 hover:text-brand transition-colors">
+                            <button key={item} onClick={() => setActiveSection(item as LegalSection)} className="text-[11px] font-medium text-white/20 hover:text-brand transition-colors">
                                 {item}
                             </button>
                         ))}
                     </div>
                 </div>
             </div>
-
-            {/* Professional Protocol Modal */}
+        {/* Professional Protocol Modal */}
             <AnimatePresence>
                 {activeSection && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setActiveSection(null)} className="absolute inset-0 bg-black/95 backdrop-blur-3xl" />
-                        <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} className="relative w-full max-w-2xl bg-[#111] rounded-[3.5rem] p-12 lg:p-16 border border-white/10 shadow-2xl overflow-hidden" >
-                            <button onClick={() => setActiveSection(null)} className="absolute top-10 right-10 w-12 h-12 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-white hover:bg-brand hover:text-accent-brown transition-all" >
+                        <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} className="relative w-full max-w-2xl bg-[#111] rounded-[2rem] sm:rounded-[3rem] p-6 sm:p-10 lg:p-16 border border-white/10 shadow-2xl overflow-hidden" >
+                            <button onClick={() => setActiveSection(null)} className="absolute top-5 right-5 sm:top-8 sm:right-8 w-10 h-10 sm:w-12 sm:h-12 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-white hover:bg-brand hover:text-accent-brown transition-all" >
                                 <X className="w-6 h-6" />
                             </button>
                             <div className="space-y-10">
@@ -168,11 +174,11 @@ export function Footer({ variant = 'main' }: FooterProps) {
                                         })()}
                                     </div>
                                     <div className="space-y-2">
-                                        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-brand">System Protocol</p>
-                                        <h3 className="text-4xl font-black text-white tracking-tighter uppercase">{legalContent[activeSection].title}</h3>
+                                        <p className="text-xs font-bold text-brand">System Protocol</p>
+                                        <h3 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight">{legalContent[activeSection].title}</h3>
                                     </div>
                                 </div>
-                                <p className="text-xl text-white/50 leading-relaxed italic font-medium">"{legalContent[activeSection].content}"</p>
+                                <p className="text-base sm:text-lg text-white/60 leading-relaxed italic font-medium">"{legalContent[activeSection].content}"</p>
                                 
                                 {(activeSection === 'Direct Line' || activeSection === 'Technical Support' || activeSection === 'Customer Support') && (
                                     <div className="flex flex-col sm:flex-row gap-4">
@@ -184,7 +190,7 @@ export function Footer({ variant = 'main' }: FooterProps) {
                                                 setIsCopied(true);
                                                 setTimeout(() => setIsCopied(false), 2000);
                                             }}
-                                            className="flex-1 bg-white/5 border border-white/10 text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] hover:bg-white/10 transition-all flex items-center justify-center gap-3"
+                                            className="flex-1 bg-white/5 border border-white/10 text-white py-5 rounded-2xl font-bold text-xs hover:bg-white/10 transition-all flex items-center justify-center gap-3"
                                         >
                                             {isCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                                             {isCopied ? 'Copied to Clipboard' : 'Copy Number'}
@@ -193,7 +199,7 @@ export function Footer({ variant = 'main' }: FooterProps) {
                                             whileHover={{ scale: 1.02 }}
                                             whileTap={{ scale: 0.98 }}
                                             onClick={() => window.open(`tel:${globalPhone}`, '_self')}
-                                            className="flex-1 bg-brand text-accent-brown py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] hover:brightness-110 transition-all flex items-center justify-center gap-3"
+                                            className="flex-1 bg-brand text-accent-brown py-5 rounded-2xl font-bold text-xs hover:brightness-110 transition-all flex items-center justify-center gap-3"
                                         >
                                             <Phone className="w-4 h-4" />
                                             Place Call Now
@@ -201,10 +207,28 @@ export function Footer({ variant = 'main' }: FooterProps) {
                                     </div>
                                 )}
 
-                                <button onClick={() => setActiveSection(null)} className="w-full bg-white text-black py-6 rounded-2xl font-black uppercase tracking-[0.3em] text-[11px] hover:bg-brand hover:text-accent-brown transition-all" > Close Documentation </button>
+                                <button onClick={() => setActiveSection(null)} className="w-full bg-white text-black py-6 rounded-2xl font-bold text-xs hover:bg-brand hover:text-accent-brown transition-all" > Close Documentation </button>
                             </div>
                         </motion.div>
                     </div>
+                )}
+            </AnimatePresence>
+            {/* Floating Back to Top Button */}
+            <AnimatePresence>
+                {showFloating && (
+                    <motion.button
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        whileHover={{ scale: 1.08 }}
+                        whileTap={{ scale: 0.92 }}
+                        onClick={scrollToTop}
+                        aria-label="Back to top"
+                        title="Back to top"
+                        className="fixed bottom-6 right-6 z-40 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-brand text-white shadow-xl shadow-brand/30 border border-white/20 flex items-center justify-center transition-colors hover:bg-brand-dark"
+                    >
+                        <ArrowUp className="w-5 h-5 stroke-[2.5]" />
+                    </motion.button>
                 )}
             </AnimatePresence>
         </footer>

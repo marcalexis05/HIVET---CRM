@@ -12,6 +12,7 @@ import DashboardLayout from '../../components/DashboardLayout';
 import ModernModal from '../../components/ModernModal';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
+import { toTitleCase, toSentenceCase, formatName } from '../../utils/textFormatters';
 
 const ProductDetail = () => {
     const { id } = useParams();
@@ -404,7 +405,7 @@ const ProductDetail = () => {
             <DashboardLayout title="Loading...">
                 <div className="flex flex-col items-center justify-center py-40 gap-4 opacity-40">
                     <Loader2 className="w-12 h-12 animate-spin text-accent-brown" />
-                    <p className="font-black text-xs uppercase tracking-widest text-accent-brown">Syncing Details...</p>
+                    <p className="font-bold text-xs text-accent-brown">Syncing details...</p>
                 </div>
             </DashboardLayout>
         );
@@ -415,7 +416,7 @@ const ProductDetail = () => {
             <DashboardLayout title="Not Found">
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                     <h2 className="text-2xl font-black text-accent-brown mb-4">Product Not Found</h2>
-                    <button onClick={() => navigate('/dashboard/customer/catalog')} className="bg-accent-brown text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all">
+                    <button onClick={() => navigate('/dashboard/customer/catalog')} className="bg-accent-brown text-white px-8 py-3 rounded-xl font-bold text-xs hover:bg-black transition-all">
                         Back to Store
                     </button>
                 </div>
@@ -472,12 +473,12 @@ const ProductDetail = () => {
                     
                     {/* Navigation Trail */}
                     <div className="flex items-center justify-between mb-6">
-                        <nav className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-black/40">
+                        <nav className="flex items-center gap-3 text-xs font-semibold text-black/50">
                             <Link to="/dashboard/customer/catalog" className="hover:text-brand transition-all">Store</Link>
                             <span>/</span>
-                            <span className="text-black font-black italic uppercase">{product.category}</span>
+                            <span className="text-black font-semibold">{toTitleCase(product.category)}</span>
                             <span>/</span>
-                            <span className="text-black uppercase">{product.name}</span>
+                            <span className="text-black font-semibold">{formatName(product.name)}</span>
                         </nav>
                     </div>
 
@@ -487,7 +488,7 @@ const ProductDetail = () => {
                         <div className="lg:col-span-1">
                             {/* Smaller Vertical Thumbs - only show if multiple unique images exist */}
                             {allImages.length > 1 && (
-                                <div className="flex lg:flex-col gap-2">
+                                <div className="flex lg:col-span-1 gap-2">
                                     {allImages.map((img, i) => (
                                         <button 
                                             key={i} 
@@ -514,12 +515,12 @@ const ProductDetail = () => {
                                 
                                 {/* Professional Tag Layout */}
                                 {product.tag && (
-                                    <div className="absolute top-6 left-6 flex flex-col items-start gap-1.5">
-                                        <div className="bg-brand text-white px-4 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-brand/20 flex items-center gap-2">
-                                            {product.tag}
+                                    <div className="absolute top-4 left-4 flex flex-col items-start gap-1">
+                                        <div className="bg-brand text-white px-2.5 py-0.5 text-[8px] font-bold rounded-full shadow-sm flex items-center gap-1.5 leading-none">
+                                            {toTitleCase(product.tag)}
                                         </div>
-                                        <div className="bg-white/80 backdrop-blur-md text-accent-brown px-3 py-1 text-[7px] font-black uppercase tracking-widest rounded-full border border-accent-brown/5 shadow-sm">
-                                            {product.type} / {product.category}
+                                        <div className="bg-white/80 backdrop-blur-md text-accent-brown px-2 py-0.5 text-[8px] font-bold rounded-full border border-accent-brown/5 shadow-sm leading-none">
+                                            {toTitleCase(product.type)} / {toTitleCase(product.category)}
                                         </div>
                                     </div>
                                 )}
@@ -556,13 +557,13 @@ const ProductDetail = () => {
                                         <div className="w-7 h-7 rounded-full bg-accent-brown/5 flex items-center justify-center text-accent-brown">
                                             <Store className="w-3.5 h-3.5" />
                                         </div>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-black">{product.clinic_name}</span>
+                                        <span className="text-xs font-bold text-black">{formatName(product.clinic_name)}</span>
                                     </div>
-                                    <span className="text-[8px] font-bold text-black uppercase tracking-widest">ID: {product.sku || 'HIVET-00'}</span>
+                                    <span className="text-xs font-semibold text-black/60">ID: {product.sku || 'HIVET-00'}</span>
                                 </div>
 
-                                <h1 className="text-3xl font-black text-accent-brown tracking-tighter uppercase italic leading-[0.9]">
-                                    {product.name}
+                                <h1 className="text-3xl font-black text-accent-brown tracking-tight leading-[1.1]">
+                                    {formatName(product.name)}
                                 </h1>
 
                                 <p className="text-xs font-medium text-black leading-snug max-w-sm italic">
@@ -570,8 +571,8 @@ const ProductDetail = () => {
                                 </p>
 
                                 <div className="pt-4 border-t border-gray-50 flex flex-col">
-                                    <span className="text-[9px] font-black text-black uppercase tracking-widest mb-1">Recommended Value</span>
-                                    <span className="text-4xl font-black text-accent-brown tracking-tighter tabular-nums">₱{finalPrice.toLocaleString()}</span>
+                                    <span className="text-xs font-bold text-black/60 mb-1">Recommended value</span>
+                                    <span className="text-4xl font-black text-accent-brown tracking-tight tabular-nums">₱{finalPrice.toLocaleString()}</span>
                                 </div>
                             </div>
 
@@ -599,7 +600,7 @@ const ProductDetail = () => {
                                                     }}
                                                     className={`h-12 min-w-[100px] border-2 rounded-xl flex items-center justify-center px-6 transition-all ${selectedVariant === v.name ? 'bg-accent-brown border-accent-brown text-white shadow-xl scale-[1.02]' : 'bg-white border-gray-100 text-accent-brown hover:border-brand hover:text-brand'}`}
                                                 >
-                                                    <span className="text-[10px] font-black uppercase tracking-[0.1em]">{v.name}</span>
+                                                    <span className="text-xs font-bold">{toTitleCase(v.name)}</span>
                                                 </button>
                                             ))}
                                         </div>
@@ -609,7 +610,7 @@ const ProductDetail = () => {
                                 {/* Sizes */}
                                 {parsedSizes.length > 0 && (
                                     <div className="space-y-4">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-black">Unit Selection</span>
+                                        <span className="text-xs font-bold text-black">Unit selection</span>
                                         <div className="grid grid-cols-5 gap-3">
                                             {parsedSizes.map((s: any) => (
                                                 <button 
@@ -618,9 +619,9 @@ const ProductDetail = () => {
                                                     setSelectedSize(s.name);
                                                     if (s.image) setActiveImage(s.image);
                                                 }}
-                                                    className={`h-12 border-2 rounded-xl flex items-center justify-center text-[10px] font-black transition-all ${selectedSize === s.name ? 'bg-accent-brown border-accent-brown text-white shadow-xl' : 'bg-white border-gray-100 text-black/40 hover:border-brand hover:text-brand'}`}
+                                                    className={`h-12 border-2 rounded-xl flex items-center justify-center text-xs font-bold transition-all ${selectedSize === s.name ? 'bg-accent-brown border-accent-brown text-white shadow-xl' : 'bg-white border-gray-100 text-black/40 hover:border-brand hover:text-brand'}`}
                                                 >
-                                                    {s.name}
+                                                    {toTitleCase(s.name)}
                                                 </button>
                                             ))}
                                         </div>
@@ -663,7 +664,7 @@ const ProductDetail = () => {
                                             <button 
                                                 disabled={availableStock <= 0}
                                                 onClick={handleBuyNow}
-                                                className="flex-1 h-14 bg-brand text-white rounded-xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-black transition-all shadow-xl shadow-brand/10 active:scale-[0.98] disabled:bg-gray-100 disabled:text-gray-300"
+                                                className="flex-1 h-14 bg-brand text-white rounded-xl flex items-center justify-center gap-3 text-xs font-bold hover:bg-black transition-all shadow-xl shadow-brand/10 active:scale-[0.98] disabled:bg-gray-100 disabled:text-gray-300"
                                             >
                                                 Checkout Now
                                                 <ChevronRight className="w-4 h-4" />
@@ -676,9 +677,9 @@ const ProductDetail = () => {
                                             </button>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2 text-[8px] font-black uppercase tracking-[0.2em] text-black">
+                                    <div className="flex items-center gap-2 text-xs font-bold text-black">
                                         <div className={`w-1.5 h-1.5 rounded-full ${availableStock > 0 ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                                        <span>{availableStock > 0 ? `${availableStock} Precise Units Available` : 'Sold Out Globally'}</span>
+                                        <span>{availableStock > 0 ? `${availableStock} units available` : 'Sold out globally'}</span>
                                     </div>
                                 </div>
                             </div>
@@ -690,8 +691,8 @@ const ProductDetail = () => {
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                             <div className="space-y-6">
                                 <div className="space-y-1">
-                                    <h2 className="text-2xl font-black text-accent-brown tracking-tighter uppercase italic leading-none">Branch Logistics</h2>
-                                    <p className="text-[9px] font-bold text-black uppercase tracking-widest">Physical verification points</p>
+                                    <h2 className="text-2xl font-black text-accent-brown tracking-tight leading-none">Branch Logistics</h2>
+                                    <p className="text-xs font-medium text-black/60">Physical verification points</p>
                                 </div>
                                 <div className="grid grid-cols-1 gap-3">
                                     {(branchAvailability || []).map((branch: any) => (
@@ -706,8 +707,8 @@ const ProductDetail = () => {
                                                         <Store className="w-4 h-4" />
                                                     </div>
                                                     <div>
-                                                        <p className="text-xs font-black text-accent-brown uppercase tracking-tight">{branch.name}</p>
-                                                        <p className="text-[8px] font-black text-accent-brown uppercase tracking-widest mt-0.5">{branch.stock} Units Stocked</p>
+                                                        <p className="text-xs font-bold text-accent-brown">{formatName(branch.name)}</p>
+                                                        <p className="text-[10px] font-medium text-black/60 mt-0.5">{branch.stock} units stocked</p>
                                                     </div>
                                                 </div>
                                                 <ChevronRight className={`w-3.5 h-3.5 ${selectedBranchId === branch.branch_id ? 'text-brand' : 'text-black/10'}`} />
@@ -748,13 +749,13 @@ const ProductDetail = () => {
                                                 <MapPin className="w-4 h-4" />
                                             </div>
                                             <div>
-                                                <p className="text-[8px] font-black text-black/50 uppercase tracking-[0.2em]">Travel Distance</p>
+                                                <p className="text-[9px] font-bold text-black/50">Travel distance</p>
                                                 <p className="text-xs font-black text-accent-brown">{distance}</p>
                                             </div>
                                         </div>
                                         <button 
                                             onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&origin=${userLoc?.lat},${userLoc?.lng}&destination=${product.clinic_lat},${product.clinic_lng}`, '_blank')}
-                                            className="h-8 px-4 bg-accent-brown text-white rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-black transition-all"
+                                            className="h-8 px-4 bg-accent-brown text-white rounded-lg text-xs font-bold hover:bg-black transition-all"
                                         >
                                             Route Plan
                                         </button>
@@ -768,8 +769,8 @@ const ProductDetail = () => {
                     <div className="mt-20 border-t border-gray-50 pt-10">
                         <div className="flex items-center justify-between mb-8">
                             <div className="space-y-1">
-                                <h2 className="text-3xl font-black text-accent-brown tracking-tighter uppercase italic leading-none">Customer Review</h2>
-                                <p className="text-[9px] font-bold text-black uppercase tracking-widest">Global Customer Feedback</p>
+                                <h2 className="text-3xl font-black text-accent-brown tracking-tight leading-none">Customer Reviews</h2>
+                                <p className="text-xs font-medium text-black/60">Global customer feedback</p>
                             </div>
                             <div className="flex items-baseline gap-3">
                                 <span className="text-5xl font-black text-brand italic">{avgRating.toFixed(1)}</span>
@@ -777,7 +778,7 @@ const ProductDetail = () => {
                                     <div className="flex text-yellow-400 gap-0.5">
                                         {[1, 2, 3, 4, 5].map(s => <Star key={s} className="w-3.5 h-3.5 fill-current" />)}
                                     </div>
-                                    <p className="text-[8px] font-black text-black/40 uppercase tracking-widest">{totalReviews} Customer Reviews</p>
+                                    <p className="text-xs font-medium text-black/60">{totalReviews} customer reviews</p>
                                 </div>
                             </div>
                         </div>
@@ -791,13 +792,13 @@ const ProductDetail = () => {
                                                 {rev.customer_name?.[0]}
                                             </div>
                                             <div>
-                                                <h5 className="text-xs font-black text-accent-brown uppercase tracking-tight">{rev.customer_name}</h5>
+                                                <h5 className="text-xs font-bold text-accent-brown">{formatName(rev.customer_name)}</h5>
                                                 <div className="flex text-yellow-400 mt-0.5 gap-0.5">
                                                     {[...Array(5)].map((_, si) => <Star key={si} className={`w-2.5 h-2.5 ${si < rev.rating ? 'fill-current' : 'text-gray-100'}`} />)}
                                                 </div>
                                             </div>
                                         </div>
-                                        <span className="text-[8px] font-bold text-black uppercase tracking-widest font-mono italic">{new Date(rev.created_at).toLocaleDateString()}</span>
+                                        <span className="text-[10px] font-medium text-black/50 font-mono">{new Date(rev.created_at).toLocaleDateString()}</span>
                                     </div>
                                     <p className="text-xs font-medium text-black italic leading-relaxed opacity-80 group-hover:opacity-100 transition-opacity px-1">"{rev.comment}"</p>
                                 </div>
@@ -808,15 +809,15 @@ const ProductDetail = () => {
                     {/* Related Products Syndicate (The Randomizer) */}
                     <div className="mt-20 pt-10 border-t border-gray-100">
                         <div className="text-center mb-10 space-y-3">
-                            <h2 className="text-4xl font-black text-accent-brown tracking-tighter uppercase italic leading-none">Discover More</h2>
+                            <h2 className="text-4xl font-black text-accent-brown tracking-tight leading-none">Discover More</h2>
                             <div className="w-12 h-0.5 bg-brand mx-auto shadow-md shadow-brand/20" />
-                            <p className="text-[8px] font-bold text-black uppercase tracking-[0.4em] pt-2">Handpicked for You</p>
+                            <p className="text-xs font-medium text-black/60 pt-2">Handpicked for you</p>
                         </div>
                         
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                             {relatedProducts.map((p) => (
                                 <motion.div 
-                                    key={p.id}
+                                    key={p.id} 
                                     whileHover={{ y: -5 }}
                                     onClick={() => {
                                         navigate(`/dashboard/customer/catalog/${p.id}`);
@@ -827,8 +828,8 @@ const ProductDetail = () => {
                                     <div className="aspect-[4/5] bg-gray-50 rounded-[2rem] mb-4 relative overflow-hidden flex items-center justify-center p-8 border-2 border-transparent group-hover:border-brand/40 group-hover:bg-white group-hover:shadow-xl transition-all duration-700">
                                         <img src={p.image} className="w-full h-full object-contain mix-blend-multiply transition-transform duration-1000 group-hover:scale-105" alt={p.name} />
                                         {p.tag && (
-                                            <div className="absolute top-4 left-4 bg-brand text-white px-3 py-1 text-[7px] font-black uppercase tracking-[0.2em] rounded-full shadow-lg">
-                                                {p.tag}
+                                            <div className="absolute top-2.5 left-2.5 bg-brand text-white px-2 py-0.5 text-[8px] font-bold rounded-full shadow-sm leading-none">
+                                                {toTitleCase(p.tag)}
                                             </div>
                                         )}
                                         <div className="absolute bottom-4 right-4 w-8 h-8 bg-white rounded-lg flex items-center justify-center text-accent-brown shadow-md opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all">
@@ -836,8 +837,8 @@ const ProductDetail = () => {
                                         </div>
                                     </div>
                                     <div className="space-y-1.5 px-1">
-                                        <p className="text-[8px] font-black text-black/50 uppercase tracking-[0.25em]">{p.category}</p>
-                                        <h4 className="text-sm font-black text-brand transition-colors truncate uppercase italic tracking-tight leading-none">{p.name}</h4>
+                                        <p className="text-xs font-bold text-black/50">{toTitleCase(p.category)}</p>
+                                        <h4 className="text-sm font-black text-brand transition-colors truncate tracking-tight leading-none">{formatName(p.name)}</h4>
                                         <div className="flex items-center justify-between pt-0.5">
                                             <p className="text-lg font-black text-accent-brown tracking-tighter tabular-nums">₱{Number(p.price).toLocaleString()}</p>
                                             <div className="flex items-center gap-1.5 grayscale group-hover:grayscale-0 transition-all">

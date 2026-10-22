@@ -85,7 +85,7 @@ const ModernModal = ({
                                 <button
                                     onClick={onConfirm}
                                     disabled={loading}
-                                    className={`w-full text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer ${getButtonStyles()} disabled:opacity-50`}
+                                    className={`w-full text-white py-3.5 rounded-2xl font-bold text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer ${getButtonStyles()} disabled:opacity-50`}
                                 >
                                     {loading ? (
                                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -97,7 +97,7 @@ const ModernModal = ({
                             <button
                                 onClick={onClose}
                                 disabled={loading}
-                                className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-accent-brown/30 hover:bg-accent-peach/10 transition-all border-2 border-accent-peach/20 hover:border-transparent cursor-pointer disabled:opacity-50"
+                                className="w-full py-3.5 rounded-2xl font-bold text-xs text-slate-500 hover:bg-slate-100 transition-all border-2 border-slate-200 hover:border-transparent cursor-pointer disabled:opacity-50"
                             >
                                 {onConfirm ? cancelLabel : 'Dismiss'}
                             </button>

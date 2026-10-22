@@ -6,6 +6,7 @@ import {
     X, MapPin, Store, Phone, User, Clock, ShieldCheck
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
+import Pagination from '../../components/Pagination';
 import RiderBottomNav from '../../components/RiderBottomNav';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -397,37 +398,7 @@ const RiderOrders = () => {
                                 </div>
 
                                 {/* Modern Pagination */}
-                                {filteredOrders.length > ITEMS_PER_PAGE && (
-                                    <div className="flex items-center justify-center gap-2 pt-6">
-                                        <button
-                                            onClick={() => { setCurrentPage(prev => Math.max(1, prev - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                                            disabled={currentPage === 1}
-                                            className="w-10 h-10 bg-white border border-accent-brown/10 rounded-xl flex items-center justify-center text-accent-brown hover:bg-black hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
-                                        >
-                                            <ArrowLeft size={16} />
-                                        </button>
-                                        <div className="flex items-center gap-2 bg-white border border-accent-brown/10 p-1 rounded-xl shadow-sm">
-                                            {Array.from({ length: Math.ceil(filteredOrders.length / ITEMS_PER_PAGE) }).map((_, i) => (
-                                                <button
-                                                    key={i}
-                                                    onClick={() => { setCurrentPage(i + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                                                    className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${
-                                                        currentPage === i + 1 ? 'bg-brand-dark text-white shadow-md' : 'bg-transparent text-accent-brown/40 hover:text-accent-brown'
-                                                    }`}
-                                                >
-                                                    {i + 1}
-                                                </button>
-                                            ))}
-                                        </div>
-                                        <button
-                                            onClick={() => { setCurrentPage(prev => Math.min(Math.ceil(filteredOrders.length / ITEMS_PER_PAGE), prev + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                                            disabled={currentPage === Math.ceil(filteredOrders.length / ITEMS_PER_PAGE)}
-                                            className="w-10 h-10 bg-white border border-accent-brown/10 rounded-xl flex items-center justify-center text-accent-brown hover:bg-black hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
-                                        >
-                                            <ArrowRight size={16} />
-                                        </button>
-                                    </div>
-                                )}
+                                <Pagination currentPage={currentPage} totalPages={Math.ceil(filteredOrders.length / ITEMS_PER_PAGE)} onPageChange={setCurrentPage} scrollToTop={true} />
                             </div>
                         )}
                     </div>

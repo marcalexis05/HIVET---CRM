@@ -74,7 +74,7 @@ body {
   }
 
   .btn-primary {
-    @apply bg-brand-dark text-white px-6 xs:px-10 py-3 xs:py-5 rounded-full font-black transition-all hover:scale-105 hover:bg-brand-dark/90 active:scale-95 shadow-lg shadow-brand/20 uppercase tracking-widest text-[10px] xs:text-sm;
+    @apply bg-brand-dark text-white px-6 xs:px-10 py-3 xs:py-4 rounded-full font-black transition-all hover:scale-105 hover:bg-brand-dark/90 active:scale-95 shadow-lg shadow-brand/20 text-xs xs:text-sm;
   }
 
   .heading-xl {

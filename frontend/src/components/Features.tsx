@@ -46,7 +46,7 @@ export const Features = () => {
             <div className="container mx-auto px-6 relative z-10">
                 <div className="flex flex-col lg:flex-row lg:items-end justify-between mb-16 gap-8">
                     <div className="max-w-2xl space-y-4">
-                        <div className="inline-flex items-center gap-2 text-brand-dark uppercase tracking-[0.4em] text-[10px] font-black">
+                        <div className="inline-flex items-center gap-2 text-brand-dark text-xs font-bold">
                             <div className="w-8 h-[2px] bg-brand-dark" />
                             Core Capabilities
                         </div>
@@ -75,13 +75,13 @@ export const Features = () => {
                                         <f.icon className="w-7 h-7" />
                                     </div>
                                     {f.accent && (
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-brand-dark opacity-40">
+                                        <span className="text-xs font-bold text-brand-dark opacity-60">
                                             {f.accent}
                                         </span>
                                     )}
                                 </div>
                                 <div className="mt-auto">
-                                    <h3 className="text-2xl lg:text-3xl font-black mb-4 uppercase tracking-tighter leading-none">
+                                    <h3 className="text-2xl lg:text-3xl font-black mb-4 tracking-tight leading-tight">
                                         {f.title}
                                     </h3>
                                     <p className={`text-base lg:text-lg font-medium leading-relaxed max-w-sm ${f.color.includes('text-white') ? 'opacity-80' : 'text-accent-brown/60'}`}>

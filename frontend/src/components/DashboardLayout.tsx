@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { NavLink, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -8,12 +8,17 @@ import {
     LogOut, LayoutDashboard, ShoppingBag, Users, Settings, Bell,
     Calendar, Award, ShoppingCart, X, Plus, Minus, Wallet,
     BarChart2, UserCircle, Menu, Store, Truck, Check, MapPin,
-    ChevronRight, ChevronLeft, Search, Zap, HelpCircle, Clock, Package, Shield
+    ChevronRight, ChevronLeft, Search, Zap, HelpCircle, Clock, Package, Shield,
+    MessageCircle, Home
 } from 'lucide-react';
 import { Logo } from './Logo';
-import { Footer } from './Footer';
 import { AdminFooter } from './AdminFooter';
 import SupportBot from './SupportBot';
+import { formatName } from '../utils/textFormatters';
+import {
+    calculateSideTabDimensions,
+    runStandardScreenOverlapChecks
+} from '../utils/moreMenuGeometry';
 
 const MotionLink = motion(Link);
 
@@ -33,6 +38,8 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     const location = useLocation();
     const [isCartOpen, setIsCartOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+    const [isShortScreen, setIsShortScreen] = useState(() => typeof window !== 'undefined' && window.innerHeight < 520);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem('hivet_sidebar_collapsed') === 'true');
@@ -40,6 +47,102 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     const [notifications, setNotifications] = useState<any[]>([]);
 
     const isCustomer = user?.role === 'customer';
+    const shouldReduceMotion = useReducedMotion();
+    const isRtl = typeof document !== 'undefined' && (document.dir === 'rtl' || document.documentElement.dir === 'rtl');
+    const moreButtonRef = useRef<HTMLButtonElement | null>(null);
+    const prevMoreOpenRef = useRef(isMoreMenuOpen);
+
+    const sideTabRef = useRef<HTMLDivElement | null>(null);
+
+    // Responsive Side Tab Dimensions
+    const [sideTabDims, setSideTabDims] = useState(() => {
+        if (typeof window === 'undefined') return { width: 220, height: 300, rowHeight: 52, iconSize: 44, fontSizePx: 14, gap: 5, padding: 12 };
+        return calculateSideTabDimensions(window.innerWidth, window.innerHeight);
+    });
+
+    // Responsively adapt side tab menu sizing & rotation
+    useEffect(() => {
+        const updateDimensions = () => {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            setIsShortScreen(h < 560);
+            setSideTabDims(calculateSideTabDimensions(w, h));
+        };
+        window.addEventListener('resize', updateDimensions);
+        return () => window.removeEventListener('resize', updateDimensions);
+    }, []);
+
+    // Dev-time assertion check for geometries
+    useEffect(() => {
+        if (import.meta.env.DEV) {
+            const check = runStandardScreenOverlapChecks();
+            if (!check.passed) {
+                console.warn('[MoreMenu] Overlap check detected issues:', check.results);
+            }
+        }
+    }, []);
+
+    // Return focus to "More" button when menu closes
+    useEffect(() => {
+        if (prevMoreOpenRef.current && !isMoreMenuOpen) {
+            moreButtonRef.current?.focus();
+        }
+        prevMoreOpenRef.current = isMoreMenuOpen;
+    }, [isMoreMenuOpen]);
+
+    // Gracefully close "More" popup and revert dummy history entry
+    const closeMoreMenu = () => {
+        setIsMoreMenuOpen(false);
+        if (typeof window !== 'undefined' && window.history.state?.hivetMoreMenu) {
+            window.history.back();
+        }
+    };
+
+    // Keyboard (Escape, ArrowUp, ArrowDown) & Hardware/Browser Back button handlers for "More" popup
+    useEffect(() => {
+        if (!isMoreMenuOpen) return;
+
+        window.history.pushState({ hivetMoreMenu: true }, '');
+
+        const handlePopState = () => {
+            setIsMoreMenuOpen(false);
+        };
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                closeMoreMenu();
+                return;
+            }
+
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Home' || e.key === 'End') {
+                const menuItems = sideTabRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
+                if (!menuItems || menuItems.length === 0) return;
+
+                const activeIndex = Array.from(menuItems).indexOf(document.activeElement as HTMLButtonElement);
+                e.preventDefault();
+
+                if (e.key === 'Home') {
+                    menuItems[0]?.focus();
+                } else if (e.key === 'End') {
+                    menuItems[menuItems.length - 1]?.focus();
+                } else if (e.key === 'ArrowDown') {
+                    const next = activeIndex < menuItems.length - 1 ? activeIndex + 1 : 0;
+                    menuItems[next]?.focus();
+                } else if (e.key === 'ArrowUp') {
+                    const prev = activeIndex > 0 ? activeIndex - 1 : menuItems.length - 1;
+                    menuItems[prev]?.focus();
+                }
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        window.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            window.removeEventListener('popstate', handlePopState);
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isMoreMenuOpen]);
 
     const itemsRef = useRef(items);
     useEffect(() => {
@@ -219,7 +322,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     ];
 
     const userLinks = [
-        { name: 'Dashboard', path: '/dashboard/customer', icon: LayoutDashboard },
+        { name: 'Home', path: '/dashboard/customer', icon: Home },
         { name: 'Store', path: '/dashboard/customer/catalog', icon: ShoppingBag },
         { name: 'Orders', path: '/dashboard/customer/orders', icon: ShoppingBag },
         { name: 'Visits', path: '/dashboard/customer/reservations', icon: Calendar },
@@ -287,7 +390,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                             {!isCollapsed && (
                                 <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col overflow-hidden">
                                     <h2 className="text-2xl font-black text-accent-brown tracking-tighter leading-none mb-1 whitespace-nowrap">Hi-Vet</h2>
-                                    <p className="text-[10px] font-black text-brand-dark transition-all opacity-60 uppercase tracking-widest leading-none whitespace-nowrap">
+                                    <p className="text-xs font-bold text-brand-dark transition-all opacity-70 leading-none whitespace-nowrap">
                                         {user?.role === 'super_admin' ? 'Super Admin' :
                                             user?.role === 'system_admin' ? 'System Admin' :
                                                 user?.role === 'business' ? 'Partner Portal' :
@@ -316,7 +419,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                             }
                                         }}
                                         end={link.name === 'Dashboard'}
-                                        className={() => `flex items-center rounded-2xl font-black text-xs uppercase tracking-widest transition-all group relative ${isCollapsed ? 'justify-center p-4' : 'gap-3 px-4 py-4'} ${isParentActive ? 'bg-brand text-white shadow-lg shadow-brand/20 ml-2' : 'text-accent-brown hover:text-brand hover:bg-brand/5'}`}
+                                        className={() => `flex items-center rounded-2xl font-bold text-xs transition-all group relative ${isCollapsed ? 'justify-center p-4' : 'gap-3 px-4 py-4'} ${isParentActive ? 'bg-brand text-white shadow-lg shadow-brand/20 ml-2' : 'text-accent-brown hover:text-brand hover:bg-brand/5'}`}
                                     >
                                         {() => (
                                             <>
@@ -350,7 +453,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                                         
                                                         return (
                                                             <div key={sub.name}>
-                                                                <Link to={sub.path} className={`flex items-center gap-2.5 font-black text-xs uppercase tracking-widest transition-all ${(isSubActive && !isLaunchActive) || (isSubActive && !sub.submenus) ? 'text-brand drop-shadow-sm' : 'text-black opacity-80 hover:opacity-100 hover:text-brand'}`}>
+                                                                <Link to={sub.path} className={`flex items-center gap-2.5 font-semibold text-xs transition-all ${(isSubActive && !isLaunchActive) || (isSubActive && !sub.submenus) ? 'text-brand drop-shadow-sm' : 'text-black opacity-80 hover:opacity-100 hover:text-brand'}`}>
                                                                     {sub.icon && <sub.icon className="w-4 h-4 opacity-70" />}
                                                                     {sub.name}
                                                                 </Link>
@@ -361,7 +464,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                                                         {sub.submenus.map((deep: any) => {
                                                                             const deepActive = location.search.includes(deep.path.split('?')[1]);
                                                                             return (
-                                                                                <Link key={deep.name} to={deep.path} className={`flex items-center gap-2 font-black text-[11px] uppercase tracking-widest transition-all ${deepActive ? 'text-brand' : 'text-black opacity-60 hover:opacity-100 hover:text-brand'}`}>
+                                                                                <Link key={deep.name} to={deep.path} className={`flex items-center gap-2 font-medium text-xs transition-all ${deepActive ? 'text-brand' : 'text-black opacity-60 hover:opacity-100 hover:text-brand'}`}>
                                                                                     {deep.icon && <deep.icon className="w-3.5 h-3.5 opacity-70" />}
                                                                                     {deep.name}
                                                                                 </Link>
@@ -390,13 +493,13 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                 {!isCollapsed && (
                                     <motion.div initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} className="min-w-0 flex-1 overflow-hidden">
                                         <p className="text-[11px] font-black text-accent-brown truncate leading-none mb-1 text-xs">{user?.clinic_name || user?.name || 'My Account'}</p>
-                                        <p className="text-[8px] font-bold text-accent-brown/40 uppercase tracking-widest truncate">{user?.email}</p>
+                                        <p className="text-xs font-medium text-slate-500 truncate">{user?.email}</p>
                                     </motion.div>
                                 )}
                             </div>
                             <div className="absolute inset-0 bg-brand/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
                         </div>
-                        <button onClick={() => setIsLogoutModalOpen(true)} className={`w-full mt-4 py-4 rounded-2xl flex items-center justify-center gap-3 text-red-500 bg-red-50 hover:bg-red-500 hover:text-white transition-all font-black text-[10px] uppercase tracking-widest shadow-sm ${isCollapsed ? 'px-0' : 'px-4'}`}>
+                        <button onClick={() => setIsLogoutModalOpen(true)} className={`w-full mt-4 py-4 rounded-2xl flex items-center justify-center gap-3 text-red-500 bg-red-50 hover:bg-red-500 hover:text-white transition-all font-bold text-xs shadow-sm ${isCollapsed ? 'px-0' : 'px-4'}`}>
                             <LogOut className="w-4 h-4 shrink-0" /> 
                             {!isCollapsed && <span>Log Out Portal</span>}
                         </button>
@@ -410,9 +513,9 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                 <Menu className="w-5 h-5" />
                             </button>
                             <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black text-accent-brown/30 uppercase tracking-widest hidden xs:block">Hub</span>
+                                <span className="text-xs font-bold text-slate-400 hidden xs:block">Hub</span>
                                 <ChevronRight className="w-3 h-3 text-accent-brown/20 hidden xs:block" />
-                                <h1 className="text-lg font-black text-accent-brown tracking-tighter uppercase whitespace-nowrap">{currentPathName}</h1>
+                                <h1 className="text-lg font-bold text-accent-brown tracking-tight whitespace-nowrap">{currentPathName}</h1>
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
@@ -433,7 +536,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                             <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 p-4 bg-brand-dark rounded-3xl text-white flex items-center justify-between shadow-xl">
                                 <div className="flex items-center gap-4">
                                     <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center"><MapPin className="w-6 h-6" /></div>
-                                    <div><p className="text-[10px] font-bold opacity-60 uppercase tracking-widest leading-none mb-1">Active Hub</p><h4 className="text-sm font-black tracking-tight">{branchContext.name} | {branchContext.address}</h4></div>
+                                    <div><p className="text-xs font-semibold opacity-75 leading-none mb-1">Active Hub</p><h4 className="text-sm font-bold tracking-tight">{branchContext.name} | {branchContext.address}</h4></div>
                                 </div>
                             </motion.div>
                         )}
@@ -442,20 +545,97 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                         </motion.div>
                     </main>
                     {!hideFooter && (
-                        (user?.role === 'rider' || user?.role === 'business') ? (
-                            <Footer variant={user.role as any} />
-                        ) : (user?.role === 'super_admin' || user?.role === 'system_admin') ? (
+                        (user?.role === 'super_admin' || user?.role === 'system_admin') ? (
                             <AdminFooter />
                         ) : null
                     )}
                 </div>
-                {/* Reuse Original Notifications logic for Sidebar (simplified) */}
-  {/* Support Bot Widget */}
+                {/* Non-Customer Mobile Drawer */}
+                <AnimatePresence>
+                    {isMobileMenuOpen && (
+                        <>
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-brand-dark/60 backdrop-blur-md z-[60]" />
+                            <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} className="fixed top-0 right-0 h-full w-[280px] bg-white z-[70] flex flex-col">
+                                <div className="p-6 flex items-center justify-between border-b border-brand-dark/5 bg-accent-peach/10">
+                                    <span className="font-bold text-xs text-slate-500">Navigation</span>
+                                    <button onClick={() => setIsMobileMenuOpen(false)} className="w-8 h-8 flex items-center justify-center bg-white rounded-lg"><X className="w-4 h-4" /></button>
+                                </div>
+                                <div className="flex-1 p-4 space-y-2 overflow-y-auto">
+                                    {links?.map((link) => (
+                                        <NavLink
+                                            key={link?.name}
+                                            to={link?.path || '#'}
+                                            end={link?.name === 'Dashboard'}
+                                            onClick={() => setIsMobileMenuOpen(false)}
+                                            className={({ isActive }) => `flex items-center gap-3 px-5 py-3.5 rounded-2xl font-bold text-xs transition-all group ${isActive ? 'bg-brand text-white shadow-md shadow-brand/20' : 'text-black hover:bg-brand hover:text-white'}`}
+                                        >
+                                            <link.icon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" /> <span>{link?.name}</span>
+                                        </NavLink>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
+                {/* Support Bot Widget */}
                 <SupportBot />
                 <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} logout={handleLogout} />
             </div>
         );
     }
+
+    // Customer "More" Popup Menu Items (The remaining 5 items not in bottom bar)
+    const moreMenuItems = [
+        {
+            id: 'map',
+            name: 'Clinic Map',
+            path: '/dashboard/customer/map',
+            icon: MapPin,
+        },
+        {
+            id: 'rewards',
+            name: 'Rewards',
+            path: '/dashboard/customer/loyalty',
+            icon: Award,
+        },
+        {
+            id: 'alerts',
+            name: 'Alerts',
+            path: '/dashboard/customer/alerts',
+            icon: Bell,
+            badge: unreadCount,
+        },
+        {
+            id: 'account',
+            name: 'Account',
+            path: '/dashboard/customer/account',
+            icon: UserCircle,
+        },
+        {
+            id: 'chat',
+            name: 'Chat Support',
+            icon: MessageCircle,
+            isChat: true,
+        },
+    ];
+
+    const handleMoreItemClick = (item: (typeof moreMenuItems)[number]) => {
+        setIsMoreMenuOpen(false);
+        if (item.isChat) {
+            if (typeof window !== 'undefined' && window.history.state?.hivetMoreMenu) {
+                window.history.back();
+            }
+            setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('open-support-bot'));
+            }, 120);
+        } else if (item.path) {
+            if (typeof window !== 'undefined' && window.history.state?.hivetMoreMenu) {
+                navigate(item.path, { replace: true });
+            } else {
+                navigate(item.path);
+            }
+        }
+    };
 
     // --- RENDER ORIGINAL TOP-NAV LAYOUT (Specifically for Customers) ---
     return (
@@ -464,18 +644,42 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
             {!hideHeader && (
                 <nav className="bg-white border-b border-accent-brown/5 shadow-xl shadow-accent-brown/5 fixed top-0 left-0 right-0 z-50 h-18 sm:h-22">
                     <div className="max-w-[1920px] mx-auto px-4 sm:px-8 h-full flex items-center justify-between gap-6">
-                        {/* Brand */}
-                        <div className="flex items-center gap-2.5 sm:gap-3.5 shrink-0 transition-opacity">
-                            <div className="w-9 h-9 sm:w-11 sm:h-11 bg-white rounded-xl shadow-md shadow-brand/10 flex items-center justify-center p-1.5 shrink-0 border border-brand/5">
-                                <Logo className="w-full h-full" />
+                        {/* Profile Avatar & User Info (or Brand for non-customers) */}
+                        {isCustomer ? (
+                            <Link
+                                to="/dashboard/customer/account"
+                                className="flex items-center gap-2.5 sm:gap-3.5 shrink min-w-0 max-w-[calc(100vw-130px)] xs:max-w-none group transition-all"
+                                title="View Account Profile"
+                            >
+                                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-brand/10 border-2 border-brand/30 overflow-hidden flex items-center justify-center text-brand-dark font-black text-xs sm:text-sm shadow-sm group-hover:scale-105 group-hover:border-brand transition-all shrink-0">
+                                    {user?.avatar ? (
+                                        <img src={user?.avatar} alt={user?.name || 'User Profile'} className="w-full h-full object-cover" />
+                                    ) : (
+                                        (user?.name || user?.email || 'U').slice(0, 2).toUpperCase()
+                                    )}
+                                </div>
+                                <div className="flex flex-col min-w-0">
+                                    <h2 className="text-sm sm:text-lg font-black text-accent-brown tracking-tight leading-tight truncate group-hover:text-brand-dark transition-colors">
+                                        {formatName(user?.name) || 'My Profile'}
+                                    </h2>
+                                    <p className="text-xs mt-0.5 font-bold text-black/60 truncate">
+                                        Bronze Elite Member
+                                    </p>
+                                </div>
+                            </Link>
+                        ) : (
+                            <div className="flex items-center gap-2.5 sm:gap-3.5 shrink-0 transition-opacity">
+                                <div className="w-9 h-9 sm:w-11 sm:h-11 bg-white rounded-xl shadow-md shadow-brand/10 flex items-center justify-center p-1.5 shrink-0 border border-brand/5">
+                                    <Logo className="w-full h-full" />
+                                </div>
+                                <div className="flex flex-col min-w-0">
+                                    <h2 className="text-base sm:text-xl lg:text-[22px] font-black text-accent-brown tracking-tighter leading-none truncate">{user?.clinic_name || 'Hi-Vet'}</h2>
+                                    <p className="text-xs mt-0.5 font-bold text-black transition-all whitespace-nowrap opacity-60 capitalize">
+                                        {user?.role || 'Portal'}
+                                    </p>
+                                </div>
                             </div>
-                            <div className="flex flex-col min-w-0">
-                                <h2 className="text-base sm:text-xl lg:text-[22px] font-black text-accent-brown tracking-tighter leading-none truncate">{user?.clinic_name || 'Hi-Vet'}</h2>
-                                <p className="text-[10px] sm:text-[11px] lg:text-[12px] mt-0.5 font-bold text-black transition-all whitespace-nowrap opacity-60 uppercase tracking-widest">
-                                    Customer
-                                </p>
-                            </div>
-                        </div>
+                        )}
 
                         {/* Desktop Navigation Links */}
                         <div className="hidden lg:flex items-center justify-center flex-1 gap-1 xl:gap-2">
@@ -500,15 +704,16 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                         </div>
 
                         {/* Right Actions */}
-                        <div className="flex items-center gap-3 sm:gap-5 shrink-0">
+                        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
                             {user?.role === 'customer' && (
                                 <motion.button
                                     onClick={() => setIsCartOpen(true)}
-                                    className="relative w-9 h-9 sm:w-12 sm:h-12 bg-brand-dark/5 rounded-xl sm:rounded-2xl flex items-center justify-center text-brand-dark hover:text-white hover:bg-brand hover:shadow-lg hover:shadow-brand/20 transition-all cursor-pointer"
+                                    aria-label={`Shopping cart with ${totalItems} items`}
+                                    className="relative min-w-[44px] min-h-[44px] w-11 h-11 sm:w-12 sm:h-12 bg-brand-dark/5 rounded-xl sm:rounded-2xl flex items-center justify-center text-brand-dark hover:text-white hover:bg-brand hover:shadow-lg hover:shadow-brand/20 transition-all cursor-pointer"
                                 >
-                                    <ShoppingCart className="w-4.5 h-4.5" />
+                                    <ShoppingCart className="w-5 h-5" />
                                     {totalItems > 0 && (
-                                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-brand-dark text-white text-[9px] font-black flex items-center justify-center rounded-full border-2 border-white">
+                                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-brand text-white text-[9px] font-black flex items-center justify-center rounded-full border-2 border-white shadow-sm pointer-events-none">
                                             {totalItems}
                                         </span>
                                     )}
@@ -518,9 +723,10 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                             <div className="relative">
                                 <motion.button
                                     onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                                    className={`relative w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer ${isNotificationsOpen ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'bg-slate-100 text-black hover:text-accent-brown hover:bg-slate-200'}`}
+                                    aria-label="Notifications"
+                                    className={`relative min-w-[44px] min-h-[44px] w-11 h-11 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer ${isNotificationsOpen ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'bg-slate-100 text-black hover:text-accent-brown hover:bg-slate-200'}`}
                                 >
-                                    <Bell className="w-4.5 h-4.5" />
+                                    <Bell className="w-5 h-5" />
                                     {notifications.filter(n => !n.read).length > 0 && (
                                         <span className={`absolute top-2.5 right-2.5 w-2 h-2 rounded-full border-2 border-white ${isNotificationsOpen ? 'bg-white' : 'bg-rose-500 animate-pulse'}`}></span>
                                     )}
@@ -540,10 +746,10 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                                 <div className="p-5 sm:p-6 border-b border-accent-brown/5 flex items-center justify-between bg-accent-peach/10">
                                                     <div className="flex items-center gap-2">
                                                         <Bell className="w-3.5 h-3.5 text-brand" />
-                                                        <h3 className="font-black text-black text-sm uppercase tracking-tighter italic">Notifications</h3>
+                                                        <h3 className="font-black text-black text-sm italic">Notifications</h3>
                                                     </div>
                                                     {unreadCount > 0 && (
-                                                        <button onClick={markAllAsRead} className="text-[9px] font-black text-black uppercase tracking-widest hover:underline bg-white px-3 py-1 rounded-full shadow-sm cursor-pointer">Mark all as read</button>
+                                                        <button onClick={markAllAsRead} className="text-xs font-bold text-black hover:underline bg-white px-3 py-1 rounded-full shadow-sm cursor-pointer">Mark all as read</button>
                                                     )}
                                                 </div>
                                                 <div className="max-h-[350px] sm:max-h-[450px] overflow-y-auto no-scrollbar">
@@ -552,7 +758,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                                             <div className="w-16 h-16 bg-accent-peach/20 rounded-full flex items-center justify-center mx-auto mb-4">
                                                                 <Bell className="w-8 h-8 text-black/10" />
                                                             </div>
-                                                            <p className="text-[10px] font-black text-black uppercase tracking-widest">No notifications yet</p>
+                                                            <p className="text-xs font-bold text-black">No notifications yet</p>
                                                         </div>
                                                     ) : (
                                                         notifications?.map((n) => (
@@ -575,7 +781,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                                                     <div className="flex items-center justify-between gap-2 mb-1">
                                                                         <span className="font-black text-[11px] sm:text-xs text-black truncate">{n?.title}</span>
                                                                         <div className="flex items-center gap-2">
-                                                                            <span className="text-[8px] font-bold text-black uppercase shrink-0">Just now</span>
+                                                                            <span className="text-[10px] font-bold text-black shrink-0">Just now</span>
                                                                             <motion.button
                                                                                 whileHover={{ scale: 1.2, rotate: 90 }}
                                                                                 whileTap={{ scale: 0.8 }}
@@ -608,25 +814,18 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                     <LogOut className="w-4.5 h-4.5 sm:w-5 h-5" />
                                 </motion.button>
                             </div>
-
-                            <button
-                                onClick={() => setIsMobileMenuOpen(true)}
-                                className="lg:hidden w-9 h-9 sm:w-11 sm:h-11 bg-white border border-brand-dark/10 rounded-xl flex items-center justify-center text-brand-dark/60"
-                            >
-                                <Menu className="w-4.5 h-4.5" />
-                            </button>
                         </div>
                     </div>
                 </nav>
             )}
 
-            <main className={`flex-1 flex flex-col w-full px-2 sm:px-4 lg:px-6 ${hideHeader ? 'pt-6' : 'pt-24 sm:pt-28 lg:pt-30'} pb-10 lg:pb-16`}>
+            <main className={`flex-1 flex flex-col w-full px-2 sm:px-4 lg:px-6 ${hideHeader ? 'pt-6' : 'pt-24 sm:pt-28 lg:pt-30'} pb-24 lg:pb-16`}>
                 {title && (
                     <div className="mb-8 sm:mb-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                         <div className="flex flex-col gap-1">
                             <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-accent-brown tracking-tighter leading-tight">{title}</h1>
                             {branchContext?.id && (
-                                <div className="flex items-center gap-1.5 text-brand-dark font-black text-[10px] uppercase tracking-widest bg-brand/10 px-3 py-1 rounded-full self-start mt-4">
+                                <div className="flex items-center gap-1.5 text-brand-dark font-bold text-xs bg-brand/10 px-3 py-1 rounded-full self-start mt-4">
                                     <MapPin className="w-3 h-3" />
                                     {branchContext?.name}
                                     {branchContext?.address && <span className="text-brand-dark/70 font-bold normal-case ml-1">| {branchContext?.address}</span>}
@@ -640,29 +839,172 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                 </motion.div>
             </main>
 
-            {!hideFooter && !isCartOpen && <Footer />}
 
-            <AnimatePresence>
-                {isMobileMenuOpen && (
-                    <>
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-brand-dark/60 backdrop-blur-md z-[60]" />
-                        <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} className="fixed top-0 right-0 h-full w-[280px] bg-white z-[70] flex flex-col">
-                            <div className="p-6 flex items-center justify-between border-b border-brand-dark/5 bg-accent-peach/10">
-                                <span className="font-black text-xs uppercase tracking-widest text-black/50">Navigation</span>
-                                <button onClick={() => setIsMobileMenuOpen(false)} className="w-8 h-8 flex items-center justify-center bg-white rounded-lg"><X className="w-4 h-4" /></button>
+            {/* Customer Mobile Bottom Navigation Bar */}
+            {isCustomer && !hideHeader && (
+                <nav className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 ${isMoreMenuOpen ? 'bg-white' : 'bg-white/95 backdrop-blur-xl'} border-t border-accent-brown/10 shadow-[0_-10px_25px_rgba(0,0,0,0.06)] h-16 px-2`}>
+                    <div className="flex items-center justify-around h-full max-w-lg mx-auto">
+                        {[
+                            { name: 'Home', path: '/dashboard/customer', icon: Home },
+                            { name: 'Store', path: '/dashboard/customer/catalog', icon: ShoppingBag },
+                            { name: 'Orders', path: '/dashboard/customer/orders', icon: Package },
+                            { name: 'Visits', path: '/dashboard/customer/reservations', icon: Calendar },
+                        ].map((item) => {
+                            const isActive = item.path === '/dashboard/customer'
+                                ? location.pathname === '/dashboard/customer'
+                                : location.pathname.startsWith(item.path);
+                            return (
+                                <NavLink
+                                    key={item.name}
+                                    to={item.path}
+                                    end={item.path === '/dashboard/customer'}
+                                    onClick={() => { if (isMoreMenuOpen) closeMoreMenu(); }}
+                                    className={`flex flex-col items-center justify-center flex-1 py-1 transition-all group ${
+                                        isActive && !isMoreMenuOpen ? 'text-brand-dark' : 'text-black hover:text-brand-dark'
+                                    }`}
+                                >
+                                    <div className={`p-1.5 rounded-xl transition-all ${isActive && !isMoreMenuOpen ? 'bg-brand-dark/10 scale-105' : 'group-hover:scale-105'}`}>
+                                        <item.icon className={`w-5 h-5 ${isActive && !isMoreMenuOpen ? 'stroke-[2.5]' : 'stroke-2'}`} />
+                                    </div>
+                                    <span className={`text-xs leading-none mt-0.5 ${isActive && !isMoreMenuOpen ? 'font-black' : 'font-bold'}`}>
+                                        {item.name}
+                                    </span>
+                                </NavLink>
+                            );
+                        })}
+                        <button
+                            ref={moreButtonRef}
+                            type="button"
+                            onClick={() => {
+                                if (isMoreMenuOpen) {
+                                    closeMoreMenu();
+                                } else {
+                                    setIsMoreMenuOpen(true);
+                                }
+                            }}
+                            aria-expanded={isMoreMenuOpen}
+                            aria-haspopup="dialog"
+                            className={`flex flex-col items-center justify-center flex-1 py-1 transition-all group ${
+                                isMoreMenuOpen || ['/dashboard/customer/map', '/dashboard/customer/loyalty', '/dashboard/customer/alerts', '/dashboard/customer/account'].some(p => location.pathname.startsWith(p))
+                                    ? 'text-brand-dark'
+                                    : 'text-black hover:text-brand-dark'
+                            }`}
+                        >
+                            <div className={`p-1.5 rounded-xl transition-all ${
+                                isMoreMenuOpen || ['/dashboard/customer/map', '/dashboard/customer/loyalty', '/dashboard/customer/alerts', '/dashboard/customer/account'].some(p => location.pathname.startsWith(p))
+                                    ? 'bg-brand-dark/10 scale-105'
+                                    : 'group-hover:scale-105'
+                            }`}>
+                                {isMoreMenuOpen ? (
+                                    <X className="w-5 h-5 stroke-[2.5] text-brand" />
+                                ) : (
+                                    <Menu className="w-5 h-5 stroke-2" />
+                                )}
                             </div>
-                            <div className="flex-1 p-4 space-y-2">
-                                {links?.map((link) => (
-                                    <NavLink
-                                        key={link?.name}
-                                        to={link?.path || '#'}
-                                        end={link?.name === 'Dashboard'}
-                                        onClick={() => setIsMobileMenuOpen(false)}
-                                        className={({ isActive }) => `flex items-center gap-3 px-5 py-4 rounded-2xl font-black text-xs uppercase tracking-widest ${isActive ? 'bg-brand-dark text-white' : 'text-brand-dark hover:bg-brand hover:text-white'}`}
-                                    >
-                                        <link.icon className="w-4 h-4" /> {link?.name}
-                                    </NavLink>
-                                ))}
+                            <span className={`text-xs leading-none mt-0.5 ${
+                                isMoreMenuOpen || ['/dashboard/customer/map', '/dashboard/customer/loyalty', '/dashboard/customer/alerts', '/dashboard/customer/account'].some(p => location.pathname.startsWith(p))
+                                    ? 'font-black text-brand-dark'
+                                    : 'font-bold'
+                            }`}>
+                                {isMoreMenuOpen ? 'Close' : 'More'}
+                            </span>
+                        </button>
+                    </div>
+                </nav>
+            )}
+
+            {/* Customer Animated Side Tab "More" Menu Attached Flat to Right Edge */}
+            <AnimatePresence>
+                {isCustomer && isMoreMenuOpen && (
+                    <>
+                        {/* Light Dim Backdrop - Zero blur, page remains crisp & legible */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: shouldReduceMotion ? 0.1 : 0.2 }}
+                            onClick={closeMoreMenu}
+                            className="lg:hidden fixed inset-0 bg-black/[0.08] z-40"
+                            aria-hidden="true"
+                        />
+
+                        {/* Vertical Side Tab Panel stuck flat to right edge (or left in RTL) */}
+                        <motion.div
+                            ref={sideTabRef}
+                            role="menu"
+                            aria-label="More navigation options"
+                            initial={shouldReduceMotion ? { opacity: 0 } : { x: isRtl ? '-100%' : '100%', opacity: 0.8 }}
+                            animate={shouldReduceMotion ? { opacity: 1 } : { x: 0, opacity: 1 }}
+                            exit={shouldReduceMotion ? { opacity: 0 } : { x: isRtl ? '-100%' : '100%', opacity: 0 }}
+                            transition={shouldReduceMotion ? { duration: 0.1 } : { type: 'spring', damping: 28, stiffness: 320, duration: 0.26 }}
+                            style={{
+                                width: `${sideTabDims.width}px`,
+                            }}
+                            className={`lg:hidden fixed ${
+                                isRtl
+                                    ? 'left-0 rounded-r-[24px] rounded-l-none border-r border-y shadow-[10px_0_30px_rgba(0,0,0,0.12)]'
+                                    : 'right-0 rounded-l-[24px] rounded-r-none border-l border-y shadow-[-10px_0_30px_rgba(0,0,0,0.12)]'
+                            } bottom-[calc(4rem+8px+env(safe-area-inset-bottom,0px))] max-h-[calc(100vh-5rem-env(safe-area-inset-bottom,0px)-16px)] z-[51] bg-white border-slate-200/90 select-none overflow-hidden flex flex-col pointer-events-auto`}
+                        >
+                            {/* Scrollable list of 5 rows with 12px padding */}
+                            <div className="flex flex-col gap-1 p-3 overflow-y-auto max-h-full no-scrollbar">
+                                {moreMenuItems.map((item, idx) => {
+                                    const isActive = item.path && location.pathname.startsWith(item.path);
+
+                                    return (
+                                        <motion.button
+                                            key={item.id}
+                                            type="button"
+                                            role="menuitem"
+                                            data-tab-item={item.id}
+                                            custom={idx}
+                                            initial={shouldReduceMotion ? { opacity: 0 } : { x: isRtl ? -14 : 14, opacity: 0 }}
+                                            animate={shouldReduceMotion ? { opacity: 1 } : { x: 0, opacity: 1 }}
+                                            exit={shouldReduceMotion ? { opacity: 0 } : { x: isRtl ? -14 : 14, opacity: 0 }}
+                                            transition={shouldReduceMotion ? { duration: 0.1 } : { delay: 0.04 + idx * 0.03, duration: 0.2 }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleMoreItemClick(item);
+                                            }}
+                                            style={{ minHeight: `${sideTabDims.rowHeight}px` }}
+                                            className={`w-full flex items-center gap-3 px-2.5 py-1.5 rounded-2xl transition-all cursor-pointer select-none group ${
+                                                isRtl ? 'flex-row-reverse text-right' : 'flex-row text-left'
+                                            } ${
+                                                isActive
+                                                    ? 'bg-brand/10 text-brand-dark'
+                                                    : 'hover:bg-slate-100/80 active:bg-slate-200/60 text-slate-800'
+                                            } focus:outline-none focus-visible:ring-2 focus-visible:ring-brand`}
+                                        >
+                                            {/* Round Icon Button (40px-46px) */}
+                                            <div
+                                                style={{ width: `${sideTabDims.iconSize}px`, height: `${sideTabDims.iconSize}px` }}
+                                                className={`rounded-full flex items-center justify-center shrink-0 relative transition-transform duration-200 group-hover:scale-105 group-active:scale-95 ${
+                                                isActive
+                                                    ? 'bg-brand text-white shadow-md shadow-brand/30 ring-2 ring-brand/40'
+                                                    : item.isChat
+                                                        ? 'bg-gradient-to-br from-brand/15 to-brand/25 text-brand border border-brand/40 shadow-sm group-hover:bg-brand group-hover:text-white'
+                                                        : 'bg-slate-50 text-slate-700 border border-slate-200/80 shadow-sm group-hover:bg-brand group-hover:text-white group-hover:border-brand'
+                                            }`}>
+                                                <item.icon className="w-5 h-5 stroke-[2.2]" />
+                                                {item.badge && item.badge > 0 ? (
+                                                    <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full border-2 border-white flex items-center justify-center animate-bounce shadow-sm">
+                                                        {item.badge}
+                                                    </span>
+                                                ) : null}
+                                                {item.isChat && (
+                                                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white animate-pulse" />
+                                                )}
+                                            </div>
+
+                                            {/* Full Label (At least 14px, single line, never shortened) */}
+                                            <span className={`text-sm tracking-tight leading-snug whitespace-nowrap transition-colors flex-1 ${
+                                                isActive ? 'font-black text-brand-dark' : 'font-bold text-slate-800 group-hover:text-brand-dark'
+                                            }`}>
+                                                {item.name}
+                                            </span>
+                                        </motion.button>
+                                    );
+                                })}
                             </div>
                         </motion.div>
                     </>
@@ -677,7 +1019,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                             <div className="h-24 px-6 border-b flex items-center justify-between shrink-0 bg-accent-peach/10">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm"><ShoppingCart className="w-5 h-5" /></div>
-                                    <div><h2 className="font-black text-accent-brown text-xl leading-none">Your Cart</h2><p className="text-[10px] uppercase font-black text-black mt-1">{totalItems} items</p></div>
+                                    <div><h2 className="font-black text-accent-brown text-xl leading-none">Your Cart</h2><p className="text-xs font-bold text-black mt-1">{totalItems} items</p></div>
                                 </div>
                                 <button onClick={() => setIsCartOpen(false)} className="w-10 h-10 bg-white rounded-xl flex items-center justify-center"><X className="w-5 h-5" /></button>
                             </div>
@@ -692,12 +1034,12 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                             <div className="w-20 h-20 bg-accent-peach/10 rounded-xl p-2 flex items-center justify-center"><img src={item.image} className="w-full h-full object-contain" /></div>
                                             <div className="flex-1 flex flex-col">
                                                 <h4 className="font-black text-xs text-accent-brown leading-tight mb-1">{item.name}</h4>
-                                                <p className="text-[9px] font-black uppercase tracking-widest text-black mb-auto">{item.variant} • {item.size}</p>
+                                                <p className="text-xs font-bold text-black mb-auto">{item.variant} • {item.size}</p>
                                                 <div className="flex items-center justify-between mt-2">
                                                     <span className="font-black text-brand-dark">₱{item.price}</span>
                                                     <div className="flex items-center gap-1 bg-accent-peach/20 rounded-lg p-1">
                                                         <button onMouseDown={() => startCounter(item, false)} onMouseUp={stopCounter} onMouseLeave={stopCounter} className="w-6 h-6 bg-white rounded-md flex items-center justify-center"><Minus className="w-3 h-3" /></button>
-                                                        <input type="text" value={item.quantity} onChange={(e) => handleQuantityInput(item, e.target.value)} className="text-[10px] font-black w-6 text-center bg-transparent outline-none" />
+                                                        <input type="text" value={item.quantity} onChange={(e) => handleQuantityInput(item, e.target.value)} className="text-xs font-black w-6 text-center bg-transparent outline-none" />
                                                         <button onMouseDown={() => startCounter(item, true)} onMouseUp={stopCounter} onMouseLeave={stopCounter} className="w-6 h-6 bg-white rounded-md flex items-center justify-center"><Plus className="w-3 h-3" /></button>
                                                     </div>
                                                 </div>
@@ -709,11 +1051,11 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                             {items.length > 0 && (
                                 <div className="p-6 border-t bg-white">
                                     <div className="flex flex-col gap-2 mb-6">
-                                        <div className="flex justify-between text-[10px] font-black uppercase"><span>Selected ({selectedCount})</span><span>Subtotal</span></div>
+                                        <div className="flex justify-between text-xs font-bold text-black"><span>Selected ({selectedCount})</span><span>Subtotal</span></div>
                                         <div className="flex justify-between items-center">
                                             <div className="flex gap-2">
-                                                <button onClick={() => setSelectedItems(new Set(items.map(i => `${i.id}-${i.variant}-${i.size}`)))} className="text-[9px] font-black hover:underline uppercase">All</button>
-                                                <button onClick={() => setSelectedItems(new Set())} className="text-[9px] font-black opacity-40 uppercase">None</button>
+                                                <button onClick={() => setSelectedItems(new Set(items.map(i => `${i.id}-${i.variant}-${i.size}`)))} className="text-xs font-bold hover:underline text-brand">All</button>
+                                                <button onClick={() => setSelectedItems(new Set())} className="text-xs font-bold text-slate-500 hover:underline">None</button>
                                             </div>
                                             <span className="text-2xl font-black italic">₱{selectiveAmount.toFixed(2)}</span>
                                         </div>
@@ -726,7 +1068,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                             setIsCartOpen(false);
                                             navigate('/dashboard/customer/checkout');
                                         }}
-                                        className={`w-full py-4 rounded-xl font-black text-xs uppercase tracking-widest ${hasStockError || selectedCount === 0 ? 'bg-slate-100 text-slate-300' : 'bg-brand text-white shadow-lg shadow-brand/20'}`}
+                                        className={`w-full py-4 rounded-xl font-black text-sm ${hasStockError || selectedCount === 0 ? 'bg-slate-100 text-slate-300' : 'bg-brand text-white shadow-lg shadow-brand/20'}`}
                                     >
                                         Checkout
                                     </button>
@@ -737,7 +1079,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                 )}
             </AnimatePresence>
 
-  {/* Support Bot Widget */}
+            {/* Support Bot Widget (Accessible via More Menu -> Chat Support) */}
             <SupportBot />
             <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} logout={handleLogout} />
         </div>
@@ -751,10 +1093,10 @@ const LogoutModal = ({ isOpen, onClose, logout }: any) => (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-accent-brown/20 backdrop-blur-md" />
                 <motion.div initial={{ scale: 0.9, opacity: 0, y: 30 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 30 }} className="bg-white w-full max-w-sm rounded-[3rem] p-10 text-center relative z-10">
                     <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-8"><LogOut className="w-10 h-10" /></div>
-                    <h3 className="text-3xl font-black italic uppercase leading-none mb-4">Log Out?</h3>
+                    <h3 className="text-2xl font-black italic leading-none mb-4">Log Out?</h3>
                     <div className="grid grid-cols-2 gap-4 mt-8">
-                        <button onClick={onClose} className="py-4 bg-slate-100 rounded-2xl font-black text-[10px] uppercase">No</button>
-                        <button onClick={logout} className="py-4 bg-red-500 text-white rounded-2xl font-black text-[10px] uppercase">Yes</button>
+                        <button onClick={onClose} className="py-3.5 bg-slate-100 rounded-2xl font-black text-xs cursor-pointer">No</button>
+                        <button onClick={logout} className="py-3.5 bg-red-500 text-white rounded-2xl font-black text-xs cursor-pointer">Yes</button>
                     </div>
                 </motion.div>
             </div>

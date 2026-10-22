@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Gift, Info, Bell, CheckCircle2, Trash2, BellOff } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useNavigate } from 'react-router-dom';
+import { toTitleCase, toSentenceCase } from '../../utils/textFormatters';
 
 const CustomerAlerts = () => {
     const [notifications, setNotifications] = useState<any[]>([]);
@@ -107,7 +108,7 @@ const CustomerAlerts = () => {
                             <button
                                 key={f}
                                 onClick={() => setFilter(f)}
-                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer border ${
+                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                                     filter === f
                                         ? 'bg-brand text-white border-brand shadow-md shadow-brand/20'
                                         : 'bg-white border-accent-brown/15 text-accent-brown/50 hover:border-brand/30 hover:text-brand'
@@ -122,14 +123,14 @@ const CustomerAlerts = () => {
                     <div className="flex items-center gap-3">
                         <button
                             onClick={markAllAsRead}
-                            className="text-[10px] font-black uppercase tracking-widest text-black/40 hover:text-black transition-colors flex items-center gap-1.5 cursor-pointer"
+                            className="text-xs font-bold text-black/50 hover:text-black transition-colors flex items-center gap-1.5 cursor-pointer"
                         >
                             <CheckCircle2 className="w-3.5 h-3.5" /> Mark all read
                         </button>
                         <div className="w-px h-4 bg-accent-brown/15" />
                         <button
                             onClick={deleteAllNotifications}
-                            className="text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-600 transition-colors flex items-center gap-1.5 cursor-pointer"
+                            className="text-xs font-bold text-red-500 hover:text-red-700 transition-colors flex items-center gap-1.5 cursor-pointer"
                         >
                             <Trash2 className="w-3.5 h-3.5" /> Clear All
                         </button>
@@ -149,7 +150,7 @@ const CustomerAlerts = () => {
                                 <div className="w-16 h-16 bg-brand-dark/5 rounded-2xl flex items-center justify-center mx-auto mb-4">
                                     <BellOff className="w-8 h-8 text-black/20" />
                                 </div>
-                                <p className="text-sm font-black text-black/40 uppercase tracking-widest">No alerts to show</p>
+                                <p className="text-sm font-bold text-black/50">No alerts to show</p>
                                 <p className="text-xs text-black/30 font-medium mt-1">You're all caught up!</p>
                             </motion.div>
                         ) : (
@@ -187,12 +188,12 @@ const CustomerAlerts = () => {
                                             {/* Content */}
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full ${
+                                                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
                                                         alert.read
                                                             ? 'bg-accent-brown/[0.08] text-black/40'
                                                             : 'bg-brand/15 text-black'
                                                     }`}>
-                                                        {alert.type}
+                                                        {toTitleCase(alert.type)}
                                                     </span>
                                                     {!alert.read && (
                                                         <span className="w-2 h-2 rounded-full bg-brand shrink-0" />
@@ -213,7 +214,7 @@ const CustomerAlerts = () => {
 
                                         {/* Right: date + delete */}
                                         <div className="flex flex-col items-end gap-2 shrink-0">
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-black whitespace-nowrap">
+                                            <span className="text-[10px] font-medium text-black/60 whitespace-nowrap">
                                                 {new Date(alert.created_at).toLocaleDateString(undefined, {
                                                     month: 'short', day: 'numeric', year: 'numeric'
                                                 })}

@@ -12,6 +12,7 @@ import { APIProvider, Map, AdvancedMarker, InfoWindow, useMap, useMapsLibrary } 
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import RiderBottomNav from '../../components/RiderBottomNav';
+import Pagination from '../../components/Pagination';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
@@ -828,35 +829,7 @@ const RiderDashboard = () => {
                                         </div>
 
                                         {/* Pagination */}
-                                        {availableOrders.length > ITEMS_PER_PAGE && (
-                                            <div className="flex items-center justify-center gap-3 pt-4">
-                                                <button
-                                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                                    disabled={currentPage === 1}
-                                                    className="w-10 h-10 bg-white border border-accent-brown/10 rounded-xl flex items-center justify-center text-accent-brown/40 hover:text-accent-brown disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
-                                                >
-                                                    <ArrowLeft size={16} />
-                                                </button>
-                                                <div className="flex items-center gap-2">
-                                                    {Array.from({ length: Math.ceil(availableOrders.length / ITEMS_PER_PAGE) }).map((_, i) => (
-                                                        <button
-                                                            key={i}
-                                                            onClick={() => setCurrentPage(i + 1)}
-                                                            className={`w-10 h-10 rounded-xl text-xs font-black transition-all ${currentPage === i + 1 ? 'bg-brand-dark text-white shadow-md scale-105' : 'bg-white text-accent-brown border border-accent-brown/5 hover:text-brand-dark'}`}
-                                                        >
-                                                            {i + 1}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                                <button
-                                                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(availableOrders.length / ITEMS_PER_PAGE), prev + 1))}
-                                                    disabled={currentPage === Math.ceil(availableOrders.length / ITEMS_PER_PAGE)}
-                                                    className="w-10 h-10 bg-white border border-accent-brown/10 rounded-xl flex items-center justify-center text-accent-brown/40 hover:text-accent-brown disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
-                                                >
-                                                    <ArrowRight size={16} />
-                                                </button>
-                                            </div>
-                                        )}
+                                        <Pagination currentPage={currentPage} totalPages={Math.ceil(availableOrders.length / ITEMS_PER_PAGE)} onPageChange={setCurrentPage} />
                                     </div>
                                 )}
                             </div>

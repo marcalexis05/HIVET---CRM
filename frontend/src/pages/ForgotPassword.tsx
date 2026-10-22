@@ -137,20 +137,20 @@ const ForgotPassword = () => {
                 return (
                     <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
                         <div className="space-y-1">
-                            <h3 className="text-5xl font-black text-accent-brown tracking-tighter uppercase leading-none">Recovery</h3>
+                            <h3 className="text-5xl font-black text-accent-brown tracking-tight leading-none">Recovery</h3>
                             <p className="text-xs text-accent-brown/40 font-medium italic">Enter your account email to proceed.</p>
                         </div>
                         <div className="space-y-4">
                             <div className="group space-y-2">
-                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Recovery Identity <span className="text-brand-dark">*</span></label>
+                                <label className="text-[11px] font-black text-accent-brown/30  pl-6 italic">Recovery Identity <span className="text-brand-dark">*</span></label>
                                 <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                     <Mail className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
                                     <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" required />
                                 </div>
                             </div>
                         </div>
-                        {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
-                        <button type="submit" disabled={loading} className="bg-brand-dark text-white w-full py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] flex items-center justify-center gap-4 hover:shadow-2xl transition-all group shadow-xl">
+                        {error && <div className="text-[10px] font-black text-red-500  bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
+                        <button type="submit" disabled={loading} className="bg-brand-dark text-white w-full py-5 rounded-full font-black text-xs  flex items-center justify-center gap-4 hover:shadow-2xl transition-all group shadow-xl">
                             {loading ? 'Initializing...' : 'Send Recovery Code'} 
                             {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />}
                         </button>
@@ -162,7 +162,7 @@ const ForgotPassword = () => {
                         <div className="space-y-4">
                             <div className="w-20 h-20 bg-brand/10 text-brand-dark rounded-3xl flex items-center justify-center"><MailCheck className="w-10 h-10" /></div>
                             <div className="space-y-1">
-                                <h3 className="text-3xl font-black text-accent-brown tracking-tighter uppercase leading-none italic">Verification</h3>
+                                <h3 className="text-3xl font-black text-accent-brown tracking-tight leading-none italic">Verification</h3>
                                 <p className="text-sm text-accent-brown/40 font-medium italic">Sent code to <span className="text-accent-brown font-bold not-italic">{email}</span></p>
                             </div>
                         </div>
@@ -171,12 +171,12 @@ const ForgotPassword = () => {
                                 <input key={idx} id={`otp-${idx}`} type="text" maxLength={1} value={digit} onChange={(e) => handleOtpChange(idx, e.target.value)} onKeyDown={(e) => handleKeyDown(idx, e)} onPaste={handlePaste} className="w-12 h-16 sm:w-16 sm:h-20 text-center text-3xl font-black text-brand-dark bg-[#F7F6F2] rounded-3xl outline-none transition-all ring-1 ring-brand-dark/5 focus:ring-brand-dark/30 shadow-inner" />
                             ))}
                         </div>
-                        {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
+                        {error && <div className="text-[10px] font-black text-red-500  bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
                         <div className="space-y-6">
-                            <p className="text-xs font-black text-accent-brown/30 uppercase tracking-[0.2em] ml-6 italic">No code? <button type="button" onClick={handleSendOtp} disabled={countdown > 0} className="text-brand-dark font-black">{countdown > 0 ? `Wait ${countdown}s` : 'Resend'}</button></p>
+                            <p className="text-xs font-black text-accent-brown/30  ml-6 italic">No code? <button type="button" onClick={handleSendOtp} disabled={countdown > 0} className="text-brand-dark font-black">{countdown > 0 ? `Wait ${countdown}s` : 'Resend'}</button></p>
                             <div className="flex gap-4">
-                                <button type="button" onClick={prevStep} className="flex-1 px-8 py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] text-accent-brown/30 italic">Back</button>
-                                <button type="submit" className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all italic">Verify Code</button>
+                                <button type="button" onClick={prevStep} className="flex-1 px-8 py-5 rounded-full font-black text-xs  text-accent-brown/30 italic">Back</button>
+                                <button type="submit" className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs  transition-all italic">Verify Code</button>
                             </div>
                         </div>
                     </motion.div>
@@ -185,12 +185,12 @@ const ForgotPassword = () => {
                 return (
                     <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
                         <div className="space-y-1">
-                            <h3 className="text-3xl font-black text-accent-brown tracking-tighter uppercase leading-none">New Credentials</h3>
+                            <h3 className="text-3xl font-black text-accent-brown tracking-tight leading-none">New Credentials</h3>
                             <p className="text-xs text-accent-brown/40 font-medium italic">Update your security secret.</p>
                         </div>
                         <div className="space-y-4">
                             <div className="group space-y-2">
-                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">New Secret <span className="text-brand-dark">*</span></label>
+                                <label className="text-[11px] font-black text-accent-brown/30  pl-6 italic">New Secret <span className="text-brand-dark">*</span></label>
                                 <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                     <Lock className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark" />
                                     <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full bg-transparent py-5 pl-16 pr-14 text-accent-brown font-bold text-base outline-none" required />
@@ -199,7 +199,7 @@ const ForgotPassword = () => {
                                 {password && <div className="px-6"><PasswordStrength password={password} /></div>}
                             </div>
                             <div className="group space-y-2">
-                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Confirm Secret <span className="text-brand-dark">*</span></label>
+                                <label className="text-[11px] font-black text-accent-brown/30  pl-6 italic">Confirm Secret <span className="text-brand-dark">*</span></label>
                                 <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                     <ShieldCheck className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark" />
                                     <input type={showConfirmPassword ? "text" : "password"} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••" className="w-full bg-transparent py-5 pl-16 pr-14 text-accent-brown font-bold text-base outline-none" required />
@@ -207,8 +207,8 @@ const ForgotPassword = () => {
                                 </div>
                             </div>
                         </div>
-                        {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
-                        <button type="submit" disabled={loading} className="bg-brand-dark text-white w-full py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic">{loading ? 'Updating...' : 'Update Secret'}</button>
+                        {error && <div className="text-[10px] font-black text-red-500  bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
+                        <button type="submit" disabled={loading} className="bg-brand-dark text-white w-full py-6 rounded-full font-black text-xs  transition-all hover:shadow-2xl shadow-xl italic">{loading ? 'Updating...' : 'Update Secret'}</button>
                     </motion.div>
                 );
             default: return null;
@@ -233,16 +233,16 @@ const ForgotPassword = () => {
                             <div className="w-14 h-14 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20 group-hover/back:bg-brand-dark transition-all text-white">
                                 <ShieldCheck className="w-8 h-8" />
                             </div>
-                            <span className="text-3xl font-black text-white tracking-widest uppercase italic">Hi-Vet</span>
+                            <span className="text-3xl font-black text-white tracking-tight">Hi-Vet</span>
                         </Link>
                         <div className="space-y-8 max-w-lg">
-                            <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Account Security</div>
-                            <h1 className="text-7xl font-black text-white leading-[0.8] tracking-tighter uppercase">Account <br /><span className="text-brand-dark italic font-outfit">Recovery.</span></h1>
+                            <div className="inline-flex items-center gap-3 text-white/60  text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Account Security</div>
+                            <h1 className="text-7xl font-black text-white leading-tight tracking-tight">Account <br /><span className="text-brand-dark italic font-outfit">Recovery.</span></h1>
                             <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Let's get you back into your Hi-Vet account securely and efficiently.</p>
                         </div>
                     </div>
                     <div className="bg-white/10 backdrop-blur-xl px-10 py-5 rounded-full border border-white/10 w-fit">
-                        <p className="text-[11px] font-black text-white uppercase tracking-[0.5em] italic">Security Stage {step} / 3</p>
+                        <p className="text-[11px] font-black text-white  italic">Security Stage {step} / 3</p>
                     </div>
                 </div>
             </div>
@@ -255,13 +255,13 @@ const ForgotPassword = () => {
                         <div className="flex gap-4">
                             {[1, 2, 3].map(i => <div key={i} className={`h-1.5 rounded-full transition-all duration-700 ${step >= i ? 'w-16 bg-brand-dark shadow-[0_0_20px_rgba(242,107,33,0.4)]' : 'w-4 bg-accent-brown/10'}`} />)}
                         </div>
-                        <Link to={loginPath} className="text-sm font-black text-brand-dark uppercase tracking-[0.3em] border-b-4 border-brand-dark/10 pb-1 italic hover:text-accent-brown transition-all">Recall Credentials?</Link>
+                        <Link to={loginPath} className="text-sm font-black text-brand-dark  border-b-4 border-brand-dark/10 pb-1 italic hover:text-accent-brown transition-all">Recall Credentials?</Link>
                     </div>
 
                     <form onSubmit={handleSubmit} className="overflow-y-visible"><AnimatePresence mode="wait">{renderStep()}</AnimatePresence></form>
 
                     <div className="mt-12 text-center pt-8 border-t border-accent-brown/5">
-                        <Link to={loginPath} className="inline-flex items-center gap-4 text-sm font-black uppercase tracking-[0.4em] text-accent-brown/30 hover:text-brand-dark transition-all group italic">
+                        <Link to={loginPath} className="inline-flex items-center gap-4 text-sm font-black  text-accent-brown/30 hover:text-brand-dark transition-all group italic">
                             <ChevronLeft className="w-5 h-5 group-hover:-translate-x-2 transition-transform" />
                             Cancel Recovery
                         </Link>

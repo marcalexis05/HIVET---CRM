@@ -86,7 +86,7 @@ export function LoyaltySection() {
                         transition={{ duration: 0.8 }}
                         className="lg:col-span-12 xl:col-span-5 bg-accent-brown p-12 lg:p-16 rounded-[4rem] text-white shadow-2xl relative overflow-hidden"
                     >
-                        <h3 className="text-3xl font-black mb-10 tracking-tight uppercase">Accrual Methods</h3>
+                        <h3 className="text-3xl font-black mb-10 tracking-tight">Accrual Methods</h3>
                         <div className="space-y-8 relative z-10">
                             {earning.map((e) => (
                                 <div key={e.label} className="flex items-center justify-between group">
@@ -94,9 +94,9 @@ export function LoyaltySection() {
                                         <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-brand-dark group-hover:text-white transition-all duration-500">
                                             <e.icon className="w-6 h-6" />
                                         </div>
-                                        <p className="font-black text-white text-lg uppercase tracking-widest">{e.label}</p>
+                                        <p className="font-black text-white text-base font-bold">{e.label}</p>
                                     </div>
-                                    <span className="text-[10px] font-black uppercase tracking-widest px-4 py-2 bg-brand-dark/10 text-brand-dark rounded-full">
+                                    <span className="text-xs font-bold px-3 py-1 bg-brand-dark/10 text-brand-dark rounded-full">
                                         {e.pts}
                                     </span>
                                 </div>
@@ -113,7 +113,7 @@ export function LoyaltySection() {
                         transition={{ duration: 0.8 }}
                         className="lg:col-span-12 xl:col-span-7 bg-[#F7F6F2] p-12 lg:p-16 rounded-[4rem] border border-accent-brown/5 shadow-inner"
                     >
-                        <h3 className="text-3xl font-black text-accent-brown mb-10 tracking-tight uppercase">Exclusive Redemptions</h3>
+                        <h3 className="text-3xl font-black text-accent-brown mb-10 tracking-tight">Exclusive Redemptions</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                             {rewards.map((r) => (
                                 <div key={r.title} className="bg-white p-6 rounded-[2.5rem] flex items-center gap-6 shadow-sm hover:shadow-xl transition-all duration-500 border border-transparent hover:border-brand/10 group">
@@ -121,10 +121,10 @@ export function LoyaltySection() {
                                         <r.icon className="w-7 h-7" />
                                     </div>
                                     <div className="space-y-1">
-                                        <p className="font-black text-accent-brown text-lg leading-tight uppercase tracking-tight">{r.title}</p>
+                                        <p className="font-black text-accent-brown text-base font-bold leading-tight tracking-tight">{r.title}</p>
                                         <div className="flex items-center gap-2">
                                             <Star className="w-3 h-3 text-brand-dark fill-brand-dark" />
-                                            <span className="text-[10px] font-black text-brand-dark uppercase tracking-widest">{r.cost} PTS REQUIRED</span>
+                                            <span className="text-xs font-bold text-brand-dark">{r.cost} pts required</span>
                                         </div>
                                     </div>
                                 </div>

@@ -68,7 +68,9 @@ if not DATABASE_URL:
     raise ValueError("DATABASE_URL is not set. Please configure it in your environment variables.")
 
 if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 REDIRECT_URI         = "http://localhost:8000/auth/google/callback"
 ALGORITHM            = "HS256"
 TOKEN_EXPIRE_DAYS    = 30

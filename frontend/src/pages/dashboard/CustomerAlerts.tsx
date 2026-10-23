@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Gift, Info, Bell, CheckCircle2, Trash2, BellOff } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useNavigate } from 'react-router-dom';
 import { toTitleCase, toSentenceCase, formatReviewIdInText } from '../../utils/textFormatters';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const CustomerAlerts = () => {
     const [notifications, setNotifications] = useState<any[]>([]);
@@ -14,7 +16,7 @@ const CustomerAlerts = () => {
         const token = localStorage.getItem('hivet_token');
         if (!token) return;
         try {
-            const res = await fetch('http://localhost:8000/api/notifications', {
+            const res = await fetch(`${API}/api/notifications`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -42,7 +44,7 @@ const CustomerAlerts = () => {
     const markAllAsRead = async () => {
         const token = localStorage.getItem('hivet_token');
         try {
-            await fetch('http://localhost:8000/api/notifications/read-all', {
+            await fetch(`${API}/api/notifications/read-all`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -64,7 +66,7 @@ const CustomerAlerts = () => {
     const deleteAllNotifications = async () => {
         const token = localStorage.getItem('hivet_token');
         try {
-            const res = await fetch('http://localhost:8000/api/notifications/all', {
+            const res = await fetch(`${API}/api/notifications/all`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });

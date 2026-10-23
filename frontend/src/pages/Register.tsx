@@ -179,7 +179,7 @@ const Register = () => {
         setLoading(true);
         setError('');
         try {
-            const res = await fetch('http://localhost:8000/api/auth/send-otp', {
+            const res = await fetch(`${API}/api/auth/send-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -300,7 +300,7 @@ const Register = () => {
         setLoading(true);
         setError('');
         try {
-            const res = await fetch('http://localhost:8000/api/auth/register', {
+            const res = await fetch(`${API}/api/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, Bike, Eye, EyeOff, ChevronLeft } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -6,6 +6,8 @@ import { Logo } from '../components/Logo';
 import { useAuth } from '../context/AuthContext';
 import { RIDER_LANDING_TEXT } from '../constants/riderLandingWording';
 import loginHero from '../assets/login_hero_landscape.png';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const RiderLogin = () => {
     const [email, setEmail] = useState('');
@@ -30,7 +32,7 @@ const RiderLogin = () => {
         setLoading(true);
 
         try {
-            const res = await fetch('http://localhost:8000/api/auth/login', {
+            const res = await fetch(`${API}/api/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })

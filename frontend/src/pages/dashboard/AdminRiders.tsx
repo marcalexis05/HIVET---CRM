@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Filter, CheckCircle2, XCircle, MoreVertical, Bike, AlertCircle, ShieldCheck, RefreshCw, Mail, Check, Trash2, Loader2 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import ModernModal from '../../components/ModernModal';
 import { useAuth } from '../../context/AuthContext';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 interface RiderRecord {
     id: number;
@@ -44,7 +46,7 @@ const AdminRiders = () => {
             if (!token) return;
 
             setLoading(true);
-            const res = await fetch('http://localhost:8000/api/admin/riders', {
+            const res = await fetch(`${API}/api/admin/riders`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();

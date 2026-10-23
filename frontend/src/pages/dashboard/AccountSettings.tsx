@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+﻿import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     User, Lock, AlertCircle, Bell, Trash2, Loader2, Eye, EyeOff,
@@ -21,6 +21,8 @@ import ModernModal from '../../components/ModernModal';
 import ConfirmLogoutModal from '../../components/ConfirmLogoutModal';
 import RiderBottomNav from '../../components/RiderBottomNav';
 import { RIDER_TEXT } from '../../constants/riderWording';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 type Section = 'profile' | 'addresses' | 'password' | 'notifications' | 'danger';
 
@@ -386,7 +388,7 @@ const AccountSettings = () => {
             if (user.role !== 'customer' && user.role !== 'business' && user.role !== 'rider') return;
 
             try {
-                const res = await fetch('http://localhost:8000/api/auth/me', {
+                const res = await fetch(`${API}/api/auth/me`, {
                     headers: { 'Authorization': `Bearer ${user.token}` }
                 });
                 if (res.ok) {
@@ -583,7 +585,7 @@ const AccountSettings = () => {
         }
         setSendingOtp(true);
         try {
-            const res = await fetch('http://localhost:8000/api/auth/request-email-change', {
+            const res = await fetch(`${API}/api/auth/request-email-change`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -612,7 +614,7 @@ const AccountSettings = () => {
         }
         setVerifyingEmail(true);
         try {
-            const res = await fetch('http://localhost:8000/api/auth/verify-email-change', {
+            const res = await fetch(`${API}/api/auth/verify-email-change`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -672,7 +674,7 @@ const AccountSettings = () => {
         setSavingProfile(true);
         setSaveStatus('saving');
         try {
-            const res = await fetch('http://localhost:8000/api/customer/profile', {
+            const res = await fetch(`${API}/api/customer/profile`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -763,7 +765,7 @@ const AccountSettings = () => {
 
         setSavingPw(true);
         try {
-            const res = await fetch('http://localhost:8000/api/customer/password', {
+            const res = await fetch(`${API}/api/customer/password`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -801,7 +803,7 @@ const AccountSettings = () => {
             type: 'danger',
             onConfirm: async () => {
                 try {
-                    const res = await fetch('http://localhost:8000/api/account', {
+                    const res = await fetch(`${API}/api/account`, {
                         method: 'DELETE',
                         headers: { 'Authorization': `Bearer ${user?.token}` }
                     });

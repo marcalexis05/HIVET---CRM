@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Filter, Mail, User, Phone, Award, Clock, MoreVertical, Loader2, Trash2, Shield, ShieldCheck, ChevronRight } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const AdminCustomerRecords = () => {
     const { user, isLoading: authLoading } = useAuth();
@@ -18,7 +20,7 @@ const AdminCustomerRecords = () => {
         const t = user?.token || localStorage.getItem('hivet_token');
         if (!t) return;
         try {
-            const res = await fetch('http://localhost:8000/api/admin/users', {
+            const res = await fetch(`${API}/api/admin/users`, {
                 headers: { 'Authorization': `Bearer ${t}` }
             });
             if (res.ok) {
@@ -67,7 +69,7 @@ const AdminCustomerRecords = () => {
             });
             if (res.ok) {
                 // Refresh list
-                const refreshed = await fetch('http://localhost:8000/api/admin/users', {
+                const refreshed = await fetch(`${API}/api/admin/users`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await refreshed.json();

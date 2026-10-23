@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+﻿import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -10,6 +10,8 @@ import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { CustomDropdown } from '../../components/CustomDropdown';
 import BranchSelector from '../../components/BranchSelector';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 interface Product {
     id: number;
@@ -91,7 +93,7 @@ const BusinessProductEditor = () => {
 
     const fetchAllBranches = async () => {
         try {
-            const resp = await fetch('http://localhost:8000/api/business/branches', {
+            const resp = await fetch(`${API}/api/business/branches`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (resp.ok) {
@@ -157,7 +159,7 @@ const BusinessProductEditor = () => {
         formData.append('file', file);
 
         try {
-            const resp = await fetch('http://localhost:8000/api/business/upload-product-image', {
+            const resp = await fetch(`${API}/api/business/upload-product-image`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData

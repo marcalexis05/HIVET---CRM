@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+﻿import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     ArrowRight, ArrowLeft, ChevronLeft, ShieldCheck, MailCheck, Bike, Eye, EyeOff, User,
@@ -17,6 +17,8 @@ import { CONTACT_VALIDATION_MESSAGES } from '../constants/contactValidationWordi
 import { RIDER_LANDING_TEXT } from '../constants/riderLandingWording';
 import loginHero from '../assets/login_hero_landscape.png';
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 const FileUploadField = ({ label, icon: Icon, onUpload, value, docType }: any) => {
     const [uploading, setUploading] = useState(false);
     const ref = useRef<HTMLInputElement>(null);
@@ -31,7 +33,7 @@ const FileUploadField = ({ label, icon: Icon, onUpload, value, docType }: any) =
         formData.append('doc_type', docType);
 
         try {
-            const res = await fetch('http://localhost:8000/api/business/upload-document', {
+            const res = await fetch(`${API}/api/business/upload-document`, {
                 method: 'POST',
                 body: formData,
             });
@@ -329,7 +331,7 @@ const RiderRegister = () => {
         setLoading(true);
         setError('');
         try {
-            const res = await fetch('http://localhost:8000/api/auth/send-otp', {
+            const res = await fetch(`${API}/api/auth/send-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, phone, role: 'rider' })
@@ -429,7 +431,7 @@ const RiderRegister = () => {
         setError('');
         const isBicycle = vehicleType === 'Bicycle';
         try {
-            const res = await fetch('http://localhost:8000/api/auth/register', { 
+            const res = await fetch(`${API}/api/auth/register`, { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

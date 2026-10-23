@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, ArrowRight, ShieldCheck, MailCheck, Eye, EyeOff, ChevronLeft } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -6,6 +6,8 @@ import { Logo } from '../components/Logo';
 import { PasswordStrength } from '../components/PasswordStrength';
 import { MAIN_LANDING_TEXT } from '../constants/mainLandingWording';
 import loginHero from '../assets/login_hero_landscape.png';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const ForgotPassword = () => {
     const [step, setStep] = useState(1);
@@ -69,7 +71,7 @@ const ForgotPassword = () => {
         setLoading(true);
         setError('');
         try {
-            const res = await fetch('http://localhost:8000/api/auth/forgot-password/send-otp', {
+            const res = await fetch(`${API}/api/auth/forgot-password/send-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email })
@@ -103,7 +105,7 @@ const ForgotPassword = () => {
         setLoading(true);
         setError('');
         try {
-            const res = await fetch('http://localhost:8000/api/auth/forgot-password/reset', {
+            const res = await fetch(`${API}/api/auth/forgot-password/reset`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, otp: otpCode, new_password: password })

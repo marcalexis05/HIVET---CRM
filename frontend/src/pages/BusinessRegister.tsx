@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+﻿import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Mail, AlertCircle, Lock, ArrowRight, ChevronLeft,
@@ -16,6 +16,8 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import { useAuth } from '../context/AuthContext';
 import loginHero from '../assets/login_hero_landscape.png';
 import { CLINIC_LANDING_TEXT } from '../constants/clinicLandingWording';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const calculateAge = (birthday: string) => {
     if (!birthday) return '';
@@ -320,7 +322,7 @@ const BusinessRegister = () => {
     const handleSendOtp = async () => {
         setLoading(true);
         try {
-            const res = await fetch('http://localhost:8000/api/auth/send-otp', {
+            const res = await fetch(`${API}/api/auth/send-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, phone: ownerPhone || phone, role: 'business' })
@@ -352,7 +354,7 @@ const BusinessRegister = () => {
                 const fd = new FormData();
                 fd.append('file', file);
                 fd.append('doc_type', docType);
-                const r = await fetch('http://localhost:8000/api/business/upload-document', { method: 'POST', body: fd });
+                const r = await fetch(`${API}/api/business/upload-document`, { method: 'POST', body: fd });
                 const d = await r.json();
                 return d.url as string;
             };
@@ -361,7 +363,7 @@ const BusinessRegister = () => {
             const mayorsUrl = mayorsDocument ? await uploadDoc(mayorsDocument, 'mayors_permit') : '';
             const govIdUrl = ownerIdDocument ? await uploadDoc(ownerIdDocument, 'gov_id') : '';
 
-            const res = await fetch('http://localhost:8000/api/auth/register', {
+            const res = await fetch(`${API}/api/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

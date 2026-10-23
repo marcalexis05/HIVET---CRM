@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { MapPin, ChevronDown, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 interface Branch {
     id: number;
@@ -33,7 +35,7 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
     useEffect(() => {
         const fetchBranches = async () => {
             try {
-                const resp = await fetch('http://localhost:8000/api/business/branches', {
+                const resp = await fetch(`${API}/api/business/branches`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await resp.json();

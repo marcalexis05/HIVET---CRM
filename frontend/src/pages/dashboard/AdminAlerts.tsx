@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
 import { Bell, ArrowRight, Store, Truck, Clock } from 'lucide-react';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const AdminAlerts = () => {
     const [alerts, setAlerts] = useState<any[]>([]);
@@ -10,7 +12,7 @@ const AdminAlerts = () => {
     const fetchAlerts = async () => {
         const token = localStorage.getItem('hivet_token');
         try {
-            const res = await fetch('http://localhost:8000/api/admin/alerts', {
+            const res = await fetch(`${API}/api/admin/alerts`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {

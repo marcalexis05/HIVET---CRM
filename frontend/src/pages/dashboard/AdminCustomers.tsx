@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Filter, Mail, Shield, User, Store, MoreVertical, Bike, Loader2, Trash2, ShieldCheck } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const AdminCustomers = () => {
     const { user, isLoading: authLoading } = useAuth();
@@ -24,7 +26,7 @@ const AdminCustomers = () => {
             if (!token) return;
 
             try {
-                const res = await fetch('http://localhost:8000/api/admin/users', {
+                const res = await fetch(`${API}/api/admin/users`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (res.ok) {
@@ -88,7 +90,7 @@ const AdminCustomers = () => {
             });
             if (res.ok) {
                 // Refresh list
-                const refreshed = await fetch('http://localhost:8000/api/admin/users', {
+                const refreshed = await fetch(`${API}/api/admin/users`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await refreshed.json();

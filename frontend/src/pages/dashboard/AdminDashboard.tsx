@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { motion } from 'framer-motion';
 import { Store, Users, Bike, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { X, Mail, Calendar, Hash, TrendingUp, PieChart as PieIcon, Activity } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 
 const AdminDashboard = () => {
@@ -43,10 +45,10 @@ const AdminDashboard = () => {
 
             try {
                 const [statsRes, analyticsRes] = await Promise.all([
-                    fetch('http://localhost:8000/api/admin/dashboard-stats', {
+                    fetch(`${API}/api/admin/dashboard-stats`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
-                    fetch('http://localhost:8000/api/admin/analytics', {
+                    fetch(`${API}/api/admin/analytics`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     })
                 ]);

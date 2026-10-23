@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search, CheckCircle2, XCircle, Clock, ExternalLink,
@@ -6,6 +6,8 @@ import {
     Truck, RefreshCw, RotateCw
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 type ComplianceStatus = 'pending' | 'verified' | 'non_compliant';
 
@@ -73,7 +75,7 @@ const AdminRiderCompliance = () => {
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await fetch('http://localhost:8000/api/admin/riders', {
+            const res = await fetch(`${API}/api/admin/riders`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.ok) setRiders(await res.json());

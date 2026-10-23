@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+﻿import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Package, MapPin, Calendar, Clock, ChevronRight, Plus, X, AlertCircle, CheckCircle, Loader2, CalendarX, Clock3, CreditCard, Banknote, ShieldCheck, Gift, Sparkles, QrCode, Wallet, Smartphone, Activity, Trophy, Eye, Tag } from 'lucide-react';
 import { APIProvider, useMapsLibrary } from '@vis.gl/react-google-maps';
@@ -586,7 +586,7 @@ const CustomerReservations = () => {
                                             <div className="border-t border-accent-brown/5 pt-4 flex items-center justify-between gap-3 mt-auto relative z-10">
                                                 <div>
                                                     <p className="text-[10px] font-bold text-black mb-1 leading-none">Total value</p>
-                                                    <p className="text-lg sm:text-xl font-black italic text-accent-brown tracking-tight leading-none">₱{res.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                                                    <p className="text-lg sm:text-xl font-black italic text-accent-brown tracking-tight leading-none">â‚±{res.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
                                                 </div>
 
                                                 <div className="flex items-center gap-2 shrink-0">
@@ -661,7 +661,7 @@ const CustomerReservations = () => {
                 )}
             </div>
 
-            {/* ── View Details / Receipt Summary Modal ───────────────────────── */}
+            {/* â”€â”€ View Details / Receipt Summary Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <AnimatePresence>
                 {selectedDetail && (
                     <>
@@ -735,7 +735,7 @@ const CustomerReservations = () => {
                                             </h4>
                                             <p className="text-sm font-medium text-slate-600 mt-0.5 break-words">
                                                 {toTitleCase(selectedDetail.pet_type)}
-                                                {selectedDetail.pet_breed ? ` • ${toTitleCase(selectedDetail.pet_breed)}` : ''}
+                                                {selectedDetail.pet_breed ? ` â€¢ ${toTitleCase(selectedDetail.pet_breed)}` : ''}
                                             </p>
                                         </div>
                                     </div>
@@ -810,7 +810,7 @@ const CustomerReservations = () => {
                                                                 className="font-black text-base sm:text-lg tabular-nums text-accent-brown shrink-0 whitespace-nowrap ml-3"
                                                                 aria-label={`${selectedDetail.total.toFixed(2)} pesos`}
                                                             >
-                                                                ₱{selectedDetail.total.toFixed(2)}
+                                                                â‚±{selectedDetail.total.toFixed(2)}
                                                             </span>
                                                         )}
                                                     </div>
@@ -824,7 +824,7 @@ const CustomerReservations = () => {
                                                         className="font-black text-base sm:text-lg tabular-nums text-accent-brown shrink-0 whitespace-nowrap ml-3"
                                                         aria-label={`${selectedDetail.total.toFixed(2)} pesos`}
                                                     >
-                                                        ₱{selectedDetail.total.toFixed(2)}
+                                                        â‚±{selectedDetail.total.toFixed(2)}
                                                     </span>
                                                 </div>
                                             )}
@@ -859,7 +859,7 @@ const CustomerReservations = () => {
                                                 className="text-3xl xs:text-4xl sm:text-5xl font-black italic tracking-tight text-brand-dark leading-none tabular-nums"
                                                 aria-label={`${selectedDetail.total.toLocaleString('en-US', { minimumFractionDigits: 2 })} pesos`}
                                             >
-                                                ₱{selectedDetail.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                â‚±{selectedDetail.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                             </h2>
                                             <div className="flex items-center gap-1.5 shrink-0" aria-label={selectedDetail.payment_status === 'paid' ? 'Payment secured and paid' : 'Payment pending'}>
                                                 {selectedDetail.payment_status === 'paid' ? (

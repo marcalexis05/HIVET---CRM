@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+﻿/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,6 +14,8 @@ import ProductCard from '../../components/ProductCard';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { toTitleCase, toSentenceCase, formatName } from '../../utils/textFormatters';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const ProductDetail = () => {
     const { id } = useParams();
@@ -137,7 +139,7 @@ const ProductDetail = () => {
     useEffect(() => {
         const fetchRelated = async () => {
             try {
-                const resp = await fetch('http://localhost:8000/api/catalog/');
+                const resp = await fetch(`${API}/api/catalog/`);
                 if (resp.ok) {
                     const allProducts = await resp.json();
                     
@@ -216,7 +218,7 @@ const ProductDetail = () => {
         const formData = new FormData();
         formData.append('file', file);
         try {
-            const resp = await fetch('http://localhost:8000/api/business/upload-product-image', {
+            const resp = await fetch(`${API}/api/business/upload-product-image`, {
                 method: 'POST',
                 body: formData
             });

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, Building2, Eye, EyeOff, ChevronLeft } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -6,6 +6,8 @@ import { Logo } from '../components/Logo';
 import { useAuth } from '../context/AuthContext';
 import { CLINIC_LANDING_TEXT } from '../constants/clinicLandingWording';
 import loginHero from '../assets/login_hero_landscape.png';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const BusinessLogin = () => {
     const [email, setEmail] = useState('');
@@ -34,7 +36,7 @@ const BusinessLogin = () => {
         setLoading(true);
 
         try {
-            const res = await fetch('http://localhost:8000/api/auth/login', {
+            const res = await fetch(`${API}/api/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })

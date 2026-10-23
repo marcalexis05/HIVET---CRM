@@ -1,0 +1,71 @@
+UNIVERSITY OF CALOOCAN CITY – NORTH CAMPUS 
+COMPUTER STUDIES DEPARTMENT 
+BACHELOR OF SCIENCE IN INFORMATION SYSTEM 
+ 
+BSIS 3-A             
+DATABASE SYSTEM ENTERPRISE 
+ 
+Proposed Title: Hi-Vet: E-Commerce Web Application for Household Pets Supplies 
+ 
+Description: 
+The Hi-Vet system is a specialized "Click and Collect" e-commerce platform designed to digitalize and 
+streamline retail operations for pet supplies. By providing a dedicated digital space for pet owners and local 
+businesses, the application bridges the gap between online browsing and physical storefront efficiency through 
+order reservations and inventory management. The system operates through two primary interfaces: a 
+User/Customer Side for browsing and loyalty tracking, and an Admin/Business Side for data visualization 
+and catalog management. 
+ 
+Objectives:   
+General Objective: To design and implement an affordable, user-friendly pet supply web application that 
+helps pet owners and local businesses by streamlining order reservations and inventory management. 
+Specific Objectives: 
+• Secure Access: To create and customize a product catalog for dog and cat supplies featuring secure 
+Google authentication for verified access. 
+• Enhanced Navigation: To integrate filtering by category (food, accessories, vitamins) and advanced 
+search functions to improve user experience. 
+• Data Analytics: To develop a Business Intelligence (BI) dashboard that displays statistics on top-selling 
+products and revenue trends for informed decision-making. 
+• Communication: To implement a notification system via Gmail for automated order confirmations and 
+pickup alerts. 
+ 
+Scope: 
+The system consists of two primary interfaces with the following functional features: 
+User Side (Pet Owners): 
+• Product Browsing: Access to a categorized catalog of pet supplies. 
+• Reservation System: Ability to place "Pickup Orders" online for local collection. 
+• Loyalty Dashboard: A personalized interface to track reward points and available vouchers. 
+• Automated Alerts: Gmail notifications for order status and pickup readiness. 
+Admin/Business Side: 
+• Catalog Management: Tools to update products, categories, and inventory levels. 
+• BI Dashboard: Real-time visualization of sales performance and product trends. 
+• Order Management: Oversight of incoming reservations and pickup fulfillment. 
+ 
+Limitations : 
+• Connectivity: The platform requires a stable internet connection for cloud hosting and Google API 
+integrations. 
+• Platform Constraint: The system is strictly a web-based application; it does not include a native mobile app 
+(iOS/Android). 
+• Service Exclusions: The platform is focused on retail; it excludes veterinary medical services and last-mile 
+delivery logistics. 
+• Maintenance: Requires ongoing monitoring of APIs and cloud database performance. 
+ 
+UNIVERSITY OF CALOOCAN CITY – NORTH CAMPUS 
+COMPUTER STUDIES DEPARTMENT 
+BACHELOR OF SCIENCE IN INFORMATION SYSTEM 
+ 
+BSIS 3-A             
+DATABASE SYSTEM ENTERPRISE 
+Name of Members: 
+Project Manager: Lamsen, Val Javes M.  
+Members: Evangelista, Marc Alexis N. 
+                  Garcia, Marc Justine M. 
+                  Tabios, Gene G. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Approved by: Benjamin Dave Cruz 
+                                                        Professor 

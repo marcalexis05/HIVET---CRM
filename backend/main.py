@@ -73,6 +73,20 @@ elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("p
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 BACKEND_URL          = os.getenv("BACKEND_URL", "").rstrip("/")
 REDIRECT_URI         = os.getenv("REDIRECT_URI", f"{BACKEND_URL}/auth/google/callback" if BACKEND_URL else "http://localhost:8000/auth/google/callback")
+if "hivet-crm-api.onrender.com" in REDIRECT_URI:
+    REDIRECT_URI = REDIRECT_URI.replace("hivet-crm-api.onrender.com", "hivet-crm.onrender.com")
+
+def get_effective_redirect_uri(request: Optional[Request] = None) -> str:
+    uri = REDIRECT_URI
+    if not uri or "localhost:8000" in uri:
+        if request:
+            host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+            proto = request.headers.get("x-forwarded-proto", "https" if host and "render.com" in str(host) else "http")
+            if host and "render.com" in str(host):
+                uri = f"{proto}://{host}/auth/google/callback"
+    if "hivet-crm-api.onrender.com" in uri:
+        uri = uri.replace("hivet-crm-api.onrender.com", "hivet-crm.onrender.com")
+    return uri
 ALGORITHM            = "HS256"
 TOKEN_EXPIRE_DAYS    = 30
 
@@ -1792,9 +1806,10 @@ async def google_login(request: Request, redirect_to: Optional[str] = None):
     if not target_frontend:
         target_frontend = FRONTEND_URL
 
+    eff_redirect_uri = get_effective_redirect_uri(request)
     params = {
         "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": REDIRECT_URI,
+        "redirect_uri": eff_redirect_uri,
         "response_type": "code",
         "scope": "openid email profile",
         "access_type": "offline",
@@ -1805,7 +1820,7 @@ async def google_login(request: Request, redirect_to: Optional[str] = None):
     return RedirectResponse(url=google_auth_url)
 
 @app.get("/auth/google/callback")
-async def google_callback(code: str, state: Optional[str] = None, db: Session = Depends(get_db)):
+async def google_callback(request: Request, code: str, state: Optional[str] = None, db: Session = Depends(get_db)):
     """Exchange code for token, upsert customer, return JWT to frontend."""
     dest_frontend = FRONTEND_URL
     if state:
@@ -1824,7 +1839,7 @@ async def google_callback(code: str, state: Optional[str] = None, db: Session = 
                 "code": code,
                 "client_id": GOOGLE_CLIENT_ID,
                 "client_secret": GOOGLE_CLIENT_SECRET,
-                "redirect_uri": REDIRECT_URI,
+                "redirect_uri": get_effective_redirect_uri(request),
                 "grant_type": "authorization_code",
             },
         )

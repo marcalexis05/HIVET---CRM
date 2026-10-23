@@ -12,9 +12,25 @@ function getTokenPayload(): { role?: string } | null {
     try {
         const token = localStorage.getItem('hivet_token');
         if (!token) return null;
-        const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-        const payload = JSON.parse(atob(base64));
-        if (payload.exp && payload.exp * 1000 < Date.now()) {
+        const parts = token.split('.');
+        if (parts.length < 2) return null;
+        let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4 !== 0) {
+            base64 += '=';
+        }
+        let payload: any = null;
+        try {
+            const jsonPayload = decodeURIComponent(
+                atob(base64)
+                    .split('')
+                    .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                    .join('')
+            );
+            payload = JSON.parse(jsonPayload);
+        } catch {
+            payload = JSON.parse(atob(base64));
+        }
+        if (payload && payload.exp && payload.exp * 1000 < Date.now()) {
             localStorage.removeItem('hivet_token');
             return null;
         }

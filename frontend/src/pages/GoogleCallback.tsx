@@ -13,25 +13,30 @@ const GoogleCallback = () => {
         const error = searchParams.get('error');
 
         if (error || !token) {
-            navigate('/login?error=google_auth_failed');
+            navigate('/login?error=google_auth_failed', { replace: true });
             return;
         }
 
-        // Store in localStorage first (synchronous) so ProtectedRoute sees it immediately
-        localStorage.setItem('hivet_token', token);
-        // Then update React state
-        loginWithToken(token);
-        // Navigate — ProtectedRoute will read localStorage as fallback
-        navigate('/dashboard/customer', { replace: true });
-    }, []); // run once on mount only
+        try {
+            // Store in localStorage first (synchronous) so ProtectedRoute sees it immediately
+            localStorage.setItem('hivet_token', token);
+            // Then update React state
+            loginWithToken(token);
+            // Clean browser redirect directly to dashboard — clears token from URL address bar
+            window.location.replace('/dashboard/customer');
+        } catch (err) {
+            console.error('Error completing Google login:', err);
+            window.location.replace('/dashboard/customer');
+        }
+    }, [searchParams]);
 
     return (
-        <div className="min-h-screen bg-accent-cream flex flex-col items-center justify-center gap-6">
+        <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-6">
             <div className="w-16 h-16 animate-pulse">
                 <Logo className="w-full h-full" />
             </div>
-            <p className="text-accent-brown/60 font-semibold text-sm animate-pulse">
-                Signing you in with Google…
+            <p className="text-accent-brown/80 font-bold text-sm tracking-wide animate-pulse">
+                Signing you in to Hi-Vet…
             </p>
         </div>
     );

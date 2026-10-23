@@ -29,7 +29,7 @@ from typing import Optional, List, Tuple
 import re
 import time
 import urllib.parse
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from fastapi import FastAPI, HTTPException, Depends, Request, UploadFile, File, Form, Query, APIRouter, BackgroundTasks
 from contextlib import asynccontextmanager
@@ -60,7 +60,7 @@ load_dotenv()
 GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 SECRET_KEY           = os.getenv("SECRET_KEY", "fallback-secret")
-FRONTEND_URL         = os.getenv("FRONTEND_URL", "http://localhost:3000")
+FRONTEND_URL         = os.getenv("FRONTEND_URL", "https://hivet-crm.vercel.app")
 DATABASE_URL         = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     print("[ERROR] DATABASE_URL environment variable is missing!")
@@ -71,7 +71,8 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
 elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
-REDIRECT_URI         = "http://localhost:8000/auth/google/callback"
+BACKEND_URL          = os.getenv("BACKEND_URL", "").rstrip("/")
+REDIRECT_URI         = os.getenv("REDIRECT_URI", f"{BACKEND_URL}/auth/google/callback" if BACKEND_URL else "http://localhost:8000/auth/google/callback")
 ALGORITHM            = "HS256"
 TOKEN_EXPIRE_DAYS    = 30
 
@@ -1777,8 +1778,20 @@ async def update_business_order_status(order_id: int, body: BusinessOrderStatusU
 # Routes â€“ Google OAuth
 # ---------------------------------------------------------------------------
 @app.get("/auth/google")
-async def google_login():
+async def google_login(request: Request, redirect_to: Optional[str] = None):
     """Redirect user to Google's OAuth consent screen."""
+    target_frontend = redirect_to
+    if not target_frontend:
+        referer = request.headers.get("referer") or request.headers.get("origin")
+        if referer:
+            try:
+                parsed = urlparse(referer)
+                target_frontend = f"{parsed.scheme}://{parsed.netloc}"
+            except Exception:
+                pass
+    if not target_frontend:
+        target_frontend = FRONTEND_URL
+
     params = {
         "client_id": GOOGLE_CLIENT_ID,
         "redirect_uri": REDIRECT_URI,
@@ -1786,13 +1799,23 @@ async def google_login():
         "scope": "openid email profile",
         "access_type": "offline",
         "prompt": "select_account",
+        "state": target_frontend,
     }
     google_auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
     return RedirectResponse(url=google_auth_url)
 
 @app.get("/auth/google/callback")
-async def google_callback(code: str, db: Session = Depends(get_db)):
+async def google_callback(code: str, state: Optional[str] = None, db: Session = Depends(get_db)):
     """Exchange code for token, upsert customer, return JWT to frontend."""
+    dest_frontend = FRONTEND_URL
+    if state:
+        cleaned_state = state.strip().rstrip("/")
+        if (cleaned_state.startswith("http://localhost:") or 
+            cleaned_state.startswith("https://localhost:") or 
+            "hivet-crm.vercel.app" in cleaned_state or 
+            "vercel.app" in cleaned_state):
+            dest_frontend = cleaned_state
+
     # 1. Exchange code for access token
     async with httpx.AsyncClient() as client:
         token_resp = await client.post(
@@ -1808,7 +1831,7 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
     token_data = token_resp.json()
     access_token = token_data.get("access_token")
     if not access_token:
-        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=google_auth_failed")
+        return RedirectResponse(url=f"{dest_frontend}/login?error=google_auth_failed")
 
     # 2. Fetch user profile from Google
     async with httpx.AsyncClient() as client:
@@ -1823,7 +1846,7 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
     picture   = google_user.get("picture", "")
 
     if not google_id or not email:
-        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=missing_profile")
+        return RedirectResponse(url=f"{dest_frontend}/login?error=missing_profile")
 
     # 3. Upsert customer row
     try:
@@ -1856,7 +1879,7 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         print(f"Error upserting Google user {email}: {e}")
-        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=db_error")
+        return RedirectResponse(url=f"{dest_frontend}/login?error=db_error")
 
     # 4. Issue JWT
     token = create_access_token({
@@ -1877,7 +1900,7 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
 
     # 5. Send Welcome Email if new, then redirect
     if is_new:
-        magic_link = f"{FRONTEND_URL}/auth/callback?token={token}"
+        magic_link = f"{dest_frontend}/auth/callback?token={token}"
         
 
         html_content = f"""
@@ -1932,9 +1955,9 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         except Exception as e:
             print("SMTP Error sending welcome email:", e)
             
-        return RedirectResponse(url=f"{FRONTEND_URL}/login?msg=check_email")
+        return RedirectResponse(url=f"{dest_frontend}/login?msg=check_email")
     else:
-        return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={token}")
+        return RedirectResponse(url=f"{dest_frontend}/auth/callback?token={token}")
 
 # --- Unified Contact Uniqueness & Normalization (Hi-Vet Security Core) ---
 CONTACT_UNIQUENESS_SCOPE = "global"  # "global" across Customer, Rider, Clinic, Admin

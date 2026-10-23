@@ -1,31 +1,27 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Mail,
+    Mail, AlertCircle,
     Lock, ArrowRight,
     ShieldCheck, MailCheck,
-    Eye, EyeOff, X, ChevronLeft, User
+    Eye, EyeOff, X, ChevronLeft, User, Smartphone
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { PasswordStrength } from '../components/PasswordStrength';
 import { CustomDropdown } from '../components/CustomDropdown';
 import { CustomDatePicker } from '../components/CustomDatePicker';
+import { calculateAgeFullYears, validateBirthday } from '../utils/dateValidation';
+import { checkContactAvailability, isValidPhMobile, isValidEmail } from '../utils/contactValidation';
+import { CONTACT_VALIDATION_MESSAGES } from '../constants/contactValidationWording';
+import { MAIN_LANDING_TEXT } from '../constants/mainLandingWording';
 import { useAuth } from '../context/AuthContext';
 import registerHero from '../assets/login_hero_landscape.png';
 
 const calculateAge = (birthdate: string) => {
     if (!birthdate) return '';
-    try {
-        const birthDate = new Date(birthdate);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const month = today.getMonth() - birthDate.getMonth();
-        if (month < 0 || (month === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-        }
-        return age >= 0 ? age.toString() : '0';
-    } catch (e) { return ''; }
+    const age = calculateAgeFullYears(birthdate);
+    return age !== null && age >= 0 ? age.toString() : '';
 };
 
 const Register = () => {
@@ -45,6 +41,79 @@ const Register = () => {
     const [birthdate, setBirthdate] = useState('');
     const [gender, setGender] = useState('');
     const [email, setEmail] = useState('');
+    const [sentTo, setSentTo] = useState('');
+    const [phoneError, setPhoneError] = useState<string | null>(null);
+    const [emailError, setEmailError] = useState<string | null>(null);
+    const [phoneChecking, setPhoneChecking] = useState(false);
+    const [emailChecking, setEmailChecking] = useState(false);
+
+    // Debounced Phone Validation
+    useEffect(() => {
+        if (!phone) {
+            setPhoneError(null);
+            return;
+        }
+        if (phone.length === 10 && !phone.startsWith('9')) {
+            setPhoneError(CONTACT_VALIDATION_MESSAGES.invalidNumber);
+            return;
+        }
+        if (phone.length < 10) {
+            setPhoneError(null);
+            return;
+        }
+        if (phone.length === 10 && phone.startsWith('9')) {
+            const timer = setTimeout(async () => {
+                setPhoneChecking(true);
+                const res = await checkContactAvailability('phone', phone);
+                setPhoneChecking(false);
+                setPhoneError(res.error);
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [phone]);
+
+    // Debounced Email Validation
+    useEffect(() => {
+        if (!email) {
+            setEmailError(null);
+            return;
+        }
+        if (!isValidEmail(email)) {
+            setEmailError(null);
+            return;
+        }
+        const timer = setTimeout(async () => {
+            setEmailChecking(true);
+            const res = await checkContactAvailability('email', email);
+            setEmailChecking(false);
+            setEmailError(res.error);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [email]);
+
+    const handlePhoneBlur = async () => {
+        if (!phone) return;
+        if (!isValidPhMobile(phone)) {
+            setPhoneError(CONTACT_VALIDATION_MESSAGES.invalidNumber);
+            return;
+        }
+        setPhoneChecking(true);
+        const res = await checkContactAvailability('phone', phone);
+        setPhoneChecking(false);
+        setPhoneError(res.error);
+    };
+
+    const handleEmailBlur = async () => {
+        if (!email) return;
+        if (!isValidEmail(email)) {
+            setEmailError(CONTACT_VALIDATION_MESSAGES.invalidEmail);
+            return;
+        }
+        setEmailChecking(true);
+        const res = await checkContactAvailability('email', email);
+        setEmailChecking(false);
+        setEmailError(res.error);
+    };
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [countdown, setCountdown] = useState(0);
@@ -99,7 +168,7 @@ const Register = () => {
 
     const handleSendOtp = async () => {
         if (!email || !password || password !== confirmPassword) {
-            return setError('Please check your email and passwords');
+            return setError('Please enter your email and matching passwords.');
         }
         if (password.length < 8) {
             return setError('Password must be at least 8 characters');
@@ -114,19 +183,23 @@ const Register = () => {
                 body: JSON.stringify({
                     email,
                     name: `${firstName} ${lastName}`.trim(),
+                    first_name: firstName,
+                    last_name: lastName,
                     gender,
-                    last_name: lastName
+                    phone,
+                    role: 'customer'
                 })
             });
             const data = await res.json();
             if (res.ok) {
+                setSentTo(data.channel === 'sms' && data.masked_phone ? data.masked_phone : email);
                 setStep(3);
                 setCountdown(60);
             } else {
-                setError(data.detail || 'Failed to send verification email');
+                setError(data.detail || 'Could not send verification code. Please try again.');
             }
         } catch (err) {
-            setError('An error occurred. Please try again.');
+            setError('Could not connect. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -145,34 +218,52 @@ const Register = () => {
         setError('');
         if (step === 1) {
             if (!firstName || !lastName || !phone || !birthdate || !gender) {
-                setError('All mandatory fields must be completed');
+                setError('Please fill in all required fields.');
                 return;
             }
-            const age = parseInt(calculateAge(birthdate));
-            if (isNaN(age)) {
-                setError('A valid birthdate is required for identification');
+            const bVal = validateBirthday(birthdate, 'person birthday');
+            if (!bVal.isValid) {
+                setError(bVal.error || 'Please choose a valid birthdate.');
                 return;
             }
-            if (age < 18) {
-                setError('Identification requires candidates 18 years and above');
+            if (phoneError) {
+                setError(phoneError);
                 return;
             }
-            if (age > 120) {
-                setError('Entry exceeds the maximum permissible age limit');
+            if (!isValidPhMobile(phone)) {
+                setPhoneError(CONTACT_VALIDATION_MESSAGES.invalidNumber);
+                setError(CONTACT_VALIDATION_MESSAGES.invalidNumber);
                 return;
             }
-            if (phone.length !== 10 || !phone.startsWith('9')) {
-                setError('Enter a valid 10-digit mobile number');
+            setPhoneChecking(true);
+            const pCheck = await checkContactAvailability('phone', phone);
+            setPhoneChecking(false);
+            if (!pCheck.available) {
+                setPhoneError(pCheck.error);
+                setError(pCheck.error || CONTACT_VALIDATION_MESSAGES.numberUsed);
                 return;
             }
             setStep(2);
         } else if (step === 2) {
             if (!email || !password || !confirmPassword) {
-                setError('All mandatory fields must be completed');
+                setError('Please fill in all required fields.');
                 return;
             }
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                setError('Enter a valid electronic mail address');
+            if (emailError) {
+                setError(emailError);
+                return;
+            }
+            if (!isValidEmail(email)) {
+                setEmailError(CONTACT_VALIDATION_MESSAGES.invalidEmail);
+                setError(CONTACT_VALIDATION_MESSAGES.invalidEmail);
+                return;
+            }
+            setEmailChecking(true);
+            const eCheck = await checkContactAvailability('email', email);
+            setEmailChecking(false);
+            if (!eCheck.available) {
+                setEmailError(eCheck.error);
+                setError(eCheck.error || CONTACT_VALIDATION_MESSAGES.emailUsed);
                 return;
             }
 
@@ -184,16 +275,16 @@ const Register = () => {
             if (/[^A-Za-z0-9]/.test(password)) strengthScore += 1;
 
             if (strengthScore < 2) {
-                setError('Security requires 8+ characters with uppercase, numeric, and symbols');
+                setError('Password must be at least 8 characters with a capital letter, a number, and a symbol.');
                 return;
             }
 
             if (password !== confirmPassword) {
-                setError('Security credentials do not match');
+                setError('Passwords do not match.');
                 return;
             }
             if (!agreedToTerms) {
-                setError('Acknowledgment of terms and conditions is required');
+                setError('Please accept the Terms of Use and Privacy Policy.');
                 return;
             }
             await handleSendOtp();
@@ -203,7 +294,7 @@ const Register = () => {
 
     const handleRegister = async () => {
         const otpCode = otp.join('');
-        if (otpCode.length !== 6) return setError('Verification requires the complete 6-digit code');
+        if (otpCode.length !== 6) return setError('Please enter the full 6-digit code.');
         setLoading(true);
         setError('');
         try {
@@ -230,11 +321,11 @@ const Register = () => {
                 // Redirect to login page with success message instead of auto-logging in
                 navigate('/login?msg=reg_success');
             } else {
-                setError(data.detail || 'Registration failed');
+                setError(data.detail || 'Could not create account. Please try again.');
             }
         } catch (err) {
             console.error(err);
-            setError('An error occurred. Please try again.');
+            setError('Could not connect. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -246,8 +337,8 @@ const Register = () => {
                 return (
                     <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-2 sm:space-y-2.5">
                         <div className="space-y-0.5">
-                            <h3 className="text-2xl sm:text-3xl font-black text-accent-brown tracking-tight leading-none">Profile</h3>
-                            <p className="text-[10px] sm:text-[11px] text-accent-brown/40 font-medium italic">Identification details.</p>
+                            <h3 className="text-2xl sm:text-3xl font-black text-accent-brown tracking-tight leading-none">{MAIN_LANDING_TEXT.registerPage.step1Title}</h3>
+                            <p className="text-[10px] sm:text-[11px] text-accent-brown/40 font-medium italic">{MAIN_LANDING_TEXT.registerPage.step1Subtitle}</p>
                         </div>
                         <div className="space-y-2 sm:space-y-2.5">
                             <div className="grid grid-cols-2 gap-3 sm:gap-4">
@@ -285,15 +376,36 @@ const Register = () => {
                                 </div>
                             </div>
                             <div className="space-y-1 group">
-                                <label className="text-[10px] sm:text-[11px] font-black text-accent-brown/30  pl-4 sm:pl-6 transition-colors group-focus-within:text-brand-dark italic block">Mobile Phone <span className="text-brand-dark">*</span></label>
-                                <div className="relative flex items-center bg-[#F7F6F2] ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl overflow-hidden transition-all shadow-inner">
+                                <label htmlFor="reg-phone" className="text-[10px] sm:text-[11px] font-black text-accent-brown/30  pl-4 sm:pl-6 transition-colors group-focus-within:text-brand-dark italic block">Mobile Phone <span className="text-brand-dark">*</span></label>
+                                <div className={`relative flex items-center bg-[#F7F6F2] ring-1 ${phoneError ? 'ring-red-400' : 'ring-brand-dark/5 focus-within:ring-brand-dark/30'} rounded-3xl overflow-hidden transition-all shadow-inner`}>
                                     <div className="pl-6 pr-4 py-2.5 sm:py-3 text-accent-brown font-black border-r border-accent-brown/10 text-sm sm:text-base opacity-30 transition-opacity group-focus-within:opacity-100">+63</div>
-                                    <input type="tel" value={phone} maxLength={10} onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="9XX XXX XXXX" className="flex-1 bg-transparent py-2.5 sm:py-3 px-5 sm:px-6 text-accent-brown font-bold text-sm sm:text-base outline-none" />
+                                    <input 
+                                        id="reg-phone"
+                                        type="tel" 
+                                        value={phone} 
+                                        maxLength={10} 
+                                        onChange={e => {
+                                            setPhone(e.target.value.replace(/\D/g, '').slice(0, 10));
+                                            if (phoneError) setPhoneError(null);
+                                        }} 
+                                        onBlur={handlePhoneBlur}
+                                        aria-invalid={!!phoneError}
+                                        aria-describedby={phoneError ? "reg-phone-error" : undefined}
+                                        placeholder="9XX XXX XXXX" 
+                                        className="flex-1 bg-transparent py-2.5 sm:py-3 px-5 sm:px-6 text-accent-brown font-bold text-sm sm:text-base outline-none" 
+                                    />
                                 </div>
+                                {phoneError && (
+                                    <p id="reg-phone-error" role="alert" aria-live="polite" className="text-xs font-bold text-red-500 flex items-center gap-1.5 pl-4 sm:pl-6 mt-1.5">
+                                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                        {phoneError}
+                                    </p>
+                                )}
                             </div>
                             <div className="grid grid-cols-2 gap-3 sm:gap-4 items-start">
                                 <div className="space-y-1">
                                     <CustomDatePicker 
+                                        mode="person birthday"
                                         label="Birthdate" 
                                         value={birthdate} 
                                         isRequired={true} 
@@ -305,7 +417,7 @@ const Register = () => {
                                 <div className="space-y-1">
                                     <label className="text-[10px] sm:text-[11px] font-black  text-accent-brown/30 block pl-4 sm:pl-6 italic mb-1">Calculated Age</label>
                                     <div className="w-full bg-[#F7F6F2] py-2.5 sm:py-3 px-5 sm:px-6 rounded-3xl text-accent-brown font-black text-sm sm:text-base italic opacity-50 shadow-inner border border-brand-dark/5 flex items-center">{calculateAge(birthdate) || '--'}</div>
-                                    <button type="button" onClick={() => setShowStudyModal(true)} className="text-[9px] font-black text-brand-dark  hover:underline italic pl-4 sm:pl-6 block text-left pt-0.5">Why 18+? View BAI Study</button>
+                                    <button type="button" onClick={() => setShowStudyModal(true)} className="text-[9px] font-black text-brand-dark  hover:underline italic pl-4 sm:pl-6 block text-left pt-0.5">Why 18+? Learn More</button>
                                 </div>
                             </div>
                             <div className="space-y-1">
@@ -322,23 +434,42 @@ const Register = () => {
                             </div>
                         </div>
                         {error && <div className="text-[10px] font-black text-red-500  bg-red-50 py-1.5 px-4 rounded-xl border border-red-100 italic text-center">{error}</div>}
-                        <button type="submit" className="bg-brand-dark text-white w-full py-3 sm:py-3.5 rounded-full font-black text-xs uppercase tracking-[0.35em] flex items-center justify-center gap-3 hover:shadow-2xl transition-all group mt-1">Next Stage <ArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform" /></button>
+                        <button type="submit" disabled={!!phoneError || phoneChecking} className="bg-brand-dark text-white w-full py-3 sm:py-3.5 rounded-full font-black text-xs uppercase tracking-[0.35em] flex items-center justify-center gap-3 hover:shadow-2xl transition-all group mt-1 disabled:opacity-50">{MAIN_LANDING_TEXT.registerPage.nextBtn} <ArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform" /></button>
                     </motion.div>
                 );
             case 2:
                 return (
                     <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-3 sm:space-y-4">
                         <div className="space-y-0.5">
-                            <h3 className="text-2xl sm:text-3xl font-black text-accent-brown tracking-tight leading-none">Security</h3>
-                            <p className="text-[10px] sm:text-[11px] text-accent-brown/40 font-medium italic">Secure your account credentials.</p>
+                            <h3 className="text-2xl sm:text-3xl font-black text-accent-brown tracking-tight leading-none">{MAIN_LANDING_TEXT.registerPage.step2Title}</h3>
+                            <p className="text-[10px] sm:text-[11px] text-accent-brown/40 font-medium italic">{MAIN_LANDING_TEXT.registerPage.step2Subtitle}</p>
                         </div>
                         <div className="space-y-2.5 sm:space-y-3">
                             <div className="group space-y-1">
-                                <label className="text-[10px] sm:text-[11px] font-black text-accent-brown/30  pl-4 sm:pl-6 italic">Email</label>
-                                <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-sm">
+                                <label htmlFor="reg-email" className="text-[10px] sm:text-[11px] font-black text-accent-brown/30  pl-4 sm:pl-6 italic">Email <span className="text-brand-dark">*</span></label>
+                                <div className={`relative ring-1 ${emailError ? 'ring-red-400' : 'ring-brand-dark/5 focus-within:ring-brand-dark/30'} rounded-3xl transition-all shadow-sm`}>
                                     <Mail className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/20 group-focus-within:text-brand-dark" />
-                                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="user@gmail.com" className="w-full bg-[#F7F6F2] rounded-3xl py-2.5 sm:py-3 pl-14 pr-6 text-accent-brown font-bold text-sm sm:text-base outline-none shadow-inner" />
+                                    <input 
+                                        id="reg-email"
+                                        type="email" 
+                                        value={email} 
+                                        onChange={e => {
+                                            setEmail(e.target.value);
+                                            if (emailError) setEmailError(null);
+                                        }} 
+                                        onBlur={handleEmailBlur}
+                                        aria-invalid={!!emailError}
+                                        aria-describedby={emailError ? "reg-email-error" : undefined}
+                                        placeholder="user@gmail.com" 
+                                        className="w-full bg-[#F7F6F2] rounded-3xl py-2.5 sm:py-3 pl-14 pr-6 text-accent-brown font-bold text-sm sm:text-base outline-none shadow-inner" 
+                                    />
                                 </div>
+                                {emailError && (
+                                    <p id="reg-email-error" role="alert" aria-live="polite" className="text-xs font-bold text-red-500 flex items-center gap-1.5 pl-4 sm:pl-6 mt-1.5">
+                                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                        {emailError}
+                                    </p>
+                                )}
                             </div>
                             <div className="group space-y-1">
                                 <label className="text-[10px] sm:text-[11px] font-black text-accent-brown/30  pl-4 sm:pl-6">Password</label>
@@ -376,10 +507,10 @@ const Register = () => {
                                         {agreedToTerms && <div className="w-2 h-2 bg-white rounded-xs" />}
                                     </div>
                                     <p className="text-[10px] sm:text-[11px] font-black  text-accent-brown/30 group-hover/terms:text-accent-brown transition-colors italic">
-                                        I accept the {' '}
-                                        <button type="button" onClick={(e) => { e.stopPropagation(); setShowLegalModal(true); }} className="text-brand-dark hover:underline">Terms</button>
+                                        {MAIN_LANDING_TEXT.registerPage.agreeTermsPrefix} {' '}
+                                        <button type="button" onClick={(e) => { e.stopPropagation(); setShowLegalModal(true); }} className="text-brand-dark hover:underline">{MAIN_LANDING_TEXT.registerPage.termsLink}</button>
                                         {' '} and {' '}
-                                        <button type="button" onClick={(e) => { e.stopPropagation(); setShowLegalModal(true); }} className="text-brand-dark hover:underline">Conditions</button>
+                                        <button type="button" onClick={(e) => { e.stopPropagation(); setShowLegalModal(true); }} className="text-brand-dark hover:underline">{MAIN_LANDING_TEXT.registerPage.privacyLink}</button>
                                     </p>
                                 </div>
                             </div>
@@ -390,7 +521,7 @@ const Register = () => {
                                 <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                                 Back
                             </button>
-                            <button type="submit" disabled={loading} className="bg-brand-dark text-white flex-[2] py-3 rounded-full font-black text-xs  transition-all hover:shadow-2xl shadow-xl italic">{loading ? 'Processing...' : 'Verify Now'}</button>
+                            <button type="submit" disabled={loading} className="bg-brand-dark text-white flex-[2] py-3 rounded-full font-black text-xs  transition-all hover:shadow-2xl shadow-xl italic">{loading ? 'Sending Code...' : MAIN_LANDING_TEXT.registerPage.sendCodeBtn}</button>
                         </div>
                     </motion.div>
                 );
@@ -398,10 +529,12 @@ const Register = () => {
                 return (
                     <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4 sm:space-y-6">
                         <div className="space-y-2">
-                            <div className="w-12 h-12 bg-brand/10 text-brand-dark rounded-2xl flex items-center justify-center"><MailCheck className="w-6 h-6" /></div>
+                            <div className="w-12 h-12 bg-brand/10 text-brand-dark rounded-2xl flex items-center justify-center">
+                                {sentTo && sentTo.startsWith('+') ? <Smartphone className="w-6 h-6" /> : <MailCheck className="w-6 h-6" />}
+                            </div>
                             <div className="space-y-0.5">
-                                <h3 className="text-2xl sm:text-3xl font-black text-accent-brown tracking-tight leading-none italic">Verification</h3>
-                                <p className="text-xs text-accent-brown/40 font-medium italic leading-relaxed">Sent 6-digit code to <span className="text-accent-brown font-bold not-italic">{email}</span></p>
+                                <h3 className="text-2xl sm:text-3xl font-black text-accent-brown tracking-tight leading-none italic">{MAIN_LANDING_TEXT.registerPage.step3Title}</h3>
+                                <p className="text-xs text-accent-brown/40 font-medium italic leading-relaxed">{MAIN_LANDING_TEXT.registerPage.step3Subtitle(sentTo || email)}</p>
                             </div>
                         </div>
                         <div className="flex justify-between gap-2 sm:gap-3">
@@ -411,10 +544,10 @@ const Register = () => {
                         </div>
                         {error && <div className="text-[10px] font-black text-red-500  bg-red-50 py-1.5 px-4 rounded-xl border border-red-100 italic text-center">{error}</div>}
                         <div className="space-y-3">
-                            <p className="text-xs font-black text-accent-brown/30  ml-4 italic">No code? <button type="button" onClick={handleSendOtp} disabled={countdown > 0} className="text-brand-dark font-black hover:text-accent-brown">{countdown > 0 ? `Wait ${countdown}s` : 'Resend'}</button></p>
+                            <p className="text-xs font-black text-accent-brown/30  ml-4 italic">Didn't get a code? <button type="button" onClick={handleSendOtp} disabled={countdown > 0} className="text-brand-dark font-black hover:text-accent-brown">{countdown > 0 ? MAIN_LANDING_TEXT.registerPage.waitCountdown(countdown) : MAIN_LANDING_TEXT.registerPage.resendBtn}</button></p>
                             <div className="flex gap-4">
-                                <button type="button" onClick={prevStep} className="flex-1 px-6 py-3 rounded-full font-black text-xs  text-accent-brown/30 italic">Review</button>
-                                <button type="submit" disabled={loading} className="bg-brand-dark text-white flex-[2] py-3 rounded-full font-black text-xs  transition-all italic">{loading ? 'Creating...' : 'Initialize'}</button>
+                                <button type="button" onClick={prevStep} className="flex-1 px-6 py-3 rounded-full font-black text-xs  text-accent-brown/30 italic">{MAIN_LANDING_TEXT.registerPage.backBtn}</button>
+                                <button type="submit" disabled={loading} className="bg-brand-dark text-white flex-[2] py-3 rounded-full font-black text-xs  transition-all italic">{loading ? MAIN_LANDING_TEXT.registerPage.creatingAccountBtn : MAIN_LANDING_TEXT.registerPage.completeSignUpBtn}</button>
                             </div>
                         </div>
                     </motion.div>
@@ -428,7 +561,7 @@ const Register = () => {
             {/* Left Column: Full Screen Hero */}
             <div className="hidden lg:block w-1/2 h-full relative overflow-hidden group">
                 <div className="absolute inset-0 z-0">
-                    <img src={registerHero} alt="Lifestyle" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
+                    <img src={registerHero} alt="Pet Owner Registration" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
                     <div className="absolute inset-0 bg-gradient-to-t from-accent-brown via-accent-brown/40 to-transparent opacity-90 transition-opacity" />
                     <div className="absolute inset-0 bg-black/20" />
                 </div>
@@ -441,13 +574,13 @@ const Register = () => {
                             <span className="text-2xl xl:text-3xl font-black text-white tracking-tight">Hi-Vet</span>
                         </Link>
                         <div className="space-y-6 xl:space-y-8 max-w-lg">
-                            <div className="inline-flex items-center gap-3 text-white/60  text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Join Network</div>
-                            <h1 className="text-5xl xl:text-7xl font-black text-white leading-[0.85] tracking-tighter uppercase">Start your <br /><span className="text-brand-dark italic font-outfit">Journey.</span></h1>
-                            <p className="text-base xl:text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Join the world's most innovative community for dedicated pet parents and professionals.</p>
+                            <div className="inline-flex items-center gap-3 text-white/60  text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />{MAIN_LANDING_TEXT.registerPage.heroTag}</div>
+                            <h1 className="text-5xl xl:text-7xl font-black text-white leading-[0.85] tracking-tighter uppercase">{MAIN_LANDING_TEXT.registerPage.heroTitle}</h1>
+                            <p className="text-base xl:text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">{MAIN_LANDING_TEXT.registerPage.heroSubtitle}</p>
                         </div>
                     </div>
                     <div className="bg-white/10 backdrop-blur-xl px-8 py-3.5 xl:px-10 xl:py-5 rounded-full border border-white/10 w-fit">
-                        <p className="text-[10px] xl:text-[11px] font-black text-white  italic">Onboarding Stage {step} / 3</p>
+                        <p className="text-[10px] xl:text-[11px] font-black text-white  italic">{MAIN_LANDING_TEXT.registerPage.heroStepBadge(step)}</p>
                     </div>
                 </div>
             </div>
@@ -465,14 +598,14 @@ const Register = () => {
                         <div className="flex gap-3">
                             {[1, 2, 3].map(i => <div key={i} className={`h-1.5 rounded-full transition-all duration-700 ${step >= i ? 'w-12 sm:w-16 bg-brand-dark shadow-[0_0_20px_rgba(242,107,33,0.4)]' : 'w-4 bg-accent-brown/10'}`} />)}
                         </div>
-                        <Link to="/login" className="text-xs sm:text-sm font-black text-brand-dark uppercase tracking-[0.25em] border-b-2 sm:border-b-4 border-brand-dark/10 pb-0.5 sm:pb-1 italic hover:text-accent-brown transition-all">Sign In Instead</Link>
+                        <Link to="/login" className="text-xs sm:text-sm font-black text-brand-dark uppercase tracking-[0.25em] border-b-2 sm:border-b-4 border-brand-dark/10 pb-0.5 sm:pb-1 italic hover:text-accent-brown transition-all">{MAIN_LANDING_TEXT.registerPage.logInInstead}</Link>
                     </div>
 
                     <form onSubmit={handleSubmit} className="overflow-y-visible"><AnimatePresence mode="wait">{renderStep()}</AnimatePresence></form>
 
                     {step === 1 && (
                         <div className={`mt-2 ${error ? 'space-y-1' : 'space-y-1.5'}`}>
-                            <div className="flex items-center gap-6"><div className="flex-1 h-[1px] bg-accent-brown/10" /><span className="text-[10px] font-black text-accent-brown/20 ">Quick Link</span><div className="flex-1 h-[1px] bg-accent-brown/10" /></div>
+                            <div className="flex items-center gap-6"><div className="flex-1 h-[1px] bg-accent-brown/10" /><span className="text-[10px] font-black text-accent-brown/20 ">Or</span><div className="flex-1 h-[1px] bg-accent-brown/10" /></div>
                             <button type="button" onClick={() => window.location.href = 'http://localhost:8000/auth/google'} className="w-full flex items-center justify-center gap-3 bg-[#F7F6F2] hover:bg-white border border-transparent hover:border-brand-dark/20 py-2.5 sm:py-3 rounded-full font-black text-[10px]  transition-all shadow-sm italic">
                                 <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" /><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" /><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
                                 Sign Up with Google
@@ -483,7 +616,7 @@ const Register = () => {
                     <div className="mt-2.5 sm:mt-3 text-center pt-2 border-t border-accent-brown/5">
                         <Link to="/" className="inline-flex items-center gap-3 text-xs sm:text-sm font-black uppercase tracking-[0.35em] text-accent-brown/30 hover:text-brand-dark transition-all group italic">
                             <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                            Return
+                            Back to Home
                         </Link>
                     </div>
                 </div>
@@ -498,30 +631,30 @@ const Register = () => {
                             <button onClick={() => setShowLegalModal(false)} className="absolute top-12 right-12 text-accent-brown hover:rotate-90 transition-transform"><X className="w-8 h-8" /></button>
                             <div className="space-y-10 text-left">
                                 <div className="w-20 h-20 bg-brand/10 text-brand-dark rounded-3xl flex items-center justify-center"><ShieldCheck className="w-10 h-10" /></div>
-                                <h3 className="text-3xl font-black text-accent-brown tracking-tight leading-none italic">Terms & Conditions</h3>
+                                <h3 className="text-3xl font-black text-accent-brown tracking-tight leading-none italic">Terms of Use</h3>
                                 <div className="space-y-8">
                                     <div className="space-y-3">
-                                        <h4 className="text-[10px] font-black  text-brand-dark italic">User Integrity</h4>
+                                        <h4 className="text-[10px] font-black  text-brand-dark italic">Accurate Information</h4>
                                         <p className="text-md text-accent-brown/70 italic leading-[1.6]">
-                                            You agree to provide accurate identification data and maintain the absolute confidentiality of your portal access credentials.
+                                            You agree to provide accurate details and keep your account password safe.
                                         </p>
                                     </div>
                                     <div className="w-full h-[1px] bg-accent-brown/5" />
                                     <div className="space-y-3">
-                                        <h4 className="text-[10px] font-black  text-brand-dark italic">Data Protection</h4>
+                                        <h4 className="text-[10px] font-black  text-brand-dark italic">Privacy & Security</h4>
                                         <p className="text-md text-accent-brown/70 italic leading-[1.6]">
-                                            Your information is secured via advanced encryption. We uphold strict privacy standards and never compromise your individual data sovereignty.
+                                            Your information is protected with secure encryption. We respect your privacy and never sell your personal details.
                                         </p>
                                     </div>
                                     <div className="w-full h-[1px] bg-accent-brown/5" />
                                     <div className="space-y-3">
-                                        <h4 className="text-[10px] font-black  text-brand-dark italic">Service Usage</h4>
+                                        <h4 className="text-[10px] font-black  text-brand-dark italic">Fair Use</h4>
                                         <p className="text-md text-accent-brown/70 italic leading-[1.6]">
-                                            The Hi-Vet ecosystem must be utilized in accordance with professional veterinary ethics and local regulatory requirements.
+                                            Please use Hi-Vet responsibly and follow local animal care rules.
                                         </p>
                                     </div>
                                 </div>
-                                <button onClick={() => { setAgreedToTerms(true); setShowLegalModal(false); }} className="w-full bg-brand-dark text-white py-6 rounded-full font-black  text-xs shadow-xl shadow-brand-dark/20 hover:shadow-brand-dark/40 hover:-translate-y-1 transition-all">Confirm Acknowledgement</button>
+                                <button onClick={() => { setAgreedToTerms(true); setShowLegalModal(false); }} className="w-full bg-brand-dark text-white py-6 rounded-full font-black  text-xs shadow-xl shadow-brand-dark/20 hover:shadow-brand-dark/40 hover:-translate-y-1 transition-all">I Understand and Agree</button>
                             </div>
                         </motion.div>
                     </div>
@@ -539,30 +672,30 @@ const Register = () => {
                                 <div className="space-y-6 md:pr-12">
                                     <div className="inline-flex items-center gap-3 text-brand-dark  text-[10px] font-black mb-2 italic">
                                         <div className="w-10 h-[2px] bg-brand-dark" /> 
-                                        Regulatory Compliance
+                                        Age Requirement
                                     </div>
-                                    <h3 className="text-4xl md:text-5xl font-black text-accent-brown tracking-tighter uppercase leading-[0.9] italic">BAI Age Policy <br /><span className="text-brand-dark">Research Note</span></h3>
+                                    <h3 className="text-4xl md:text-5xl font-black text-accent-brown tracking-tighter uppercase leading-[0.9] italic">Age 18+ Policy <br /><span className="text-brand-dark">Information</span></h3>
                                 </div>
 
                                 <div className="space-y-10">
                                     <div className="space-y-4">
-                                        <h4 className="text-[11px] font-black  text-accent-brown/40 italic">Overview</h4>
+                                        <h4 className="text-[11px] font-black  text-accent-brown/40 italic">Why Age 18+?</h4>
                                         <p className="text-md text-accent-brown font-medium italic leading-[1.8] bg-white p-8 rounded-[2.5rem] shadow-sm border border-accent-brown/5">
-                                            Hi-Vet enforces a **18-year-old minimum age** requirement to align with the Bureau of Animal Industry (BAI) standards and the Animal Welfare Act (RA 8485).
+                                            Hi-Vet requires pet owners to be at least 18 years old to follow the Animal Welfare Act (RA 8485) and Bureau of Animal Industry standards.
                                         </p>
                                     </div>
 
                                     <div className="grid md:grid-cols-2 gap-8">
                                         <div className="space-y-3">
-                                            <h4 className="text-[10px] font-black  text-brand-dark italic">Legal Capacity</h4>
+                                            <h4 className="text-[10px] font-black  text-brand-dark italic">Adult Responsibility</h4>
                                             <p className="text-sm text-accent-brown/70 italic leading-[1.7]">
-                                                Under Philippine law, legal personhood is attained at 18. This ensures every Hi-Vet user is capable of entering into binding service contracts for veterinary care.
+                                                Under Philippine law, you become an adult at 18. This ensures you can legally order pet supplies and book clinic visits.
                                             </p>
                                         </div>
                                         <div className="space-y-3">
-                                            <h4 className="text-[10px] font-black  text-brand-dark italic">Accountability</h4>
+                                            <h4 className="text-[10px] font-black  text-brand-dark italic">Pet Care Decisions</h4>
                                             <p className="text-sm text-accent-brown/70 italic leading-[1.7]">
-                                                The BAI requires accountable representatives for all animal-related transactions. This prevents legal slippage in animal welfare compliance.
+                                                An adult must be responsible for clinic visits, medicine orders, and pet care decisions.
                                             </p>
                                         </div>
                                     </div>
@@ -570,7 +703,7 @@ const Register = () => {
                                     <div className="w-full h-[1px] bg-accent-brown/10" />
 
                                     <div className="space-y-6">
-                                        <h4 className="text-[10px] font-black  text-accent-brown/30 italic">Official References</h4>
+                                        <h4 className="text-[10px] font-black  text-accent-brown/30 italic">Legal References</h4>
                                         <div className="flex flex-wrap gap-3">
                                             {['BAI GUIDELINES', 'RA 8485', 'RA 10631', 'CIVIL CODE'].map(ref => (
                                                 <span key={ref} className="px-5 py-2 rounded-full border border-accent-brown/10 text-[10px] font-black text-accent-brown/40 ">{ref}</span>
@@ -579,7 +712,7 @@ const Register = () => {
                                     </div>
                                 </div>
 
-                                <button onClick={() => setShowStudyModal(false)} className="w-full bg-accent-brown text-white py-6 rounded-full font-black  text-xs shadow-2xl hover:brightness-110 transition-all">Close Study</button>
+                                <button onClick={() => setShowStudyModal(false)} className="w-full bg-accent-brown text-white py-6 rounded-full font-black  text-xs shadow-2xl hover:brightness-110 transition-all">Close</button>
                             </div>
                         </motion.div>
                     </div>

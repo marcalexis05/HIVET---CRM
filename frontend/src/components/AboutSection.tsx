@@ -1,29 +1,21 @@
 import { motion } from 'framer-motion';
-import { Zap, Users, Shield, Award, Sparkles } from 'lucide-react';
+import { Zap, Shield, Sparkles } from 'lucide-react';
+import { MAIN_LANDING_TEXT } from '../constants/mainLandingWording';
 
-const pillars = [
-    {
-        icon: Shield,
-        title: 'Professional Integrity',
-        desc: 'Licensed veterinary experts and certified specialists delivering care under rigorous clinical protocols.',
-        color: 'bg-accent-brown text-white',
-    },
-    {
-        icon: Zap,
-        title: 'Synchronized Care',
-        desc: 'Real-time infrastructure connecting clinics, riders, and owners for a frictionless experience.',
-        color: 'bg-brand-dark text-white',
-    },
-    {
-        icon: Sparkles,
-        title: 'Premium Standard',
-        desc: 'A commitment to excellence in every product, every interaction, and every tail wag.',
-        color: 'bg-white border-brand/20 text-brand-dark',
-    },
+const PILLAR_STYLES = [
+    { icon: Shield, color: 'bg-accent-brown text-white' },
+    { icon: Zap, color: 'bg-brand-dark text-white' },
+    { icon: Sparkles, color: 'bg-white border-brand/20 text-brand-dark' },
 ];
 
+const pillars = MAIN_LANDING_TEXT.aboutSection.pillars.map((p, idx) => ({
+    ...p,
+    ...PILLAR_STYLES[idx],
+}));
 
 export function AboutSection() {
+    const imagesAlt = MAIN_LANDING_TEXT.aboutSection.imagesAlt;
+
     return (
         <section id="about" className="py-24 sm:py-40 bg-[#FAF9F6] relative overflow-hidden">
             <div className="container mx-auto px-6">
@@ -38,20 +30,20 @@ export function AboutSection() {
                         <div className="space-y-4">
                             <div className="inline-flex items-center gap-3 text-brand-dark text-xs font-bold">
                                 <div className="w-12 h-[2px] bg-brand-dark" />
-                                Our Heritage
+                                {MAIN_LANDING_TEXT.aboutSection.tag}
                             </div>
                             <h2 className="text-5xl sm:text-6xl lg:text-7xl font-black text-accent-brown tracking-tight leading-tight">
-                                Built for <span className="text-brand-dark">Pets,</span><br />
-                                Driven by <span className="italic font-outfit">Love.</span>
+                                {MAIN_LANDING_TEXT.aboutSection.titlePrefix}<br />
+                                <span className="text-brand-dark italic font-outfit">{MAIN_LANDING_TEXT.aboutSection.titleHighlight}</span>
                             </h2>
                         </div>
                         
                         <div className="space-y-6 max-w-xl">
                             <p className="text-xl text-accent-brown/70 font-semibold leading-relaxed">
-                                Hi-Vet was established with a singular objective: to architect a supply chain where quality pet care is not a luxury, but a seamless standard.
+                                {MAIN_LANDING_TEXT.aboutSection.desc1}
                             </p>
                             <p className="text-lg text-accent-brown/50 font-medium leading-relaxed">
-                                By integrating deep veterinary expertise with cutting-edge logistics technology, we ensure every interaction is precise, rewarding, and deeply personal.
+                                {MAIN_LANDING_TEXT.aboutSection.desc2}
                             </p>
                         </div>
                     </motion.div>
@@ -66,18 +58,18 @@ export function AboutSection() {
                         <div className="grid grid-cols-2 gap-6">
                             <div className="space-y-6 translate-y-12">
                                 <div className="aspect-[4/5] rounded-[3rem] overflow-hidden border-8 border-white shadow-2xl">
-                                    <img src="/about-grid-1.png" alt="Care" className="w-full h-full object-cover" />
+                                    <img src="/about-grid-1.png" alt={imagesAlt[0]} className="w-full h-full object-cover" />
                                 </div>
                                 <div className="aspect-square rounded-[3rem] overflow-hidden border-8 border-white shadow-2xl">
-                                    <img src="/about-grid-3.png" alt="Clinical" className="w-full h-full object-cover" />
+                                    <img src="/about-grid-3.png" alt={imagesAlt[1]} className="w-full h-full object-cover" />
                                 </div>
                             </div>
                             <div className="space-y-6">
                                 <div className="aspect-square rounded-[3rem] overflow-hidden border-8 border-white shadow-2xl">
-                                    <img src="/about-grid-2.png" alt="Professional" className="w-full h-full object-cover" />
+                                    <img src="/about-grid-2.png" alt={imagesAlt[2]} className="w-full h-full object-cover" />
                                 </div>
                                 <div className="aspect-[4/5] rounded-[3rem] overflow-hidden border-8 border-white shadow-2xl">
-                                    <img src="/about-grid-4.png" alt="Service" className="w-full h-full object-cover" />
+                                    <img src="/about-grid-4.png" alt={imagesAlt[3]} className="w-full h-full object-cover" />
                                 </div>
                             </div>
                         </div>
@@ -98,13 +90,11 @@ export function AboutSection() {
                             transition={{ duration: 0.6, delay: i * 0.1 }}
                             className="bg-white p-12 rounded-[3.5rem] shadow-sm hover:shadow-2xl transition-all duration-500 border border-accent-brown/5 group"
                         >
-                            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-8 border shadow-inner group-hover:scale-110 transition-transform ${p.color.includes('bg-white') ? 'bg-accent-peach/20 border-brand/20' : 'bg-current border-white/20'}`}>
-                                <p.icon className={`w-8 h-8 ${p.color.includes('text-white') ? 'text-white' : 'text-accent-brown'}`} />
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-8 ${p.color} shadow-lg group-hover:scale-110 transition-transform`}>
+                                <p.icon className="w-7 h-7" />
                             </div>
-                            <h4 className="text-2xl font-black text-accent-brown tracking-tight mb-4">{p.title}</h4>
-                            <p className="text-accent-brown/50 font-medium leading-relaxed italic">
-                                "{p.desc}"
-                            </p>
+                            <h3 className="text-2xl font-black text-accent-brown mb-4 tracking-tight">{p.title}</h3>
+                            <p className="text-accent-brown/60 font-medium leading-relaxed">{p.desc}</p>
                         </motion.div>
                     ))}
                 </div>

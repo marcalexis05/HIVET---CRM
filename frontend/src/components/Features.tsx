@@ -1,45 +1,40 @@
 import { motion } from 'framer-motion';
-import { Package, Truck, Award, BarChart3, PawPrint, Target, ShieldCheck } from 'lucide-react';
+import { Truck, Award, BarChart3, PawPrint, Target, ShieldCheck } from 'lucide-react';
+import { MAIN_LANDING_TEXT } from '../constants/mainLandingWording';
 
 export const Features = () => {
-    const features = [
+    const cardVisuals = [
         {
             icon: Target,
-            title: "Precision Sourcing",
-            description: "A specialized store curated with surgical precision for discerning pet professionals and owners.",
             color: "bg-white border-accent-brown/5",
             size: "col-span-1 md:col-span-2",
-            accent: "Expert Selection"
         },
         {
             icon: Truck,
-            title: "Rider Logistics",
-            description: "Seamless click-and-collect fulfillment powered by our dedicated rider workforce.",
             color: "bg-brand-dark text-white",
-            size: "col-span-1"
+            size: "col-span-1",
         },
         {
             icon: ShieldCheck,
-            title: "Clinic Standards",
-            description: "Every product verified for professional veterinary use and standard compliance.",
             color: "bg-white border-accent-brown/5",
-            size: "col-span-1"
+            size: "col-span-1",
         },
         {
             icon: BarChart3,
-            title: "BI Analytics",
-            description: "Empowering clinics with real-time data insights to optimize procurement and forecasting.",
             color: "bg-accent-brown text-white",
-            size: "col-span-1 md:col-span-2 shadow-2xl shadow-accent-brown/20"
+            size: "col-span-1 md:col-span-2 shadow-2xl shadow-accent-brown/20",
         },
         {
             icon: Award,
-            title: "Elite Loyalty",
-            description: "A multi-tier rewards program designed to value long-term health and commitment.",
             color: "bg-white border-accent-brown/5",
-            size: "col-span-1 md:col-span-2"
-        }
+            size: "col-span-1 md:col-span-2",
+        },
     ];
+
+    const features = MAIN_LANDING_TEXT.features.cards.map((card, i) => ({
+        ...card,
+        ...cardVisuals[i],
+    }));
 
     return (
         <section className="py-24 sm:py-32 bg-white relative overflow-hidden">
@@ -48,14 +43,14 @@ export const Features = () => {
                     <div className="max-w-2xl space-y-4">
                         <div className="inline-flex items-center gap-2 text-brand-dark text-xs font-bold">
                             <div className="w-8 h-[2px] bg-brand-dark" />
-                            Core Capabilities
+                            {MAIN_LANDING_TEXT.features.tag}
                         </div>
                         <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-accent-brown tracking-tighter leading-[0.95]">
-                            Ecosystem Designed for <span className="text-brand-dark italic font-outfit">Supreme Efficiency.</span>
+                            {MAIN_LANDING_TEXT.features.titlePrefix} <span className="text-brand-dark italic font-outfit">{MAIN_LANDING_TEXT.features.titleHighlight}</span>
                         </h2>
                     </div>
                     <p className="text-lg sm:text-xl text-accent-brown/50 font-medium max-w-sm leading-relaxed">
-                        Precision-engineered solutions for the modern veterinary supply chain and retail experience.
+                        {MAIN_LANDING_TEXT.features.subtitle}
                     </p>
                 </div>
 
@@ -99,9 +94,8 @@ export const Features = () => {
                 </div>
             </div>
 
-            {/* Architectural Background Decoration */}
-            <div className="absolute -left-20 top-1/2 -translate-y-1/2 w-64 h-64 bg-brand/5 rounded-full blur-3xl" />
-            <div className="absolute -right-20 bottom-0 w-96 h-96 bg-accent-peach/20 rounded-full blur-3xl" />
+            {/* Background Paw Element */}
+            <PawPrint className="absolute left-[-5%] bottom-[-5%] w-96 h-96 text-accent-brown/5 -rotate-12 pointer-events-none" />
         </section>
     );
 };

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Mail, Lock, ArrowRight, ChevronLeft,
+    Mail, AlertCircle, Lock, ArrowRight, ChevronLeft,
     ShieldCheck, MailCheck, Building2, Eye, EyeOff,
     FileCheck, Landmark, User, MapPin, Upload, X, CheckCircle2, Clock
 } from 'lucide-react';
@@ -9,22 +9,18 @@ import { Link, useNavigate } from 'react-router-dom';
 import { PasswordStrength } from '../components/PasswordStrength';
 import { CustomDropdown } from '../components/CustomDropdown';
 import { CustomDatePicker } from '../components/CustomDatePicker';
+import { calculateAgeFullYears, validateBirthday } from '../utils/dateValidation';
+import { checkContactAvailability, isValidPhMobile, isValidEmail } from '../utils/contactValidation';
+import { CONTACT_VALIDATION_MESSAGES } from '../constants/contactValidationWording';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { useAuth } from '../context/AuthContext';
 import loginHero from '../assets/login_hero_landscape.png';
+import { CLINIC_LANDING_TEXT } from '../constants/clinicLandingWording';
 
 const calculateAge = (birthday: string) => {
     if (!birthday) return '';
-    try {
-        const birthDate = new Date(birthday);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const month = today.getMonth() - birthDate.getMonth();
-        if (month < 0 || (month === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-        }
-        return age >= 0 ? age.toString() : '0';
-    } catch (e) { return ''; }
+    const age = calculateAgeFullYears(birthday);
+    return age !== null && age >= 0 ? age.toString() : '';
 };
 
 // ─── File Upload Input Component ──────────────────────────────────────────────
@@ -64,8 +60,8 @@ const FileUploadField = ({
                         <Upload className="w-6 h-6 text-accent-brown/20 group-hover:text-brand-dark transition-colors" />
                     </div>
                     <div className="text-center">
-                        <span className="block text-[10px] font-black text-accent-brown uppercase tracking-[0.3em] group-hover:text-brand-dark transition-colors italic">Initialize Upload</span>
-                        <span className="block text-[9px] text-accent-brown/30 font-bold uppercase tracking-widest mt-1 italic">PDF, JPG, or PNG · Max 5MB</span>
+                        <span className="block text-[10px] font-black text-accent-brown uppercase tracking-[0.3em] group-hover:text-brand-dark transition-colors italic">Upload Document</span>
+                        <span className="block text-[9px] text-accent-brown/30 font-bold uppercase tracking-widest mt-1 italic">PDF, JPG, or PNG · Up to 5MB</span>
                     </div>
                 </button>
             )}
@@ -79,9 +75,12 @@ const FileUploadField = ({
 const BusinessRegister = () => {
     const [step, setStep] = useState(1);
     const TOTAL_STEPS = 6;
+
+    useEffect(() => {
+        document.title = 'Hi-Vet';
+    }, []);
     const [pendingApproval, setPendingApproval] = useState(false);
     const [registeredEmail, setRegisteredEmail] = useState('');
-
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -137,6 +136,80 @@ const BusinessRegister = () => {
     // Step 5 — Credentials
     const [email, setEmail] = useState('');
 
+    const [phoneError, setPhoneError] = useState<string | null>(null);
+    const [emailError, setEmailError] = useState<string | null>(null);
+    const [phoneChecking, setPhoneChecking] = useState(false);
+    const [emailChecking, setEmailChecking] = useState(false);
+
+    // Debounced Personal Phone Validation
+    useEffect(() => {
+        if (!ownerPhone) {
+            setPhoneError(null);
+            return;
+        }
+        if (ownerPhone.length === 10 && !ownerPhone.startsWith('9')) {
+            setPhoneError(CONTACT_VALIDATION_MESSAGES.invalidNumber);
+            return;
+        }
+        if (ownerPhone.length < 10) {
+            setPhoneError(null);
+            return;
+        }
+        if (ownerPhone.length === 10 && ownerPhone.startsWith('9')) {
+            const timer = setTimeout(async () => {
+                setPhoneChecking(true);
+                const res = await checkContactAvailability('phone', ownerPhone);
+                setPhoneChecking(false);
+                setPhoneError(res.error);
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [ownerPhone]);
+
+    // Debounced Email Validation
+    useEffect(() => {
+        if (!email) {
+            setEmailError(null);
+            return;
+        }
+        if (!isValidEmail(email)) {
+            setEmailError(null);
+            return;
+        }
+        const timer = setTimeout(async () => {
+            setEmailChecking(true);
+            const res = await checkContactAvailability('email', email);
+            setEmailChecking(false);
+            setEmailError(res.error);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [email]);
+
+    const handlePhoneBlur = async () => {
+        if (!ownerPhone) return;
+        if (!isValidPhMobile(ownerPhone)) {
+            setPhoneError(CONTACT_VALIDATION_MESSAGES.invalidNumber);
+            return;
+        }
+        setPhoneChecking(true);
+        const res = await checkContactAvailability('phone', ownerPhone);
+        setPhoneChecking(false);
+        setPhoneError(res.error);
+    };
+
+    const handleEmailBlur = async () => {
+        if (!email) return;
+        if (!isValidEmail(email)) {
+            setEmailError(CONTACT_VALIDATION_MESSAGES.invalidEmail);
+            return;
+        }
+        setEmailChecking(true);
+        const res = await checkContactAvailability('email', email);
+        setEmailChecking(false);
+        setEmailError(res.error);
+    };
+
+
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [countdown, setCountdown] = useState(0);
@@ -177,29 +250,56 @@ const BusinessRegister = () => {
     const nextStep = async () => {
         setError('');
         if (step === 1) {
-            if (!clinicName) return setError('Clinic Name is required.');
+            if (!clinicName) return setError('Please enter your clinic name.');
             if (phone.length !== 10 || !phone.startsWith('9')) {
-                return setError('Please enter a valid 10-digit PH mobile number starting with 9.');
+                return setError('Please enter a valid 10-digit mobile number starting with 9.');
             }
             setStep(2);
         } else if (step === 2) {
-            if (!ownerFirstName || !ownerLastName || !ownerBirthday || !ownerGender) return setError('Owner full name, birthdate, and sex are required.');
-            if (!ownerHomeAddress) return setError('Owner home address is required.');
-            if (ownerPhone.length !== 10 || !ownerPhone.startsWith('9')) {
-                return setError('Please enter a valid 10-digit personal contact number starting with 9.');
+            if (!ownerFirstName || !ownerLastName || !ownerBirthday || !ownerGender) return setError('Please enter your name, birthdate, and sex.');
+            const bVal = validateBirthday(ownerBirthday, 'person birthday');
+            if (!bVal.isValid) return setError(bVal.error || 'Please choose a valid birthdate.');
+            if (!ownerHomeAddress) return setError('Please enter your home address.');
+            if (phoneError) {
+                return setError(phoneError);
+            }
+            if (!isValidPhMobile(ownerPhone)) {
+                setPhoneError(CONTACT_VALIDATION_MESSAGES.invalidNumber);
+                return setError(CONTACT_VALIDATION_MESSAGES.invalidNumber);
+            }
+            setPhoneChecking(true);
+            const pCheck = await checkContactAvailability('phone', ownerPhone);
+            setPhoneChecking(false);
+            if (!pCheck.available) {
+                setPhoneError(pCheck.error);
+                return setError(pCheck.error || CONTACT_VALIDATION_MESSAGES.numberUsed);
             }
             setStep(3);
         } else if (step === 3) {
             // Remove strict city/province check. Allow progression if some location data is present.
             const hasLocation = clinicLat || clinicCity || clinicProvince || clinicBarangay || clinicStreet;
-            if (!hasLocation) return setError('Please select a clinic location from the map or search bar.');
+            if (!hasLocation) return setError('Please choose your clinic address on the map or type it in.');
             setStep(4);
         } else if (step === 4) {
-            if (!baiNumber || !baiDocument) return setError('BAI Animal Welfare Registration number and document are required.');
-            if (!mayorsPermit || !mayorsDocument) return setError("Mayor's Business Permit number and document are required.");
+            if (!baiNumber || !baiDocument) return setError('Please provide your BAI Registration number and document.');
+            if (!mayorsPermit || !mayorsDocument) return setError("Please provide your Mayor's Permit number and document.");
             setStep(5);
         } else if (step === 5) {
-            if (!email) return setError('Email is required.');
+            if (emailError) {
+                return setError(emailError);
+            }
+            if (!isValidEmail(email)) {
+                setEmailError(CONTACT_VALIDATION_MESSAGES.invalidEmail);
+                return setError(CONTACT_VALIDATION_MESSAGES.invalidEmail);
+            }
+            setEmailChecking(true);
+            const eCheck = await checkContactAvailability('email', email);
+            setEmailChecking(false);
+            if (!eCheck.available) {
+                setEmailError(eCheck.error);
+                return setError(eCheck.error || CONTACT_VALIDATION_MESSAGES.emailUsed);
+            }
+            if (!email) return setError('Please enter your email address.');
             if (password !== confirmPassword) return setError('Passwords do not match.');
             if (password.length < 8) return setError('Password must be at least 8 characters.');
             await handleSendOtp();
@@ -223,7 +323,7 @@ const BusinessRegister = () => {
             const res = await fetch('http://localhost:8000/api/auth/send-otp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
+                body: JSON.stringify({ email, phone: ownerPhone || phone, role: 'business' })
             });
             const data = await res.json();
             if (res.ok) {
@@ -233,7 +333,7 @@ const BusinessRegister = () => {
                 setError(data.detail || 'Failed to send verification email.');
             }
         } catch {
-            setError('Cannot reach the server. Please make sure the backend is running (python main.py).');
+            setError('Could not connect to the server. Please check your internet and try again.');
         } finally {
             setLoading(false);
         }
@@ -310,10 +410,10 @@ const BusinessRegister = () => {
                 loginWithToken(data.token);
                 navigate('/dashboard/business');
             } else {
-                setError(data.detail || 'Registration failed. Please try again.');
+                setError(data.detail || 'Could not create account. Please try again.');
             }
         } catch {
-            setError('An error occurred during registration.');
+            setError('Could not create account. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -407,7 +507,7 @@ const BusinessRegister = () => {
                     <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                         <div className="space-y-1">
                             <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Clinic Information</h3>
-                            <p className="text-xs text-accent-brown/40 font-medium italic">Tell us about your veterinary practice.</p>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">Tell us about your clinic.</p>
                         </div>
                         {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
                         <div className="space-y-4">
@@ -421,7 +521,7 @@ const BusinessRegister = () => {
                             </div>
                             {/* Phone */}
                             <div className="group space-y-2">
-                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Clinic Phone / Contact <span className="text-brand-dark">*</span></label>
+                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Clinic Phone <span className="text-brand-dark">*</span></label>
                                 <div className="relative flex items-center bg-[#F7F6F2] ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl overflow-hidden transition-all shadow-inner">
                                     <div className="pl-8 pr-5 py-5 text-accent-brown font-black border-r border-accent-brown/10 text-base opacity-20 transition-opacity group-focus-within:opacity-100">+63</div>
                                     <input 
@@ -441,7 +541,7 @@ const BusinessRegister = () => {
                             </div>
                         </div>
                         <button type="button" onClick={nextStep} className="bg-brand-dark text-white w-full py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] flex items-center justify-center gap-4 hover:shadow-2xl transition-all group shadow-xl italic">
-                            Validate Clinic Identity <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
+                            Continue <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
                         </button>
                     </motion.div>
                 );
@@ -451,8 +551,8 @@ const BusinessRegister = () => {
                 return (
                     <motion.div key="s2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
                         <div className="space-y-1">
-                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Owner Identity</h3>
-                            <p className="text-xs text-accent-brown/40 font-medium italic">Identify the primary clinic representative.</p>
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Owner Information</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">Enter the clinic owner's details.</p>
                         </div>
                         {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
                         <div className="space-y-4 max-h-[55vh] overflow-y-auto px-1 custom-scrollbar pb-2">
@@ -498,10 +598,11 @@ const BusinessRegister = () => {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="group space-y-2">
-                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Personal Phone <span className="text-brand-dark">*</span></label>
-                                    <div className="relative flex items-center bg-[#F7F6F2] ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl overflow-hidden transition-all shadow-inner">
+                                    <label htmlFor="biz-owner-phone" className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Personal Phone <span className="text-brand-dark">*</span></label>
+                                    <div className={`relative flex items-center bg-[#F7F6F2] ring-1 ${phoneError ? 'ring-red-400' : 'ring-brand-dark/5 focus-within:ring-brand-dark/30'} rounded-3xl overflow-hidden transition-all shadow-inner`}>
                                         <div className="pl-6 pr-4 py-5 text-accent-brown font-black border-r border-accent-brown/10 text-sm opacity-20 transition-opacity group-focus-within:opacity-100">+63</div>
                                         <input 
+                                            id="biz-owner-phone"
                                             type="tel" 
                                             value={ownerPhone} 
                                             maxLength={10}
@@ -510,11 +611,21 @@ const BusinessRegister = () => {
                                                 if (val.startsWith('0')) val = val.substring(1);
                                                 if (val.length > 0 && !val.startsWith('9')) val = '';
                                                 setOwnerPhone(val.slice(0, 10));
+                                                if (phoneError) setPhoneError(null);
                                             }} 
+                                            onBlur={handlePhoneBlur}
+                                            aria-invalid={!!phoneError}
+                                            aria-describedby={phoneError ? "biz-owner-phone-error" : undefined}
                                             placeholder="9XX XXX XXXX" 
                                             className="flex-1 bg-transparent py-5 px-6 text-accent-brown font-bold text-base outline-none" 
                                         />
                                     </div>
+                                    {phoneError && (
+                                        <p id="biz-owner-phone-error" role="alert" aria-live="polite" className="text-xs font-bold text-red-500 flex items-center gap-1.5 pl-6 mt-1.5">
+                                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                            {phoneError}
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
                                     <CustomDropdown
@@ -534,19 +645,20 @@ const BusinessRegister = () => {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <CustomDatePicker
+                                    mode="person birthday"
                                     label="Birthdate"
                                     value={ownerBirthday}
                                     onChange={setOwnerBirthday}
                                 />
                                 <div className="group space-y-2">
-                                    <label className="text-[11px] font-black uppercase tracking-widest text-accent-brown/40 block ml-1 italic">Calculated Age</label>
+                                    <label className="text-[11px] font-black uppercase tracking-widest text-accent-brown/40 block ml-1 italic">Age</label>
                                     <div className="w-full bg-[#F7F6F2] py-5 px-8 rounded-3xl text-accent-brown font-black text-xl italic opacity-50 ring-1 ring-brand-dark/5">{calculateAge(ownerBirthday) || '--'}</div>
                                 </div>
                             </div>
 
                             {/* Home Address */}
                             <div className="group space-y-2">
-                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Residential Address <span className="text-brand-dark">*</span></label>
+                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Home Address <span className="text-brand-dark">*</span></label>
                                 <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                     <MapPin className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark z-10 transition-colors" />
                                     <AddressAutocomplete
@@ -593,9 +705,9 @@ const BusinessRegister = () => {
                             
                             {/* Government ID Upload */}
                             <FileUploadField
-                                label="Official Government ID"
+                                label="Valid Government ID"
                                 required
-                                hint="Upload a clear scan of a valid government ID (Passport, License, etc.)"
+                                hint="Upload a clear photo or copy of your valid government ID."
                                 value={ownerIdDocument}
                                 onChange={setOwnerIdDocument}
                             />
@@ -605,7 +717,7 @@ const BusinessRegister = () => {
                                 <ChevronLeft className="w-5 h-5 group-hover:-translate-x-2 transition-transform" />
                                 Back
                             </button>
-                            <button type="button" onClick={nextStep} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4">Next Stage <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" /></button>
+                            <button type="button" onClick={nextStep} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4">Continue <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" /></button>
                         </div>
                     </motion.div>
                 );
@@ -615,17 +727,17 @@ const BusinessRegister = () => {
                 return (
                     <motion.div key="s3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                         <div className="space-y-1">
-                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Clinic Location</h3>
-                            <p className="text-xs text-accent-brown/40 font-medium italic">Physical address of your veterinary practice.</p>
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Clinic Address</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">Where is your clinic located?</p>
                         </div>
                         {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
                         <div className="space-y-4 max-h-[50vh] overflow-y-auto px-1 custom-scrollbar pr-4">
                             <div className="group space-y-3">
                                 <div className="flex items-center justify-between pl-6">
-                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] italic">Precise Hub Location <span className="text-brand-dark">*</span></label>
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] italic">Clinic Address <span className="text-brand-dark">*</span></label>
                                     <span className="text-[9px] font-black text-brand-dark/40 uppercase tracking-widest italic flex items-center gap-2">
                                         <div className="w-1.5 h-1.5 rounded-full bg-brand-dark animate-pulse" />
-                                        Pinpoint on Map
+                                        Pin on Map
                                     </span>
                                 </div>
                                 <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-[2.5rem] transition-all shadow-inner bg-[#F7F6F2] overflow-hidden">
@@ -649,22 +761,22 @@ const BusinessRegister = () => {
                                             zip: clinicZip,
                                             region: clinicRegion
                                         }}
-                                        placeholder="Search or designate waypoint..."
+                                        placeholder="Search for your clinic address..."
                                         className="!py-6 !bg-transparent !border-0 !shadow-none !rounded-[2.5rem] !pl-16 text-base font-bold text-accent-brown pr-4"
                                     />
                                 </div>
-                                <p className="text-[9px] font-black text-accent-brown/20 uppercase tracking-widest pl-8 italic leading-relaxed">Designate exact clinic entrance. Use the PIN icon to manually override details if necessary.</p>
+                                <p className="text-[9px] font-black text-accent-brown/20 uppercase tracking-widest pl-8 italic leading-relaxed">Choose your clinic location on the map, or tap the pin to type your address.</p>
                             </div>
 
                             {/* Precise Address Confirmation */}
                             <div className="p-8 bg-accent-peach/5 rounded-[2.5rem] border border-accent-peach/10 space-y-3 relative overflow-hidden group/addr">
                                 <div className="absolute top-0 right-0 p-6 opacity-5 group-hover/addr:opacity-20 transition-opacity"><Building2 className="w-16 h-16" /></div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Validated Hub Address</p>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Clinic Address</p>
                                 <div className="space-y-2 relative z-10">
                                     <p className="text-lg font-black text-accent-brown leading-tight capitalize">
                                         {[clinicHouseNumber, clinicBlockNumber, clinicStreet, clinicSubdivision, clinicSitio, clinicBarangay, clinicCity, clinicProvince, clinicZip].filter(Boolean).join(' ')}
                                     </p>
-                                    {!clinicCity && <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-50 text-red-500 rounded-full text-[9px] font-black uppercase tracking-widest italic border border-red-100">Location Incomplete</div>}
+                                    {!clinicCity && <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-50 text-red-500 rounded-full text-[9px] font-black uppercase tracking-widest italic border border-red-100">Address Needed</div>}
                                 </div>
                             </div>
                         </div>
@@ -673,7 +785,7 @@ const BusinessRegister = () => {
                                 <ChevronLeft className="w-5 h-5 group-hover:-translate-x-2 transition-transform" />
                                 Back
                             </button>
-                            <button type="button" onClick={nextStep} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4">Next Stage <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" /></button>
+                            <button type="button" onClick={nextStep} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4">Continue <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" /></button>
                         </div>
                     </motion.div>
                 );
@@ -683,8 +795,8 @@ const BusinessRegister = () => {
                 return (
                     <motion.div key="s4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                         <div className="space-y-1">
-                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Compliance</h3>
-                            <p className="text-xs text-accent-brown/40 font-medium italic">Required documentation for professional clinical operation.</p>
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Clinic Permits</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">Upload your business permits to verify your clinic.</p>
                         </div>
                         {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
 
@@ -696,8 +808,8 @@ const BusinessRegister = () => {
                                         <FileCheck className="w-5 h-5 text-brand-dark" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-black text-accent-brown uppercase tracking-tighter">BAI Welfare Registry <span className="text-brand-dark">*</span></p>
-                                        <p className="text-[9px] text-accent-brown/40 font-bold uppercase tracking-widest leading-relaxed mt-1 italic">Mandatory registration with the Bureau of Animal Industry.</p>
+                                        <p className="text-sm font-black text-accent-brown uppercase tracking-tighter">BAI Registration <span className="text-brand-dark">*</span></p>
+                                        <p className="text-[9px] text-accent-brown/40 font-bold uppercase tracking-widest leading-relaxed mt-1 italic">Your clinic registration with the Bureau of Animal Industry.</p>
                                     </div>
                                 </div>
                                 <div className="group space-y-2">
@@ -706,7 +818,7 @@ const BusinessRegister = () => {
                                         <input type="text" value={baiNumber} onChange={e => setBaiNumber(e.target.value)} placeholder="BAI-REG-2024-XXXXX" className="w-full bg-transparent py-4 px-8 text-accent-brown font-bold text-base outline-none" />
                                     </div>
                                 </div>
-                                <FileUploadField label="BAI Registration Document" required value={baiDocument} onChange={setBaiDocument} hint="Upload official BAI registration certificate." />
+                                <FileUploadField label="BAI Registration Document" required value={baiDocument} onChange={setBaiDocument} hint="Upload your official BAI registration certificate." />
                             </div>
 
                             {/* Mayor's Permit Section */}
@@ -716,8 +828,8 @@ const BusinessRegister = () => {
                                         <Landmark className="w-5 h-5 text-brand-dark" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-black text-accent-brown uppercase tracking-tighter">Mayor's Operations Permit <span className="text-brand-dark">*</span></p>
-                                        <p className="text-[9px] text-accent-brown/40 font-bold uppercase tracking-widest leading-relaxed mt-1 italic">Validated permit to legally operate business within municipality.</p>
+                                        <p className="text-sm font-black text-accent-brown uppercase tracking-tighter">Mayor's Permit <span className="text-brand-dark">*</span></p>
+                                        <p className="text-[9px] text-accent-brown/40 font-bold uppercase tracking-widest leading-relaxed mt-1 italic">Your business permit from your city or town.</p>
                                     </div>
                                 </div>
                                 <div className="group space-y-2">
@@ -726,7 +838,7 @@ const BusinessRegister = () => {
                                         <input type="text" value={mayorsPermit} onChange={e => setMayorsPermit(e.target.value)} placeholder="Permit No. 2024-XXXXXX" className="w-full bg-transparent py-4 px-8 text-accent-brown font-bold text-base outline-none" />
                                     </div>
                                 </div>
-                                <FileUploadField label="Mayor's Permit Document" required value={mayorsDocument} onChange={setMayorsDocument} hint="Upload scanned copy of current Mayor's Business Permit." />
+                                <FileUploadField label="Mayor's Permit Document" required value={mayorsDocument} onChange={setMayorsDocument} hint="Upload a copy of your current Mayor's Business Permit." />
                             </div>
                         </div>
 
@@ -735,7 +847,7 @@ const BusinessRegister = () => {
                                 <ChevronLeft className="w-5 h-5 group-hover:-translate-x-2 transition-transform" />
                                 Back
                             </button>
-                            <button type="button" onClick={nextStep} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4">Next Stage <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" /></button>
+                            <button type="button" onClick={nextStep} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4">Continue <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" /></button>
                         </div>
                     </motion.div>
                 );
@@ -745,20 +857,39 @@ const BusinessRegister = () => {
                 return (
                     <motion.div key="s5" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
                         <div className="space-y-1">
-                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none italic">Security</h3>
-                            <p className="text-xs text-accent-brown/40 font-medium italic">Secure access for your partner portal.</p>
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none italic">Account Password</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">Set a secure password for your clinic account.</p>
                         </div>
                         {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
                         <div className="space-y-4">
                             <div className="group space-y-2">
-                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Partner Identity <span className="text-brand-dark">*</span></label>
-                                <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                <label htmlFor="biz-email" className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Email Address <span className="text-brand-dark">*</span></label>
+                                <div className={`relative ring-1 ${emailError ? 'ring-red-400' : 'ring-brand-dark/5 focus-within:ring-brand-dark/30'} rounded-3xl transition-all shadow-inner bg-[#F7F6F2]`}>
                                     <Mail className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@happy-paws.com" className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" />
+                                    <input 
+                                        id="biz-email"
+                                        type="email" 
+                                        value={email} 
+                                        onChange={e => {
+                                            setEmail(e.target.value);
+                                            if (emailError) setEmailError(null);
+                                        }} 
+                                        onBlur={handleEmailBlur}
+                                        aria-invalid={!!emailError}
+                                        aria-describedby={emailError ? "biz-email-error" : undefined}
+                                        placeholder="admin@happy-paws.com" 
+                                        className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" 
+                                    />
                                 </div>
+                                {emailError && (
+                                    <p id="biz-email-error" role="alert" aria-live="polite" className="text-xs font-bold text-red-500 flex items-center gap-1.5 pl-6 mt-1.5">
+                                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                        {emailError}
+                                    </p>
+                                )}
                             </div>
                             <div className="group space-y-2">
-                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Security Secret <span className="text-brand-dark">*</span></label>
+                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Password <span className="text-brand-dark">*</span></label>
                                 <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                     <Lock className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
                                     <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full bg-transparent py-5 pl-16 pr-14 text-accent-brown font-bold text-base outline-none" />
@@ -769,7 +900,7 @@ const BusinessRegister = () => {
                                 {password && <div className="px-6"><PasswordStrength password={password} /></div>}
                             </div>
                             <div className="group space-y-2">
-                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Confirm Secret <span className="text-brand-dark">*</span></label>
+                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Confirm Password <span className="text-brand-dark">*</span></label>
                                 <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                     <ShieldCheck className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
                                     <input type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••" className="w-full bg-transparent py-5 pl-16 pr-14 text-accent-brown font-bold text-base outline-none" />
@@ -777,7 +908,7 @@ const BusinessRegister = () => {
                                         {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                     </button>
                                 </div>
-                                {confirmPassword && password !== confirmPassword && <p className="text-red-500 text-[10px] font-black uppercase tracking-widest pl-6 mt-1 italic leading-none">Credentials do not match</p>}
+                                {confirmPassword && password !== confirmPassword && <p className="text-red-500 text-[10px] font-black uppercase tracking-widest pl-6 mt-1 italic leading-none">Passwords do not match</p>}
                             </div>
                         </div>
                         <div className="flex gap-4 pt-2">
@@ -786,7 +917,7 @@ const BusinessRegister = () => {
                                 Back
                             </button>
                             <button type="submit" disabled={loading} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic disabled:opacity-50 flex items-center justify-center gap-4">
-                                {loading ? 'Authorizing...' : 'Initialize Portal'} 
+                                {loading ? 'Creating Account...' : 'Continue'} 
                                 {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />}
                             </button>
                         </div>
@@ -800,8 +931,8 @@ const BusinessRegister = () => {
                          <div className="space-y-4">
                             <div className="w-20 h-20 bg-brand/10 text-brand-dark rounded-3xl flex items-center justify-center"><MailCheck className="w-10 h-10" /></div>
                             <div className="space-y-2">
-                                <h3 className="text-3xl font-black text-accent-brown tracking-tighter uppercase leading-none italic">Verification</h3>
-                                <p className="text-sm text-accent-brown/40 font-medium italic leading-relaxed">Sent 6-digit code to <span className="text-accent-brown font-bold not-italic">{email}</span></p>
+                                <h3 className="text-3xl font-black text-accent-brown tracking-tighter uppercase leading-none italic">Verify Email</h3>
+                                <p className="text-sm text-accent-brown/40 font-medium italic leading-relaxed">We sent a 6-digit code to <span className="text-accent-brown font-bold not-italic">{email}</span></p>
                             </div>
                         </div>
                         <div className="flex justify-between gap-3">
@@ -811,11 +942,11 @@ const BusinessRegister = () => {
                         </div>
                         {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-2 px-4 rounded-xl border border-red-100 italic text-center mb-4">{error}</div>}
                         <div className="space-y-8">
-                            <p className="text-xs font-black text-accent-brown/30 uppercase tracking-[0.2em] ml-6 italic">No code? <button type="button" onClick={handleSendOtp} disabled={countdown > 0} className="text-brand-dark font-black hover:text-accent-brown">{countdown > 0 ? `Wait ${countdown}s` : 'Resend'}</button></p>
+                            <p className="text-xs font-black text-accent-brown/30 uppercase tracking-[0.2em] ml-6 italic">Didn't get a code? <button type="button" onClick={handleSendOtp} disabled={countdown > 0} className="text-brand-dark font-black hover:text-accent-brown">{countdown > 0 ? `Wait ${countdown}s` : 'Resend'}</button></p>
                             <div className="flex gap-4">
-                                <button type="button" onClick={prevStep} className="flex-1 px-8 py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] text-accent-brown/30 italic">Review</button>
+                                <button type="button" onClick={prevStep} className="flex-1 px-8 py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] text-accent-brown/30 italic">Back</button>
                                 <button type="button" onClick={handleRegister} disabled={loading} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all italic flex items-center justify-center gap-4 group">
-                                    {loading ? 'Finalizing...' : 'Initialize Portal'}
+                                    {loading ? 'Checking Code...' : 'Create Account'}
                                     {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />}
                                 </button>
                             </div>
@@ -833,7 +964,7 @@ const BusinessRegister = () => {
             <div className="h-screen bg-white flex font-brand select-none overflow-hidden">
                 <div className="hidden lg:block w-1/2 h-full relative overflow-hidden group">
                     <div className="absolute inset-0 z-0">
-                        <img src={loginHero} alt="Clinic Operations" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
+                        <img src={loginHero} alt="Veterinary clinic" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
                         <div className="absolute inset-0 bg-gradient-to-t from-accent-brown via-accent-brown/40 to-transparent opacity-90 transition-opacity" />
                         <div className="absolute inset-0 bg-black/20" />
                     </div>
@@ -843,12 +974,12 @@ const BusinessRegister = () => {
                                 <div className="w-14 h-14 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20 group-hover/back:bg-brand-dark transition-all text-white">
                                     <Building2 className="w-8 h-8" />
                                 </div>
-                                <span className="text-3xl font-black text-white tracking-widest uppercase italic">Hi-Vet Partners</span>
+                                <span className="text-3xl font-black text-white tracking-widest uppercase italic">Hi-Vet for Clinics</span>
                             </Link>
                             <div className="space-y-8 max-w-lg">
-                                <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Clinic Command</div>
-                                <h1 className="text-7xl font-black text-white leading-[0.8] tracking-tighter uppercase">Partner <br /><span className="text-brand-dark italic font-outfit">Operations.</span></h1>
-                                <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Access your patient CRM, real-time inventory, and business intelligence dashboard.</p>
+                                <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Clinic Hub</div>
+                                <h1 className="text-7xl font-black text-white leading-[0.8] tracking-tighter uppercase">Run Your Clinic <br /><span className="text-brand-dark italic font-outfit">Easily.</span></h1>
+                                <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Sign up to manage bookings, track stock, and see your clinic reports.</p>
                             </div>
                         </div>
                     </div>
@@ -860,20 +991,20 @@ const BusinessRegister = () => {
                             <Clock className="w-12 h-12 animate-pulse" />
                         </div>
                         <div className="space-y-3">
-                            <h2 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Under Review</h2>
+                            <h2 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Application Under Review</h2>
                             <p className="text-sm text-accent-brown/50 font-medium italic">Application submitted for <span className="text-accent-brown font-bold not-italic font-outfit">{registeredEmail}</span></p>
                         </div>
                         <div className="bg-accent-peach/10 p-8 rounded-[2.5rem] border border-accent-brown/5 text-left space-y-6">
                             <div className="flex gap-4">
                                 <div className="w-6 h-6 rounded-full bg-brand-dark text-white flex items-center justify-center text-[10px] font-black shrink-0">1</div>
-                                <p className="text-xs text-accent-brown/70 italic leading-relaxed">Our compliance team will verify your <span className="font-bold text-accent-brown">BAI Registration</span> and <span className="font-bold text-accent-brown">Mayor's Permit</span> within 24-48 business hours.</p>
+                                <p className="text-xs text-accent-brown/70 italic leading-relaxed">We will check your <span className="font-bold text-accent-brown">BAI Registration</span> and <span className="font-bold text-accent-brown">Mayor's Permit</span> within 1 to 2 business days.</p>
                             </div>
                             <div className="flex gap-4 opacity-50">
                                 <div className="w-6 h-6 rounded-full bg-brand-dark/20 text-accent-brown/40 flex items-center justify-center text-[10px] font-black shrink-0">2</div>
-                                <p className="text-xs text-accent-brown/40 italic leading-relaxed">Once approved, you will receive an activation email with your clinic portal access link.</p>
+                                <p className="text-xs text-accent-brown/40 italic leading-relaxed">Once approved, we will send an email so you can log in to your clinic account.</p>
                             </div>
                         </div>
-                        <button onClick={() => navigate('/for-clinics')} className="bg-brand-dark text-white w-full py-5 rounded-full font-black text-[10px] uppercase tracking-[0.5em] shadow-xl shadow-brand-dark/20 hover:shadow-brand-dark/40 transition-all italic">Return to Landing</button>
+                        <button onClick={() => navigate('/for-clinics')} className="bg-brand-dark text-white w-full py-5 rounded-full font-black text-[10px] uppercase tracking-[0.5em] shadow-xl shadow-brand-dark/20 hover:shadow-brand-dark/40 transition-all italic">Back to Clinic Page</button>
                     </motion.div>
                 </div>
             </div>
@@ -885,7 +1016,7 @@ const BusinessRegister = () => {
             {/* Left Column: Full Screen Hero */}
             <div className="hidden lg:block w-1/2 h-full relative overflow-hidden group">
                 <div className="absolute inset-0 z-0">
-                    <img src={loginHero} alt="Clinic Operations" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
+                    <img src={loginHero} alt="Veterinary clinic" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
                     <div className="absolute inset-0 bg-gradient-to-t from-accent-brown via-accent-brown/40 to-transparent opacity-90 transition-opacity" />
                     <div className="absolute inset-0 bg-black/20" />
                 </div>
@@ -895,16 +1026,16 @@ const BusinessRegister = () => {
                             <div className="w-14 h-14 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20 group-hover/back:bg-brand-dark transition-all text-white">
                                 <Building2 className="w-8 h-8" />
                             </div>
-                            <span className="text-3xl font-black text-white tracking-widest uppercase italic">Hi-Vet Partners</span>
+                            <span className="text-3xl font-black text-white tracking-widest uppercase italic">Hi-Vet for Clinics</span>
                         </Link>
                         <div className="space-y-8 max-w-lg">
-                            <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Clinic Command</div>
-                            <h1 className="text-7xl font-black text-white leading-[0.8] tracking-tighter uppercase">Partner <br /><span className="text-brand-dark italic font-outfit">Operations.</span></h1>
-                            <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Access your patient CRM, real-time inventory, and business intelligence dashboard.</p>
+                            <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Clinic Hub</div>
+                            <h1 className="text-7xl font-black text-white leading-[0.8] tracking-tighter uppercase">Run Your Clinic <br /><span className="text-brand-dark italic font-outfit">Easily.</span></h1>
+                            <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Sign up to manage bookings, track stock, and see your clinic reports.</p>
                         </div>
                     </div>
                     <div className="bg-white/10 backdrop-blur-xl px-10 py-5 rounded-full border border-white/10 w-fit">
-                        <p className="text-[11px] font-black text-white uppercase tracking-[0.5em] italic">Clinic Registration Stage {step} / {TOTAL_STEPS}</p>
+                        <p className="text-[11px] font-black text-white uppercase tracking-[0.5em] italic">Step {step} of {TOTAL_STEPS}</p>
                     </div>
                 </div>
             </div>
@@ -921,7 +1052,7 @@ const BusinessRegister = () => {
                         <div className="flex gap-4">
                             {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className={`h-1.5 rounded-full transition-all duration-700 ${step >= i ? 'w-10 bg-brand-dark shadow-[0_0_20px_rgba(242,107,33,0.4)]' : 'w-3 bg-accent-brown/10'}`} />)}
                         </div>
-                        <Link to="/login/business" className="text-[10px] font-black text-brand-dark uppercase tracking-[0.3em] border-b-4 border-brand-dark/10 pb-1 italic hover:text-accent-brown transition-all">Partner Login Instead</Link>
+                        <Link to="/login/business" className="text-[10px] font-black text-brand-dark uppercase tracking-[0.3em] border-b-4 border-brand-dark/10 pb-1 italic hover:text-accent-brown transition-all">Clinic Log In Instead</Link>
                     </div>
 
                     <form onSubmit={handleSubmit} className="overflow-y-visible">
@@ -933,7 +1064,7 @@ const BusinessRegister = () => {
                     <div className="mt-8 text-center pt-6 border-t border-accent-brown/5">
                         <Link to="/for-clinics" className="inline-flex items-center gap-4 text-[10px] font-black uppercase tracking-[0.4em] text-accent-brown/30 hover:text-brand-dark transition-all group italic">
                             <ChevronLeft className="w-4 h-4 group-hover:-translate-x-2 transition-transform" />
-                            Return
+                            Back to Clinic Page
                         </Link>
                     </div>
                 </div>

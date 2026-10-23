@@ -1,70 +1,56 @@
+import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Wallet, User } from 'lucide-react';
+import { Home, ShoppingBag, Wallet, User } from 'lucide-react';
+import { RIDER_TEXT } from '../constants/riderWording';
 
-const RiderBottomNav = () => {
+const RiderBottomNav: React.FC = () => {
+    const navItems = [
+        { name: RIDER_TEXT.nav.home, path: '/dashboard/rider', end: true, icon: Home },
+        { name: RIDER_TEXT.nav.history, path: '/dashboard/rider/orders', end: false, icon: ShoppingBag },
+        { name: RIDER_TEXT.nav.earnings, path: '/dashboard/rider/earnings', end: false, icon: Wallet },
+        { name: RIDER_TEXT.nav.profile, path: '/dashboard/rider/account', end: false, icon: User },
+    ];
+
     return (
-        <nav className="fixed bottom-0 left-0 right-0 bg-accent-brown border-t border-white/5 z-[100] h-24 sm:hidden shadow-[0_-20px_50px_rgba(0,0,0,0.3)]">
-            <div className="flex items-center justify-around h-full px-6">
-                <NavLink 
-                    to="/dashboard/rider" 
-                    end
-                    className={({ isActive }) => `flex flex-col items-center gap-2 transition-all duration-500 ${isActive ? 'text-brand scale-110 drop-shadow-[0_0_10px_rgba(255,159,28,0.5)]' : 'text-white/20 hover:text-white/40'}`}
-                >
-                    {({ isActive }) => (
-                        <>
-                            <div className={`p-2 rounded-xl transition-colors ${isActive ? 'bg-white/5' : ''}`}>
-                                <LayoutDashboard size={22} className={isActive ? 'fill-current' : ''} />
-                            </div>
-                            <span className="text-[11px] font-bold leading-none">Ops</span>
-                        </>
-                    )}
-                </NavLink>
-
-                <NavLink 
-                    to="/dashboard/rider/orders" 
-                    className={({ isActive }) => `flex flex-col items-center gap-2 transition-all duration-500 ${isActive ? 'text-brand scale-110 drop-shadow-[0_0_10px_rgba(255,159,28,0.5)]' : 'text-white/20 hover:text-white/40'}`}
-                >
-                    {({ isActive }) => (
-                        <>
-                            <div className={`p-2 rounded-xl transition-colors ${isActive ? 'bg-white/5' : ''}`}>
-                                <ShoppingBag size={22} className={isActive ? 'fill-brand' : ''} />
-                            </div>
-                            <span className="text-[11px] font-bold leading-none">Logs</span>
-                        </>
-                    )}
-                </NavLink>
-
-                <NavLink 
-                    to="/dashboard/rider/earnings" 
-                    className={({ isActive }) => `flex flex-col items-center gap-2 transition-all duration-500 ${isActive ? 'text-brand scale-110 drop-shadow-[0_0_10px_rgba(255,159,28,0.5)]' : 'text-white/20 hover:text-white/40'}`}
-                >
-                    {({ isActive }) => (
-                        <>
-                            <div className={`p-2 rounded-xl transition-colors ${isActive ? 'bg-white/5' : ''}`}>
-                                <Wallet size={22} className={isActive ? 'fill-brand' : ''} />
-                            </div>
-                            <span className="text-[11px] font-bold leading-none">Vault</span>
-                        </>
-                    )}
-                </NavLink>
-
-                <NavLink 
-                    to="/dashboard/rider/account" 
-                    className={({ isActive }) => `flex flex-col items-center gap-2 transition-all duration-500 ${isActive ? 'text-brand scale-110 drop-shadow-[0_0_10px_rgba(255,159,28,0.5)]' : 'text-white/20 hover:text-white/40'}`}
-                >
-                    {({ isActive }) => (
-                        <>
-                            <div className={`p-2 rounded-xl transition-colors ${isActive ? 'bg-white/5' : ''}`}>
-                                <User size={22} className={isActive ? 'fill-brand' : ''} />
-                            </div>
-                            <span className="text-[11px] font-bold leading-none">Agent</span>
-                        </>
-                    )}
-                </NavLink>
+        <nav
+            aria-label="Rider Mobile Bottom Navigation"
+            className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-xl border-t border-accent-brown/10 shadow-[0_-10px_25px_rgba(0,0,0,0.06)] h-16 px-2 pb-[env(safe-area-inset-bottom,0px)]"
+        >
+            <div className="flex items-center justify-around h-full max-w-lg mx-auto">
+                {navItems.map((item) => (
+                    <NavLink
+                        key={item.name}
+                        to={item.path}
+                        end={item.end}
+                        className={({ isActive }) =>
+                            `flex flex-col items-center justify-center flex-1 h-full min-h-[48px] py-1 transition-all group select-none ${
+                                isActive ? 'text-brand-dark' : 'text-black hover:text-brand-dark'
+                            }`
+                        }
+                    >
+                        {({ isActive }) => (
+                            <>
+                                <div
+                                    className={`p-1.5 rounded-xl transition-all ${
+                                        isActive ? 'bg-brand-dark/10 scale-105' : 'group-hover:scale-105'
+                                    }`}
+                                >
+                                    <item.icon
+                                        className={`w-5 h-5 ${isActive ? 'stroke-[2.5]' : 'stroke-2'}`}
+                                    />
+                                </div>
+                                <span
+                                    className={`text-xs leading-none mt-0.5 ${
+                                        isActive ? 'font-black text-brand-dark' : 'font-bold text-black group-hover:text-brand-dark'
+                                    }`}
+                                >
+                                    {item.name}
+                                </span>
+                            </>
+                        )}
+                    </NavLink>
+                ))}
             </div>
-            
-            {/* Safe Area Spacer for iOS */}
-            <div className="h-safe-bottom bg-transparent" />
         </nav>
     );
 };

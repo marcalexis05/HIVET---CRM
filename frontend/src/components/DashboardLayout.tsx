@@ -9,12 +9,21 @@ import {
     Calendar, Award, ShoppingCart, X, Plus, Minus, Wallet,
     BarChart2, UserCircle, Menu, Store, Truck, Check, MapPin,
     ChevronRight, ChevronLeft, Search, Zap, HelpCircle, Clock, Package, Shield,
-    MessageCircle, Home
+    MessageCircle, Home, QrCode
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { AdminFooter } from './AdminFooter';
 import SupportBot from './SupportBot';
+import ConfirmLogoutModal from './ConfirmLogoutModal';
+import NotificationBell from './NotificationBell';
+import PwaInstallModal from './PwaInstallModal';
+import { setPwaManifestForRole } from '../utils/pwaManager';
 import { formatName } from '../utils/textFormatters';
+import { RIDER_TEXT } from '../constants/riderWording';
+import { CLINIC_TEXT } from '../constants/clinicWording';
+import BusinessBottomNav from './BusinessBottomNav';
+import ClinicAvatarBlock from './ClinicAvatarBlock';
+import RiderAvatarBlock from './RiderAvatarBlock';
 import {
     calculateSideTabDimensions,
     runStandardScreenOverlapChecks
@@ -40,13 +49,19 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
     const [isShortScreen, setIsShortScreen] = useState(() => typeof window !== 'undefined' && window.innerHeight < 520);
-    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+    const [showPwaModal, setShowPwaModal] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem('hivet_sidebar_collapsed') === 'true');
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [notifications, setNotifications] = useState<any[]>([]);
 
+    useEffect(() => {
+        const role = user?.role === 'business' ? 'business' : user?.role === 'rider' ? 'rider' : 'customer';
+        setPwaManifestForRole(role);
+    }, [user?.role]);
+
     const isCustomer = user?.role === 'customer';
+    const isRider = user?.role === 'rider';
     const shouldReduceMotion = useReducedMotion();
     const isRtl = typeof document !== 'undefined' && (document.dir === 'rtl' || document.documentElement.dir === 'rtl');
     const moreButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -290,35 +305,35 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     }, [isCollapsed]);
 
     const businessLinks = [
-        { name: 'Dashboard', path: '/dashboard/business', icon: LayoutDashboard },
+        { name: CLINIC_TEXT.nav.dashboard, path: '/dashboard/business', icon: LayoutDashboard },
         { 
-            name: 'Reservations', 
+            name: CLINIC_TEXT.nav.reservations, 
             path: '/dashboard/business/reservations', 
             icon: Calendar,
             submenus: [
-                { name: 'Schedule', path: '/dashboard/business/reservations?tab=hours', icon: Clock },
-                { name: 'Overrides', path: '/dashboard/business/reservations?tab=special', icon: Zap },
+                { name: CLINIC_TEXT.nav.schedule, path: '/dashboard/business/reservations?tab=hours', icon: Clock },
+                { name: CLINIC_TEXT.nav.overrides, path: '/dashboard/business/reservations?tab=special', icon: Zap },
                 { 
-                    name: 'Clinic Services', 
+                    name: CLINIC_TEXT.nav.clinicServices, 
                     path: '/dashboard/business/reservations?tab=services',
                     icon: Settings,
                     submenus: [
-                        { name: 'Launch New Service', path: '/dashboard/business/reservations?tab=services&action=launch', icon: Plus }
+                        { name: CLINIC_TEXT.nav.launchNewService, path: '/dashboard/business/reservations?tab=services&action=launch', icon: Plus }
                     ]
                 }
             ]
         },
-        { name: 'Orders', path: '/dashboard/business/orders', icon: ShoppingBag },
+        { name: CLINIC_TEXT.nav.orders, path: '/dashboard/business/orders', icon: ShoppingBag },
         { 
-            name: 'Store', 
+            name: CLINIC_TEXT.nav.store, 
             path: '/dashboard/business/catalog', 
             icon: Store,
             submenus: [
-                { name: 'Add Product Item', path: '/dashboard/business/catalog/product/new', icon: Plus }
+                { name: CLINIC_TEXT.nav.addProductItem, path: '/dashboard/business/catalog/product/new', icon: Plus }
             ]
         },
-        { name: 'Analytics', path: '/dashboard/business/analytics', icon: BarChart2 },
-        { name: 'Account', path: '/dashboard/business/account', icon: UserCircle },
+        { name: CLINIC_TEXT.nav.analytics, path: '/dashboard/business/analytics', icon: BarChart2 },
+        { name: CLINIC_TEXT.nav.account, path: '/dashboard/business/account', icon: UserCircle },
     ];
 
     const userLinks = [
@@ -328,7 +343,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
         { name: 'Visits', path: '/dashboard/customer/reservations', icon: Calendar },
         { name: 'Clinic Map', path: '/dashboard/customer/map', icon: MapPin },
         { name: 'Rewards', path: '/dashboard/customer/loyalty', icon: Award },
-        { name: 'Alerts', path: '/dashboard/customer/alerts', icon: Bell },
+        { name: 'Notifications', path: '/dashboard/customer/alerts', icon: Bell },
         { name: 'Account', path: '/dashboard/customer/account', icon: UserCircle },
     ];
 
@@ -350,11 +365,11 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     ];
 
     const riderLinks = [
-        { name: 'Dashboard', path: '/dashboard/rider', icon: LayoutDashboard },
-        { name: 'Orders', path: '/dashboard/rider/orders', icon: ShoppingBag },
-        { name: 'Earnings', path: '/dashboard/rider/earnings', icon: Wallet },
-        { name: 'System Alerts', path: '/dashboard/rider/alerts', icon: Bell },
-        { name: 'Account', path: '/dashboard/rider/account', icon: UserCircle },
+        { name: RIDER_TEXT.nav.home, path: '/dashboard/rider', icon: Home },
+        { name: RIDER_TEXT.nav.history, path: '/dashboard/rider/orders', icon: ShoppingBag },
+        { name: RIDER_TEXT.nav.earnings, path: '/dashboard/rider/earnings', icon: Wallet },
+        { name: RIDER_TEXT.nav.notifications, path: '/dashboard/rider/alerts', icon: Bell },
+        { name: RIDER_TEXT.nav.profile, path: '/dashboard/rider/account', icon: UserCircle },
     ];
 
     const links = user?.role === 'super_admin' ? superAdminLinks :
@@ -366,11 +381,13 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     const basePath = ['super_admin', 'system_admin'].includes(user?.role || '') ? 'admin' : user?.role;
     const hasStockError = items.some(item => item.stock !== undefined && item.quantity > item.stock);
     const currentPathName = links.find(l => location.pathname === l.path)?.name || title;
+    const hubLabel = user?.role === 'business' ? CLINIC_TEXT.nav.hub : (user?.role === 'rider' ? RIDER_TEXT.nav.home : 'Hub');
+    const isHome = !currentPathName || currentPathName.trim().toLowerCase() === 'home' || currentPathName.trim().toLowerCase() === hubLabel.trim().toLowerCase();
 
     // --- RENDER SIDEBAR LAYOUT (For Business/Admin/Rider) ---
     if (!isCustomer && user) {
         return (
-            <div className="min-h-screen bg-[#FAF9F6] flex transition-all duration-300">
+            <div className="min-h-screen min-h-[100dvh] w-full bg-[#FAF9F6] flex transition-all duration-300 overflow-x-hidden">
                 <aside className={`hidden lg:flex flex-col bg-white border-r border-accent-brown/5 fixed inset-y-0 left-0 z-50 overflow-hidden shadow-2xl shadow-accent-brown/5 transition-all duration-300 ${isCollapsed ? 'w-24' : 'w-72'}`}>
                     {/* Collapse Toggle */}
                     <button 
@@ -393,7 +410,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                     <p className="text-xs font-bold text-brand-dark transition-all opacity-70 leading-none whitespace-nowrap">
                                         {user?.role === 'super_admin' ? 'Super Admin' :
                                             user?.role === 'system_admin' ? 'System Admin' :
-                                                user?.role === 'business' ? 'Partner Portal' :
+                                                user?.role === 'business' ? CLINIC_TEXT.nav.partnerPortal :
                                                     'Rider Portal'}
                                     </p>
                                 </motion.div>
@@ -404,7 +421,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                     <nav className="flex-1 px-4 space-y-1 overflow-y-auto no-scrollbar pb-8">
                         {links.map((link) => {
                             const linkBase = link.path.split('?')[0];
-                            const isParentActive = link.name === 'Dashboard' 
+                            const isParentActive = (link.name === 'Dashboard' || link.name === 'Home')
                                 ? location.pathname === linkBase 
                                 : location.pathname.startsWith(linkBase);
                             const hasSubmenus = !!(link as any).submenus;
@@ -501,45 +518,176 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                         </div>
                         <button onClick={() => setIsLogoutModalOpen(true)} className={`w-full mt-4 py-4 rounded-2xl flex items-center justify-center gap-3 text-red-500 bg-red-50 hover:bg-red-500 hover:text-white transition-all font-bold text-xs shadow-sm ${isCollapsed ? 'px-0' : 'px-4'}`}>
                             <LogOut className="w-4 h-4 shrink-0" /> 
-                            {!isCollapsed && <span>Log Out Portal</span>}
+                            {!isCollapsed && <span>{user?.role === 'business' ? CLINIC_TEXT.nav.logOutPortal : 'Log Out'}</span>}
                         </button>
                     </div>
                 </aside>
 
                 <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isCollapsed ? 'lg:ml-24' : 'lg:ml-72'}`}>
-                    <header className="h-20 bg-white/80 backdrop-blur-xl border-b border-accent-brown/5 sticky top-0 z-40 px-6 sm:px-10 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <button className="lg:hidden p-2.5 bg-accent-peach/10 rounded-xl text-accent-brown" onClick={() => setIsMobileMenuOpen(true)}>
-                                <Menu className="w-5 h-5" />
-                            </button>
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-slate-400 hidden xs:block">Hub</span>
-                                <ChevronRight className="w-3 h-3 text-accent-brown/20 hidden xs:block" />
-                                <h1 className="text-lg font-bold text-accent-brown tracking-tight whitespace-nowrap">{currentPathName}</h1>
+                    {!hideHeader && (
+                        user?.role === 'business' ? (
+                        /* Clinic Business Unified Responsive Header */
+                        <header
+                            role="banner"
+                            className="h-18 sm:h-20 bg-white border-b border-accent-brown/5 shadow-xs sticky top-0 z-40 px-4 sm:px-6 lg:px-8 flex items-center justify-between pt-[env(safe-area-inset-top,0px)]"
+                        >
+                            {/* Mobile / Tablet (< 1024px): Clinic Avatar Block on the Left */}
+                            <div className="flex lg:hidden items-center min-w-0 flex-1 mr-2">
+                                <ClinicAvatarBlock maxTextWidth="max-w-[calc(100vw-120px)] xs:max-w-[280px] sm:max-w-[360px]" />
                             </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <div className="hidden sm:flex items-center gap-3 bg-accent-peach/5 border border-accent-brown/5 px-4 py-2.5 rounded-2xl w-64 group focus-within:border-brand/40 transition-all">
-                                <Search className="w-4 h-4 text-accent-brown/30" />
-                                <input type="text" placeholder="Search..." className="bg-transparent border-none outline-none text-xs font-bold text-accent-brown placeholder:text-accent-brown/20 w-full" />
+
+                            {/* Desktop (>= 1024px): Breadcrumb on the Left */}
+                            <div className="hidden lg:flex items-center gap-2 min-w-0">
+                                <Link
+                                    to={`/dashboard/${basePath}`}
+                                    className="text-xs font-bold text-slate-400 hover:text-brand-dark transition-colors"
+                                >
+                                    {hubLabel}
+                                </Link>
+                                {!isHome && (
+                                    <>
+                                        <ChevronRight className="w-3 h-3 text-accent-brown/20 shrink-0" />
+                                        <span className="text-xs font-bold text-accent-brown truncate max-w-[200px]">
+                                            {currentPathName}
+                                        </span>
+                                    </>
+                                )}
                             </div>
-                            <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-accent-brown/5 shadow-sm">
-                                <button onClick={() => setIsNotificationsOpen(true)} className="relative w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-50 text-accent-brown transition-all">
-                                    <Bell className="w-4.5 h-4.5" />
-                                </button>
-                            </div>
-                            {branchAction && <div className="hidden xl:block">{branchAction}</div>}
-                        </div>
-                    </header>
-                    <main className="flex-1 p-6 sm:p-10">
-                        {branchContext?.id && (
-                            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 p-4 bg-brand-dark rounded-3xl text-white flex items-center justify-between shadow-xl">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center"><MapPin className="w-6 h-6" /></div>
-                                    <div><p className="text-xs font-semibold opacity-75 leading-none mb-1">Active Hub</p><h4 className="text-sm font-bold tracking-tight">{branchContext.name} | {branchContext.address}</h4></div>
+
+                            {/* Right Side: Search Box + Bell + Desktop Clinic Avatar Block */}
+                            <div className="flex items-center gap-2.5 sm:gap-3.5 shrink-0">
+                                {/* Desktop Search Input */}
+                                <div className="hidden lg:flex items-center gap-2.5 bg-accent-peach/5 border border-accent-brown/5 px-3.5 py-2 rounded-2xl w-48 xl:w-60 group focus-within:border-brand/40 transition-all">
+                                    <Search className="w-3.5 h-3.5 text-accent-brown/30" />
+                                    <input
+                                        type="text"
+                                        placeholder={CLINIC_TEXT.nav.searchPlaceholder}
+                                        className="bg-transparent border-none outline-none text-xs font-bold text-accent-brown placeholder:text-accent-brown/30 w-full"
+                                    />
                                 </div>
-                            </motion.div>
-                        )}
+
+                                {/* Notification Bell */}
+                                <NotificationBell
+                                    notifications={notifications}
+                                    unreadCount={unreadCount}
+                                    markAsRead={markAsRead}
+                                    markAllAsRead={markAllAsRead}
+                                    deleteNotification={deleteNotification}
+                                    variant="portal"
+                                />
+                                <button
+                                    onClick={() => setShowPwaModal(true)}
+                                    title="Install App & Scan QR Code"
+                                    aria-label="Install App / Scan QR Code"
+                                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-brand/10 hover:bg-brand/20 text-brand flex items-center justify-center transition-all cursor-pointer shrink-0"
+                                >
+                                    <QrCode className="w-5 h-5" />
+                                </button>
+
+                                {/* Install App & QR Code */}
+                                <button
+                                    onClick={() => setShowPwaModal(true)}
+                                    title="Install App & Scan QR Code"
+                                    aria-label="Install App / Scan QR Code"
+                                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-brand/10 hover:bg-brand/20 text-brand flex items-center justify-center transition-all cursor-pointer shrink-0"
+                                >
+                                    <QrCode className="w-5 h-5" />
+                                </button>
+
+                                {/* Desktop Clinic Avatar Block (Next to Bell) */}
+                                <div className="hidden lg:flex items-center border-l border-accent-brown/10 pl-3 xl:pl-4">
+                                    <ClinicAvatarBlock maxTextWidth="max-w-[160px] xl:max-w-[220px]" />
+                                </div>
+
+                                {branchAction && <div className="hidden xl:block">{branchAction}</div>}
+                            </div>
+                        </header>
+                    ) : user?.role === 'rider' ? (
+                        /* Rider Unified Responsive Header */
+                        <header
+                            role="banner"
+                            className="h-18 sm:h-20 bg-white border-b border-accent-brown/5 shadow-xs sticky top-0 z-40 px-4 sm:px-6 lg:px-8 flex items-center justify-between pt-[env(safe-area-inset-top,0px)]"
+                        >
+                            {/* Left: Rider Avatar Block */}
+                            <div className="flex items-center min-w-0 flex-1 mr-3">
+                                <RiderAvatarBlock maxTextWidth="max-w-[calc(100vw-120px)] xs:max-w-[280px] sm:max-w-[420px] lg:max-w-[500px]" />
+                            </div>
+
+                            {/* Right: Bell with Unread Dot */}
+                            <div className="flex items-center gap-2.5 sm:gap-3.5 shrink-0">
+                                <NotificationBell
+                                    notifications={notifications}
+                                    unreadCount={unreadCount}
+                                    markAsRead={markAsRead}
+                                    markAllAsRead={markAllAsRead}
+                                    deleteNotification={deleteNotification}
+                                    variant="portal"
+                                />
+                                <button
+                                    onClick={() => setShowPwaModal(true)}
+                                    title="Install App & Scan QR Code"
+                                    aria-label="Install App / Scan QR Code"
+                                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-brand/10 hover:bg-brand/20 text-brand flex items-center justify-center transition-all cursor-pointer shrink-0"
+                                >
+                                    <QrCode className="w-5 h-5" />
+                                </button>
+                                {branchAction && <div className="hidden xl:block">{branchAction}</div>}
+                            </div>
+                        </header>
+                    ) : (
+                        /* Original Header for Admins */
+                        <header className="h-20 bg-white/80 backdrop-blur-xl border-b border-accent-brown/5 sticky top-0 z-40 px-4 sm:px-8 lg:px-10 flex items-center justify-between pt-[env(safe-area-inset-top,0px)]">
+                            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                {!isRider && (
+                                    <button
+                                        aria-label="Open Navigation Menu"
+                                        className="lg:hidden min-w-[44px] min-h-[44px] w-11 h-11 flex items-center justify-center bg-accent-peach/10 rounded-xl text-accent-brown hover:bg-accent-peach/20 active:scale-95 transition-all"
+                                        onClick={() => setIsMobileMenuOpen(true)}
+                                    >
+                                        <Menu className="w-5 h-5" />
+                                    </button>
+                                )}
+                                <div className="flex items-center gap-2 min-w-0">
+                                    {!isHome && (
+                                        <>
+                                            <Link
+                                                to={`/dashboard/${basePath}`}
+                                                className="text-xs font-bold text-slate-400 hover:text-brand-dark transition-colors hidden xs:block"
+                                            >
+                                                {hubLabel}
+                                            </Link>
+                                            <ChevronRight className="w-3 h-3 text-accent-brown/20 hidden xs:block shrink-0" />
+                                        </>
+                                    )}
+                                    <h1 className="text-lg font-black text-accent-brown tracking-tight truncate max-w-[180px] xs:max-w-none">{currentPathName}</h1>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                                <div className="hidden sm:flex items-center gap-3 bg-accent-peach/5 border border-accent-brown/5 px-4 py-2.5 rounded-2xl w-64 group focus-within:border-brand/40 transition-all">
+                                    <Search className="w-4 h-4 text-accent-brown/30" />
+                                    <input type="text" placeholder="Search..." className="bg-transparent border-none outline-none text-xs font-bold text-accent-brown placeholder:text-accent-brown/20 w-full" />
+                                </div>
+                                <NotificationBell
+                                    notifications={notifications}
+                                    unreadCount={unreadCount}
+                                    markAsRead={markAsRead}
+                                    markAllAsRead={markAllAsRead}
+                                    deleteNotification={deleteNotification}
+                                    variant="portal"
+                                />
+                                <button
+                                    onClick={() => setShowPwaModal(true)}
+                                    title="Install App & Scan QR Code"
+                                    aria-label="Install App / Scan QR Code"
+                                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-brand/10 hover:bg-brand/20 text-brand flex items-center justify-center transition-all cursor-pointer shrink-0"
+                                >
+                                    <QrCode className="w-5 h-5" />
+                                </button>
+                                {branchAction && <div className="hidden xl:block">{branchAction}</div>}
+                            </div>
+                        </header>
+                    ))}
+                    <main className={`flex-1 p-4 sm:p-6 lg:p-10 w-full overflow-x-hidden ${user?.role === 'business' ? 'pb-28 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px)+1.5rem)] md:pb-6 lg:pb-10' : ''}`}>
                         <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="w-full">
                             {children}
                         </motion.div>
@@ -565,7 +713,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                         <NavLink
                                             key={link?.name}
                                             to={link?.path || '#'}
-                                            end={link?.name === 'Dashboard'}
+                                            end={link?.name === 'Dashboard' || link?.name === 'Home'}
                                             onClick={() => setIsMobileMenuOpen(false)}
                                             className={({ isActive }) => `flex items-center gap-3 px-5 py-3.5 rounded-2xl font-bold text-xs transition-all group ${isActive ? 'bg-brand text-white shadow-md shadow-brand/20' : 'text-black hover:bg-brand hover:text-white'}`}
                                         >
@@ -578,13 +726,21 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                     )}
                 </AnimatePresence>
                 {/* Support Bot Widget */}
-                <SupportBot />
-                <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} logout={handleLogout} />
+                <SupportBot hideFloating={isLogoutModalOpen} />
+                {/* Business Mobile Bottom Navigation Bar (Phones < 768px) */}
+                {user?.role === 'business' && !hideFooter && (
+                    <BusinessBottomNav onOpenLogout={() => setIsLogoutModalOpen(true)} />
+                )}
+                <ConfirmLogoutModal
+                    isOpen={isLogoutModalOpen}
+                    onClose={() => setIsLogoutModalOpen(false)}
+                    onConfirm={handleLogout}
+                />
             </div>
         );
     }
 
-    // Customer "More" Popup Menu Items (The remaining 5 items not in bottom bar)
+    // Customer "More" Popup Menu Items (The remaining 4 items not in bottom bar)
     const moreMenuItems = [
         {
             id: 'map',
@@ -600,7 +756,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
         },
         {
             id: 'alerts',
-            name: 'Alerts',
+            name: 'Notifications',
             path: '/dashboard/customer/alerts',
             icon: Bell,
             badge: unreadCount,
@@ -611,24 +767,11 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
             path: '/dashboard/customer/account',
             icon: UserCircle,
         },
-        {
-            id: 'chat',
-            name: 'Chat Support',
-            icon: MessageCircle,
-            isChat: true,
-        },
     ];
 
     const handleMoreItemClick = (item: (typeof moreMenuItems)[number]) => {
         setIsMoreMenuOpen(false);
-        if (item.isChat) {
-            if (typeof window !== 'undefined' && window.history.state?.hivetMoreMenu) {
-                window.history.back();
-            }
-            setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('open-support-bot'));
-            }, 120);
-        } else if (item.path) {
+        if (item.path) {
             if (typeof window !== 'undefined' && window.history.state?.hivetMoreMenu) {
                 navigate(item.path, { replace: true });
             } else {
@@ -720,89 +863,23 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                 </motion.button>
                             )}
 
-                            <div className="relative">
-                                <motion.button
-                                    onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                                    aria-label="Notifications"
-                                    className={`relative min-w-[44px] min-h-[44px] w-11 h-11 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer ${isNotificationsOpen ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'bg-slate-100 text-black hover:text-accent-brown hover:bg-slate-200'}`}
-                                >
-                                    <Bell className="w-5 h-5" />
-                                    {notifications.filter(n => !n.read).length > 0 && (
-                                        <span className={`absolute top-2.5 right-2.5 w-2 h-2 rounded-full border-2 border-white ${isNotificationsOpen ? 'bg-white' : 'bg-rose-500 animate-pulse'}`}></span>
-                                    )}
-                                </motion.button>
+                            <NotificationBell
+                                notifications={notifications}
+                                unreadCount={unreadCount}
+                                markAsRead={markAsRead}
+                                markAllAsRead={markAllAsRead}
+                                deleteNotification={deleteNotification}
+                                variant="customer"
+                            />
 
-                                <AnimatePresence>
-                                    {isNotificationsOpen && (
-                                        <>
-                                            <div className="fixed inset-0 z-40" onClick={() => setIsNotificationsOpen(false)} />
-                                            <motion.div
-                                                initial={{ opacity: 0, y: 15, scale: 0.95, x: 'var(--notifications-x, 0)' }}
-                                                animate={{ opacity: 1, y: 0, scale: 1, x: 'var(--notifications-x, 0)' }}
-                                                exit={{ opacity: 0, y: 15, scale: 0.95, x: 'var(--notifications-x, 0)' }}
-                                                style={{ '--notifications-x': '0px' } as any}
-                                                className="fixed xs:absolute right-4 xs:right-0 top-[88px] xs:top-auto mt-2 w-[calc(100vw-2rem)] xs:w-[400px] bg-white rounded-3xl shadow-2xl border border-brand-dark/5 z-50 overflow-hidden origin-top-right"
-                                            >
-                                                <div className="p-5 sm:p-6 border-b border-accent-brown/5 flex items-center justify-between bg-accent-peach/10">
-                                                    <div className="flex items-center gap-2">
-                                                        <Bell className="w-3.5 h-3.5 text-brand" />
-                                                        <h3 className="font-black text-black text-sm italic">Notifications</h3>
-                                                    </div>
-                                                    {unreadCount > 0 && (
-                                                        <button onClick={markAllAsRead} className="text-xs font-bold text-black hover:underline bg-white px-3 py-1 rounded-full shadow-sm cursor-pointer">Mark all as read</button>
-                                                    )}
-                                                </div>
-                                                <div className="max-h-[350px] sm:max-h-[450px] overflow-y-auto no-scrollbar">
-                                                    {notifications?.length === 0 ? (
-                                                        <div className="py-16 text-center">
-                                                            <div className="w-16 h-16 bg-accent-peach/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                                <Bell className="w-8 h-8 text-black/10" />
-                                                            </div>
-                                                            <p className="text-xs font-bold text-black">No notifications yet</p>
-                                                        </div>
-                                                    ) : (
-                                                        notifications?.map((n) => (
-                                                            <motion.div
-                                                                key={n?.id}
-                                                                whileHover={{ x: 4, backgroundColor: 'rgba(255, 159, 28, 0.08)' }}
-                                                                whileTap={{ scale: 0.99 }}
-                                                                onClick={() => {
-                                                                    if (!n?.read) markAsRead(n?.id);
-                                                                    if (n?.link) navigate(n?.link);
-                                                                    setIsNotificationsOpen(false);
-                                                                }}
-                                                                className={`p-4 sm:p-5 flex gap-4 cursor-pointer transition-all border-b border-brand-dark/5 last:border-0 relative ${n?.read ? 'hover:bg-accent-peach/5' : 'bg-brand/5 hover:bg-brand/10'}`}
-                                                            >
-                                                                {!n?.read && <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand" />}
-                                                                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl shrink-0 flex items-center justify-center shadow-sm ${n?.type === 'System' ? 'bg-white text-brand' : 'bg-blue-50 text-blue-500'}`}>
-                                                                    <Bell className="w-4 h-4 sm:w-5 h-5" />
-                                                                </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <div className="flex items-center justify-between gap-2 mb-1">
-                                                                        <span className="font-black text-[11px] sm:text-xs text-black truncate">{n?.title}</span>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="text-[10px] font-bold text-black shrink-0">Just now</span>
-                                                                            <motion.button
-                                                                                whileHover={{ scale: 1.2, rotate: 90 }}
-                                                                                whileTap={{ scale: 0.8 }}
-                                                                                onClick={(e) => { e.stopPropagation(); deleteNotification(n?.id); }}
-                                                                                className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-red-50 text-brand-dark/20 hover:text-red-500 transition-all cursor-pointer"
-                                                                            >
-                                                                                <X className="w-3 h-3" />
-                                                                            </motion.button>
-                                                                        </div>
-                                                                    </div>
-                                                                    <p className="text-[10px] sm:text-[11px] text-black leading-relaxed line-clamp-2 font-medium">{n?.desc}</p>
-                                                                </div>
-                                                            </motion.div>
-                                                        ))
-                                                    )}
-                                                </div>
-                                            </motion.div>
-                                        </>
-                                    )}
-                                </AnimatePresence>
-                            </div>
+                            <button
+                                onClick={() => setShowPwaModal(true)}
+                                title="Install App & Scan QR Code"
+                                aria-label="Install App / Scan QR Code"
+                                className="min-w-[44px] min-h-[44px] w-11 h-11 sm:w-12 sm:h-12 bg-brand/10 hover:bg-brand/20 text-brand rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer shrink-0"
+                            >
+                                <QrCode className="w-5 h-5" />
+                            </button>
 
                             <div className="hidden lg:flex items-center">
                                 <motion.button
@@ -841,7 +918,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
 
 
             {/* Customer Mobile Bottom Navigation Bar */}
-            {isCustomer && !hideHeader && (
+            {isCustomer && !hideFooter && (
                 <nav className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 ${isMoreMenuOpen ? 'bg-white' : 'bg-white/95 backdrop-blur-xl'} border-t border-accent-brown/10 shadow-[0_-10px_25px_rgba(0,0,0,0.06)] h-16 px-2`}>
                     <div className="flex items-center justify-around h-full max-w-lg mx-auto">
                         {[
@@ -981,9 +1058,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                                 className={`rounded-full flex items-center justify-center shrink-0 relative transition-transform duration-200 group-hover:scale-105 group-active:scale-95 ${
                                                 isActive
                                                     ? 'bg-brand text-white shadow-md shadow-brand/30 ring-2 ring-brand/40'
-                                                    : item.isChat
-                                                        ? 'bg-gradient-to-br from-brand/15 to-brand/25 text-brand border border-brand/40 shadow-sm group-hover:bg-brand group-hover:text-white'
-                                                        : 'bg-slate-50 text-slate-700 border border-slate-200/80 shadow-sm group-hover:bg-brand group-hover:text-white group-hover:border-brand'
+                                                    : 'bg-slate-50 text-slate-700 border border-slate-200/80 shadow-sm group-hover:bg-brand group-hover:text-white group-hover:border-brand'
                                             }`}>
                                                 <item.icon className="w-5 h-5 stroke-[2.2]" />
                                                 {item.badge && item.badge > 0 ? (
@@ -991,9 +1066,6 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                                         {item.badge}
                                                     </span>
                                                 ) : null}
-                                                {item.isChat && (
-                                                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white animate-pulse" />
-                                                )}
                                             </div>
 
                                             {/* Full Label (At least 14px, single line, never shortened) */}
@@ -1034,6 +1106,9 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                             <div className="w-20 h-20 bg-accent-peach/10 rounded-xl p-2 flex items-center justify-center"><img src={item.image} className="w-full h-full object-contain" /></div>
                                             <div className="flex-1 flex flex-col">
                                                 <h4 className="font-black text-xs text-accent-brown leading-tight mb-1">{item.name}</h4>
+                                                {item.description && (
+                                                    <p className="text-[10px] text-black/50 line-clamp-1 mb-1 font-medium">{item.description}</p>
+                                                )}
                                                 <p className="text-xs font-bold text-black mb-auto">{item.variant} • {item.size}</p>
                                                 <div className="flex items-center justify-between mt-2">
                                                     <span className="font-black text-brand-dark">₱{item.price}</span>
@@ -1079,29 +1154,20 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                 )}
             </AnimatePresence>
 
-            {/* Support Bot Widget (Accessible via More Menu -> Chat Support) */}
-            <SupportBot />
-            <LogoutModal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} logout={handleLogout} />
+            {/* Support Bot Widget (Accessible via More Menu -> Chat Support or Floating Button) */}
+            <SupportBot hideFloating={isMoreMenuOpen || isCartOpen || isLogoutModalOpen} />
+            <ConfirmLogoutModal
+                isOpen={isLogoutModalOpen}
+                onClose={() => setIsLogoutModalOpen(false)}
+                onConfirm={handleLogout}
+            />
+            <PwaInstallModal
+                isOpen={showPwaModal}
+                onClose={() => setShowPwaModal(false)}
+                initialRole={user?.role === 'business' ? 'business' : user?.role === 'rider' ? 'rider' : 'customer'}
+            />
         </div>
     );
 };
-
-const LogoutModal = ({ isOpen, onClose, logout }: any) => (
-    <AnimatePresence>
-        {isOpen && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-accent-brown/20 backdrop-blur-md" />
-                <motion.div initial={{ scale: 0.9, opacity: 0, y: 30 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 30 }} className="bg-white w-full max-w-sm rounded-[3rem] p-10 text-center relative z-10">
-                    <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-8"><LogOut className="w-10 h-10" /></div>
-                    <h3 className="text-2xl font-black italic leading-none mb-4">Log Out?</h3>
-                    <div className="grid grid-cols-2 gap-4 mt-8">
-                        <button onClick={onClose} className="py-3.5 bg-slate-100 rounded-2xl font-black text-xs cursor-pointer">No</button>
-                        <button onClick={logout} className="py-3.5 bg-red-500 text-white rounded-2xl font-black text-xs cursor-pointer">Yes</button>
-                    </div>
-                </motion.div>
-            </div>
-        )}
-    </AnimatePresence>
-);
 
 export default DashboardLayout;

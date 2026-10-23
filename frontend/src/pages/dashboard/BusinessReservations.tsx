@@ -10,6 +10,13 @@ import {
 import DashboardLayout from '../../components/DashboardLayout';
 import { CustomDropdown } from '../../components/CustomDropdown';
 import BranchSelector from '../../components/BranchSelector';
+import { CLINIC_TEXT } from '../../constants/clinicWording';
+import { formatReviewId, getReviewIdAriaLabel } from '../../utils/textFormatters';
+import { 
+    validateDay, 
+    validateWeeklySchedule, 
+    getScheduleDropdownOptions 
+} from '../../utils/scheduleValidation';
 
 const API = 'http://localhost:8000';
 
@@ -329,8 +336,8 @@ export default function BusinessReservations() {
             const res = await fetch(`${API}/api/business/special-hours/${id}`, { method: 'DELETE', headers: authHeaders });
             if (!res.ok) throw new Error();
             setSpecialHours(prev => prev.filter(s => s.id !== id));
-            showToast('Override removed.');
-        } catch { showToast('Failed to delete override.', 'error'); }
+            showToast('Special day removed.');
+        } catch { showToast('Failed to delete special day.', 'error'); }
     };
 
     useEffect(() => { fetchAll(); }, [branchId]);
@@ -345,6 +352,46 @@ export default function BusinessReservations() {
             showToast(`Status updated to "${status}"`);
         } catch { showToast('Failed to update status.', 'error'); }
         finally { setUpdatingId(null); }
+    };
+
+    const [hasAttemptedSaveHours, setHasAttemptedSaveHours] = useState(false);
+    const [showAllClosedConfirm, setShowAllClosedConfirm] = useState(false);
+
+    // Live validation for weekly schedule
+    const scheduleValidation = validateWeeklySchedule(hours);
+    const hasScheduleErrors = !scheduleValidation.isValid;
+
+    const scrollToFirstError = (invalidDaysList = scheduleValidation.invalidDays) => {
+        if (!invalidDaysList || invalidDaysList.length === 0) return;
+        const firstDay = invalidDaysList[0];
+        const errors = scheduleValidation.dayResults[firstDay.day_of_week]?.errors || {};
+        const errorKeys = Object.keys(errors) as (keyof typeof errors)[];
+        const firstKey = errorKeys[0];
+        const fieldId = `schedule-field-${firstDay.day_of_week}-${firstKey}`;
+        const el = document.getElementById(fieldId);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const focusable = el.querySelector('button, input, [tabindex="0"]') as HTMLElement | null;
+            focusable?.focus();
+        } else {
+            const row = document.getElementById(`schedule-day-row-${firstDay.day_of_week}`);
+            row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    };
+
+    const handleSaveHours = () => {
+        setHasAttemptedSaveHours(true);
+        const validation = validateWeeklySchedule(hours);
+        if (!validation.isValid) {
+            scrollToFirstError(validation.invalidDays);
+            showToast('Fix invalid schedule days before saving', 'error');
+            return;
+        }
+        if (validation.allDaysClosed) {
+            setShowAllClosedConfirm(true);
+            return;
+        }
+        saveHours();
     };
 
     const saveHours = async () => {
@@ -513,23 +560,23 @@ export default function BusinessReservations() {
                             <div>
                                 <div className="flex items-center gap-3 mb-4">
                                     <div className="h-1 w-12 bg-white rounded-full" />
-                                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Configuration Portal</span>
+                                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">{CLINIC_TEXT.services.configTitle}</span>
                                 </div>
                                 <h2 className="text-4xl lg:text-5xl font-black tracking-tighter mb-4 text-white">
-                                    {editingService ? `Editing: ${editingService.name}` : 'New Clinic Service'}
+                                    {editingService ? CLINIC_TEXT.services.editServiceTitle(editingService.name) : CLINIC_TEXT.services.newServiceTitle}
                                 </h2>
-                                <p className="text-sm font-medium text-white max-w-md">Design and publish high-performance clinic services and package bundles for your clients.</p>
+                                <p className="text-sm font-medium text-white max-w-md">{CLINIC_TEXT.services.subtitle}</p>
                             </div>
 
                             <div className="flex items-center gap-4">
                                 <button onClick={() => setShowServiceEditor(false)}
                                     className="px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-white/60 hover:text-white hover:bg-white/5 transition-all border border-white/10">
-                                    Discard Changes
+                                    {CLINIC_TEXT.services.discardButton}
                                 </button>
                                 <button onClick={handleSaveService} disabled={savingService}
                                     className="flex items-center gap-3 bg-brand text-white px-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-2xl shadow-brand/20 disabled:opacity-50">
                                     {savingService ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
-                                    Publish to Catalog
+                                    {CLINIC_TEXT.services.saveButton}
                                 </button>
                             </div>
                         </div>
@@ -541,7 +588,7 @@ export default function BusinessReservations() {
                             <div className="bg-white rounded-[3rem] p-10 shadow-2xl shadow-accent-brown/5 border border-white space-y-8">
                                 <div className="flex items-center gap-4 mb-2">
                                     <div className="w-12 h-12 rounded-2xl bg-brand/10 flex items-center justify-center text-brand"><Settings className="w-6 h-6" /></div>
-                                    <h4 className="text-xl font-black text-accent-brown tracking-tight">Core Configuration</h4>
+                                    <h4 className="text-xl font-black text-accent-brown tracking-tight">{CLINIC_TEXT.services.configTitle}</h4>
                                 </div>
 
                                 <div className="space-y-6">
@@ -574,7 +621,7 @@ export default function BusinessReservations() {
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black uppercase tracking-widest text-black pl-2">Description</label>
                                         <textarea value={serviceForm.description} onChange={e => setServiceForm({ ...serviceForm, description: e.target.value })} rows={4}
-                                            className="w-full bg-accent-peach/5 border-2 border-transparent focus:border-brand/30 rounded-3xl px-6 py-5 text-sm font-medium text-black transition-all shadow-inner resize-none" placeholder="Elaborate on the specific value and details of this clinic service..." />
+                                            className="w-full bg-accent-peach/5 border-2 border-transparent focus:border-brand/30 rounded-3xl px-6 py-5 text-sm font-medium text-black transition-all shadow-inner resize-none" placeholder="Write details about this service..." />
                                     </div>
                                 </div>
                             </div>
@@ -594,9 +641,9 @@ export default function BusinessReservations() {
                         <div className="xl:col-span-8 space-y-8">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                                 {[
-                                    { label: 'Market Price (₱)', icon: Scissors, value: serviceForm.price, key: 'price', color: 'text-brand', prefix: '₱' },
-                                    { label: 'Time Allocated', icon: Timer, value: serviceForm.duration_minutes, key: 'duration_minutes', color: 'text-blue-500', suffix: ' Min' },
-                                    { label: 'Loyalty Units', icon: Award, value: serviceForm.loyalty_points, key: 'loyalty_points', color: 'text-green-500', suffix: ' pts' },
+                                    { label: `${CLINIC_TEXT.services.priceLabel} (₱)`, icon: Scissors, value: serviceForm.price, key: 'price', color: 'text-brand', prefix: '₱' },
+                                    { label: CLINIC_TEXT.services.timeAllocated, icon: Timer, value: serviceForm.duration_minutes, key: 'duration_minutes', color: 'text-blue-500', suffix: ' Min' },
+                                    { label: CLINIC_TEXT.services.rewardPoints, icon: Award, value: serviceForm.loyalty_points, key: 'loyalty_points', color: 'text-green-500', suffix: ' Points' },
                                 ].map(stat => (
                                     <div key={stat.label} className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-accent-brown/5 border border-white space-y-6 group hover:border-brand/20 transition-all duration-500">
                                         <div className="flex items-center gap-4">
@@ -816,47 +863,95 @@ export default function BusinessReservations() {
 
     return (
         <DashboardLayout title="">
-            <div className="space-y-8">
+            <div className="w-full max-w-[1280px] mx-auto space-y-5 sm:space-y-6 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-6">
                 {/* Redesigned Header Area */}
-                <div className="relative rounded-[2.5rem] bg-brand p-8 text-white shadow-2xl shadow-brand/20 lg:p-12">
-                    <div className="absolute inset-0 rounded-[2.5rem] overflow-hidden pointer-events-none">
+                <div className="relative rounded-[20px] sm:rounded-[24px] bg-brand p-4 min-[400px]:p-5 sm:p-6 lg:p-8 text-white shadow-xl shadow-brand/20">
+                    <div className="absolute inset-0 rounded-[20px] sm:rounded-[24px] overflow-hidden pointer-events-none">
                         <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-brand/20 blur-3xl pointer-events-none" />
                         <div className="absolute -left-20 -bottom-20 h-64 w-64 rounded-full bg-accent-peach/5 blur-3xl pointer-events-none" />
                     </div>
 
-                    <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+                    <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
                         <div>
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="h-1 w-12 bg-white rounded-full" />
-                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Management Portal</span>
+                            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                                <div className="h-1 w-8 sm:w-10 bg-white rounded-full" />
+                                <span className="text-xs font-bold uppercase tracking-wider text-white/90">{CLINIC_TEXT.bookings.badge}</span>
                             </div>
-                            <h2 className="text-4xl lg:text-5xl font-black tracking-tighter mb-2 text-white">Clinic Bookings</h2>
-                            <p className="text-sm font-medium text-white max-w-md">Oversee appointments, manage clinic capacity, and monitor service performance across all locations.</p>
+                            <h2 className="text-2xl min-[360px]:text-[28px] sm:text-3xl lg:text-4xl font-black text-white leading-tight mb-1.5 sm:mb-2">{CLINIC_TEXT.bookings.title}</h2>
+                            <p className="text-sm text-white/90 max-w-xl leading-relaxed">{CLINIC_TEXT.bookings.description}</p>
                         </div>
-                        <div className="flex flex-col items-end gap-4 min-w-[280px]">
+                        <div className="w-full sm:w-[280px] md:w-[320px] shrink-0">
                             {token && <BranchSelector token={token} onBranchChange={setBranchId} currentBranchId={branchId} />}
                         </div>
                     </div>
 
                     {/* Integrated Tab Navigation */}
-                    <div className="relative z-10 flex items-center gap-1 bg-black/20 backdrop-blur-md rounded-2xl p-1.5 mt-10 w-fit border border-white/10">
-                        {[
-                            { id: 'reservations', label: 'Reservations', icon: ClipboardList },
-                            { id: 'hours', label: 'Schedule', icon: Clock },
-                            { id: 'special', label: 'Overrides', icon: Calendar },
-                            { id: 'services', label: 'Clinic Service', icon: Tag },
-                        ].map(({ id, label, icon: Icon }) => (
-                            <button key={id} onClick={() => setTab(id as any)}
-                                className={`flex items-center gap-2.5 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all duration-300 ${tab === id ? 'bg-white text-accent-brown shadow-xl scale-[1.02]' : 'text-white hover:bg-white/10'}`}>
-                                <Icon className={`w-4 h-4 ${tab === id ? 'text-brand' : 'text-white/40'}`} />
-                                {label}
-                                {id === 'reservations' && (pending + confirmed) > 0 && (
-                                    <span className={`flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-[9px] font-black tabular-nums transition-colors ${tab === id ? 'bg-brand text-white' : 'bg-white/20 text-white'}`}>
-                                        {pending + confirmed}
-                                    </span>
-                                )}
-                            </button>
-                        ))}
+                    <div className="relative z-10 mt-5 sm:mt-6">
+                        {/* Mobile 2x2 grid (phones < 640px) */}
+                        <div className="grid grid-cols-2 gap-2 sm:hidden w-full">
+                            {[
+                                { id: 'reservations', label: CLINIC_TEXT.bookings.tabs.reservations, icon: ClipboardList },
+                                { id: 'hours', label: CLINIC_TEXT.bookings.tabs.schedule, icon: Clock },
+                                { id: 'special', label: CLINIC_TEXT.bookings.tabs.overrides, icon: Calendar },
+                                { id: 'services', label: CLINIC_TEXT.bookings.tabs.services, icon: Tag },
+                            ].map(({ id, label, icon: Icon }) => {
+                                const isActive = tab === id;
+                                return (
+                                    <button
+                                        key={id}
+                                        onClick={() => setTab(id as any)}
+                                        className={`min-h-[48px] px-3 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all duration-200 ${
+                                            isActive
+                                                ? 'bg-white text-accent-brown shadow-md'
+                                                : 'bg-black/20 text-white hover:bg-black/30'
+                                        }`}
+                                    >
+                                        <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-brand' : 'text-white/80'}`} />
+                                        <span className="truncate">{label}</span>
+                                        {id === 'reservations' && (pending + confirmed) > 0 && (
+                                            <span className={`shrink-0 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-xs font-bold tabular-nums ${
+                                                isActive ? 'bg-brand text-white' : 'bg-white/20 text-white'
+                                            }`}>
+                                                {pending + confirmed}
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Tablet/Desktop horizontal row */}
+                        <div className="hidden sm:inline-flex items-center gap-1.5 bg-black/20 backdrop-blur-md rounded-2xl p-1.5 border border-white/10">
+                            {[
+                                { id: 'reservations', label: CLINIC_TEXT.bookings.tabs.reservations, icon: ClipboardList },
+                                { id: 'hours', label: CLINIC_TEXT.bookings.tabs.schedule, icon: Clock },
+                                { id: 'special', label: CLINIC_TEXT.bookings.tabs.overrides, icon: Calendar },
+                                { id: 'services', label: CLINIC_TEXT.bookings.tabs.services, icon: Tag },
+                            ].map(({ id, label, icon: Icon }) => {
+                                const isActive = tab === id;
+                                return (
+                                    <button
+                                        key={id}
+                                        onClick={() => setTab(id as any)}
+                                        className={`min-h-[44px] flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm tracking-wide transition-all duration-200 ${
+                                            isActive
+                                                ? 'bg-white text-accent-brown shadow-md scale-[1.02]'
+                                                : 'text-white hover:bg-white/10'
+                                        }`}
+                                    >
+                                        <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-brand' : 'text-white/70'}`} />
+                                        <span>{label}</span>
+                                        {id === 'reservations' && (pending + confirmed) > 0 && (
+                                            <span className={`flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-xs font-bold tabular-nums ${
+                                                isActive ? 'bg-brand text-white' : 'bg-white/20 text-white'
+                                            }`}>
+                                                {pending + confirmed}
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
 
@@ -873,53 +968,58 @@ export default function BusinessReservations() {
 
                 {/* ── RESERVATIONS TAB ── */}
                 {tab === 'reservations' && (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="space-y-5 sm:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                         {/* More Professional Stats Grid */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
                             {[
-                                { label: 'Total Volume', value: reservations.length, icon: ClipboardList, color: 'text-accent-brown', bg: 'bg-accent-peach/20', trend: 'Lifetime' },
-                                { label: 'Awaiting Action', value: pending, icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50', trend: 'Requires update' },
-                                { label: 'Confirmed', value: confirmed, icon: CheckCircle, color: 'text-blue-600', bg: 'bg-blue-50', trend: 'Scheduled' },
-                                { label: 'Successfully Met', value: reservations.filter(r => r.status === 'Completed').length, icon: Award, color: 'text-green-600', bg: 'bg-green-50', trend: 'Completed' },
+                                { label: CLINIC_TEXT.bookings.cards.totalBookings, value: reservations.length, icon: ClipboardList, color: 'text-accent-brown', bg: 'bg-accent-peach/20', trend: CLINIC_TEXT.bookings.cards.allTime },
+                                { label: CLINIC_TEXT.bookings.cards.waitingForYou, value: pending, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50', trend: CLINIC_TEXT.bookings.cards.needsAction },
+                                { label: CLINIC_TEXT.bookings.cards.confirmedBookings, value: confirmed, icon: CheckCircle, color: 'text-blue-600', bg: 'bg-blue-50', trend: CLINIC_TEXT.bookings.cards.booked },
+                                { label: CLINIC_TEXT.bookings.cards.completedBookings, value: reservations.filter(r => r.status === 'Completed').length, icon: Award, color: 'text-green-600', bg: 'bg-green-50', trend: CLINIC_TEXT.bookings.cards.done },
                             ].map(({ label, value, icon: Icon, color, bg, trend }) => (
-                                <div key={label} className={`group relative bg-white rounded-3xl p-6 shadow-xl shadow-accent-brown/5 border border-white hover:border-brand/20 transition-all duration-300 overflow-hidden`}>
-                                    <div className={`absolute -right-4 -top-4 h-24 w-24 rounded-full opacity-5 group-hover:scale-150 transition-transform duration-500 ${bg}`} />
-                                    <div className="relative z-10">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${bg} ${color}`}>
-                                                <Icon className="w-6 h-6" />
-                                            </div>
-                                            <div className="text-[10px] font-black uppercase tracking-widest text-black bg-accent-peach/10 px-2 py-1 rounded-md">{trend}</div>
+                                <div key={label} className="bg-white rounded-[20px] p-4 sm:p-5 shadow-sm border border-accent-brown/10 hover:border-brand/20 transition-all duration-200 flex flex-col justify-between h-full">
+                                    <div className="flex items-center justify-between gap-2 mb-3">
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${bg} ${color}`}>
+                                            <Icon className="w-5 h-5" />
                                         </div>
-                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-black block mb-1">{label}</span>
-                                        <div className="flex items-baseline gap-2">
-                                            <span className={`text-4xl font-black tracking-tight text-accent-brown`}>{value}</span>
+                                        <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md truncate">
+                                            {trend}
                                         </div>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs font-bold uppercase tracking-wider text-slate-600 block mb-1 truncate">{label}</span>
+                                        <span className="text-2xl sm:text-3xl font-black tracking-tight text-accent-brown">{value}</span>
                                     </div>
                                 </div>
                             ))}
                         </div>
 
                         {/* Integrated Filter System */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-white rounded-3xl p-4 shadow-xl shadow-accent-brown/5 border border-white">
-                            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar shrink-0">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 bg-white rounded-[20px] p-3 sm:p-4 shadow-sm border border-accent-brown/10">
+                            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
                                 {STATUS_FILTERS.map(f => {
                                     const count = f === 'All' ? reservations.length : reservations.filter(r => r.status === f).length;
+                                    const isActive = filter === f;
                                     return (
                                         <button key={f} onClick={() => setFilter(f)}
-                                            className={`relative shrink-0 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 ${filter === f ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'text-black hover:bg-accent-peach/30 hover:text-accent-brown'}`}>
-                                            {f}
-                                            <span className={`flex h-4 min-w-[1rem] items-center justify-center rounded-lg px-1 text-[8px] font-black tabular-nums transition-colors ${filter === f ? 'bg-white text-brand' : 'bg-accent-brown/10 text-black'}`}>
+                                            className={`min-h-[44px] shrink-0 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-bold transition-all duration-200 flex items-center gap-2 ${
+                                                isActive
+                                                    ? 'bg-brand text-white shadow-md shadow-brand/20'
+                                                    : 'text-slate-700 hover:bg-accent-peach/20 hover:text-accent-brown'
+                                            }`}>
+                                            <span>{f}</span>
+                                            <span className={`flex h-5 min-w-[1.25rem] items-center justify-center rounded-lg px-1.5 text-xs font-bold tabular-nums transition-colors ${
+                                                isActive ? 'bg-white text-brand' : 'bg-accent-brown/10 text-slate-700'
+                                            }`}>
                                                 {count}
                                             </span>
                                         </button>
                                     );
                                 })}
                             </div>
-                            <div className="h-10 w-px bg-accent-brown/5 hidden sm:block" />
-                            <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-black">
-                                <Calendar className="w-4 h-4" />
-                                Showing {filtered.length} matching entries
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-600 sm:border-l sm:border-accent-brown/10 sm:pl-4 pt-1 sm:pt-0 shrink-0">
+                                <Calendar className="w-4 h-4 text-brand shrink-0" />
+                                <span>{CLINIC_TEXT.bookings.countFound(filtered.length)}</span>
                             </div>
                         </div>
 
@@ -927,13 +1027,18 @@ export default function BusinessReservations() {
                         {loading && <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 text-brand animate-spin" /></div>}
                         {!loading && filtered.length === 0 && (
                             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                                className="bg-white rounded-[3rem] p-24 flex flex-col items-center gap-6 text-center shadow-2xl shadow-accent-brown/10 border border-white">
-                                <div className="w-24 h-24 bg-accent-peach rounded-full flex items-center justify-center border-4 border-white shadow-xl"><Calendar className="w-12 h-12 text-brand" /></div>
-                                <div><h3 className="font-black text-accent-brown text-2xl tracking-tight mb-2">No Records Found</h3><p className="text-black text-sm font-medium">There are currently no reservations under the "{filter}" status.</p></div>
-                                <button onClick={() => setFilter('All')} className="text-[10px] font-black uppercase tracking-[0.2em] text-brand hover:underline">View all records</button>
+                                className="bg-white rounded-[20px] p-8 sm:p-12 flex flex-col items-center gap-4 text-center shadow-sm border border-accent-brown/10">
+                                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-accent-peach rounded-full flex items-center justify-center border-4 border-white shadow-md">
+                                    <Calendar className="w-8 h-8 sm:w-10 sm:h-10 text-brand" />
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-accent-brown text-xl sm:text-2xl tracking-tight mb-1.5">{CLINIC_TEXT.bookings.empty.title}</h3>
+                                    <p className="text-slate-600 text-sm max-w-md">{CLINIC_TEXT.bookings.empty.description(filter)}</p>
+                                </div>
+                                <button onClick={() => setFilter('All')} className="text-xs font-bold uppercase tracking-wider text-brand hover:underline pt-2">{CLINIC_TEXT.bookings.empty.viewAll}</button>
                             </motion.div>
                         )}
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5 items-stretch">
                             {filtered.slice((reservationsPage - 1) * RESERVATIONS_PER_PAGE, reservationsPage * RESERVATIONS_PER_PAGE).map((r, i) => {
                                 const style = STATUS_STYLES[r.status] || STATUS_STYLES['Pending'];
                                 const actions = NEXT_STATUSES[r.status] || [];
@@ -947,23 +1052,28 @@ export default function BusinessReservations() {
 
                                 return (
                                     <motion.div key={r.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                                        className="group relative bg-white rounded-2xl p-2 shadow-2xl shadow-accent-brown/5 border border-white hover:border-brand/10 transition-all duration-300 flex flex-col h-full">
+                                        className="group relative bg-white rounded-[20px] p-4 sm:p-5 shadow-sm border border-accent-brown/10 hover:border-brand/20 transition-all duration-200 flex flex-col justify-between h-full">
 
                                         {/* Profile/Service Top Block */}
-                                        <div className="p-6 flex flex-col gap-6 flex-1">
+                                        <div className="flex flex-col gap-4 flex-1">
                                             {/* Header Row: Icon & Status */}
-                                            <div className="flex items-start justify-between gap-4">
+                                            <div className="flex items-start justify-between gap-3">
                                                 <div className="relative shrink-0">
-                                                    <div className={`w-16 h-16 rounded-xl flex items-center justify-center shadow-inner ${style.bg}`}>
+                                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-inner ${style.bg}`}>
                                                         <ServiceIcon className={`w-6 h-6 ${style.text}`} />
                                                     </div>
-                                                    <div className={`absolute -right-2 -bottom-2 w-6 h-6 rounded-xl flex items-center justify-center border-4 border-white shadow-lg ${style.dot}`} />
+                                                    <div className={`absolute -right-1 -bottom-1 w-4 h-4 rounded-md flex items-center justify-center border-2 border-white shadow-sm ${style.dot}`} />
                                                 </div>
-                                                <div className="flex flex-col items-end text-right mt-1">
-                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-black mb-1.5">{r.id}</span>
-                                                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full ${style.bg} ${style.text}`}>
-                                                        <div className={`w-1 h-1 rounded-full ${style.dot}`} />
-                                                        <span className="text-[8px] font-black uppercase tracking-widest">{r.status}</span>
+                                                <div className="flex flex-col items-end text-right">
+                                                    <span
+                                                        className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1 select-all"
+                                                        aria-label={getReviewIdAriaLabel(r.id)}
+                                                    >
+                                                        {formatReviewId(r.id)}
+                                                    </span>
+                                                    <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full ${style.bg} ${style.text}`}>
+                                                        <div className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider">{r.status}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -971,13 +1081,13 @@ export default function BusinessReservations() {
                                             {/* Service Title & Sub-Services */}
                                             <div className="flex flex-col gap-2">
                                                 <div className="flex flex-col gap-1">
-                                                    <h4 className="text-2xl font-black text-accent-brown tracking-tighter leading-none mb-1">
+                                                    <h4 className="text-xl sm:text-2xl font-black text-accent-brown tracking-tight leading-snug break-words">
                                                         {r.service}
                                                     </h4>
                                                     {r.pet_name && (
                                                         <div className="flex flex-col gap-1 items-start">
-                                                            <span className="text-brand text-sm tracking-tight font-bold bg-brand/10 px-3 py-0.5 rounded-lg">for {r.pet_name}</span>
-                                                            <span className="text-[10px] font-black uppercase tracking-widest text-black pl-1">{r.pet_type}{r.pet_breed ? ` • ${r.pet_breed}` : ''}</span>
+                                                            <span className="text-brand text-xs sm:text-sm font-bold bg-brand/10 px-2.5 py-0.5 rounded-lg break-words">for {r.pet_name}</span>
+                                                            <span className="text-xs font-semibold text-slate-600 break-words">{r.pet_type}{r.pet_breed ? ` • ${r.pet_breed}` : ''}</span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -990,9 +1100,9 @@ export default function BusinessReservations() {
                                                             const items = JSON.parse(matchedService.package_items_json);
                                                             if (Array.isArray(items) && items.length > 0) {
                                                                 return (
-                                                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                                                    <div className="flex flex-wrap gap-1.5 mt-1">
                                                                         {items.map((it: string, idx: number) => (
-                                                                            <span key={idx} className="text-[9px] font-black tracking-widest uppercase bg-accent-peach/20 text-black px-2 py-0.5 rounded-md border border-accent-brown/10">
+                                                                            <span key={idx} className="text-[10px] font-bold tracking-wide uppercase bg-accent-peach/20 text-slate-700 px-2 py-0.5 rounded-md border border-accent-brown/10 break-words">
                                                                                 {it}
                                                                             </span>
                                                                         ))}
@@ -1006,43 +1116,43 @@ export default function BusinessReservations() {
                                             </div>
 
                                             {/* Details Grid (2x2) */}
-                                            <div className="grid grid-cols-2 gap-4 mt-auto pt-2">
-                                                <div className="flex items-center gap-3 text-black">
-                                                    <div className="w-8 h-8 rounded-xl bg-accent-peach/30 flex items-center justify-center shrink-0"><Calendar className="w-4 h-4" /></div>
+                                            <div className="grid grid-cols-2 gap-3 mt-auto pt-3 border-t border-accent-brown/5">
+                                                <div className="flex items-center gap-2.5 text-slate-700 min-w-0">
+                                                    <div className="w-8 h-8 rounded-lg bg-accent-peach/20 flex items-center justify-center shrink-0"><Calendar className="w-4 h-4 text-brand" /></div>
                                                     <div className="flex flex-col min-w-0">
-                                                        <span className="text-[8px] font-black uppercase tracking-widest text-black">Date</span>
-                                                        <span className="text-xs font-bold truncate text-black">{r.date}</span>
+                                                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Date</span>
+                                                        <span className="text-xs font-bold text-slate-800 break-words leading-tight">{r.date}</span>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-3 text-black">
-                                                    <div className="w-8 h-8 rounded-xl bg-accent-peach/30 flex items-center justify-center shrink-0"><Clock className="w-4 h-4" /></div>
+                                                <div className="flex items-center gap-2.5 text-slate-700 min-w-0">
+                                                    <div className="w-8 h-8 rounded-lg bg-accent-peach/20 flex items-center justify-center shrink-0"><Clock className="w-4 h-4 text-brand" /></div>
                                                     <div className="flex flex-col min-w-0">
-                                                        <span className="text-[8px] font-black uppercase tracking-widest text-black">Time</span>
-                                                        <span className="text-xs font-bold truncate text-black">{r.time}</span>
+                                                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Time</span>
+                                                        <span className="text-xs font-bold text-slate-800 break-words leading-tight">{r.time}</span>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-3 text-black">
-                                                    <div className="w-8 h-8 rounded-xl bg-accent-peach/30 flex items-center justify-center shrink-0"><User className="w-4 h-4" /></div>
+                                                <div className="flex items-center gap-2.5 text-slate-700 min-w-0">
+                                                    <div className="w-8 h-8 rounded-lg bg-accent-peach/20 flex items-center justify-center shrink-0"><User className="w-4 h-4 text-brand" /></div>
                                                     <div className="flex flex-col min-w-0">
-                                                        <span className="text-[8px] font-black uppercase tracking-widest text-black">Cust</span>
-                                                        <span className="text-xs font-bold truncate text-black">{r.customer_name}</span>
+                                                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Cust</span>
+                                                        <span className="text-xs font-bold text-slate-800 break-words leading-tight">{r.customer_name}</span>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-3 text-black">
-                                                    <div className="w-8 h-8 rounded-xl bg-accent-peach/30 flex items-center justify-center shrink-0"><MapPin className="w-4 h-4" /></div>
+                                                <div className="flex items-center gap-2.5 text-slate-700 min-w-0">
+                                                    <div className="w-8 h-8 rounded-lg bg-accent-peach/20 flex items-center justify-center shrink-0"><MapPin className="w-4 h-4 text-brand" /></div>
                                                     <div className="flex flex-col min-w-0">
-                                                        <span className="text-[8px] font-black uppercase tracking-widest text-black">Loc</span>
-                                                        <span className="text-xs font-bold truncate text-black">{r.location || 'Clinic'}</span>
+                                                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Loc</span>
+                                                        <span className="text-xs font-bold text-slate-800 break-words leading-tight">{r.location || 'Clinic'}</span>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
 
                                         {/* Bottom Action & Price Section */}
-                                        <div className="bg-accent-peach/10 rounded-xl p-6 flex flex-col gap-5 border border-accent-brown/5 mt-auto">
-                                            <div className="flex items-end justify-between border-b border-accent-brown/5 pb-4">
-                                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-black">Total</span>
-                                                <p className="text-3xl font-black text-black tracking-tighter">₱{r.total.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</p>
+                                        <div className="bg-accent-peach/10 rounded-xl p-4 flex flex-col gap-4 border border-accent-brown/5 mt-4">
+                                            <div className="flex items-baseline justify-between border-b border-accent-brown/5 pb-2.5">
+                                                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total</span>
+                                                <p className="text-2xl sm:text-3xl font-black text-accent-brown tracking-tight">₱{r.total.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</p>
                                             </div>
 
                                             <div className="flex flex-col gap-2">
@@ -1067,14 +1177,14 @@ export default function BusinessReservations() {
                                                         <button key={action.value}
                                                             onClick={() => updateStatus(r.db_id, action.value)}
                                                             disabled={isActionDisabled}
-                                                            className={`w-full flex items-center justify-center gap-3 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 shadow-xl ${isActionDisabled ? 'bg-accent-brown/10 text-black cursor-not-allowed shadow-none select-none' : `${action.color} shadow-accent-brown/10 active:scale-95 cursor-pointer`}`}>
+                                                            className={`w-full min-h-[44px] flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider transition-all shadow-md ${isActionDisabled ? 'bg-accent-brown/10 text-slate-400 cursor-not-allowed shadow-none select-none' : `${action.color} shadow-accent-brown/10 active:scale-95 cursor-pointer`}`}>
                                                             {updatingId === r.db_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ActionIcon className="w-4 h-4" />}
                                                             {action.label}
                                                         </button>
                                                     );
                                                 }) : (
-                                                    <div className="py-3.5 text-center rounded-xl bg-white/50 border border-dashed border-accent-brown/20">
-                                                        <span className="text-[9px] font-black uppercase tracking-widest text-black italic">No actions available</span>
+                                                    <div className="py-2.5 text-center rounded-xl bg-white/50 border border-dashed border-accent-brown/20">
+                                                        <span className="text-xs font-semibold text-slate-500 italic">No actions available</span>
                                                     </div>
                                                 )}
                                             </div>
@@ -1086,26 +1196,28 @@ export default function BusinessReservations() {
 
                         {/* Pagination Controls */}
                         {filtered.length > RESERVATIONS_PER_PAGE && (
-                            <div className="flex items-center justify-between bg-white rounded-3xl p-4 shadow-xl shadow-accent-brown/5 border border-white">
-                                <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-black">
-                                    <ClipboardList className="w-4 h-4" />
-                                    Showing {(reservationsPage - 1) * RESERVATIONS_PER_PAGE + 1}-{Math.min(reservationsPage * RESERVATIONS_PER_PAGE, filtered.length)} of {filtered.length} entries
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white rounded-[20px] p-4 shadow-sm border border-accent-brown/10">
+                                <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                                    <ClipboardList className="w-4 h-4 text-brand shrink-0" />
+                                    <span>Showing {(reservationsPage - 1) * RESERVATIONS_PER_PAGE + 1}-{Math.min(reservationsPage * RESERVATIONS_PER_PAGE, filtered.length)} of {filtered.length} entries</span>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1.5">
                                     <button onClick={() => setReservationsPage(p => Math.max(1, p - 1))} disabled={reservationsPage === 1}
-                                        className="w-10 h-10 rounded-xl flex items-center justify-center bg-white border border-accent-brown/5 text-accent-brown hover:text-brand hover:shadow-lg transition-all disabled:opacity-30">
+                                        aria-label="Previous page"
+                                        className="w-10 h-10 rounded-xl flex items-center justify-center bg-white border border-accent-brown/10 text-accent-brown hover:text-brand hover:shadow-md transition-all disabled:opacity-30">
                                         <ChevronLeft className="w-5 h-5" />
                                     </button>
-                                    <div className="flex items-center gap-1.5">
+                                    <div className="flex items-center gap-1">
                                         {Array.from({ length: Math.ceil(filtered.length / RESERVATIONS_PER_PAGE) }).map((_, idx) => (
                                             <button key={idx} onClick={() => setReservationsPage(idx + 1)}
-                                                className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-[10px] transition-all duration-300 ${reservationsPage === idx + 1 ? 'bg-brand text-white shadow-lg' : 'bg-accent-peach/5 text-black hover:bg-accent-peach/20'}`}>
+                                                className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs transition-all ${reservationsPage === idx + 1 ? 'bg-brand text-white shadow-md' : 'bg-accent-peach/20 text-slate-700 hover:bg-accent-peach/40'}`}>
                                                 {idx + 1}
                                             </button>
                                         ))}
                                     </div>
                                     <button onClick={() => setReservationsPage(p => Math.min(Math.ceil(filtered.length / RESERVATIONS_PER_PAGE), p + 1))} disabled={reservationsPage >= Math.ceil(filtered.length / RESERVATIONS_PER_PAGE)}
-                                        className="w-10 h-10 rounded-xl flex items-center justify-center bg-white border border-accent-brown/5 text-accent-brown hover:text-brand hover:shadow-lg transition-all disabled:opacity-30">
+                                        aria-label="Next page"
+                                        className="w-10 h-10 rounded-xl flex items-center justify-center bg-white border border-accent-brown/10 text-accent-brown hover:text-brand hover:shadow-md transition-all disabled:opacity-30">
                                         <ChevronRight className="w-5 h-5" />
                                     </button>
                                 </div>
@@ -1126,83 +1238,243 @@ export default function BusinessReservations() {
                                 </div>
                             </div>
 
+                            {/* Top Summary: Schedule Errors Banner */}
+                            {hasAttemptedSaveHours && !scheduleValidation.isValid && (
+                                <div
+                                    role="alert"
+                                    className="mx-6 sm:mx-10 mt-6 p-4 sm:p-5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm animate-in fade-in"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                            <AlertCircle className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-black text-rose-900">
+                                                Fix {scheduleValidation.invalidDays.length} day{scheduleValidation.invalidDays.length > 1 ? 's' : ''} before saving: {scheduleValidation.invalidDays.map(d => d.day_name).join(', ')}
+                                            </p>
+                                            <p className="text-xs text-rose-700 font-medium mt-0.5">
+                                                Review the highlighted operating hours and break intervals below.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => scrollToFirstError(scheduleValidation.invalidDays)}
+                                        className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm shrink-0"
+                                    >
+                                        Go to first error &rarr;
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* All Days Closed Warning */}
+                            {scheduleValidation.allDaysClosed && (
+                                <div
+                                    role="status"
+                                    className="mx-6 sm:mx-10 mt-6 p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center gap-3 shadow-sm animate-in fade-in"
+                                >
+                                    <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                        <AlertCircle className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-black text-amber-900">
+                                            {CLINIC_TEXT.hours.noDaysOpenWarning}
+                                        </p>
+                                        <p className="text-xs text-amber-700 font-medium mt-0.5">
+                                            {CLINIC_TEXT.hours.allDaysClosedNote}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             {loading ? (
                                 <div className="flex justify-center py-24"><Loader2 className="w-12 h-12 text-brand animate-spin" /></div>
                             ) : (
                                 <div className="p-6 sm:p-10 space-y-4">
-                                    {hours.map((h, i) => (
-                                        <motion.div key={h.day_of_week} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
-                                            className={`group relative rounded-[2rem] border-2 transition-all duration-500 overflow-hidden ${h.is_open ? 'border-accent-peach/50 bg-white shadow-xl shadow-accent-brown/5' : 'border-accent-brown/5 bg-accent-peach/5 opacity-60 grayscale'}`}>
-                                            <div className="flex flex-col xl:flex-row xl:items-center gap-8 p-6 lg:p-8">
-                                                <div className="flex items-center gap-6 min-w-[200px]">
-                                                    <button onClick={() => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, is_open: !d.is_open } : d))}
-                                                        className="shrink-0 transition-transform active:scale-90 duration-300">
-                                                        {h.is_open
-                                                            ? <div className="w-14 h-8 bg-brand rounded-full p-1 flex items-center justify-end transition-colors"><div className="w-6 h-6 bg-white rounded-full shadow-lg" /></div>
-                                                            : <div className="w-14 h-8 bg-accent-brown/10 rounded-full p-1 flex items-center transition-colors"><div className="w-6 h-6 bg-white rounded-full shadow-md" /></div>}
-                                                    </button>
-                                                    <div>
-                                                        <p className={`text-xl font-black tracking-tight ${h.is_open ? 'text-accent-brown' : 'text-black'}`}>{h.day_name}</p>
-                                                        <p className={`text-[9px] font-black uppercase tracking-[0.2em] mt-1 ${h.is_open ? 'text-brand' : 'text-black'}`}>{h.is_open ? 'Operational' : 'Facility Closed'}</p>
+                                    {hours.map((h, i) => {
+                                        const dayValidation = scheduleValidation.dayResults[h.day_of_week] || { isValid: true, errors: {} };
+                                        const dayHasErrors = h.is_open && !dayValidation.isValid;
+
+                                        return (
+                                            <motion.div 
+                                                key={h.day_of_week} 
+                                                id={`schedule-day-row-${h.day_of_week}`}
+                                                initial={{ opacity: 0, x: -20 }} 
+                                                animate={{ opacity: 1, x: 0 }} 
+                                                transition={{ delay: i * 0.05 }}
+                                                className={`group relative rounded-[2rem] border-2 transition-all duration-300 overflow-hidden ${
+                                                    !h.is_open 
+                                                        ? 'border-accent-brown/5 bg-accent-peach/5 opacity-60 grayscale' 
+                                                        : dayHasErrors
+                                                            ? 'border-rose-400 bg-rose-50/20 shadow-xl shadow-rose-500/5'
+                                                            : 'border-accent-peach/50 bg-white shadow-xl shadow-accent-brown/5'
+                                                }`}
+                                            >
+                                                <div className="flex flex-col xl:flex-row xl:items-start gap-6 sm:gap-8 p-5 sm:p-6 lg:p-8">
+                                                    <div className="flex items-center gap-4 sm:gap-6 min-w-[200px] pt-1">
+                                                        <button 
+                                                            onClick={() => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, is_open: !d.is_open } : d))}
+                                                            className="shrink-0 transition-transform active:scale-90 duration-300"
+                                                            aria-label={`Toggle ${h.day_name} open or closed`}
+                                                        >
+                                                            {h.is_open
+                                                                ? <div className="w-14 h-8 bg-brand rounded-full p-1 flex items-center justify-end transition-colors"><div className="w-6 h-6 bg-white rounded-full shadow-lg" /></div>
+                                                                : <div className="w-14 h-8 bg-accent-brown/10 rounded-full p-1 flex items-center transition-colors"><div className="w-6 h-6 bg-white rounded-full shadow-md" /></div>}
+                                                        </button>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <p className={`text-xl font-black tracking-tight ${h.is_open ? (dayHasErrors ? 'text-rose-900' : 'text-accent-brown') : 'text-black'}`}>
+                                                                    {h.day_name}
+                                                                </p>
+                                                                {dayHasErrors && (
+                                                                    <span className="p-1 rounded-full bg-rose-100 text-rose-600 shrink-0" title="Schedule configuration error">
+                                                                        <AlertCircle className="w-3.5 h-3.5" />
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className={`text-[10px] font-black uppercase tracking-wider mt-0.5 ${
+                                                                !h.is_open 
+                                                                    ? 'text-black' 
+                                                                    : dayHasErrors 
+                                                                        ? 'text-rose-600' 
+                                                                        : 'text-brand'
+                                                            }`}>
+                                                                {!h.is_open ? CLINIC_TEXT.hours.closed : dayHasErrors ? CLINIC_TEXT.hours.fixErrors : CLINIC_TEXT.hours.open}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                </div>
 
-                                                {h.is_open && (
-                                                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-end">
-                                                        <div className="space-y-2">
-                                                            <div className="flex items-center gap-2 px-1">
-                                                                <Clock className="w-3 h-3 text-brand" />
-                                                                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-black">Opening Time</label>
-                                                            </div>
-                                                            <CustomDropdown
-                                                                value={h.open_time || '09:00 AM'}
-                                                                options={TIME_OPTIONS}
-                                                                onChange={val => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, open_time: val } : d))}
-                                                            />
-                                                        </div>
-
-                                                        <div className="space-y-2">
-                                                            <div className="flex items-center gap-2 px-1">
-                                                                <div className="w-3 h-3 border-2 border-accent-brown/20 rounded-sm" />
-                                                                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-black">Break Starts</label>
-                                                            </div>
-                                                            <CustomDropdown
-                                                                value={h.break_start || 'No break'}
-                                                                options={['No break', ...TIME_OPTIONS]}
-                                                                onChange={val => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, break_start: val === 'No break' ? null : val, break_end: val === 'No break' ? null : d.break_end } : d))}
-                                                            />
-                                                        </div>
-
-                                                        {h.break_start && (
-                                                            <div className="space-y-2">
-                                                                <div className="flex items-center gap-2 px-1">
-                                                                    <div className="w-3 h-3 border-2 border-brand/50 rounded-sm bg-brand/10" />
-                                                                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-black">Break Ends</label>
+                                                    {h.is_open && (
+                                                        <div className="flex-1 grid grid-cols-1 min-[340px]:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 items-start">
+                                                            {/* Opening Time */}
+                                                            <div className="space-y-1.5 min-w-[140px]" id={`schedule-field-${h.day_of_week}-open_time`}>
+                                                                <div className="flex items-center gap-1.5 px-1">
+                                                                    <Clock className="w-3.5 h-3.5 text-brand shrink-0" />
+                                                                    <label className="text-xs font-black uppercase tracking-wider text-black">Opening Time</label>
                                                                 </div>
                                                                 <CustomDropdown
-                                                                    value={h.break_end || '—'}
-                                                                    options={['—', ...TIME_OPTIONS]}
-                                                                    onChange={val => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, break_end: val === '—' ? null : val } : d))}
+                                                                    label="Opening Time"
+                                                                    hideInlineLabel={true}
+                                                                    value={h.open_time || '09:00 AM'}
+                                                                    options={getScheduleDropdownOptions('open_time', h, TIME_OPTIONS)}
+                                                                    buttonClassName={`w-full min-h-[48px] h-12 py-3 px-4 rounded-2xl bg-accent-peach/15 border-2 text-sm sm:text-base font-black text-accent-brown flex items-center justify-between transition-all outline-none ${
+                                                                        dayValidation.errors.open_time
+                                                                            ? 'border-rose-500 bg-rose-50/40 ring-2 ring-rose-200'
+                                                                            : 'border-transparent hover:border-accent-peach/50 hover:bg-white'
+                                                                    }`}
+                                                                    onChange={val => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, open_time: val } : d))}
                                                                 />
+                                                                {dayValidation.errors.open_time && (
+                                                                    <div 
+                                                                        id={`error-${h.day_of_week}-open_time`}
+                                                                        className="flex items-start gap-1.5 px-1 pt-1 text-xs font-bold text-rose-600 leading-tight animate-in fade-in"
+                                                                        role="alert"
+                                                                    >
+                                                                        <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-500" />
+                                                                        <span>{dayValidation.errors.open_time}</span>
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        )}
 
-                                                        <div className="space-y-2 lg:col-start-4">
-                                                            <div className="flex items-center gap-2 px-1">
-                                                                <MapPin className="w-3 h-3 text-red-400" />
-                                                                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-black">Closing Time</label>
+                                                            {/* Break Starts */}
+                                                            <div className="space-y-1.5 min-w-[140px]" id={`schedule-field-${h.day_of_week}-break_start`}>
+                                                                <div className="flex items-center gap-1.5 px-1">
+                                                                    <div className="w-3.5 h-3.5 border-2 border-accent-brown/30 rounded-sm shrink-0" />
+                                                                    <label className="text-xs font-black uppercase tracking-wider text-black">Break Starts</label>
+                                                                </div>
+                                                                <CustomDropdown
+                                                                    label="Break Starts"
+                                                                    hideInlineLabel={true}
+                                                                    value={h.break_start || 'No break'}
+                                                                    options={getScheduleDropdownOptions('break_start', h, TIME_OPTIONS)}
+                                                                    buttonClassName={`w-full min-h-[48px] h-12 py-3 px-4 rounded-2xl bg-accent-peach/15 border-2 text-sm sm:text-base font-black text-accent-brown flex items-center justify-between transition-all outline-none ${
+                                                                        dayValidation.errors.break_start
+                                                                            ? 'border-rose-500 bg-rose-50/40 ring-2 ring-rose-200'
+                                                                            : 'border-transparent hover:border-accent-peach/50 hover:bg-white'
+                                                                    }`}
+                                                                    onChange={val => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, break_start: val === 'No break' ? null : val, break_end: val === 'No break' ? null : d.break_end } : d))}
+                                                                />
+                                                                {dayValidation.errors.break_start && (
+                                                                    <div 
+                                                                        id={`error-${h.day_of_week}-break_start`}
+                                                                        className="flex items-start gap-1.5 px-1 pt-1 text-xs font-bold text-rose-600 leading-tight animate-in fade-in"
+                                                                        role="alert"
+                                                                    >
+                                                                        <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-500" />
+                                                                        <span>{dayValidation.errors.break_start}</span>
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                            <CustomDropdown
-                                                                value={h.close_time || '06:00 PM'}
-                                                                options={TIME_OPTIONS}
-                                                                onChange={val => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, close_time: val } : d))}
-                                                            />
+
+                                                            {/* Break Ends */}
+                                                            {(h.break_start || h.break_end) ? (
+                                                                <div className="space-y-1.5 min-w-[140px]" id={`schedule-field-${h.day_of_week}-break_end`}>
+                                                                    <div className="flex items-center gap-1.5 px-1">
+                                                                        <div className="w-3.5 h-3.5 border-2 border-brand/60 rounded-sm bg-brand/10 shrink-0" />
+                                                                        <label className="text-xs font-black uppercase tracking-wider text-black">Break Ends</label>
+                                                                    </div>
+                                                                    <CustomDropdown
+                                                                        label="Break Ends"
+                                                                        hideInlineLabel={true}
+                                                                        value={h.break_end || '—'}
+                                                                        options={getScheduleDropdownOptions('break_end', h, TIME_OPTIONS)}
+                                                                        buttonClassName={`w-full min-h-[48px] h-12 py-3 px-4 rounded-2xl bg-accent-peach/15 border-2 text-sm sm:text-base font-black text-accent-brown flex items-center justify-between transition-all outline-none ${
+                                                                            dayValidation.errors.break_end
+                                                                                ? 'border-rose-500 bg-rose-50/40 ring-2 ring-rose-200'
+                                                                                : 'border-transparent hover:border-accent-peach/50 hover:bg-white'
+                                                                        }`}
+                                                                        onChange={val => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, break_end: val === '—' ? null : val } : d))}
+                                                                    />
+                                                                    {dayValidation.errors.break_end && (
+                                                                        <div 
+                                                                            id={`error-${h.day_of_week}-break_end`}
+                                                                            className="flex items-start gap-1.5 px-1 pt-1 text-xs font-bold text-rose-600 leading-tight animate-in fade-in"
+                                                                            role="alert"
+                                                                        >
+                                                                            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-500" />
+                                                                            <span>{dayValidation.errors.break_end}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="hidden lg:block" />
+                                                            )}
+
+                                                            {/* Closing Time */}
+                                                            <div className="space-y-1.5 min-w-[140px] lg:col-start-4" id={`schedule-field-${h.day_of_week}-close_time`}>
+                                                                <div className="flex items-center gap-1.5 px-1">
+                                                                    <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                                                    <label className="text-xs font-black uppercase tracking-wider text-black">Closing Time</label>
+                                                                </div>
+                                                                <CustomDropdown
+                                                                    label="Closing Time"
+                                                                    hideInlineLabel={true}
+                                                                    value={h.close_time || '06:00 PM'}
+                                                                    options={getScheduleDropdownOptions('close_time', h, TIME_OPTIONS)}
+                                                                    buttonClassName={`w-full min-h-[48px] h-12 py-3 px-4 rounded-2xl bg-accent-peach/15 border-2 text-sm sm:text-base font-black text-accent-brown flex items-center justify-between transition-all outline-none ${
+                                                                        dayValidation.errors.close_time
+                                                                            ? 'border-rose-500 bg-rose-50/40 ring-2 ring-rose-200'
+                                                                            : 'border-transparent hover:border-accent-peach/50 hover:bg-white'
+                                                                    }`}
+                                                                    onChange={val => setHours(prev => prev.map((d, idx) => idx === i ? { ...d, close_time: val } : d))}
+                                                                />
+                                                                {dayValidation.errors.close_time && (
+                                                                    <div 
+                                                                        id={`error-${h.day_of_week}-close_time`}
+                                                                        className="flex items-start gap-1.5 px-1 pt-1 text-xs font-bold text-rose-600 leading-tight animate-in fade-in"
+                                                                        role="alert"
+                                                                    >
+                                                                        <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-500" />
+                                                                        <span>{dayValidation.errors.close_time}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </motion.div>
-                                    ))}
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        );
+                                    })}
                                 </div>
                             )}
 
@@ -1211,16 +1483,93 @@ export default function BusinessReservations() {
                                     <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center shadow-sm border border-accent-brown/5"><CheckCircle className="w-5 h-5" /></div>
                                     <span className="text-[10px] font-black uppercase tracking-widest leading-none">Last synced with <br />branch database</span>
                                 </div>
-                                <button onClick={saveHours} disabled={savingHours}
-                                    className="group relative flex items-center gap-4 bg-brand text-white pl-8 pr-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-2xl shadow-brand/20 disabled:opacity-50 min-w-[240px]">
-                                    <div className="flex-1 flex items-center gap-3 justify-center">
-                                        {savingHours ? <Loader2 className="w-5 h-5 animate-spin text-brand" /> : hoursSuccess ? <Check className="w-5 h-5 text-green-400" /> : <Settings className="w-5 h-5 text-brand group-hover:rotate-90 transition-transform duration-700" />}
-                                        {hoursSuccess ? 'Success!' : 'Save Schedule'}
-                                    </div>
-                                    <div className="absolute right-4 w-1.5 h-1.5 bg-brand rounded-full animate-pulse" />
-                                </button>
+
+                                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                                    {hasScheduleErrors && (
+                                        <p className="text-xs font-bold text-rose-600 text-center sm:text-right">
+                                            Fix schedule errors above to save
+                                        </p>
+                                    )}
+                                    <button 
+                                        onClick={handleSaveHours} 
+                                        disabled={hasScheduleErrors || savingHours}
+                                        title={hasScheduleErrors ? "Please resolve schedule errors before saving" : undefined}
+                                        aria-disabled={hasScheduleErrors || savingHours}
+                                        className={`group relative flex items-center gap-4 text-white pl-8 pr-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest transition-all shadow-2xl min-w-[240px] w-full sm:w-auto ${
+                                            hasScheduleErrors 
+                                                ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none' 
+                                                : 'bg-brand hover:bg-black shadow-brand/20 active:scale-[0.98]'
+                                        }`}
+                                    >
+                                        <div className="flex-1 flex items-center gap-3 justify-center">
+                                            {savingHours ? (
+                                                <Loader2 className="w-5 h-5 animate-spin text-brand" />
+                                            ) : hoursSuccess ? (
+                                                <Check className="w-5 h-5 text-green-400" />
+                                            ) : (
+                                                <Settings className="w-5 h-5 text-brand group-hover:rotate-90 transition-transform duration-700" />
+                                            )}
+                                            {hoursSuccess ? 'Success!' : 'Save Schedule'}
+                                        </div>
+                                        {!hasScheduleErrors && <div className="absolute right-4 w-1.5 h-1.5 bg-brand rounded-full animate-pulse" />}
+                                    </button>
+                                </div>
                             </div>
                         </div>
+
+                        {/* Confirmation dialog for all days closed */}
+                        {showAllClosedConfirm && (
+                            <div className="fixed inset-0 z-[6000] flex items-center justify-center p-4">
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    onClick={() => setShowAllClosedConfirm(false)}
+                                    className="absolute inset-0 bg-black/40 backdrop-blur-none cursor-pointer"
+                                />
+                                <motion.div
+                                    role="alertdialog"
+                                    aria-modal="true"
+                                    aria-labelledby="all-closed-title"
+                                    aria-describedby="all-closed-desc"
+                                    initial={{ scale: 0.95, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    exit={{ scale: 0.95, opacity: 0 }}
+                                    className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative z-10 border border-slate-100 space-y-5"
+                                >
+                                    <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center">
+                                        <AlertCircle className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <h4 id="all-closed-title" className="text-lg font-black text-accent-brown">
+                                            Save With All Days Closed?
+                                        </h4>
+                                        <p id="all-closed-desc" className="text-xs text-black/70 font-medium mt-1 leading-relaxed">
+                                            No days are open. Residents will not be able to book any appointments at this branch while all days are closed.
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center justify-end gap-3 pt-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAllClosedConfirm(false)}
+                                            className="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-accent-brown hover:bg-slate-50 transition-all"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowAllClosedConfirm(false);
+                                                saveHours();
+                                            }}
+                                            className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-all shadow-md shadow-amber-500/20"
+                                        >
+                                            Confirm & Save
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -1232,13 +1581,13 @@ export default function BusinessReservations() {
                                 <div className="absolute right-0 top-0 w-64 h-64 bg-brand/5 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
                                 <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                                     <div>
-                                        <h3 className="font-black text-accent-brown text-3xl tracking-tighter">Advanced Overrides</h3>
-                                        <p className="text-black text-sm font-medium mt-2 max-w-xl">Configure holidays, sudden interruptions, or extended hours for specific dates without changing your master schedule.</p>
+                                        <h3 className="font-black text-accent-brown text-3xl tracking-tighter">{CLINIC_TEXT.specialDays.title}</h3>
+                                        <p className="text-black text-sm font-medium mt-2 max-w-xl">{CLINIC_TEXT.specialDays.subtitle}</p>
                                     </div>
                                     <div className="flex items-center gap-3 bg-white/50 backdrop-blur-sm p-2 rounded-2xl border border-white/50">
                                         <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center text-brand"><Calendar className="w-5 h-5" /></div>
                                         <div className="pr-4">
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-black">Active Overrides</p>
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-black">{CLINIC_TEXT.specialDays.activeBadge}</p>
                                             <p className="text-lg font-black text-accent-brown leading-none">{specialHours.length}</p>
                                         </div>
                                     </div>
@@ -1328,7 +1677,7 @@ export default function BusinessReservations() {
                                         <div className="flex flex-wrap gap-6 px-4">
                                             {[
                                                 { label: 'Custom Hours', color: 'bg-brand' },
-                                                { label: 'Facility Closed', color: 'bg-red-400' },
+                                                { label: CLINIC_TEXT.specialDays.closedForService, color: 'bg-red-400' },
                                                 { label: 'Current Date', color: 'bg-brand/20 ring-2 ring-brand' }
                                             ].map(item => (
                                                 <div key={item.label} className="flex items-center gap-3">
@@ -1346,7 +1695,7 @@ export default function BusinessReservations() {
 
                                             <div className="flex items-start justify-between relative z-10">
                                                 <div>
-                                                    <p className="text-[11px] font-black uppercase tracking-[0.3em] text-brand mb-1">Override Details</p>
+                                                    <p className="text-[11px] font-black uppercase tracking-[0.3em] text-brand mb-1">{CLINIC_TEXT.specialDays.detailsTitle}</p>
                                                     <h5 className="text-3xl font-black text-accent-brown tracking-tighter">
                                                         {new Date(selectedSpecialDate).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
                                                     </h5>
@@ -1398,16 +1747,21 @@ export default function BusinessReservations() {
                                                                         <field.icon className="w-3.5 h-3.5 text-brand" />
                                                                         <label className="text-[10px] font-black uppercase tracking-widest text-black">{field.label}</label>
                                                                     </div>
-                                                                    <CustomDropdown value={field.value} options={field.options}
-                                                                        onChange={v => setSpecialForm(p => ({ ...p, [field.key]: v === 'No break' || v === '—' ? null : v }))} />
+                                                                    <CustomDropdown
+                                                                        label={field.label}
+                                                                        hideInlineLabel={true}
+                                                                        value={field.value}
+                                                                        options={field.options}
+                                                                        onChange={v => setSpecialForm(p => ({ ...p, [field.key]: v === 'No break' || v === '—' ? null : v }))}
+                                                                    />
                                                                 </div>
                                                             ))}
                                                         </motion.div>
                                                     ) : (
                                                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20 px-10 text-center bg-red-400/5 rounded-[2.5rem] border border-dashed border-red-400/20">
                                                             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4 text-red-400 shadow-inner"><XCircle className="w-8 h-8" /></div>
-                                                            <h6 className="font-black text-accent-brown text-lg tracking-tight">Closed for Service</h6>
-                                                            <p className="text-black text-xs font-medium mt-2">All reservation slots for this date will be automatically blocked for customers.</p>
+                                                            <h6 className="font-black text-accent-brown text-lg tracking-tight">{CLINIC_TEXT.specialDays.closedForService}</h6>
+                                                            <p className="text-black text-xs font-medium mt-2">{CLINIC_TEXT.specialDays.closedSlotNotice}</p>
                                                         </motion.div>
                                                     )}
                                                 </AnimatePresence>
@@ -1416,7 +1770,7 @@ export default function BusinessReservations() {
                                                     className="w-full h-20 bg-brand text-white rounded-[2rem] font-black text-xs uppercase tracking-[0.25em] hover:bg-black transition-all flex items-center justify-center gap-4 shadow-2xl shadow-brand/20 disabled:opacity-50 mt-6 relative group overflow-hidden">
                                                     <div className="absolute inset-0 bg-brand opacity-0 group-hover:opacity-10 transition-opacity" />
                                                     {savingSpecial ? <Loader2 className="w-6 h-6 animate-spin text-brand" /> : <div className="w-1.5 h-1.5 bg-brand rounded-full animate-pulse" />}
-                                                    Apply Override
+                                                    {CLINIC_TEXT.specialDays.applyButton}
                                                 </button>
                                             </div>
                                         </div>
@@ -1434,15 +1788,15 @@ export default function BusinessReservations() {
                             <div>
                                 <div className="flex items-center gap-3 mb-2">
                                     <div className="h-6 w-1.5 bg-brand rounded-full" />
-                                    <h3 className="font-black text-accent-brown text-3xl tracking-tighter">Clinic Service</h3>
+                                    <h3 className="font-black text-accent-brown text-3xl tracking-tighter">{CLINIC_TEXT.services.title}</h3>
                                 </div>
-                                <p className="text-black text-sm font-medium">Manage your clinic's offerings, packages, and points-based loyalty rewards.</p>
+                                <p className="text-black text-sm font-medium">{CLINIC_TEXT.services.subtitle}</p>
                             </div>
                             <button onClick={() => openServiceModal()}
                                 className="group flex items-center gap-4 bg-brand text-white pl-8 pr-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-2xl shadow-brand/20 min-w-[240px]">
                                 <div className="flex-1 flex items-center gap-3 justify-center">
                                     <Plus className="w-5 h-5 text-white group-hover:rotate-90 transition-transform duration-500" />
-                                    Launch New Service
+                                    {CLINIC_TEXT.services.launchButton}
                                 </div>
                             </button>
                         </div>
@@ -1455,10 +1809,10 @@ export default function BusinessReservations() {
                                 <div className="absolute inset-0 bg-accent-peach/5 opacity-40" />
                                 <div className="relative z-10">
                                     <div className="w-32 h-32 bg-white rounded-[2.5rem] flex items-center justify-center shadow-xl border border-accent-brown/5 mb-6 mx-auto"><Tag className="w-16 h-16 text-brand/20" /></div>
-                                    <h3 className="font-black text-accent-brown text-3xl tracking-tight mb-3">Your Clinic Service is Empty</h3>
-                                    <p className="text-black text-base max-w-sm font-medium">Create your first service or bundle to start accepting reservations from your clients.</p>
+                                    <h3 className="font-black text-accent-brown text-3xl tracking-tight mb-3">{CLINIC_TEXT.services.emptyTitle}</h3>
+                                    <p className="text-black text-base max-w-sm font-medium">{CLINIC_TEXT.services.emptySubtitle}</p>
                                     <button onClick={() => openServiceModal()} className="mt-10 flex items-center gap-3 bg-brand text-white px-10 py-5 rounded-full font-black text-[11px] uppercase tracking-widest hover:bg-black transition-all shadow-lg mx-auto">
-                                        <Plus className="w-4 h-4" /> Initialize Clinic Service
+                                        <Plus className="w-4 h-4" /> {CLINIC_TEXT.services.initializeButton}
                                     </button>
                                 </div>
                             </motion.div>
@@ -1474,7 +1828,7 @@ export default function BusinessReservations() {
                                                 {s.is_package && (
                                                     <div className="flex items-center gap-2 px-3 py-1.5 bg-[#ea580c] text-white rounded-full shadow-lg shadow-[#ea580c]/20">
                                                         <Package className="w-3.5 h-3.5" />
-                                                        <span className="text-[9px] font-black uppercase tracking-widest whitespace-nowrap">Package Bundle</span>
+                                                        <span className="text-[9px] font-black uppercase tracking-widest whitespace-nowrap">{CLINIC_TEXT.services.packageBundle}</span>
                                                     </div>
                                                 )}
                                             </div>
@@ -1515,12 +1869,12 @@ export default function BusinessReservations() {
 
                                             <div className="mt-auto pt-6 border-t border-accent-brown/5 flex items-center justify-between">
                                                 <div className="flex flex-col">
-                                                    <span className="text-[9px] font-black uppercase tracking-widest text-black mb-1">Clinic Fee</span>
+                                                    <span className="text-[9px] font-black uppercase tracking-widest text-black mb-1">{CLINIC_TEXT.services.priceLabel}</span>
                                                     <span className="text-3xl font-black text-accent-brown tracking-tighter">₱{s.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                                                 </div>
                                                 <div className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${s.is_active ? 'bg-green-50 border-green-100 text-green-600' : 'bg-accent-brown/5 border-transparent text-black'}`}>
                                                     <div className={`w-1.5 h-1.5 rounded-full ${s.is_active ? 'bg-green-500 animate-pulse' : 'bg-accent-brown/20'}`} />
-                                                    <span className="text-[9px] font-black uppercase tracking-[0.2em]">{s.is_active ? 'Market Active' : 'Off-Market'}</span>
+                                                    <span className="text-[9px] font-black uppercase tracking-[0.2em]">{s.is_active ? CLINIC_TEXT.services.activeStatus : CLINIC_TEXT.services.hiddenStatus}</span>
                                                 </div>
                                             </div>
                                         </motion.div>

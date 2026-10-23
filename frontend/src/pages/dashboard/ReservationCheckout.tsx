@@ -5,13 +5,15 @@ import {
     AlertCircle, CheckCircle, Loader2, Clock3,
     CreditCard, Wallet, Activity, Eye, ShieldCheck,
     Smartphone, Info, Sparkles, Tag, User,
-    Cat, Dog, Dna, LayoutGrid, Award, Check
+    Cat, Dog, Dna, LayoutGrid, Award, Check,
+    Search
 } from 'lucide-react';
 import { APIProvider, useMapsLibrary } from '@vis.gl/react-google-maps';
 import DashboardLayout from '../../components/DashboardLayout';
 import { CustomDatePicker } from '../../components/CustomDatePicker';
 import { CustomDropdown } from '../../components/CustomDropdown';
 import QrCodeModal from '../../components/QrCodeModal';
+import PackageDetailsModal from '../../components/PackageDetailsModal';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -152,6 +154,7 @@ const ReservationCheckout = () => {
     const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [isClinicListCollapsed, setIsClinicListCollapsed] = useState(false);
+    const [clinicSearchQuery, setClinicSearchQuery] = useState('');
     const [isBranchListCollapsed, setIsBranchListCollapsed] = useState(false);
     const [isServiceListCollapsed, setIsServiceListCollapsed] = useState(false);
     const [serviceCategory, setServiceCategory] = useState<'none' | 'packages' | 'individual'>('none');
@@ -250,6 +253,25 @@ const ReservationCheckout = () => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+        const filteredClinics = useMemo(() => {
+        if (!clinicSearchQuery.trim()) return clinics;
+        const query = clinicSearchQuery.toLowerCase().trim();
+        return clinics.filter(c => {
+            const nameMatch = c.name?.toLowerCase().includes(query);
+            const addressMatch = (
+                (c.address_line1 && c.address_line1.toLowerCase().includes(query)) ||
+                (c.address_line2 && c.address_line2.toLowerCase().includes(query)) ||
+                (c.zip && c.zip.toLowerCase().includes(query))
+            );
+            const branchMatch = c.branches?.some(b => 
+                b.name?.toLowerCase().includes(query) ||
+                b.address_line1?.toLowerCase().includes(query) ||
+                b.address_line2?.toLowerCase().includes(query)
+            );
+            return Boolean(nameMatch || addressMatch || branchMatch);
+        });
+    }, [clinics, clinicSearchQuery]);
 
     const allClinicOptions: ClinicOption[] = useMemo((): ClinicOption[] => {
         if (!clinics || !Array.isArray(clinics)) return [];
@@ -497,7 +519,7 @@ const ReservationCheckout = () => {
     useEffect(() => {
         if (isAnyModalOpen) {
             document.body.style.overflow = 'hidden';
-            window.scrollTo(0, 0);
+
         } else {
             document.body.style.overflow = 'unset';
         }
@@ -510,10 +532,10 @@ const ReservationCheckout = () => {
         <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
             <DashboardLayout
                 title=""
-                hideHeader={isAnyModalOpen}
-                hideFooter={isAnyModalOpen}
+                hideHeader={showQrModal}
+                hideFooter={showQrModal}
             >
-                <div className={`max-w-4xl mx-auto pb-[calc(5rem+24px+env(safe-area-inset-bottom,0px))] px-3 sm:px-4 w-full ${isAnyModalOpen ? 'opacity-30 blur-2xl pointer-events-none' : 'opacity-100'}`}>
+                <div className={`max-w-4xl mx-auto pb-[calc(5rem+24px+env(safe-area-inset-bottom,0px))] px-3 sm:px-4 w-full ${isAnyModalOpen ? 'pointer-events-none select-none' : ''}`}>
                     {/* Header Section */}
                     <div className="flex flex-col items-center mb-4 sm:mb-5 text-center">
                         <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-accent-brown tracking-tight leading-tight italic">
@@ -535,9 +557,9 @@ const ReservationCheckout = () => {
                             </div>
                             <ol className="relative flex justify-between list-none p-0 m-0">
                                 {[
-                                    { step: 1, label: 'Facility', icon: Activity },
-                                    { step: 2, label: 'Arrival', icon: Clock },
-                                    { step: 3, label: 'Settlement', icon: Wallet },
+                                    { step: 1, label: 'Clinic', icon: Activity },
+                                    { step: 2, label: 'Date & Time', icon: Clock },
+                                    { step: 3, label: 'Payment', icon: Wallet },
                                     { step: 4, label: 'Review', icon: ShieldCheck }
                                 ].map((s) => {
                                     const isCurrent = wizardStep === s.step;
@@ -595,8 +617,17 @@ const ReservationCheckout = () => {
                                         exit={{ opacity: 0, y: -15 }}
                                         className="space-y-4 sm:space-y-5"
                                     >
-                                        {/* Facility Header Card */}
-                                        <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-sm">
+                                        {/* Facility Header Card - Clicking container toggles collapse if a clinic is selected */}
+                                        <div 
+                                            onClick={() => {
+                                                if (form.clinic_id) {
+                                                    setIsClinicListCollapsed(prev => !prev);
+                                                }
+                                            }}
+                                            className={`bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-sm transition-all ${
+                                                form.clinic_id ? 'cursor-pointer hover:border-brand/40' : ''
+                                            }`}
+                                        >
                                             <div className="flex items-center justify-between gap-3">
                                                 <div className="flex items-center gap-3 sm:gap-4">
                                                     <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-dark text-white rounded-xl sm:rounded-2xl flex items-center justify-center shadow-sm shrink-0">
@@ -607,8 +638,10 @@ const ReservationCheckout = () => {
                                                         <p className="text-xs font-medium text-slate-500 mt-0.5">Choose where you'd like to bring your pet</p>
                                                     </div>
                                                 </div>
-                                                <div className="px-3 py-1 bg-brand/5 border border-brand/10 rounded-full shrink-0">
-                                                    <span className="text-[11px] font-bold text-brand">Available now</span>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="px-3 py-1 bg-brand/5 border border-brand/10 rounded-full shrink-0">
+                                                        <span className="text-[11px] font-bold text-brand">Available now</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -619,14 +652,22 @@ const ReservationCheckout = () => {
                                                 <div className="space-y-3">
                                                     <div className="flex items-center justify-between px-1">
                                                         <span className="text-xs font-bold text-brand tracking-wider">Your Selected Clinic</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsClinicListCollapsed(false)}
+                                                            className="text-xs font-bold text-brand hover:underline cursor-pointer"
+                                                        >
+                                                            Change Selection
+                                                        </button>
                                                     </div>
                                                     {clinics.filter(c => c.id === form.clinic_id).map(c => (
                                                         <div
                                                             key={c.id}
-                                                            className="w-full p-4 sm:p-5 rounded-2xl border-2 border-brand bg-white shadow-md relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                                                            onClick={() => setIsClinicListCollapsed(false)}
+                                                            className="w-full p-4 sm:p-5 rounded-2xl border-2 border-brand bg-white shadow-md relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:border-brand/80 transition-all group"
                                                         >
                                                             <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0">
-                                                                <div className="w-11 h-11 rounded-xl bg-brand/10 text-brand flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
+                                                                <div className="w-11 h-11 rounded-xl bg-brand/10 text-brand flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 group-hover:scale-105 transition-transform">
                                                                     <Activity className="w-6 h-6" />
                                                                 </div>
                                                                 <div className="min-w-0 flex-1">
@@ -641,11 +682,11 @@ const ReservationCheckout = () => {
                                                             </div>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => {
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
                                                                     setIsClinicListCollapsed(false);
-                                                                    setForm(f => ({ ...f, clinic_id: 0, clinic_option_key: '', service: '', service_id: 0 }));
                                                                 }}
-                                                                className="self-start sm:self-center px-4 py-2 bg-brand/5 hover:bg-brand text-brand hover:text-white rounded-xl border border-brand/20 text-xs font-bold tracking-wide transition-all shrink-0"
+                                                                className="self-start sm:self-center px-4 py-2 bg-brand/5 hover:bg-brand text-brand hover:text-white rounded-xl border border-brand/20 text-xs font-bold tracking-wide transition-all shrink-0 cursor-pointer"
                                                             >
                                                                 Change Selection
                                                             </button>
@@ -653,58 +694,107 @@ const ReservationCheckout = () => {
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                                                    {clinics.map(c => {
-                                                        const isSelected = form.clinic_id === c.id;
-                                                        return (
+                                                <div className="space-y-3 sm:space-y-4">
+                                                    {/* Searchbar and Close Button */}
+                                                    <div className="flex items-center gap-2 sm:gap-3">
+                                                        <div className="relative w-full">
+                                                            <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                                            <input
+                                                                type="text"
+                                                                value={clinicSearchQuery}
+                                                                onChange={(e) => setClinicSearchQuery(e.target.value)}
+                                                                placeholder="Search clinic by name or location..."
+                                                                className="w-full bg-slate-50 border border-slate-200/90 rounded-2xl py-3 pl-11 pr-10 text-xs sm:text-sm font-bold text-accent-brown placeholder:text-slate-400 placeholder:font-medium focus:outline-none focus:border-brand focus:bg-white focus:ring-2 focus:ring-brand/10 transition-all shadow-inner"
+                                                            />
+                                                            {clinicSearchQuery && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setClinicSearchQuery('')}
+                                                                    className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-all cursor-pointer"
+                                                                    aria-label="Clear search"
+                                                                >
+                                                                    <X className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Filtered Clinics Grid */}
+                                                    {filteredClinics.length === 0 ? (
+                                                        <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-2">
+                                                            <AlertCircle className="w-6 h-6 text-slate-400 mx-auto" />
+                                                            <h4 className="text-sm font-black text-accent-brown">No clinics found</h4>
+                                                            <p className="text-xs text-slate-500 font-medium">
+                                                                No clinic facilities matched "{clinicSearchQuery}". Try a different name or location.
+                                                            </p>
                                                             <button
-                                                                key={c.id}
                                                                 type="button"
-                                                                onClick={() => {
-                                                                    const mainBranch = c.branches?.find(b => b.is_main) || c.branches?.[0];
-                                                                    setForm(f => ({
-                                                                        ...f,
-                                                                        clinic_id: c.id,
-                                                                        clinic_option_key: mainBranch ? `${c.id}-${mainBranch.id}` : `${c.id}-main`,
-                                                                        service: '',
-                                                                        service_id: 0
-                                                                    }));
-                                                                    setIsClinicListCollapsed(true);
-                                                                    setIsServiceListCollapsed(false);
-                                                                    setServiceCategory('none');
-                                                                }}
-                                                                className={`w-full text-left p-4 sm:p-5 rounded-2xl border-2 transition-all min-h-[64px] flex flex-col justify-between group relative ${
-                                                                    isSelected
-                                                                        ? 'border-brand bg-brand/[0.02] shadow-md ring-2 ring-brand/10'
-                                                                        : 'border-slate-200 bg-white hover:border-brand/40 hover:shadow-sm'
-                                                                }`}
+                                                                onClick={() => setClinicSearchQuery('')}
+                                                                className="text-xs font-bold text-brand hover:underline mt-1 cursor-pointer"
                                                             >
-                                                                <div className="flex items-start justify-between gap-3 mb-3">
-                                                                    <div className="flex items-center gap-3 min-w-0">
-                                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all ${
-                                                                            isSelected ? 'bg-brand text-white shadow-sm' : 'bg-brand/5 text-brand group-hover:bg-brand/10'
-                                                                        }`}>
-                                                                            <Activity className="w-5 h-5" />
-                                                                        </div>
-                                                                        <h3 className="text-base sm:text-lg font-black text-accent-brown italic tracking-tight leading-tight">
-                                                                            {c.name}
-                                                                        </h3>
-                                                                    </div>
-                                                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-1 transition-all ${
-                                                                        isSelected ? 'border-brand bg-brand text-white' : 'border-slate-300 bg-white group-hover:border-brand/40'
-                                                                    }`}>
-                                                                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex items-start gap-1.5 text-slate-600 mt-1">
-                                                                    <MapPin className="w-4 h-4 text-brand shrink-0 mt-0.5" />
-                                                                    <p className="text-xs sm:text-sm font-medium leading-relaxed break-words">
-                                                                        {formatClinicAddress(c)}
-                                                                    </p>
-                                                                </div>
+                                                                Clear Search
                                                             </button>
-                                                        );
-                                                    })}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                                                            {filteredClinics.map(c => {
+                                                                const isSelected = form.clinic_id === c.id;
+                                                                return (
+                                                                    <button
+                                                                        key={c.id}
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            // Clicking the already selected clinic container again closes it!
+                                                                            if (isSelected) {
+                                                                                setIsClinicListCollapsed(true);
+                                                                                return;
+                                                                            }
+                                                                            const mainBranch = c.branches?.find(b => b.is_main) || c.branches?.[0];
+                                                                            setForm(f => ({
+                                                                                ...f,
+                                                                                clinic_id: c.id,
+                                                                                clinic_option_key: mainBranch ? `${c.id}-${mainBranch.id}` : `${c.id}-main`,
+                                                                                service: '',
+                                                                                service_id: 0
+                                                                            }));
+                                                                            setIsClinicListCollapsed(true);
+                                                                            setIsServiceListCollapsed(false);
+                                                                            setServiceCategory('none');
+                                                                        }}
+                                                                        className={`w-full text-left p-4 sm:p-5 rounded-2xl border-2 transition-all min-h-[64px] flex flex-col justify-between group relative cursor-pointer ${
+                                                                            isSelected
+                                                                                ? 'border-brand bg-brand/[0.02] shadow-md ring-2 ring-brand/10'
+                                                                                : 'border-slate-200 bg-white hover:border-brand/40 hover:shadow-sm'
+                                                                        }`}
+                                                                    >
+                                                                        <div className="flex items-start justify-between gap-3 mb-3">
+                                                                            <div className="flex items-center gap-3 min-w-0">
+                                                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all ${
+                                                                                    isSelected ? 'bg-brand text-white shadow-sm' : 'bg-brand/5 text-brand group-hover:bg-brand/10'
+                                                                                }`}>
+                                                                                    <Activity className="w-5 h-5" />
+                                                                                </div>
+                                                                                <h3 className="text-base sm:text-lg font-black text-accent-brown italic tracking-tight leading-tight">
+                                                                                    {c.name}
+                                                                                </h3>
+                                                                            </div>
+                                                                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-1 transition-all ${
+                                                                                isSelected ? 'border-brand bg-brand text-white' : 'border-slate-300 bg-white group-hover:border-brand/40'
+                                                                            }`}>
+                                                                                {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-start gap-1.5 text-slate-600 mt-1">
+                                                                            <MapPin className="w-4 h-4 text-brand shrink-0 mt-0.5" />
+                                                                            <p className="text-xs sm:text-sm font-medium leading-relaxed break-words">
+                                                                                {formatClinicAddress(c)}
+                                                                            </p>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -893,7 +983,7 @@ const ReservationCheckout = () => {
                                                                                                     <span className="text-lg font-black text-brand italic">₱{pkg.price.toLocaleString()}</span>
                                                                                                     {pkg.loyalty_points > 0 && (
                                                                                                         <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                                                                                                            +{pkg.loyalty_points} pts
+                                                                                                            +{pkg.loyalty_points} Points
                                                                                                         </span>
                                                                                                     )}
                                                                                                 </div>
@@ -922,7 +1012,7 @@ const ReservationCheckout = () => {
                                                                                         onClick={() => setServiceCategory('packages')}
                                                                                         className="px-4 py-2 bg-brand text-white rounded-xl text-xs font-bold shadow-sm hover:bg-brand-dark transition-all"
                                                                                     >
-                                                                                        View Clinical Bundles ({packageServices.length})
+                                                                                        View Care Packages ({packageServices.length})
                                                                                     </button>
                                                                                 )}
                                                                             </div>
@@ -954,7 +1044,7 @@ const ReservationCheckout = () => {
                                                                                                     <span className="text-lg font-black text-brand italic">₱{svc.price.toLocaleString()}</span>
                                                                                                     {svc.loyalty_points > 0 && (
                                                                                                         <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                                                                                                            +{svc.loyalty_points} pts
+                                                                                                            +{svc.loyalty_points} Points
                                                                                                         </span>
                                                                                                     )}
                                                                                                 </div>
@@ -1078,9 +1168,12 @@ const ReservationCheckout = () => {
                                                             <input
                                                                 type="text"
                                                                 value={form.pet_name}
-                                                                onChange={e => setForm(f => ({ ...f, pet_name: e.target.value }))}
+                                                                onChange={e => {
+                                                                    const lettersOnly = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                                                                    setForm(f => ({ ...f, pet_name: lettersOnly }));
+                                                                }}
                                                                 placeholder="e.g. Buddy, Luna, Max..."
-                                                                className="w-full bg-white border border-slate-200 focus:border-brand focus:ring-2 focus:ring-brand/10 rounded-xl px-4 py-3 text-sm font-semibold text-accent-brown outline-none transition-all placeholder:text-slate-300"
+                                                                className="w-full bg-white border border-slate-200 focus:border-brand focus:ring-2 focus:ring-brand/10 rounded-xl px-4 py-3 text-sm font-semibold text-black outline-none transition-all placeholder:text-slate-300"
                                                             />
                                                             <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400">
                                                                 <Activity className="w-4 h-4" />
@@ -1090,14 +1183,21 @@ const ReservationCheckout = () => {
 
                                                     <div>
                                                         <label className="block text-xs font-bold text-accent-brown mb-1.5">Pet Breed</label>
-                                                        <CustomDropdown
-                                                            options={form.pet_type === 'Dog' ? DOG_BREEDS : CAT_BREEDS}
-                                                            value={form.pet_breed}
-                                                            onChange={val => setForm(f => ({ ...f, pet_breed: val }))}
-                                                            placeholder="Select breed..."
-                                                            icon={<Dna className="w-4 h-4" />}
-                                                            className="w-full bg-white border border-slate-200 focus:border-brand focus:ring-2 focus:ring-brand/10 rounded-xl text-sm font-semibold text-accent-brown outline-none transition-all placeholder:text-slate-300"
-                                                        />
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={form.pet_breed}
+                                                                onChange={e => {
+                                                                    const lettersOnly = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                                                                    setForm(f => ({ ...f, pet_breed: lettersOnly }));
+                                                                }}
+                                                                placeholder="e.g. Golden Retriever, Shih Tzu, Aspin..."
+                                                                className="w-full bg-white border border-slate-200 focus:border-brand focus:ring-2 focus:ring-brand/10 rounded-xl px-4 py-3 text-sm font-semibold text-black outline-none transition-all placeholder:text-slate-300"
+                                                            />
+                                                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                                                                <Dna className="w-4 h-4" />
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -1108,8 +1208,21 @@ const ReservationCheckout = () => {
                                                             <CustomDatePicker
                                                                 label=""
                                                                 value={form.date}
-                                                                onChange={val => setForm(f => ({ ...f, date: val }))}
-                                                                minDate={new Date().toISOString().split('T')[0]}
+                                                                onChange={val => setForm(f => ({ ...f, date: val, time: '' }))}
+                                                                minDate={new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })}
+                                                                isDateAvailable={(dateStr, dateObj) => {
+                                                                    const todayPH = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+                                                                    if (dateStr < todayPH) return false;
+                                                                    if (!selectedOption) return true;
+                                                                    const special = selectedOption.special_hours?.find(sh => sh.specific_date === dateStr);
+                                                                    if (special) return special.is_open;
+                                                                    if (selectedOption.hours && selectedOption.hours.length > 0) {
+                                                                        const dow = dateObj.getDay();
+                                                                        const h = selectedOption.hours.find(item => item.day_of_week === dow);
+                                                                        if (h) return h.is_open;
+                                                                    }
+                                                                    return true;
+                                                                }}
                                                                 onModalOpenChange={setIsDatePickerOpen}
                                                             />
                                                         </div>
@@ -1184,7 +1297,7 @@ const ReservationCheckout = () => {
                                                     onClick={handleContinue}
                                                     className="w-full sm:w-auto h-12 min-h-[48px] px-8 bg-brand hover:bg-brand-dark text-white rounded-xl font-bold text-sm shadow-md shadow-brand/20 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                                                 >
-                                                    <span>Continue to Settlement</span>
+                                                    <span>Continue to Payment</span>
                                                     <ChevronRight className="w-4 h-4" />
                                                 </button>
                                             </div>
@@ -1207,7 +1320,7 @@ const ReservationCheckout = () => {
                                                 </div>
                                                 <div>
                                                     <h3 className="text-lg sm:text-xl font-black text-accent-brown tracking-tight italic">Payment Method</h3>
-                                                    <p className="text-xs font-medium text-slate-500 mt-0.5">Acquisition of clinical services</p>
+                                                    <p className="text-xs font-medium text-slate-500 mt-0.5">Choose how to pay for your appointment</p>
                                                 </div>
                                             </div>
 
@@ -1216,7 +1329,7 @@ const ReservationCheckout = () => {
                                                     { id: 'qrph', label: 'QRPh Pay', icon: Smartphone, desc: 'Centralized QR' },
                                                     { id: 'gcash', label: 'GCash Wallet', icon: Wallet, desc: 'Direct Transfer' },
                                                     { id: 'paymaya', label: 'Maya App', icon: CreditCard, desc: 'Digital Finance' },
-                                                    { id: 'cash', label: 'Clinic Counter', icon: Activity, desc: 'Physical Settlement' }
+                                                    { id: 'cash', label: 'Clinic Counter', icon: Activity, desc: 'Pay at Clinic' }
                                                 ].map(method => {
                                                     const isSelected = selectedPaymentMethod === method.id;
                                                     return (
@@ -1346,14 +1459,14 @@ const ReservationCheckout = () => {
                                                 </div>
                                                 <div>
                                                     <h3 className="text-lg sm:text-xl font-black text-accent-brown tracking-tight italic">Final Review</h3>
-                                                    <p className="text-xs font-medium text-slate-500 mt-0.5">Verify all clinical parameters before commitment</p>
+                                                    <p className="text-xs font-medium text-slate-500 mt-0.5">Please check your details before confirming</p>
                                                 </div>
                                             </div>
 
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                                 {/* Clinic */}
                                                 <div className="p-4 bg-slate-50/70 border border-slate-200 rounded-xl space-y-2">
-                                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Assigned Facility</span>
+                                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Clinic</span>
                                                     <div className="flex items-start gap-3">
                                                         <Activity className="w-5 h-5 text-brand shrink-0 mt-0.5" />
                                                         <div className="min-w-0">
@@ -1367,7 +1480,7 @@ const ReservationCheckout = () => {
 
                                                 {/* Procedure */}
                                                 <div className="p-4 bg-slate-50/70 border border-slate-200 rounded-xl space-y-2">
-                                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Selected Procedure</span>
+                                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Service or Package</span>
                                                     <div className="flex items-start justify-between gap-2">
                                                         <div className="flex items-start gap-3 min-w-0">
                                                             <Eye className="w-5 h-5 text-brand shrink-0 mt-0.5" />
@@ -1510,7 +1623,7 @@ const ReservationCheckout = () => {
                                         )}
 
                                         <div className="pt-3 border-t border-slate-100 flex justify-between items-baseline">
-                                            <span className="font-bold text-slate-600">Total Settlement</span>
+                                            <span className="font-bold text-slate-600">Total Price</span>
                                             <span className="text-xl font-black text-brand-dark italic">₱{estimatedTotal.toLocaleString()}</span>
                                         </div>
                                     </div>
@@ -1542,135 +1655,15 @@ const ReservationCheckout = () => {
                     )}
                 </AnimatePresence>
 
-                <AnimatePresence>
-                    {packageModal && (() => {
-                        let items: string[] = [];
-                        try {
-                            if (packageModal.package_items_json) {
-                                const parsed = JSON.parse(packageModal.package_items_json);
-                                items = Array.isArray(parsed) ? parsed : [];
-                            }
-                        } catch { items = []; }
-
-                        return (
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="fixed inset-0 z-[99999] flex items-center justify-center p-6 backdrop-blur-2xl bg-accent-brown/30"
-                                style={{ backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)' }}
-                                onClick={() => setPackageModal(null)}
-                            >
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0.95, y: 40 }}
-                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    exit={{ opacity: 0, scale: 0.95, y: 40 }}
-                                    transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                                    className="bg-white rounded-[3.5rem] shadow-[0_50px_100px_-20px_rgba(255,107,0,0.3)] w-full max-w-5xl overflow-hidden border border-white max-h-[90vh] flex flex-col sm:flex-row"
-                                    onClick={e => e.stopPropagation()}
-                                >
-                                    {/* Modal Header */}
-                                    <div className="bg-white p-12 relative overflow-hidden sm:w-[40%] flex flex-col justify-center border-r border-brand/5">
-                                        <div className="absolute top-0 right-0 w-64 h-64 bg-brand/5 rounded-full blur-3xl -mr-32 -mt-32" />
-                                        <div className="relative z-10 flex flex-col h-full justify-between">
-                                            <div>
-                                                <div className="flex items-center gap-3 mb-6">
-                                                    <div className="w-2 h-8 bg-brand rounded-full" />
-                                                    <span className="text-[11px] font-black uppercase tracking-[0.5em] text-accent-brown/30 leading-none">Pet Care Package</span>
-                                                </div>
-                                                <h3 className="text-4xl sm:text-5xl font-black text-accent-brown uppercase italic leading-none tracking-tighter mb-4">{packageModal.name}</h3>
-                                                <p className="text-[10px] font-bold text-accent-brown/20 uppercase tracking-[0.2em] leading-relaxed">Everything your pet needs in one efficient visit.</p>
-                                            </div>
-
-                                            <div className="bg-brand/5 border border-brand/10 rounded-[2.5rem] p-8 mt-12">
-                                                <div className="flex items-center gap-4 mb-4">
-                                                    <div className="w-10 h-10 rounded-2xl bg-brand text-white flex items-center justify-center shadow-lg shadow-brand/20">
-                                                        <Sparkles className="w-5 h-5" />
-                                                    </div>
-                                                    <span className="text-[11px] font-black text-accent-brown uppercase tracking-widest leading-none">What's Included</span>
-                                                </div>
-                                                <p className="text-[10px] font-bold text-accent-brown/40 leading-relaxed italic uppercase">This bundle includes all the care your pet needs in a single efficient session.</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Modal Body */}
-                                    <div className="flex-1 p-12 space-y-10 overflow-y-auto no-scrollbar relative">
-                                        <button
-                                            onClick={() => setPackageModal(null)}
-                                            className="absolute top-8 right-8 w-12 h-12 rounded-2xl bg-brand/5 border border-brand/10 items-center justify-center text-accent-brown/20 hover:text-brand hover:bg-brand/10 transition-all shrink-0 hidden sm:flex z-20"
-                                        >
-                                            <X className="w-5 h-5" />
-                                        </button>
-                                        <div className="flex items-end gap-10">
-                                            <div>
-                                                <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest mb-1">Standard Price</p>
-                                                <span className="text-4xl font-black text-accent-brown tracking-tighter italic leading-none">₱{packageModal.price.toLocaleString()}</span>
-                                            </div>
-                                            {packageModal.loyalty_points > 0 && (
-                                                <div className="bg-brand text-white px-6 py-3 rounded-2xl shadow-lg shadow-brand/20 mb-[2px]">
-                                                    <span className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest leading-none">
-                                                        <Award className="w-4 h-4" /> {packageModal.loyalty_points} Points Reward
-                                                    </span>
-                                                </div>
-                                            )}
-                                            {packageModal.duration_minutes > 0 && (
-                                                <div className="bg-brand/5 px-6 py-3 rounded-2xl border border-brand/10 mb-[2px]">
-                                                    <span className="flex items-center gap-3 text-[10px] font-black text-accent-brown uppercase tracking-widest leading-none">
-                                                        <Clock3 className="w-4 h-4 text-brand" /> {packageModal.duration_minutes} MIN ESTIMATED TIME
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="space-y-6">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-1 h-4 bg-brand rounded-full" />
-                                                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-accent-brown/40">Package Details</p>
-                                            </div>
-
-                                            {items.length > 0 ? (
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                    {items.map((item, i) => (
-                                                        <div key={i} className="flex items-center gap-4 p-5 bg-brand/5 border border-brand/10 rounded-[1.5rem] group hover:bg-white hover:border-brand/20 transition-all">
-                                                            <div className="w-8 h-8 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border border-brand/10">
-                                                                <CheckCircle className="w-4 h-4 text-emerald-500" />
-                                                            </div>
-                                                            <span className="text-[11px] font-black text-accent-brown uppercase italic tracking-wide group-hover:text-brand transition-colors whitespace-nowrap overflow-hidden text-ellipsis">{item}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <div className="p-10 border-2 border-dashed border-brand/10 rounded-[2rem] text-center">
-                                                    <p className="text-[10px] font-black text-accent-brown/20 uppercase tracking-[0.3em] italic">No technical data available.</p>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="pt-6">
-                                            <button
-                                                onClick={() => {
-                                                    setForm(f => ({ ...f, service: packageModal.name, service_id: packageModal.id }));
-                                                    setPackageModal(null);
-                                                }}
-                                                className={`w-full py-6 rounded-[2rem] font-black text-[11px] uppercase tracking-[0.3em] transition-all shadow-xl flex items-center justify-center gap-4 ${form.service_id === packageModal.id
-                                                    ? 'bg-emerald-500 text-white shadow-emerald-500/20'
-                                                    : 'bg-brand-dark text-white shadow-brand/20 hover:bg-brand transition-colors'
-                                                    }`}
-                                            >
-                                                {form.service_id === packageModal.id ? (
-                                                    <><CheckCircle className="w-5 h-5" /> Package Selected</>
-                                                ) : (
-                                                    <><Sparkles className="w-5 h-5" /> Select This Package</>
-                                                )}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            </motion.div>
-                        );
-                    })()}
-                </AnimatePresence>
+                <PackageDetailsModal
+                    packageModal={packageModal}
+                    onClose={() => setPackageModal(null)}
+                    onSelect={(pkg) => {
+                        setForm(f => ({ ...f, service: pkg.name, service_id: pkg.id }));
+                        setPackageModal(null);
+                    }}
+                    isSelected={form.service_id === packageModal?.id}
+                />
 
                 <QrCodeModal
                     isOpen={showQrModal}
@@ -1708,10 +1701,10 @@ const ReservationCheckout = () => {
                                     </div>
                                     
                                     <h2 className="text-4xl font-black italic tracking-tighter text-brand-dark leading-tight mb-4 uppercase">
-                                        Commit Invitation?
+                                        Confirm Booking?
                                     </h2>
                                     <p className="text-accent-brown/50 font-bold text-sm tracking-wide leading-relaxed mb-10 max-w-[400px] uppercase">
-                                        You are about to finalize a clinical reservation for <span className="text-brand">{form.pet_name}</span> at <span className="text-brand">{selectedOption?.clinic_name}</span>. This commitment cannot be modified once sent.
+                                        You are about to book a visit for <span className="text-brand">{form.pet_name}</span> at <span className="text-brand">{selectedOption?.clinic_name}</span>. Please make sure all details are correct.
                                     </p>
                                     
                                     <div className="space-y-4 mb-12">
@@ -1720,7 +1713,7 @@ const ReservationCheckout = () => {
                                                 <Calendar className="w-4 h-4" />
                                             </div>
                                             <div>
-                                                <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-widest leading-none mb-1 text-xs">Clinical Schedule</p>
+                                                <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-widest leading-none mb-1 text-xs">Appointment Date & Time</p>
                                                 <p className="text-xs font-black text-accent-brown uppercase italic leading-none">{formatDate(form.date)} &bull; {form.time}</p>
                                             </div>
                                         </div>
@@ -1729,7 +1722,7 @@ const ReservationCheckout = () => {
                                                 <Tag className="w-4 h-4" />
                                             </div>
                                             <div>
-                                                <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-widest leading-none mb-1 text-xs">Total Settlement</p>
+                                                <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-widest leading-none mb-1 text-xs">Total Price</p>
                                                 <p className="text-xs font-black text-accent-brown uppercase italic leading-none">₱{estimatedTotal.toLocaleString()}</p>
                                             </div>
                                         </div>
@@ -1740,13 +1733,13 @@ const ReservationCheckout = () => {
                                             onClick={() => setIsConfirmModalOpen(false)}
                                             className="flex-1 px-8 py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all bg-slate-50 text-accent-brown/40 border border-brand/5 hover:text-accent-brown"
                                         >
-                                            Revise Details
+                                            Go Back & Edit
                                         </button>
                                         <button
                                             onClick={handleSubmit}
                                             className="flex-1 px-8 py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all bg-brand text-white shadow-xl shadow-brand/20 hover:scale-[1.02] active:scale-[0.98]"
                                         >
-                                            Authorize & Commit
+                                            Confirm & Book
                                         </button>
                                     </div>
                                 </div>

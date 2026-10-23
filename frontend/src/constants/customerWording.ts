@@ -1,0 +1,123 @@
+export const CUSTOMER_TEXT = {
+    common: {
+        points: 'Points',
+        price: 'Price',
+        orderNumber: 'Order Number',
+        deliveryFee: 'Delivery Fee',
+        totalPrice: 'Total Price',
+        free: 'FREE',
+        close: 'Close',
+        back: 'Go Back',
+        cancel: 'Cancel',
+        sendRequest: 'Send Request',
+        confirmDate: 'Confirm Date',
+        safePayment: 'Your payment is safe.',
+        securePayment: 'Secure Payment',
+        status: {
+            pending: 'Pending',
+            processing: 'Processing',
+            completed: 'Completed',
+            cancelled: 'Cancelled',
+        }
+    },
+    dashboard: {
+        yourSummary: 'Your Summary',
+        noVisitBooked: 'No Visit Booked',
+        yourOrder: 'Your Order',
+        viewDetails: 'View Details',
+        yourPetVisits: "Your Pet's Visits",
+        bookVisit: 'Book a Visit',
+    },
+    checkout: {
+        steps: {
+            details: 'Your Details',
+            delivery: 'Delivery',
+            payment: 'Payment',
+        },
+        backToDetails: 'Back to Details',
+        contactInfo: 'Contact Information',
+        payAtClinic: 'Pay at Clinic',
+        pickupNote: 'Pickup Note',
+        availableBranch: 'Available Branch',
+        eWallet: 'E-Wallet',
+        qrphBadge: 'Secure Payment',
+        deliveryFee: 'Delivery Fee',
+        totalPrice: 'Total Price',
+        errors: {
+            deliveryAddressNeeded: 'Delivery Address Needed',
+            enterDeliveryAddress: 'Please enter a delivery address to continue.',
+            paymentError: 'Payment Error',
+            paymentCouldNotStart: 'Payment could not be started. Please try again.',
+            unexpectedError: 'An unexpected error occurred. Please try again.',
+            contactDetailsNeeded: 'Please enter your name and phone number to continue.',
+            choosePickupBranch: 'Please choose a clinic branch for pickup.',
+            detailsMissing: 'Details Missing',
+            enterContactDetails: 'Please enter your contact details.',
+        }
+    },
+    orders: {
+        orderNumber: 'Order Number',
+        orderStatus: 'Order Status',
+        statusProgress: {
+            completed: 'Completed',
+            onTheWay: 'On the Way',
+            orderPlaced: 'Order Placed',
+        },
+        details: {
+            orderSummary: 'Order Summary',
+            orderDate: 'Order Date',
+            items: 'Items',
+            itemSingle: '1 Item',
+            itemsPlural: (count: number) => `${count} Items`,
+            destinationDelivery: 'Destination (Delivery Address)',
+            securePayment: 'Secure Payment',
+            priceVerified: 'Price verified',
+        },
+        cancelModal: {
+            title: 'Cancel Order',
+            cannotBeUndone: 'This cannot be undone.',
+            goBack: 'Go Back',
+            cancelOrder: 'Cancel Order',
+            reasons: {
+                changeOfMind: 'Change of mind',
+                wrongItemSuggested: 'Wrong item suggested',
+                moneyProblem: 'Money problem',
+                deliveryTakingTooLong: 'Delivery is taking too long',
+                duplicateOrder: 'Duplicate order',
+                others: 'Others',
+            }
+        },
+        returnModal: {
+            photos: 'Photos',
+            photoCount: (count: number, max: number = 4) => `${count} of ${max} Photos`,
+            close: 'Close',
+            sendRequest: 'Send Request',
+        }
+    },
+    reservations: {
+        steps: {
+            facility: 'Facility',
+            arrival: 'Arrival',
+            payment: 'Payment',
+            review: 'Review',
+        },
+        continueToPayment: 'Continue to Payment',
+        payAtClinic: 'Pay at Clinic',
+        totalPrice: 'Total Price',
+        cancelVisit: 'Cancel Visit',
+        cancelConfirmation: 'Are you sure you want to cancel this visit? This cannot be undone.',
+        visitCancelledSuccess: 'Visit cancelled successfully.',
+        paymentPending: 'Payment Pending',
+    },
+    catalog: {
+        noProductsFound: 'No products found. Please try a different search or filter.',
+        pickedForYou: 'Picked for You',
+        availableBranches: 'Available Branches',
+        pickupInPerson: 'Pick up or visit in person',
+    },
+    packages: {
+        oneVisit: 'Everything your pet needs in one visit.',
+        bundleOneVisit: 'This package includes all the care your pet needs in one visit.',
+        price: 'Price',
+    }
+};

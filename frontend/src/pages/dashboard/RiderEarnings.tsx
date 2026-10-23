@@ -1,122 +1,99 @@
-import { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { 
     CreditCard, ArrowUpRight, DollarSign, 
     ChevronRight, Package, Loader2,
-    ArrowLeft, ArrowRight, Wallet,
-    X, ShieldCheck, MapPin, Store, Clock, Calendar,
+    Wallet, X, ShieldCheck,
     TrendingUp, AlertCircle, CheckCircle2, History
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import Pagination from '../../components/Pagination';
 import RiderBottomNav from '../../components/RiderBottomNav';
 import { CustomDatePicker } from '../../components/CustomDatePicker';
+import PaymentReceiptModal from '../../components/PaymentReceiptModal';
+import { RIDER_TEXT } from '../../constants/riderWording';
+import { formatTransactionId } from '../../utils/textFormatters';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-const TransactionDetailsModal = ({ transaction, isOpen, onClose }: { transaction: any, isOpen: boolean, onClose: () => void }) => {
-    if (!transaction) return null;
-
-    return (
-        <AnimatePresence>
-            {isOpen && (
-                <>
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={onClose}
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200]"
-                    />
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[201] bg-white rounded-[2.5rem] p-8 w-[95%] max-w-lg shadow-2xl"
-                    >
-                        {/* Header */}
-                        <div className="flex justify-between items-center mb-8 pb-4 border-b border-accent-brown/5">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-green-500 rounded-2xl flex items-center justify-center text-white">
-                                    <ShieldCheck size={24} />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black uppercase text-accent-brown/30 tracking-[0.3em]">Financial Receipt</p>
-                                    <h3 className="text-xl font-black text-accent-brown uppercase tracking-tighter">TRX-{transaction.id.toString().slice(-6)}</h3>
-                                </div>
-                            </div>
-                            <button onClick={onClose} className="w-10 h-10 bg-accent-peach/10 rounded-xl flex items-center justify-center text-accent-brown/40 hover:bg-red-50 hover:text-red-500 transition-all">
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        {/* Content */}
-                        <div className="space-y-8">
-                            {/* main stats */}
-                            <div className="bg-accent-peach/5 rounded-[2rem] p-8 border border-accent-brown/5 text-center relative overflow-hidden">
-                                <div className="absolute -top-10 -right-10 w-32 h-32 bg-green-500/5 rounded-full blur-2xl" />
-                                <p className="text-[9px] font-black uppercase tracking-[0.4em] text-accent-brown/30 mb-2">Authenticated Disbursement</p>
-                                <h2 className="text-5xl font-black text-accent-brown tracking-tighter uppercase">₱{(transaction.amount || 0).toLocaleString()}</h2>
-                                <div className="mt-4 flex items-center justify-center gap-3">
-                                    <div className="px-3 py-1 bg-green-500/10 text-green-600 rounded-lg text-[9px] font-black uppercase tracking-widest">Completed</div>
-                                    <div className="flex items-center gap-1.5 text-[9px] font-black text-accent-brown/40 uppercase tracking-widest">
-                                        <History size={12} /> {transaction.date}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Details List */}
-                            <div className="space-y-4">
-                                <div className="flex items-start gap-4">
-                                    <div className="w-10 h-10 bg-accent-peach/20 rounded-xl flex items-center justify-center shrink-0 text-accent-brown">
-                                        <Store size={18} />
-                                    </div>
-                                    <div>
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30 mb-0.5">Hub Extraction Point</p>
-                                        <p className="text-xs font-black text-accent-brown uppercase">{transaction.pickup_name || 'Hi-Vet Clinic Hub'}</p>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-start gap-4">
-                                    <div className="w-10 h-10 bg-accent-peach/20 rounded-xl flex items-center justify-center shrink-0 text-accent-brown">
-                                        <MapPin size={18} />
-                                    </div>
-                                    <div>
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30 mb-0.5">Deliverable Mission</p>
-                                        <p className="text-xs font-black text-accent-brown leading-snug line-clamp-2 uppercase">{transaction.address || 'Standard Delivery'}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={onClose}
-                                className="w-full bg-accent-brown text-white py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-black transition-all active:scale-95"
-                            >
-                                Close Audit
-                            </button>
-                        </div>
-                    </motion.div>
-                </>
-            )}
-        </AnimatePresence>
-    );
-};
-
 const PayoutModal = ({ isOpen, onClose, totalEarnings, onPayoutSuccess }: { isOpen: boolean, onClose: () => void, totalEarnings: number, onPayoutSuccess: (amount: number) => void }) => {
+    const shouldReduceMotion = useReducedMotion();
+    const dialogRef = useRef<HTMLDivElement>(null);
+    const closeBtnRef = useRef<HTMLButtonElement>(null);
+    const triggerElementRef = useRef<HTMLElement | null>(null);
+
     const [method, setMethod] = useState('GCash');
-    const [amount, setAmount] = useState(totalEarnings.toString());
+    const [amount, setAmount] = useState((Number(totalEarnings) || 0).toFixed(2));
     const [submitting, setSubmitting] = useState(false);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState('');
 
+    useEffect(() => {
+        if (isOpen) {
+            triggerElementRef.current = document.activeElement as HTMLElement;
+            const originalOverflow = document.body.style.overflow;
+            const originalPaddingRight = document.body.style.paddingRight;
+            const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+            document.body.style.overflow = 'hidden';
+            if (scrollbarWidth > 0) {
+                document.body.style.paddingRight = `${scrollbarWidth}px`;
+            }
+
+            setAmount((Number(totalEarnings) || 0).toFixed(2));
+            setError('');
+            setSuccess(false);
+
+            const timer = setTimeout(() => {
+                closeBtnRef.current?.focus();
+            }, 50);
+
+            return () => {
+                document.body.style.overflow = originalOverflow;
+                document.body.style.paddingRight = originalPaddingRight;
+                clearTimeout(timer);
+                triggerElementRef.current?.focus?.();
+            };
+        }
+    }, [isOpen, totalEarnings]);
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            e.stopPropagation();
+            onClose();
+            return;
+        }
+
+        if (e.key === 'Tab' && dialogRef.current) {
+            const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+                'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+
+            if (e.shiftKey) {
+                if (document.activeElement === first) {
+                    last.focus();
+                    e.preventDefault();
+                }
+            } else {
+                if (document.activeElement === last) {
+                    first.focus();
+                    e.preventDefault();
+                }
+            }
+        }
+    };
+
     const handlePayout = async () => {
-        const val = parseFloat(amount);
+        const val = Math.round(parseFloat(amount) * 100) / 100;
         if (isNaN(val) || val < 100) {
-            setError("Minimum disbursement is ₱100.00");
+            setError(RIDER_TEXT.earnings.payoutModal.errorMin);
             return;
         }
         if (val > totalEarnings) {
-            setError("Insufficient accumulated assets");
+            setError(RIDER_TEXT.earnings.payoutModal.errorBalance);
             return;
         }
 
@@ -143,10 +120,10 @@ const PayoutModal = ({ isOpen, onClose, totalEarnings, onPayoutSuccess }: { isOp
                 }, 3000);
             } else {
                 const data = await res.json();
-                setError(data.detail || "Disbursement failed. Please try again.");
+                setError(data.detail || RIDER_TEXT.earnings.payoutModal.errorGeneral);
             }
-        } catch (err) {
-            setError("Treasury network error. Please check your connection.");
+        } catch {
+            setError(RIDER_TEXT.earnings.payoutModal.errorGeneral);
         } finally {
             setSubmitting(false);
         }
@@ -156,68 +133,148 @@ const PayoutModal = ({ isOpen, onClose, totalEarnings, onPayoutSuccess }: { isOp
         <AnimatePresence>
             {isOpen && (
                 <>
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200]" />
-                    <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[201] bg-white rounded-[2.5rem] p-8 w-[95%] max-w-sm shadow-2xl">
-                        {success ? (
-                            <div className="py-12 flex flex-col items-center justify-center text-center animate-in zoom-in-95">
-                                <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center text-white mb-6 shadow-xl shadow-green-200">
-                                    <CheckCircle2 size={40} />
-                                </div>
-                                <h3 className="text-2xl font-black text-accent-brown uppercase tracking-tighter mb-2">Disbursement Sent</h3>
-                                <p className="text-[10px] font-bold text-accent-brown/40 uppercase tracking-[0.2em]">Asset transit finalized</p>
+                    <motion.div 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }} 
+                        exit={{ opacity: 0 }} 
+                        transition={{ duration: shouldReduceMotion ? 0 : 0.2 }}
+                        onClick={onClose} 
+                        className="fixed inset-0 bg-black/40 z-[200]" 
+                        aria-hidden="true" 
+                    />
+                    <div className="fixed inset-0 z-[201] flex flex-col justify-end sm:justify-center sm:items-center p-0 sm:p-4 pointer-events-none">
+                        <motion.div 
+                            ref={dialogRef}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-label={RIDER_TEXT.earnings.payoutModal.title}
+                            tabIndex={-1}
+                            onKeyDown={handleKeyDown}
+                            initial={
+                                shouldReduceMotion
+                                    ? { opacity: 0 }
+                                    : { 
+                                        opacity: 0, 
+                                        y: typeof window !== 'undefined' && window.innerWidth < 641 ? '100%' : 24,
+                                        scale: typeof window !== 'undefined' && window.innerWidth >= 641 ? 0.96 : 1 
+                                      }
+                            }
+                            animate={
+                                shouldReduceMotion
+                                    ? { opacity: 1 }
+                                    : { opacity: 1, y: 0, scale: 1 }
+                            }
+                            exit={
+                                shouldReduceMotion
+                                    ? { opacity: 0 }
+                                    : { 
+                                        opacity: 0, 
+                                        y: typeof window !== 'undefined' && window.innerWidth < 641 ? '100%' : 24,
+                                        scale: typeof window !== 'undefined' && window.innerWidth >= 641 ? 0.96 : 1 
+                                      }
+                            }
+                            transition={{ duration: shouldReduceMotion ? 0 : 0.24, ease: [0.16, 1, 0.3, 1] }}
+                            className="pointer-events-auto bg-white shadow-2xl flex flex-col w-full max-h-[92vh] sm:max-h-[90vh] rounded-t-[24px] sm:rounded-[2rem] border border-accent-brown/10 sm:max-w-md overflow-hidden outline-none"
+                        >
+                            {/* Drag handle on mobile */}
+                            <div className="sm:hidden pt-2.5 pb-1 flex justify-center shrink-0 bg-white" aria-hidden="true">
+                                <div className="w-10 h-1 bg-slate-300 rounded-full" />
                             </div>
-                        ) : (
-                            <div className="space-y-8">
-                                <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-brand-dark rounded-xl flex items-center justify-center text-white"><ArrowUpRight size={20} /></div>
-                                        <h3 className="text-lg font-black text-accent-brown uppercase tracking-tighter">Initiate Payout</h3>
+
+                            {success ? (
+                                <div className="p-8 sm:p-12 flex flex-col items-center justify-center text-center animate-in zoom-in-95">
+                                    <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center text-white mb-4 shadow-lg shadow-green-200">
+                                        <CheckCircle2 size={36} />
                                     </div>
-                                    <button onClick={onClose} className="text-accent-brown/20 hover:text-red-500 transition-colors"><X size={20} /></button>
+                                    <h3 className="text-xl font-black text-accent-brown uppercase tracking-tight mb-1">{RIDER_TEXT.earnings.payoutModal.successTitle}</h3>
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">{RIDER_TEXT.earnings.payoutModal.successDesc}</p>
                                 </div>
-
-                                <div className="bg-accent-peach/5 p-6 rounded-2xl border border-accent-brown/5 text-center">
-                                    <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-[0.3em] mb-1">Available to Withdraw</p>
-                                    <h4 className="text-3xl font-black text-accent-brown tracking-tighter">₱{(totalEarnings || 0).toLocaleString()}</h4>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest ml-1 italic">Withdrawal Yield (₱)</p>
-                                    <input 
-                                        type="number"
-                                        value={amount}
-                                        onChange={(e) => setAmount(e.target.value)}
-                                        className="w-full bg-[#FAFAFA] border-2 border-accent-brown/5 rounded-xl py-4 px-6 text-lg font-black text-accent-brown focus:border-brand-dark/40 outline-none transition-all tracking-tight"
-                                        placeholder="0.00"
-                                    />
-                                    {error && <p className="text-[9px] font-bold text-red-500 uppercase tracking-widest ml-1">{error}</p>}
-                                </div>
-
-                                <div className="space-y-4">
-                                    <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest ml-1 italic">Select Target Method</p>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {['GCash', 'PayMaya', 'BPI Bank', 'UnionBank'].map(m => (
-                                            <button 
-                                                key={m} 
-                                                onClick={() => setMethod(m)}
-                                                className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${method === m ? 'bg-brand-dark text-white border-brand-dark shadow-lg shadow-brand-dark/10' : 'bg-white text-accent-brown/40 border-accent-brown/10 hover:border-accent-brown/30'}`}
-                                            >
-                                                {m}
-                                            </button>
-                                        ))}
+                            ) : (
+                                <>
+                                    {/* Fixed Header */}
+                                    <div className="flex justify-between items-center p-4 sm:p-5 border-b border-accent-brown/10 shrink-0 bg-white">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-brand-dark rounded-xl flex items-center justify-center text-white shadow-sm" aria-hidden="true">
+                                                <ArrowUpRight size={20} />
+                                            </div>
+                                            <h3 className="text-lg font-black text-accent-brown uppercase tracking-tight">
+                                                {RIDER_TEXT.earnings.payoutModal.title}
+                                            </h3>
+                                        </div>
+                                        <button 
+                                            ref={closeBtnRef}
+                                            type="button"
+                                            onClick={onClose} 
+                                            aria-label="Close cash out modal" 
+                                            className="min-w-[44px] min-h-[44px] w-11 h-11 bg-accent-peach/15 rounded-xl flex items-center justify-center text-accent-brown hover:bg-red-50 hover:text-red-500 transition-all outline-none focus:ring-2 focus:ring-accent-brown/20 shrink-0"
+                                        >
+                                            <X size={20} />
+                                        </button>
                                     </div>
-                                </div>
 
-                                <button 
-                                    onClick={handlePayout}
-                                    disabled={submitting}
-                                    className="w-full bg-brand-dark text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-[0.3em] shadow-lg hover:bg-black transition-all flex items-center justify-center gap-3"
-                                >
-                                    {submitting ? <Loader2 size={16} className="animate-spin" /> : <><ShieldCheck size={16} /> Confirm Disbursement</>}
-                                </button>
-                            </div>
-                        )}
-                    </motion.div>
+                                    {/* Scrollable Middle */}
+                                    <div className="overflow-y-auto flex-1 p-4 sm:p-6 space-y-4 sm:space-y-5">
+                                        <div className="bg-accent-peach/5 p-5 rounded-2xl border border-accent-brown/10 text-center">
+                                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">
+                                                {RIDER_TEXT.earnings.payoutModal.availableLabel}
+                                            </p>
+                                            <h4 className="text-2xl sm:text-3xl font-black text-accent-brown tracking-tight">
+                                                ₱{(Number(totalEarnings) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </h4>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label htmlFor="payout-amount-input" className="text-xs font-bold text-slate-600 uppercase tracking-wide block">
+                                                {RIDER_TEXT.earnings.payoutModal.amountLabel}
+                                            </label>
+                                            <input 
+                                                id="payout-amount-input"
+                                                type="number"
+                                                step="0.01"
+                                                min="100"
+                                                max={(Number(totalEarnings) || 0).toFixed(2)}
+                                                value={amount}
+                                                onChange={(e) => setAmount(e.target.value)}
+                                                className="w-full bg-[#FAFAFA] border border-accent-brown/20 rounded-xl py-3 px-4 text-lg font-black text-accent-brown focus:border-brand-dark focus:ring-2 focus:ring-brand-dark/20 outline-none transition-all tracking-tight"
+                                                placeholder="0.00"
+                                            />
+                                            {error && <p className="text-xs font-bold text-red-600 uppercase tracking-wide mt-1">{error}</p>}
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">
+                                                {RIDER_TEXT.earnings.payoutModal.methodLabel}
+                                            </p>
+                                            <div className="grid grid-cols-2 gap-2.5">
+                                                {['GCash', 'PayMaya', 'BPI Bank', 'UnionBank'].map(m => (
+                                                    <button 
+                                                        key={m} 
+                                                        type="button"
+                                                        onClick={() => setMethod(m)}
+                                                        className={`min-h-[44px] py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border flex items-center justify-center ${method === m ? 'bg-brand-dark text-white border-brand-dark shadow-md' : 'bg-white text-slate-600 border-accent-brown/15 hover:border-accent-brown/30'}`}
+                                                    >
+                                                        {m}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Fixed Footer */}
+                                    <div className="p-4 sm:p-5 border-t border-accent-brown/10 shrink-0 bg-white pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5">
+                                        <button 
+                                            type="button"
+                                            onClick={handlePayout}
+                                            disabled={submitting}
+                                            className="w-full min-h-[48px] h-12 bg-brand-dark text-white rounded-xl font-black uppercase text-xs sm:text-sm tracking-wider shadow-md hover:bg-black transition-all flex items-center justify-center gap-2 outline-none focus:ring-2 focus:ring-brand-dark/30 disabled:opacity-50 active:scale-[0.98]"
+                                        >
+                                            {submitting ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <><ShieldCheck size={18} aria-hidden="true" /> {RIDER_TEXT.earnings.payoutModal.confirmBtn}</>}
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </motion.div>
+                    </div>
                 </>
             )}
         </AnimatePresence>
@@ -225,53 +282,182 @@ const PayoutModal = ({ isOpen, onClose, totalEarnings, onPayoutSuccess }: { isOp
 };
 
 const AuditModal = ({ isOpen, onClose, stats }: { isOpen: boolean, onClose: () => void, stats: any }) => {
+    const shouldReduceMotion = useReducedMotion();
+    const dialogRef = useRef<HTMLDivElement>(null);
+    const closeBtnRef = useRef<HTMLButtonElement>(null);
+    const triggerElementRef = useRef<HTMLElement | null>(null);
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        triggerElementRef.current = document.activeElement as HTMLElement;
+        const originalOverflow = document.body.style.overflow;
+        const originalPaddingRight = document.body.style.paddingRight;
+        const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+        document.body.style.overflow = 'hidden';
+        if (scrollbarWidth > 0) {
+            document.body.style.paddingRight = `${scrollbarWidth}px`;
+        }
+
+        const timer = setTimeout(() => {
+            closeBtnRef.current?.focus();
+        }, 50);
+
+        return () => {
+            document.body.style.overflow = originalOverflow;
+            document.body.style.paddingRight = originalPaddingRight;
+            clearTimeout(timer);
+            triggerElementRef.current?.focus?.();
+        };
+    }, [isOpen]);
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            e.stopPropagation();
+            onClose();
+            return;
+        }
+
+        if (e.key === 'Tab' && dialogRef.current) {
+            const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+                'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+
+            if (e.shiftKey) {
+                if (document.activeElement === first) {
+                    last.focus();
+                    e.preventDefault();
+                }
+            } else {
+                if (document.activeElement === last) {
+                    first.focus();
+                    e.preventDefault();
+                }
+            }
+        }
+    };
+
     return (
         <AnimatePresence>
             {isOpen && (
                 <>
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200]" />
-                    <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[201] bg-white rounded-[2.5rem] p-8 w-[95%] max-w-md shadow-2xl">
-                        <div className="space-y-8">
-                            <div className="flex justify-between items-center">
+                    <motion.div 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }} 
+                        exit={{ opacity: 0 }} 
+                        transition={{ duration: shouldReduceMotion ? 0 : 0.2 }}
+                        onClick={onClose} 
+                        className="fixed inset-0 bg-black/40 z-[200]" 
+                        aria-hidden="true" 
+                    />
+                    <div className="fixed inset-0 z-[201] flex flex-col justify-end sm:justify-center sm:items-center p-0 sm:p-4 pointer-events-none">
+                        <motion.div 
+                            ref={dialogRef}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-label={RIDER_TEXT.earnings.summaryModal.title}
+                            tabIndex={-1}
+                            onKeyDown={handleKeyDown}
+                            initial={
+                                shouldReduceMotion
+                                    ? { opacity: 0 }
+                                    : { 
+                                        opacity: 0, 
+                                        y: typeof window !== 'undefined' && window.innerWidth < 641 ? '100%' : 24,
+                                        scale: typeof window !== 'undefined' && window.innerWidth >= 641 ? 0.96 : 1 
+                                      }
+                            }
+                            animate={
+                                shouldReduceMotion
+                                    ? { opacity: 1 }
+                                    : { opacity: 1, y: 0, scale: 1 }
+                            }
+                            exit={
+                                shouldReduceMotion
+                                    ? { opacity: 0 }
+                                    : { 
+                                        opacity: 0, 
+                                        y: typeof window !== 'undefined' && window.innerWidth < 641 ? '100%' : 24,
+                                        scale: typeof window !== 'undefined' && window.innerWidth >= 641 ? 0.96 : 1 
+                                      }
+                            }
+                            transition={{ duration: shouldReduceMotion ? 0 : 0.24, ease: [0.16, 1, 0.3, 1] }}
+                            className="pointer-events-auto bg-white shadow-2xl flex flex-col w-full max-h-[92vh] sm:max-h-[90vh] rounded-t-[24px] sm:rounded-[2rem] border border-accent-brown/10 sm:max-w-md overflow-hidden outline-none"
+                        >
+                            {/* Drag handle on mobile */}
+                            <div className="sm:hidden pt-2.5 pb-1 flex justify-center shrink-0 bg-white" aria-hidden="true">
+                                <div className="w-10 h-1 bg-slate-300 rounded-full" />
+                            </div>
+
+                            {/* Fixed Header */}
+                            <div className="flex justify-between items-center p-4 sm:p-5 border-b border-accent-brown/10 shrink-0 bg-white">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-accent-peach/20 rounded-xl flex items-center justify-center text-accent-brown"><TrendingUp size={20} /></div>
-                                    <h3 className="text-lg font-black text-accent-brown uppercase tracking-tighter">Operational Audit</h3>
-                                </div>
-                                <button onClick={onClose} className="text-accent-brown/20 hover:text-red-500 transition-colors"><X size={20} /></button>
-                            </div>
-
-                            <div className="space-y-4">
-                                {[
-                                    { label: "Gross Earnings", val: `₱${(stats.total_earnings || 0).toLocaleString()}`, icon: ArrowUpRight, col: "text-green-600" },
-                                    { label: "Today's Contribution", val: `₱${(stats.today_earnings || 0).toLocaleString()}`, icon: TrendingUp, col: "text-brand-dark" },
-                                    { label: "Successful Missions", val: stats.completed_orders || 0, icon: Package, col: "text-accent-brown" },
-                                    { label: "Assets in Transit", val: `₱${(stats.pending_payout || 0).toLocaleString()}`, icon: Wallet, col: "text-[#FB8500]" }
-                                ].map((item, i) => (
-                                    <div key={i} className="flex items-center justify-between p-4 bg-accent-peach/5 rounded-2xl border border-accent-brown/5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-accent-brown/20 shadow-sm border border-black/5"><item.icon size={14} /></div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">{item.label}</p>
-                                        </div>
-                                        <p className={`text-sm font-black tracking-tight ${item.col}`}>{item.val}</p>
+                                    <div className="w-10 h-10 bg-accent-peach/20 rounded-xl flex items-center justify-center text-accent-brown shrink-0" aria-hidden="true">
+                                        <TrendingUp size={20} />
                                     </div>
-                                ))}
-                            </div>
-
-                            <div className="bg-brand-dark p-6 rounded-2xl text-white relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl" />
-                                <div className="flex items-center gap-3 mb-2">
-                                    <ShieldCheck size={16} />
-                                    <p className="text-[9px] font-black uppercase tracking-[0.3em]">Fleet Integrity Score</p>
+                                    <h3 className="text-lg font-black text-accent-brown uppercase tracking-tight">
+                                        {RIDER_TEXT.earnings.summaryModal.title}
+                                    </h3>
                                 </div>
-                                <h4 className="text-3xl font-black tracking-tighter">98.4%</h4>
-                                <p className="text-[9px] font-bold text-white/40 mt-2 uppercase tracking-widest italic">Top 5% of operational riders this cycle.</p>
+                                <button 
+                                    ref={closeBtnRef}
+                                    type="button"
+                                    onClick={onClose} 
+                                    aria-label="Close summary modal" 
+                                    className="min-w-[44px] min-h-[44px] w-11 h-11 bg-accent-peach/15 rounded-xl flex items-center justify-center text-accent-brown hover:bg-red-50 hover:text-red-500 transition-all outline-none focus:ring-2 focus:ring-accent-brown/20 shrink-0"
+                                >
+                                    <X size={20} />
+                                </button>
                             </div>
 
-                            <button onClick={onClose} className="w-full bg-accent-peach/20 text-accent-brown py-4 rounded-xl font-black uppercase text-[10px] tracking-[0.3em] hover:bg-accent-peach/30 transition-all">
-                                Close Registry
-                            </button>
-                        </div>
-                    </motion.div>
+                            {/* Scrollable Middle */}
+                            <div className="overflow-y-auto flex-1 p-4 sm:p-6 space-y-4 sm:space-y-5">
+                                <div className="space-y-3">
+                                    {[
+                                        { label: RIDER_TEXT.earnings.summaryModal.totalEarnings, val: `₱${(Number(stats.total_earnings) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: ArrowUpRight, col: "text-green-600" },
+                                        { label: RIDER_TEXT.earnings.summaryModal.todayEarnings, val: `₱${(Number(stats.today_earnings) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: TrendingUp, col: "text-brand-dark" },
+                                        { label: RIDER_TEXT.earnings.summaryModal.completedDeliveries, val: (stats.completed_orders || 0).toLocaleString('en-PH'), icon: Package, col: "text-accent-brown" },
+                                        { label: RIDER_TEXT.earnings.summaryModal.pendingCashOut, val: `₱${(Number(stats.pending_payout) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: Wallet, col: "text-[#FB8500]" }
+                                    ].map((item, i) => (
+                                        <div key={i} className="flex items-center justify-between p-3.5 bg-accent-peach/5 rounded-xl border border-accent-brown/10">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-accent-brown/40 shadow-sm border border-black/5" aria-hidden="true">
+                                                    <item.icon size={16} />
+                                                </div>
+                                                <p className="text-xs font-bold uppercase tracking-wide text-slate-600">{item.label}</p>
+                                            </div>
+                                            <p className={`text-sm font-black tracking-tight ${item.col}`}>{item.val}</p>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="bg-brand-dark p-5 rounded-2xl text-white relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl pointer-events-none" aria-hidden="true" />
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                        <ShieldCheck size={18} aria-hidden="true" />
+                                        <p className="text-xs font-bold uppercase tracking-wider text-white/90">{RIDER_TEXT.earnings.summaryModal.ratingScore}</p>
+                                    </div>
+                                    <h4 className="text-2xl sm:text-3xl font-black tracking-tight">98.4%</h4>
+                                    <p className="text-xs font-medium text-white/85 mt-1">{RIDER_TEXT.earnings.summaryModal.ratingDesc}</p>
+                                </div>
+                            </div>
+
+                            {/* Fixed Footer */}
+                            <div className="p-4 sm:p-5 border-t border-accent-brown/10 shrink-0 bg-white pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5">
+                                <button 
+                                    type="button"
+                                    onClick={onClose} 
+                                    className="w-full min-h-[48px] h-12 bg-accent-peach/20 text-accent-brown rounded-xl font-black uppercase text-xs sm:text-sm tracking-wider hover:bg-accent-peach/30 transition-all outline-none focus:ring-2 focus:ring-accent-brown/20 flex items-center justify-center"
+                                >
+                                    {RIDER_TEXT.earnings.summaryModal.closeBtn}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
                 </>
             )}
         </AnimatePresence>
@@ -327,22 +513,21 @@ const RiderEarnings = () => {
     const filteredHistory = useMemo(() => {
         if (!filterDate) return history;
         return history.filter(h => {
-            // History items usually have data in "Apr 19, 2026" or similar format
-            // but the DatePicker returns "YYYY-MM-DD".
-            // Let's normalize both to comparison.
-            const hDate = new Date(h.date).toLocaleDateString('en-CA'); // YYYY-MM-DD
+            const hDate = new Date(h.date).toLocaleDateString('en-CA');
             return hDate === filterDate;
         });
     }, [history, filterDate]);
 
     const dateSpecificEarnings = useMemo(() => {
         if (!filterDate) return stats.today_earnings;
-        return filteredHistory.reduce((sum, h) => sum + h.amount, 0);
+        return filteredHistory.reduce((sum, h) => sum + (h.amount || 0), 0);
     }, [filteredHistory, filterDate, stats.today_earnings]);
 
+    const isCashOutDisabled = (stats.total_earnings || 0) < 100;
+
     return (
-        <DashboardLayout title="Earnings">
-            <TransactionDetailsModal 
+        <DashboardLayout title={RIDER_TEXT.earnings.pageTitle}>
+            <PaymentReceiptModal 
                 isOpen={!!selectedTransaction}
                 transaction={selectedTransaction}
                 onClose={() => setSelectedTransaction(null)}
@@ -352,173 +537,260 @@ const RiderEarnings = () => {
                 onClose={() => setIsPayoutOpen(false)} 
                 totalEarnings={stats.total_earnings} 
                 onPayoutSuccess={(amount) => {
-                    setStats(prev => ({ ...prev, total_earnings: prev.total_earnings - amount }));
+                    setStats(prev => ({ ...prev, total_earnings: Math.max(0, prev.total_earnings - amount) }));
                 }}
             />
             <AuditModal isOpen={isAuditOpen} onClose={() => setIsAuditOpen(false)} stats={stats} />
 
-            <div className="space-y-6 pb-32">
+            <div className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-5 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]">
                 
-                {/* ── FLEET TREASURY HEADER ── */}
-                <div className="bg-brand-dark rounded-2xl px-6 py-4 flex items-center justify-between gap-4 shadow-sm transition-all duration-500">
-                    <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse" />
-                        <div>
-                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Financial Ledger</p>
-                            <h2 className="text-lg font-black tracking-tighter uppercase leading-none text-white">
-                                Fleet Treasury Status
-                            </h2>
-                        </div>
-                    </div>
-                </div>
+                {/* Visually hidden heading for a11y */}
+                <h1 className="sr-only">{RIDER_TEXT.earnings.pageTitle}</h1>
 
-                {/* ── MAIN BALANCE DISPLAY ── */}
-                <div className="bg-white rounded-2xl p-8 border border-accent-brown/5 shadow-sm relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-accent-peach/5 rounded-full -mr-32 -mt-32 blur-3xl pointer-events-none" />
+                {/* ── HERO EARNINGS OVERVIEW (Balance 60% + 3 Summary Cards 40% on Desktop) ── */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 items-stretch">
                     
-                    <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
-                        <div>
-                            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-accent-brown/30 mb-2 leading-none">Total Accumulated Asset</p>
-                            <h3 className="text-5xl font-black text-accent-brown tracking-tighter uppercase leading-none">
-                                ₱{(stats.total_earnings || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </h3>
-                            <p className="text-[11px] font-bold text-accent-brown/40 mt-3 italic">Verified logistics compensation across all cycles.</p>
+                    {/* ── MAIN BALANCE DISPLAY (Left ~60% on desktop) ── */}
+                    <div className="lg:col-span-7 bg-white rounded-3xl p-5 sm:p-7 border border-accent-brown/10 shadow-sm relative overflow-hidden flex flex-col justify-between">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-accent-peach/5 rounded-full -mr-32 -mt-32 blur-3xl pointer-events-none" aria-hidden="true" />
+                        
+                        <div className="relative z-10 space-y-3">
+                            <div>
+                                <p className="text-xs font-bold uppercase tracking-wide text-slate-600 mb-1 leading-none">
+                                    {RIDER_TEXT.earnings.balanceLabel}
+                                </p>
+                                <h3 
+                                    className="text-3xl sm:text-4xl lg:text-[2.75rem] font-black text-accent-brown tracking-normal leading-tight break-words sm:break-normal tabular-nums"
+                                    aria-label={`Available balance: ${(stats.total_earnings || 0).toLocaleString()} pesos`}
+                                >
+                                    ₱{(stats.total_earnings || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </h3>
+                            </div>
+                            <p className="text-sm font-medium text-slate-600 leading-relaxed max-w-xl">
+                                {RIDER_TEXT.earnings.balanceDesc}
+                            </p>
                         </div>
                         
-                        <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+                        <div className="relative z-10 flex flex-col sm:flex-row gap-3 pt-6 sm:pt-8 items-stretch">
                             <button 
+                                type="button"
                                 onClick={() => setIsPayoutOpen(true)}
-                                className="px-8 py-4 bg-brand-dark text-white rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg hover:bg-black transition-all active:scale-95 flex items-center justify-center gap-2"
+                                disabled={isCashOutDisabled}
+                                aria-disabled={isCashOutDisabled}
+                                className={`w-full sm:flex-[1.4] min-h-[48px] h-12 sm:h-[50px] px-6 bg-brand-dark text-white rounded-xl font-black text-sm uppercase tracking-wide flex items-center justify-center gap-2 transition-all outline-none focus:ring-2 focus:ring-brand-dark/30 ${
+                                    isCashOutDisabled 
+                                        ? 'opacity-50 cursor-not-allowed bg-brand-dark/70' 
+                                        : 'hover:bg-black active:scale-98 shadow-md'
+                                }`}
                             >
-                                <CreditCard size={14} /> Initiate Payout
+                                <CreditCard size={18} aria-hidden="true" /> 
+                                <span>{RIDER_TEXT.earnings.cashOutBtn}</span>
+                                {isCashOutDisabled && <span className="sr-only"> (Disabled, minimum ₱100 required)</span>}
                             </button>
                             <button 
+                                type="button"
                                 onClick={() => setIsAuditOpen(true)}
-                                className="px-8 py-4 bg-accent-peach/20 text-accent-brown rounded-xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-accent-peach/30 transition-all active:scale-95"
+                                className="w-full sm:flex-1 min-h-[48px] h-12 sm:h-[50px] px-6 bg-white hover:bg-slate-50 text-accent-brown rounded-xl font-black text-sm uppercase tracking-wide border border-accent-brown/20 shadow-sm transition-all active:scale-98 flex items-center justify-center outline-none focus:ring-2 focus:ring-accent-brown/20"
                             >
-                                Operational Audit
+                                {RIDER_TEXT.earnings.viewSummaryBtn}
                             </button>
                         </div>
                     </div>
-                </div>
 
-                {/* ── PERFORMANCE METRICS ── */}
-                <div className="grid grid-cols-3 gap-4">
-                    {[
-                        { 
-                            label: filterDate ? "Selected Yield" : "Today's Yield", 
-                            value: `₱${(dateSpecificEarnings || 0).toLocaleString()}`, 
-                            icon: filterDate ? History : DollarSign, 
-                            desc: filterDate ? `Earnings for ${new Date(filterDate).toLocaleDateString()}` : "Confirmed earnings for this cycle." 
-                        },
-                        { label: "Logistical Count", value: stats.completed_orders || 0, icon: Package, desc: "Successful fulfillment completions.", highlight: true },
-                        { label: "Pending Asset", value: `₱${(stats.pending_payout || 0).toLocaleString()}`, icon: Wallet, desc: "Asset value currently in transit." },
-                    ].map((stat, i) => (
+                    {/* ── THREE SUMMARY CARDS (Right ~40% on desktop stacked; 2-col/3-col on mobile/tablet) ── */}
+                    <div 
+                        className="lg:col-span-5 grid grid-cols-2 min-[481px]:grid-cols-3 lg:flex lg:flex-col gap-3 sm:gap-4 lg:gap-3.5 lg:h-full lg:justify-between"
+                        role="region"
+                        aria-label="Summary Statistics"
+                    >
+                        {/* Card 1: Today's Earnings / Selected Date's Earnings */}
                         <motion.div
-                            key={i}
                             initial={{ opacity: 0, y: 15 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: i * 0.08 }}
-                            className={`rounded-2xl p-6 border border-accent-brown/5 shadow-sm flex flex-col gap-3 ${stat.highlight ? 'bg-brand-dark text-white' : 'bg-white'}`}
+                            transition={{ delay: 0 }}
+                            className="col-span-2 min-[481px]:col-span-1 lg:flex-1 rounded-2xl p-4 sm:p-5 border border-accent-brown/10 shadow-sm bg-white flex flex-col justify-between"
                         >
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${stat.highlight ? 'bg-white/10 text-white' : 'bg-accent-peach/30 text-accent-brown'}`}>
-                                <stat.icon size={18} />
+                            <div className="flex items-center gap-3.5 min-[481px]:flex-col min-[481px]:items-start min-[481px]:gap-3">
+                                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-accent-peach/30 text-accent-brown flex items-center justify-center shrink-0" aria-hidden="true">
+                                    {filterDate ? <History size={20} /> : <DollarSign size={20} />}
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold uppercase tracking-wide text-slate-600 mb-0.5">
+                                        {filterDate ? RIDER_TEXT.earnings.metrics.selectedDateEarnings : RIDER_TEXT.earnings.metrics.todayEarnings}
+                                    </p>
+                                    <h4 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight leading-none text-accent-brown whitespace-nowrap tabular-nums">
+                                        ₱{(dateSpecificEarnings || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </h4>
+                                </div>
                             </div>
-                            <div>
-                                <p className={`text-[9px] font-black uppercase tracking-[0.2em] mb-1 ${stat.highlight ? 'text-white/40' : 'text-accent-brown/30'}`}>{stat.label}</p>
-                                <h3 className={`text-2xl font-black tracking-tighter leading-none ${stat.highlight ? 'text-white' : 'text-accent-brown'}`}>{stat.value}</h3>
-                            </div>
-                            <p className={`text-[10px] font-bold leading-relaxed ${stat.highlight ? 'text-white/40' : 'text-accent-brown/40'}`}>{stat.desc}</p>
+                            <p className="text-xs font-medium leading-relaxed text-slate-600 mt-2 min-[481px]:mt-3">
+                                {filterDate ? `Earnings for ${new Date(filterDate).toLocaleDateString()}` : RIDER_TEXT.earnings.metrics.todayDesc}
+                            </p>
                         </motion.div>
-                    ))}
+
+                        {/* Card 2: Completed Deliveries (Solid Orange Highlight) */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 15 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.08 }}
+                            className="col-span-1 lg:flex-1 rounded-2xl p-4 sm:p-5 border border-transparent shadow-sm bg-brand-dark text-white flex flex-col justify-between"
+                        >
+                            <div className="space-y-3">
+                                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0" aria-hidden="true">
+                                    <Package size={20} />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold uppercase tracking-wide text-white/90 mb-0.5">
+                                        {RIDER_TEXT.earnings.metrics.completedOrders}
+                                    </p>
+                                    <h4 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight leading-none text-white whitespace-nowrap tabular-nums">
+                                        {stats.completed_orders || 0}
+                                    </h4>
+                                </div>
+                            </div>
+                            <p className="text-xs font-medium leading-relaxed text-white/85 mt-2 sm:mt-3">
+                                {RIDER_TEXT.earnings.metrics.completedDesc}
+                            </p>
+                        </motion.div>
+
+                        {/* Card 3: Pending Cash Out */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 15 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.16 }}
+                            className="col-span-1 lg:flex-1 rounded-2xl p-4 sm:p-5 border border-accent-brown/10 shadow-sm bg-white flex flex-col justify-between"
+                        >
+                            <div className="space-y-3">
+                                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-accent-peach/30 text-accent-brown flex items-center justify-center shrink-0" aria-hidden="true">
+                                    <Wallet size={20} />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold uppercase tracking-wide text-slate-600 mb-0.5">
+                                        {RIDER_TEXT.earnings.metrics.pendingCashOut}
+                                    </p>
+                                    <h4 className="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight leading-none text-accent-brown whitespace-nowrap tabular-nums">
+                                        ₱{(stats.pending_payout || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </h4>
+                                </div>
+                            </div>
+                            <p className="text-xs font-medium leading-relaxed text-slate-600 mt-2 sm:mt-3">
+                                {RIDER_TEXT.earnings.metrics.pendingDesc}
+                            </p>
+                        </motion.div>
+                    </div>
                 </div>
 
-                {/* ── TRANSACTION LEDGER ── */}
-                <div className="space-y-4 pt-4">
-                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 px-1">
+                {/* ── RECENT ACTIVITY & DATE FILTER ── */}
+                <div className="space-y-3 sm:space-y-4 pt-3 sm:pt-4">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 sm:gap-4 px-1">
                         <div>
-                            <p className="text-[10px] font-black text-brand uppercase tracking-[0.4em]">Transaction Ledger</p>
-                            <h4 className="text-xl font-black text-accent-brown tracking-tighter uppercase">Recent Activity</h4>
+                            <p className="text-xs font-bold text-brand uppercase tracking-wider mb-1">
+                                {RIDER_TEXT.earnings.activitySub}
+                            </p>
+                            <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-accent-brown tracking-tight uppercase leading-tight">
+                                {RIDER_TEXT.earnings.activityTitle}
+                            </h2>
                         </div>
-                        <div className="w-full md:w-80">
+                        <div className="w-full md:w-auto md:min-w-[260px]">
                             <CustomDatePicker 
                                 value={filterDate} 
                                 onChange={(val) => { setFilterDate(val); setCurrentPage(1); }} 
-                                label="Filter Operational Date" 
+                                label={RIDER_TEXT.earnings.filterDateLabel} 
+                                buttonClassName="w-full min-h-[44px] h-11 sm:h-12 px-4 rounded-xl bg-white border border-accent-brown/20 text-sm font-bold text-accent-brown shadow-sm flex items-center justify-between"
                             />
                             {filterDate && (
                                 <button 
+                                    type="button"
                                     onClick={() => setFilterDate('')}
-                                    className="text-[9px] font-black text-brand mt-2 uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all ml-2"
+                                    className="text-xs font-bold text-brand mt-1.5 uppercase tracking-wider flex items-center gap-1.5 hover:gap-2 transition-all ml-1 outline-none"
                                 >
-                                    <History size={10} /> Reset Calendar Filter
+                                    <History size={12} aria-hidden="true" /> {RIDER_TEXT.earnings.resetFilterBtn}
                                 </button>
                             )}
                         </div>
                     </div>
 
-                    <div className="relative min-h-[400px]">
+                    <div className="relative min-h-[360px]" id="earnings-activity-list" aria-live="polite">
                         {loading ? (
-                            <div className="py-24 flex flex-col items-center justify-center gap-4">
+                            <div className="py-20 flex flex-col items-center justify-center gap-3">
                                 <Loader2 className="animate-spin text-brand-dark" size={32} />
-                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown/20">Syncing Treasury...</p>
+                                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{RIDER_TEXT.earnings.loading}</p>
                             </div>
                         ) : filteredHistory.length === 0 ? (
-                            <div className="bg-white rounded-[2.5rem] py-24 border border-accent-brown/5 flex flex-col items-center justify-center text-center px-12 shadow-sm">
-                                <div className="w-20 h-20 bg-accent-peach/10 rounded-full flex items-center justify-center mb-6">
-                                    <AlertCircle className="w-10 h-10 text-accent-brown/10" />
+                            <div className="bg-white rounded-2xl py-14 border border-accent-brown/10 flex flex-col items-center justify-center text-center px-6 shadow-sm">
+                                <div className="w-16 h-16 bg-accent-peach/20 rounded-full flex items-center justify-center mb-4">
+                                    <AlertCircle className="w-8 h-8 text-accent-brown/40" />
                                 </div>
-                                <h4 className="text-2xl font-black text-accent-brown mb-2 tracking-tighter uppercase leading-none">No Records Found</h4>
-                                <p className="text-[11px] font-bold text-accent-brown/30 max-w-sm leading-relaxed uppercase tracking-widest italic">
-                                    "No transaction payload detected for the specified temporal coordinates."
+                                <h3 className="text-lg sm:text-xl font-black text-accent-brown mb-1 tracking-tight uppercase">{RIDER_TEXT.earnings.emptyTitle}</h3>
+                                <p className="text-sm text-slate-600 font-medium max-w-sm leading-relaxed">
+                                    {RIDER_TEXT.earnings.emptyDesc}
                                 </p>
                             </div>
                         ) : (
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {filteredHistory.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((item) => (
-                                        <motion.div
-                                            key={item.id}
-                                            initial={{ opacity: 0, y: 15 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            className="bg-white rounded-2xl border border-accent-brown/5 shadow-sm overflow-hidden hover:border-accent-brown/20 transition-all flex flex-col"
-                                        >
-                                            <div className="px-6 py-5 flex items-center justify-between">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center text-green-600 shrink-0">
-                                                        <ArrowUpRight size={20} />
+                            <div className="space-y-6">
+                                <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 items-stretch list-none p-0 m-0" role="list">
+                                    <AnimatePresence mode="popLayout">
+                                        {filteredHistory.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((item) => (
+                                            <li key={item.id} className="h-full flex" role="listitem">
+                                                <motion.article
+                                                    layout
+                                                    initial={{ opacity: 0, y: 15 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, scale: 0.95 }}
+                                                    className="w-full bg-white rounded-2xl border border-accent-brown/10 shadow-sm hover:shadow-md hover:border-brand-dark/30 transition-all flex flex-col justify-between overflow-hidden p-4 sm:p-5"
+                                                >
+                                                    <div className="flex items-center justify-between gap-2.5 pb-3 border-b border-accent-brown/10">
+                                                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                                                            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-green-50 rounded-xl flex items-center justify-center text-green-600 shrink-0" aria-hidden="true">
+                                                                <ArrowUpRight size={18} className="sm:w-5 sm:h-5" />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wide text-slate-500 leading-tight">Transaction ID</p>
+                                                                <h4 className="font-black text-xs min-[360px]:text-sm text-accent-brown tracking-tight uppercase truncate">
+                                                                    {formatTransactionId(item.id)}
+                                                                </h4>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right shrink-0">
+                                                            <p className="text-sm min-[360px]:text-base sm:text-lg font-black text-green-600 tracking-tight whitespace-nowrap">
+                                                                +₱{(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            </p>
+                                                            <time className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-normal block" dateTime={item.date}>
+                                                                {item.date}
+                                                            </time>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-[9px] font-black uppercase tracking-[0.2em] text-accent-brown/30">Transaction ID</p>
-                                                        <p className="font-black text-sm text-accent-brown tracking-tighter uppercase">HV-TR-{item.id.toString().slice(-6)}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="text-lg font-black text-green-600 tracking-tighter">+₱{(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-                                                    <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-[0.1em]">{item.date}</p>
-                                                </div>
-                                            </div>
 
-                                            <div className="px-6 pb-5">
-                                                <div className="bg-[#FAF9F6] rounded-xl p-4 border border-accent-brown/5 flex items-center justify-between">
-                                                   <div className="flex items-center gap-3">
-                                                       <Package size={14} className="text-accent-brown/20" />
-                                                       <p className="text-[10px] font-black uppercase tracking-tight text-accent-brown">Delivery Compensation</p>
-                                                   </div>
-                                                   <button 
-                                                        onClick={() => setSelectedTransaction(item)}
-                                                        className="flex items-center gap-2 text-[9px] font-black text-brand-dark uppercase tracking-widest cursor-pointer group outline-none"
-                                                    >
-                                                       Details <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
-                                                   </button>
-                                                </div>
-                                            </div>
-                                        </motion.div>
-                                    ))}
-                                </div>
+                                                    <div className="pt-3 flex items-center justify-between gap-2">
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <Package size={15} className="text-accent-brown/40 shrink-0" aria-hidden="true" />
+                                                            <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wide text-accent-brown leading-snug truncate">
+                                                                {RIDER_TEXT.earnings.cardTitle}
+                                                            </p>
+                                                        </div>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => setSelectedTransaction(item)}
+                                                            className="min-h-[36px] sm:min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-xl flex items-center justify-end gap-1 text-xs sm:text-sm font-black text-brand-dark hover:bg-brand-dark/10 transition-all outline-none focus:ring-2 focus:ring-brand-dark/30 shrink-0"
+                                                            aria-label={`View details for transaction ${formatTransactionId(item.id)}`}
+                                                        >
+                                                            <span>{RIDER_TEXT.earnings.detailsBtn}</span>
+                                                            <ChevronRight size={15} aria-hidden="true" />
+                                                        </button>
+                                                    </div>
+                                                </motion.article>
+                                            </li>
+                                        ))}
+                                    </AnimatePresence>
+                                </ul>
 
                                 {/* Modern Pagination */}
-                                <Pagination currentPage={currentPage} totalPages={Math.ceil(filteredHistory.length / ITEMS_PER_PAGE)} onPageChange={setCurrentPage} scrollToTop={true} />
+                                <Pagination 
+                                    currentPage={currentPage} 
+                                    totalPages={Math.ceil(filteredHistory.length / ITEMS_PER_PAGE)} 
+                                    onPageChange={setCurrentPage} 
+                                    scrollToTop={true} 
+                                />
                             </div>
                         )}
                     </div>

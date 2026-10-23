@@ -19,7 +19,9 @@ from fastapi.responses import JSONResponse, HTMLResponse
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional, List, Tuple
+import re
+import time
 import urllib.parse
 from urllib.parse import urlencode
 
@@ -30,10 +32,14 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 from dotenv import load_dotenv
+from sms_service import send_sms, mask_phone
+from sms_templates import format_customer_forgot_password_sms, format_customer_registration_sms
+from email_templates import send_forgot_password_email
 from jose import JWTError, jwt
 from passlib.hash import pbkdf2_sha256
 
 from sqlalchemy import create_engine, Column, String, Text, DateTime, text, Integer, Boolean, Float, ForeignKey, func, inspect, or_, and_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from dateutil.relativedelta import relativedelta
 
@@ -1915,14 +1921,170 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
     else:
         return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={token}")
 
+# --- Unified Contact Uniqueness & Normalization (Hi-Vet Security Core) ---
+CONTACT_UNIQUENESS_SCOPE = "global"  # "global" across Customer, Rider, Clinic, Admin
+
+def normalize_ph_mobile(phone: Optional[str]) -> Optional[str]:
+    """
+    Normalizes a Philippine mobile number into standard +639XXXXXXXXX format.
+    Accepts: 09XXXXXXXXX, 9XXXXXXXXX, 639XXXXXXXXX, +639XXXXXXXXX (with spaces, dashes, dots).
+    Returns None if not a valid 10-digit PH mobile number starting with 9.
+    """
+    if not phone:
+        return None
+    digits = re.sub(r'\D', '', str(phone).strip())
+    if not digits:
+        return None
+    if digits.startswith('639') and len(digits) == 12:
+        return '+63' + digits[2:]
+    elif digits.startswith('09') and len(digits) == 11:
+        return '+63' + digits[1:]
+    elif digits.startswith('9') and len(digits) == 10:
+        return '+63' + digits
+    elif digits.startswith('63') and len(digits) == 12 and digits[2] == '9':
+        return '+' + digits
+    return None
+
+def normalize_email_address(email: Optional[str]) -> Optional[str]:
+    """
+    Normalizes an email address for comparison:
+    - Trims spaces and lowercases.
+    - Gmail / Googlemail: strips dots and strips '+...' extensions.
+    - Validates email regex.
+    """
+    if not email:
+        return None
+    email_str = str(email).strip().lower()
+    if not re.match(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$', email_str):
+        return None
+    local, domain = email_str.split('@', 1)
+    if domain in ['gmail.com', 'googlemail.com']:
+        domain = 'gmail.com'
+        local = local.split('+', 1)[0]
+        local = local.replace('.', '')
+    return f"{local}@{domain}"
+
+def is_contact_taken(
+    db: Session,
+    contact_type: str,
+    raw_value: Optional[str],
+    ignore_account_id: Optional[int] = None,
+    ignore_role: Optional[str] = None
+) -> Tuple[bool, Optional[str]]:
+    """
+    Checks if a mobile phone or email is already taken across all user tables.
+    Returns (is_taken: bool, error_message: Optional[str]).
+    Enforces global single-account ownership with transactional advisory locks to prevent race conditions.
+    """
+    if not raw_value or not str(raw_value).strip():
+        return False, None
+
+    if contact_type == "phone":
+        norm_phone = normalize_ph_mobile(raw_value)
+        if not norm_phone:
+            return True, "Please enter a valid mobile number."
+
+        # Advisory transaction lock for race-condition prevention across concurrent sign-ups
+        try:
+            db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"phone:{norm_phone}"})
+        except Exception:
+            pass
+
+        # 1. Customer phone check
+        cust_q = db.query(Customer.id, Customer.phone).filter(Customer.phone.isnot(None))
+        for cid, cphone in cust_q.all():
+            if ignore_role in ["customer", "user"] and ignore_account_id is not None and cid == int(ignore_account_id):
+                continue
+            if normalize_ph_mobile(cphone) == norm_phone:
+                return True, "This mobile number is already used by another account."
+
+        # 2. Rider phone check
+        rider_q = db.query(RiderProfile.id, RiderProfile.phone).filter(RiderProfile.phone.isnot(None))
+        for rid, rphone in rider_q.all():
+            if ignore_role == "rider" and ignore_account_id is not None and rid == int(ignore_account_id):
+                continue
+            if normalize_ph_mobile(rphone) == norm_phone:
+                return True, "This mobile number is already used by another account."
+
+        # 3. Business owner personal mobile check
+        biz_q = db.query(BusinessProfile.id, BusinessProfile.owner_phone).filter(BusinessProfile.owner_phone.isnot(None))
+        for bid, bphone in biz_q.all():
+            if ignore_role == "business" and ignore_account_id is not None and bid == int(ignore_account_id):
+                continue
+            if normalize_ph_mobile(bphone) == norm_phone:
+                return True, "This mobile number is already used by another account."
+
+        return False, None
+
+    elif contact_type == "email":
+        norm_email = normalize_email_address(raw_value)
+        if not norm_email:
+            return True, "Please enter a valid email."
+
+        # Advisory transaction lock for race-condition prevention across concurrent sign-ups
+        try:
+            db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"email:{norm_email}"})
+        except Exception:
+            pass
+
+        # 1. Customer email check
+        cust_q = db.query(Customer.id, Customer.email).filter(Customer.email.isnot(None))
+        for cid, cemail in cust_q.all():
+            if ignore_role in ["customer", "user"] and ignore_account_id is not None and cid == int(ignore_account_id):
+                continue
+            if normalize_email_address(cemail) == norm_email:
+                return True, "This email is already used by another account."
+
+        # 2. Rider email check
+        rider_q = db.query(RiderProfile.id, RiderProfile.email).filter(RiderProfile.email.isnot(None))
+        for rid, remail in rider_q.all():
+            if ignore_role == "rider" and ignore_account_id is not None and rid == int(ignore_account_id):
+                continue
+            if normalize_email_address(remail) == norm_email:
+                return True, "This email is already used by another account."
+
+        # 3. Business email check
+        biz_q = db.query(BusinessProfile.id, BusinessProfile.email).filter(BusinessProfile.email.isnot(None))
+        for bid, bemail in biz_q.all():
+            if ignore_role == "business" and ignore_account_id is not None and bid == int(ignore_account_id):
+                continue
+            if normalize_email_address(bemail) == norm_email:
+                return True, "This email is already used by another account."
+
+        # 4. Super Admin check
+        super_q = db.query(SuperAdminUser.id, SuperAdminUser.email).filter(SuperAdminUser.email.isnot(None))
+        for aid, aemail in super_q.all():
+            if ignore_role == "super_admin" and ignore_account_id is not None and aid == int(ignore_account_id):
+                continue
+            if normalize_email_address(aemail) == norm_email:
+                return True, "This email is already used by another account."
+
+        # 5. System Admin check
+        sys_q = db.query(SystemAdminUser.id, SystemAdminUser.email).filter(SystemAdminUser.email.isnot(None))
+        for sid, semail in sys_q.all():
+            if ignore_role == "system_admin" and ignore_account_id is not None and sid == int(ignore_account_id):
+                continue
+            if normalize_email_address(semail) == norm_email:
+                return True, "This email is already used by another account."
+
+        return False, None
+
+    return True, "Invalid contact type."
+
+# IP-based sliding rate limiter for quick contact availability checks (max 30 requests per hour per IP)
+AVAILABILITY_CHECK_LOG: dict[str, list[float]] = {}
+
 # Manual Signup & OTP
 OTP_STORE: dict = {}  # Format: { "email": { "otp": "123456", "expires": datetime } }
 
 class SendOtpRequest(BaseModel):
     email: str
+    phone: Optional[str] = None
     name: Optional[str] = None
+    first_name: Optional[str] = None
     gender: Optional[str] = None
     last_name: Optional[str] = None
+    role: Optional[str] = None
 
 class EmailChangeRequest(BaseModel):
     new_email: str
@@ -2454,18 +2616,82 @@ def send_return_request_emails(customer_email: str, customer_name: str, clinic_e
 
 
 
+@app.get("/api/auth/check-contact-availability")
+def check_contact_availability(
+    type: str,
+    value: str,
+    ignore_account_id: Optional[int] = None,
+    ignore_role: Optional[str] = None,
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Quick check for field availability while typing or on blur.
+    Rate limited to 30 checks per hour per client IP to prevent user enumeration.
+    """
+    client_ip = "unknown"
+    if request:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            client_ip = forwarded.split(",")[0].strip()
+        elif request.client:
+            client_ip = request.client.host
+
+    now = time.time()
+    one_hour_ago = now - 3600
+
+    history = AVAILABILITY_CHECK_LOG.setdefault(client_ip, [])
+    history = [t for t in history if t > one_hour_ago]
+    AVAILABILITY_CHECK_LOG[client_ip] = history
+
+    if len(history) >= 30:
+        raise HTTPException(status_code=429, detail="Too many verification checks. Please try again later.")
+
+    history.append(now)
+
+    taken, err = is_contact_taken(
+        db=db,
+        contact_type=type,
+        raw_value=value,
+        ignore_account_id=ignore_account_id,
+        ignore_role=ignore_role
+    )
+
+    return {"available": not taken, "error": err}
+
 @app.post("/api/auth/send-otp")
 def send_otp(body: SendOtpRequest, db: Session = Depends(get_db)):
-    """Generates and sends a 6-digit OTP to the user's email."""
-    existing_customer = db.query(Customer).filter(Customer.email == body.email).first()
-    existing_rider        = db.query(RiderProfile).filter(RiderProfile.email == body.email).first()
-    existing_business = db.query(BusinessProfile).filter(BusinessProfile.email == body.email).first()
-    if existing_customer or existing_rider or existing_business:
-        raise HTTPException(status_code=400, detail="Email already registered")
+    """Generates and sends a 6-digit OTP (via SMS for Customer accounts, or Email)."""
+    # Enforce global email uniqueness
+    taken, err = is_contact_taken(db, "email", body.email)
+    if taken:
+        raise HTTPException(status_code=400, detail=err)
+
+    # If phone is provided at OTP request stage, enforce phone uniqueness
+    if body.phone:
+        p_taken, p_err = is_contact_taken(db, "phone", body.phone)
+        if p_taken:
+            raise HTTPException(status_code=400, detail=p_err)
         
     otp_code = f"{random.randint(0, 999999):06d}"
     expires = datetime.utcnow() + timedelta(minutes=10)
     OTP_STORE[body.email] = {"otp": otp_code, "expires": expires}
+
+    # Customer accounts only: send verification code via SMS with Hello greeting
+    is_customer_signup = (body.role or "").lower() == "customer"
+    clean_phone = (body.phone or "").strip()
+    if is_customer_signup and clean_phone:
+        first_name = body.first_name or (body.name.split()[0] if body.name else "")
+        last_name = body.last_name or ""
+        sms_message = format_customer_registration_sms(first_name, last_name, otp_code)
+        sms_result = send_sms(clean_phone, sms_message, purpose="customer_registration")
+        if sms_result.get("success"):
+            return {
+                "message": "Verification code sent",
+                "channel": "sms",
+                "masked_phone": mask_phone(clean_phone)
+            }
+        print(f"[REGISTRATION OTP] SMS send failed for customer {mask_phone(clean_phone)}, falling back to email")
     
     send_professional_otp_email(
         email=body.email,
@@ -2478,7 +2704,7 @@ def send_otp(body: SendOtpRequest, db: Session = Depends(get_db)):
         last_name=body.last_name or ""
     )
     
-    return {"message": "Verification code sent"}
+    return {"message": "Verification code sent", "channel": "email"}
 
 @app.post("/api/auth/request-email-change")
 async def request_email_change(body: EmailChangeRequest, request: Request, db: Session = Depends(get_db)):
@@ -2499,40 +2725,10 @@ async def request_email_change(body: EmailChangeRequest, request: Request, db: S
     # to avoid complex exclusion logic across different tables if unnecessary, 
     # but the primary goal is to check for OTHER accounts.
     
-    # Check across all tables
-    queries = [
-        (Customer, Customer.id),
-        (BusinessProfile, BusinessProfile.id),
-        (RiderProfile, RiderProfile.id),
-        (SuperAdminUser, SuperAdminUser.id),
-        (SystemAdminUser, SystemAdminUser.id)
-    ]
-    
-    for model, id_attr in queries:
-        existing = db.query(model).filter(model.email == body.new_email).first()
-        if existing:
-            # If it's the SAME person (same role and same ID), it's not a duplicate "by another account"
-            # Note: We use string comparison for role matching if needed, 
-            # but usually the ID check is enough if we know the table.
-            
-            # For simplicity, if the table matches the user's role and the ID matches, skip error
-            is_same_user = False
-            if role == "business" and model == BusinessProfile and int(existing.id) == user_id: 
-                is_same_user = True
-            elif role == "rider":
-                if model == RiderProfile and (int(getattr(existing, 'id', 0)) == user_id or int(getattr(existing, 'customer_id', 0)) == user_id):
-                    is_same_user = True
-                elif model == Customer and int(existing.id) == user_id:
-                    is_same_user = True
-            elif role == "customer" and model == Customer and int(existing.id) == user_id: 
-                is_same_user = True
-            elif role == "superadmin" and model == SuperAdminUser and int(existing.id) == user_id: 
-                is_same_user = True
-            elif role == "admin" and model == SystemAdminUser and int(existing.id) == user_id: 
-                is_same_user = True
-            
-            if not is_same_user:
-                raise HTTPException(status_code=400, detail="Email is already registered by another account")
+    # Check if new email is taken by any other account
+    taken, err = is_contact_taken(db, "email", body.new_email, ignore_account_id=user_id, ignore_role=role)
+    if taken:
+        raise HTTPException(status_code=400, detail=err)
 
     otp_code = f"{random.randint(0, 999999):06d}"
     expires = datetime.utcnow() + timedelta(minutes=10)
@@ -2730,11 +2926,16 @@ class RegisterRequest(BaseModel):
 @app.post("/api/auth/register", status_code=201)
 async def register_customer(body: RegisterRequest, db: Session = Depends(get_db)):
     """Register a new customer, business, or rider with a password, verifying the OTP."""
-    if db.query(Customer).filter(Customer.email == body.email).first() or \
-       db.query(BusinessProfile).filter(BusinessProfile.email == body.email).first() or \
-       db.query(SuperAdminUser).filter(SuperAdminUser.email == body.email).first() or \
-       db.query(SystemAdminUser).filter(SystemAdminUser.email == body.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
+    # Enforce global email uniqueness
+    taken, err = is_contact_taken(db, "email", body.email)
+    if taken:
+        raise HTTPException(status_code=400, detail=err)
+
+    # Enforce global mobile phone uniqueness
+    if body.phone:
+        p_taken, p_err = is_contact_taken(db, "phone", body.phone)
+        if p_taken:
+            raise HTTPException(status_code=400, detail=p_err)
         
     # Verify OTP
     record = OTP_STORE.get(body.email)
@@ -6293,16 +6494,50 @@ def forgot_password_send_otp(body: SendOtpRequest, db: Session = Depends(get_db)
     otp_code = f"{random.randint(0, 999999):06d}"
     expires = datetime.utcnow() + timedelta(minutes=10)
     OTP_STORE[body.email] = {"otp": otp_code, "expires": expires}
-    
-    send_professional_otp_email(
-        email=body.email,
-        otp_code=otp_code,
-        title="Reset password",
-        description="We received a humble request to access your Hi-Vet account. Please use the verification code below to securely update your password.",
-        subject=f"{otp_code} is your Hi-Vet password reset code"
+
+    # Customer accounts only: send the code by SMS with a "Hello First Last" greeting.
+    is_customer_account = isinstance(user, Customer) and (getattr(user, "role", "") or "").lower() != "rider"
+    customer_phone = (getattr(user, "phone", "") or "").strip() if is_customer_account else ""
+    if is_customer_account and customer_phone:
+        sms_message = format_customer_forgot_password_sms(
+            getattr(user, "first_name", "") or "",
+            getattr(user, "last_name", "") or "",
+            otp_code,
+        )
+        sms_result = send_sms(customer_phone, sms_message, purpose="forgot_password")
+        if sms_result.get("success"):
+            return {
+                "message": "Verification code sent",
+                "channel": "sms",
+                "masked_phone": mask_phone(customer_phone),
+            }
+        # SMS failed: fall back to email so the customer is not locked out
+        print(f"[FORGOT PASSWORD] SMS failed for customer {user.id}, falling back to email")
+
+    # Determine the recipient's first name for personalizing the greeting
+    first_name = (
+        getattr(user, "first_name", "")
+        or getattr(user, "owner_first_name", "")
+        or ""
     )
-        
-    return {"message": "Verification code sent"}
+    if not first_name and getattr(user, "name", ""):
+        first_name = user.name.strip().split()[0]
+    elif not first_name and getattr(user, "owner_full_name", ""):
+        first_name = user.owner_full_name.strip().split()[0]
+
+    try:
+        send_forgot_password_email(
+            email=body.email,
+            otp_code=otp_code,
+            first_name=first_name,
+            sender_email=EMAIL_SENDER,
+            sender_app_pwd=EMAIL_APP_PWD,
+        )
+    except Exception as e:
+        print("[FORGOT PASSWORD] Email send error:", e)
+        raise HTTPException(status_code=500, detail="Could not send verification email. Please try again.")
+
+    return {"message": "Verification code sent", "channel": "email"}
 
 class ResetPasswordRequest(BaseModel):
     email: str
@@ -6525,7 +6760,13 @@ async def update_profile(body: ProfileUpdate, request: Request, db: Session = De
         if body.clinic_region is not None: user.clinic_region = body.clinic_region
         if body.clinic_lat is not None: user.clinic_lat = body.clinic_lat
         if body.clinic_lng is not None: user.clinic_lng = body.clinic_lng
-        if body.phone is not None: user.owner_phone = body.phone
+        if body.phone is not None:
+            clean_phone = body.phone.strip() if body.phone else ""
+            if clean_phone:
+                p_taken, p_err = is_contact_taken(db, "phone", clean_phone, ignore_account_id=user.id, ignore_role="business")
+                if p_taken:
+                    raise HTTPException(status_code=400, detail=p_err)
+            user.owner_phone = clean_phone or None
         if body.loyalty_points_per_peso is not None: user.loyalty_points_per_peso = body.loyalty_points_per_peso
         if body.loyalty_points_per_reservation is not None: user.loyalty_points_per_reservation = body.loyalty_points_per_reservation
         if body.owner_birthday is not None: user.owner_birthday = body.owner_birthday
@@ -6540,7 +6781,13 @@ async def update_profile(body: ProfileUpdate, request: Request, db: Session = De
         if body.first_name is not None: user.first_name = body.first_name
         if body.last_name is not None: user.last_name = body.last_name
         if body.suffix is not None: user.suffix = body.suffix
-        if body.phone is not None: user.phone = body.phone
+        if body.phone is not None:
+            clean_phone = body.phone.strip() if body.phone else ""
+            if clean_phone:
+                p_taken, p_err = is_contact_taken(db, "phone", clean_phone, ignore_account_id=user.id, ignore_role="rider")
+                if p_taken:
+                    raise HTTPException(status_code=400, detail=p_err)
+            user.phone = clean_phone or None
         if body.vehicle_type is not None: user.vehicle_type = body.vehicle_type
         if body.birthday is not None: user.birthday = body.birthday
         if body.gender is not None: user.gender = body.gender
@@ -6559,7 +6806,13 @@ async def update_profile(body: ProfileUpdate, request: Request, db: Session = De
         if body.middle_name is not None: user.middle_name = body.middle_name
         if body.last_name   is not None: user.last_name   = body.last_name
         if body.suffix      is not None: user.suffix      = body.suffix
-        if body.phone       is not None: user.phone       = body.phone
+        if body.phone is not None:
+            clean_phone = body.phone.strip() if body.phone else ""
+            if clean_phone:
+                p_taken, p_err = is_contact_taken(db, "phone", clean_phone, ignore_account_id=user.id, ignore_role="customer")
+                if p_taken:
+                    raise HTTPException(status_code=400, detail=p_err)
+            user.phone = clean_phone or None
         if body.gender      is not None: user.gender      = body.gender
         if body.birthday    is not None: user.birthday    = body.birthday
         
@@ -6574,8 +6827,15 @@ async def update_profile(body: ProfileUpdate, request: Request, db: Session = De
         if user.suffix: parts.append(user.suffix.strip())
         if parts: user.name = " ".join(parts).strip()
         
-    db.commit()
-    db.refresh(user)
+    try:
+        db.commit()
+        db.refresh(user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="This contact number or information is already in use by another account.")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save profile changes.")
     
     # Generate new token with updated info
     token_data = {

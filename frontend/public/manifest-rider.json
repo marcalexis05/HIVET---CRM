@@ -1,0 +1,25 @@
+{
+  "short_name": "Hi-Vet",
+  "name": "Hi-Vet",
+  "description": "Live delivery dispatch, package tracking, and earnings for Hi-Vet riders.",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/login/rider?pwa=rider",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#FAF9F6",
+  "background_color": "#FAF9F6"
+}

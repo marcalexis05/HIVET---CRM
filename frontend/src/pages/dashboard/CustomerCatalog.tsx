@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/DashboardLayout';
+import ProductCard from '../../components/ProductCard';
 import { useCart } from '../../context/CartContext';
 import { toTitleCase, toSentenceCase, formatName, formatUnit } from '../../utils/textFormatters';
 
@@ -408,160 +409,14 @@ const CustomerCatalog = () => {
                             </button>
                         </motion.div>
                     ) : (
-                        <div className="grid grid-cols-1 min-[340px]:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 xs:gap-4 sm:gap-6 lg:gap-8 pb-32 sm:pb-36">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 xs:gap-4 sm:gap-6 lg:gap-8 pb-32 sm:pb-36">
                             <AnimatePresence mode="popLayout">
                                 {filteredProducts.map((p, i) => (
-                                    <motion.div
+                                    <ProductCard 
                                         key={p.id}
-                                        layout
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: i * 0.04 }}
-                                        whileHover={{ y: -6 }}
-                                        className="group bg-white rounded-2xl xs:rounded-3xl sm:rounded-[2.5rem] p-3.5 xs:p-4 sm:p-6 lg:p-7 border border-accent-brown/10 hover:border-brand/40 transition-all duration-300 flex flex-col relative overflow-hidden h-full shadow-sm hover:shadow-lg"
-                                    >
-                                        {/* Product Image */}
-                                        <div 
-                                            onClick={() => navigate(`/dashboard/customer/catalog/${p.id}`)}
-                                            className="relative aspect-square rounded-xl xs:rounded-2xl sm:rounded-[2rem] bg-accent-brown/5 mb-3 xs:mb-4 sm:mb-6 flex items-center justify-center p-3 xs:p-4 sm:p-6 cursor-pointer group-hover:bg-white transition-all duration-300 overflow-hidden"
-                                        >
-                                            <div className="absolute inset-0 bg-accent-brown/5 group-hover:bg-brand/5 transition-colors" />
-                                            <img
-                                                src={p.image}
-                                                alt={p.name}
-                                                className="relative z-10 w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
-                                            />
-                                            
-                                            {/* Top-Left: Product Tag Reveal */}
-                                            {p.tag && (
-                                                <div className="absolute top-1.5 left-1.5 sm:top-2 sm:left-2 z-20">
-                                                    <div className="bg-accent-brown/90 backdrop-blur-md px-1.5 py-0.5 sm:px-2 sm:py-0.5 rounded-full shadow-sm border border-white/10 flex items-center justify-center">
-                                                        <span className="text-[6.5px] sm:text-[7.5px] font-black text-white leading-none">{toTitleCase(p.tag)}</span>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Bottom-Right: Loyalty Points */}
-                                            {p.loyalty_points > 0 && (
-                                                <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 z-20 group-hover:opacity-0 transition-opacity duration-200">
-                                                    <div className="bg-brand/90 backdrop-blur-md px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-xl shadow-sm border border-white/10 flex items-center gap-1">
-                                                        <Award className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-white" />
-                                                        <span className="text-[8px] sm:text-[9px] font-black text-white">+{p.loyalty_points} pts</span>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Clinic Name Hover Reveal */}
-                                            <div className="absolute inset-x-0 bottom-0 p-2 sm:p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-30">
-                                                <div className="bg-white/95 backdrop-blur-md rounded-xl p-2 shadow-lg border border-brand/10 flex items-center gap-2">
-                                                    <div className="w-6 h-6 rounded-lg bg-brand/10 flex items-center justify-center shrink-0">
-                                                        <Store className="w-3 h-3 text-brand" />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <p className="text-[7.5px] font-bold text-brand leading-none mb-0.5">Clinic</p>
-                                                        <p className="text-[9px] sm:text-[10px] font-bold text-accent-brown truncate">{formatName(p.clinic_name || 'Hi-Vet Official')}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Product Details */}
-                                        <div className="mb-3 sm:mb-4 px-1">
-                                            <div className="flex items-center gap-1.5 mb-1.5">
-                                                <span className="text-[9px] sm:text-[10px] font-bold text-brand">{toTitleCase(p.category)}</span>
-                                                <div className="w-1 h-1 rounded-full bg-accent-brown/20" />
-                                                <span className="text-[9px] sm:text-[10px] font-medium text-black/70">{toTitleCase(p.type)}</span>
-                                            </div>
-                                            <h4 
-                                                onClick={() => navigate(`/dashboard/customer/catalog/${p.id}`)}
-                                                className="text-xs xs:text-sm sm:text-base font-black text-accent-brown tracking-tight leading-snug group-hover:text-brand transition-colors line-clamp-2 min-h-[2.5rem] cursor-pointer"
-                                            >
-                                                {formatName(p.name)}
-                                            </h4>
-                                        </div>
-
-                                        {/* Price & Action Row */}
-                                        <div className="mt-auto pt-3 sm:pt-4 border-t border-accent-brown/5 flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2 px-1">
-                                            <div className="space-y-0.5 shrink-0">
-                                                <p className="text-[8px] sm:text-[9px] font-bold text-black/60">Retail price</p>
-                                                <div className="flex items-baseline gap-0.5 font-black text-accent-brown">
-                                                    <span className="text-xs">₱</span>
-                                                    <span className="text-base xs:text-lg sm:text-2xl tracking-tight tabular-nums">{p.price.toLocaleString()}</span>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex items-center gap-1.5 sm:gap-2 self-stretch xs:self-auto justify-end">
-                                                {/* Quantity Stepper */}
-                                                <div className="flex items-center bg-accent-brown/5 rounded-xl p-0.5 border border-accent-brown/5">
-                                                    <button 
-                                                        type="button"
-                                                        onMouseDown={(e) => { e.stopPropagation(); startCounter(p.id, false); }}
-                                                        onMouseUp={stopCounter}
-                                                        onMouseLeave={stopCounter}
-                                                        onTouchStart={(e) => { e.stopPropagation(); startCounter(p.id, false); }}
-                                                        onTouchEnd={stopCounter}
-                                                        className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-accent-brown/50 hover:text-brand transition-colors select-none"
-                                                        aria-label="Decrease quantity"
-                                                    >
-                                                        <Minus className="w-3 h-3" />
-                                                    </button>
-                                                    
-                                                    <input
-                                                        type="text"
-                                                        inputMode="numeric"
-                                                        value={itemQuantities[p.id] || 1}
-                                                        onChange={(e) => handleQuantityInput(p.id, e.target.value)}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        className="w-6 sm:w-8 text-center text-xs font-black text-accent-brown bg-transparent outline-none"
-                                                        aria-label="Product quantity"
-                                                    />
-
-                                                    <button 
-                                                        type="button"
-                                                        onMouseDown={(e) => { e.stopPropagation(); startCounter(p.id, true); }}
-                                                        onMouseUp={stopCounter}
-                                                        onMouseLeave={stopCounter}
-                                                        onTouchStart={(e) => { e.stopPropagation(); startCounter(p.id, true); }}
-                                                        onTouchEnd={stopCounter}
-                                                        className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-accent-brown/50 hover:text-brand transition-colors select-none"
-                                                        aria-label="Increase quantity"
-                                                    >
-                                                        <Plus className="w-3 h-3" />
-                                                    </button>
-                                                </div>
-
-                                                {/* Add to Cart Button */}
-                                                <button 
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if (p.stock > 0) {
-                                                            triggerFlyAnimation(e, p.image);
-                                                            addToCart({
-                                                                id: p.id,
-                                                                name: p.name,
-                                                                price: String(p.price),
-                                                                business_id: p.business_id,
-                                                                image: p.image,
-                                                                quantity: itemQuantities[p.id] || 1,
-                                                                variant: 'Standard',
-                                                                size: 'Medium',
-                                                                stock: p.stock || 0
-                                                            });
-                                                        }
-                                                    }}
-                                                    aria-label={`Add ${p.name} to cart`}
-                                                    className={`min-h-[44px] min-w-[44px] w-11 h-11 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-md active:scale-90 shrink-0 ${
-                                                        p.stock > 0 
-                                                        ? "bg-brand text-white hover:bg-black shadow-brand/20" 
-                                                        : "bg-accent-brown/5 text-accent-brown/20 cursor-not-allowed"
-                                                    }`}
-                                                >
-                                                    <ShoppingCart className="w-4 h-4 sm:w-5 h-5" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </motion.div>
+                                        product={p}
+                                        index={i}
+                                    />
                                 ))}
                             </AnimatePresence>
                         </div>

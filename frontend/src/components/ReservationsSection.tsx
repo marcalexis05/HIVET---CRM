@@ -1,12 +1,14 @@
 import { motion } from 'framer-motion';
-import { CheckCircle, ArrowRight, ShoppingBag, Truck, Target } from 'lucide-react';
+import { ArrowRight, ShoppingBag, Truck, Target } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { MAIN_LANDING_TEXT } from '../constants/mainLandingWording';
 
-const steps = [
-    { n: '01', title: 'Inventory Selection', desc: 'Secure high-grade supplies from our verified clinical inventory.', icon: ShoppingBag },
-    { n: '02', title: 'Sync & Verify', desc: 'Real-time availability locking with your preferred fulfillment center.', icon: Target },
-    { n: '03', title: 'Precision Delivery', desc: "Active transit tracking for surgical precision in timing.", icon: Truck },
-];
+const STEP_ICONS = [ShoppingBag, Target, Truck];
+
+const steps = MAIN_LANDING_TEXT.ordersSection.steps.map((step, idx) => ({
+    ...step,
+    icon: STEP_ICONS[idx],
+}));
 
 export function ReservationsSection() {
     return (
@@ -22,15 +24,15 @@ export function ReservationsSection() {
                     >
                         <div className="inline-flex items-center gap-3 text-brand-dark text-xs font-bold mb-6">
                             <div className="w-8 h-[2px] bg-brand-dark" />
-                            Logistics Standard
+                            {MAIN_LANDING_TEXT.ordersSection.tag}
                         </div>
                         <h2 className="text-5xl sm:text-6xl md:text-7xl font-black text-accent-brown tracking-tight leading-tight">
-                            Engineered for <br />
-                            <span className="text-brand-dark italic font-outfit">Active Response.</span>
+                            {MAIN_LANDING_TEXT.ordersSection.titlePrefix} <br />
+                            <span className="text-brand-dark italic font-outfit">{MAIN_LANDING_TEXT.ordersSection.titleHighlight}</span>
                         </h2>
                     </motion.div>
                     <p className="text-xl text-accent-brown/50 font-medium max-w-sm leading-relaxed">
-                        A high-performance procurement infrastructure designed to eliminate wait times and ensure supply chain integrity.
+                        {MAIN_LANDING_TEXT.ordersSection.subtitle}
                     </p>
                 </div>
 
@@ -50,16 +52,16 @@ export function ReservationsSection() {
                     <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
                         <div className="lg:col-span-4 space-y-8">
                             <div className="space-y-4">
-                                <span className="text-xs font-bold text-brand translate-y-2 block">Protocol</span>
+                                <span className="text-xs font-bold text-brand translate-y-2 block">{MAIN_LANDING_TEXT.ordersSection.howItWorksTag}</span>
                                 <h3 className="text-4xl xs:text-5xl font-black tracking-tight leading-tight">
-                                    The Trinity<br />of Trust.
+                                    {MAIN_LANDING_TEXT.ordersSection.howItWorksTitle}
                                 </h3>
                             </div>
                             <Link
-                                to="/login"
+                                to="/catalog"
                                 className="group inline-flex items-center gap-6 bg-brand-dark text-white px-10 py-5 rounded-full font-bold text-xs hover:bg-white hover:text-accent-brown transition-all shadow-xl shadow-brand/20"
                             >
-                                Start Procurement 
+                                {MAIN_LANDING_TEXT.ordersSection.shopNowBtn} 
                                 <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
                             </Link>
                         </div>
@@ -87,4 +89,3 @@ export function ReservationsSection() {
         </section>
     );
 }
-

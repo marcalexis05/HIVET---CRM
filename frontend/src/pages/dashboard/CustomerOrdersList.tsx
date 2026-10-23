@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import DashboardLayout from '../../components/DashboardLayout';
 import {
     ShoppingBag, Package, Truck, CheckCircle, XCircle,
@@ -10,7 +10,7 @@ import {
     ShieldAlert, Clock, CreditCard, Tag, Loader2,
     Activity, Trophy, Search, Filter, ArrowRight,
     Map as MapIcon, Navigation, Trash2, RotateCcw, Image as ImageIcon, Upload, Send,
-    Plus, Minus, LocateFixed
+    Plus, Minus, LocateFixed, Check
 } from 'lucide-react';
 import { APIProvider, useMap, AdvancedMarker, InfoWindow, Map } from '@vis.gl/react-google-maps';
 import ModernModal from '../../components/ModernModal';
@@ -420,9 +420,13 @@ const CustomerOrders = () => {
         }
     };
 
+    const shouldReduceMotion = useReducedMotion();
     const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
     const [cancelReason, setCancelReason] = useState('');
+    const [otherReasonText, setOtherReasonText] = useState('');
     const [isCancelling, setIsCancelling] = useState(false);
+    const cancelOpenerRef = useRef<HTMLElement | null>(null);
+    const returnOpenerRef = useRef<HTMLElement | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const ordersPerPage = 6;
@@ -430,6 +434,34 @@ const CustomerOrders = () => {
     const streetViewInstance = useRef<google.maps.StreetViewPanorama | null>(null);
     const [activeMarker, setActiveMarker] = useState<'branch' | 'delivery' | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+
+    const cancellationReasons = [
+        { value: "Change of mind", label: "Change of mind" },
+        { value: "Algorithm optimization error", label: "Wrong item suggested" },
+        { value: "Financial pivot", label: "Money problem" },
+        { value: "Logistic delay concerns", label: "Delivery is taking too long" },
+        { value: "Duplicate order", label: "Duplicate order" },
+        { value: "Others", label: "Others" }
+    ];
+
+    const handleReasonKeyDown = (e: React.KeyboardEvent, index: number) => {
+        let nextIndex = index;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            nextIndex = (index + 1) % cancellationReasons.length;
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+            e.preventDefault();
+            nextIndex = (index - 1 + cancellationReasons.length) % cancellationReasons.length;
+        } else if (e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault();
+            setCancelReason(cancellationReasons[index].value);
+            return;
+        } else {
+            return;
+        }
+        setCancelReason(cancellationReasons[nextIndex].value);
+        document.getElementById(`cancel-reason-${nextIndex}`)?.focus();
+    };
 
     const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'info' | 'success' | 'error' | 'confirm' | 'danger'; onConfirm?: () => void }>({
         isOpen: false,
@@ -477,6 +509,49 @@ const CustomerOrders = () => {
         }
     }, [isDetailsModalOpen]);
 
+    // Lock background scroll & handle Escape key when cancel order modal is open
+    useEffect(() => {
+        if (isCancelModalOpen) {
+            cancelOpenerRef.current = document.activeElement as HTMLElement | null;
+            const originalOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+
+            const handleKeyDown = (e: KeyboardEvent) => {
+                if (e.key === 'Escape' && !isCancelling) {
+                    setIsCancelModalOpen(false);
+                }
+            };
+            window.addEventListener('keydown', handleKeyDown);
+
+            return () => {
+                document.body.style.overflow = originalOverflow;
+                window.removeEventListener('keydown', handleKeyDown);
+                cancelOpenerRef.current?.focus();
+            };
+        }
+    }, [isCancelModalOpen, isCancelling]);
+
+    // Lock background scroll & handle Escape key when return modal is open
+    useEffect(() => {
+        if (showReturnModal) {
+            const originalOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+
+            const handleKeyDown = (e: KeyboardEvent) => {
+                if (e.key === 'Escape' && !submittingReturn) {
+                    setShowReturnModal(false);
+                }
+            };
+            window.addEventListener('keydown', handleKeyDown);
+
+            return () => {
+                document.body.style.overflow = originalOverflow;
+                window.removeEventListener('keydown', handleKeyDown);
+                returnOpenerRef.current?.focus();
+            };
+        }
+    }, [showReturnModal, submittingReturn]);
+
     const fetchOrders = async () => {
         setLoading(true);
         try {
@@ -502,18 +577,22 @@ const CustomerOrders = () => {
         setIsCancelling(true);
         try {
             const token = localStorage.getItem('hivet_token');
+            const finalReason = cancelReason === 'Others' && otherReasonText.trim()
+                ? `Others: ${otherReasonText.trim()}`
+                : cancelReason;
             const response = await fetch(`${API}/api/orders/${selectedOrder.id}/cancel`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ reason: cancelReason })
+                body: JSON.stringify({ reason: finalReason })
             });
 
             if (response.ok) {
                 setIsCancelModalOpen(false);
                 setCancelReason('');
+                setOtherReasonText('');
                 setSelectedOrder(null);
                 fetchOrders();
             }
@@ -577,6 +656,7 @@ const CustomerOrders = () => {
         switch (status) {
             case 'Completed': return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
             case 'Cancelled': return 'bg-rose-500/10 text-rose-600 border-rose-500/20';
+            case 'Rejected': return 'bg-rose-500/10 text-rose-600 border-rose-500/20';
             case 'Pending': return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
             case 'Payment Pending': return 'bg-sky-500/10 text-sky-600 border-sky-500/20';
             case 'Processing': return 'bg-brand/10 text-brand border-brand/20';
@@ -588,6 +668,7 @@ const CustomerOrders = () => {
         switch (status) {
             case 'Completed': return <CheckCircle className="w-4 h-4" />;
             case 'Cancelled': return <XCircle className="w-4 h-4" />;
+            case 'Rejected': return <ShieldAlert className="w-4 h-4" />;
             case 'Pending': return <Package className="w-4 h-4" />;
             case 'Payment Pending': return <CreditCard className="w-4 h-4" />;
             case 'Processing': return <Activity className="w-4 h-4" />;
@@ -597,7 +678,7 @@ const CustomerOrders = () => {
 
     return (
         <APIProvider apiKey={MAPS_API_KEY}>
-            <DashboardLayout title="" hideHeader={isDetailsModalOpen || isCancelModalOpen} hideFooter={isDetailsModalOpen || isCancelModalOpen}>
+            <DashboardLayout title="" hideHeader={isDetailsModalOpen || isCancelModalOpen || showReturnModal} hideFooter={isDetailsModalOpen || isCancelModalOpen || showReturnModal}>
                 <div className="max-w-[1920px] mx-auto px-3.5 sm:px-6 lg:px-8 space-y-6 sm:space-y-10 pb-36 sm:pb-32 pb-[calc(env(safe-area-inset-bottom,0px)+8rem)]">
 
 
@@ -754,7 +835,7 @@ const CustomerOrders = () => {
                                                     </div>
                                                 </div>
                                                 <div className="text-left sm:text-right">
-                                                    <p className="text-[11px] font-bold text-black/50">Deployment ID</p>
+                                                    <p className="text-[11px] font-bold text-black/50">Order Number</p>
                                                     <p className="text-xs sm:text-sm font-black text-accent-brown tracking-wider break-all mt-0.5">
                                                         HV-2026-{order.id.toString().padStart(6, '0')}
                                                     </p>
@@ -794,12 +875,12 @@ const CustomerOrders = () => {
                                                 </div>
                                             </div>
 
-                                            {/* LOGISTICS PROGRESS BAR */}
+                                            {/* ORDER STATUS PROGRESS BAR */}
                                             <div className="mb-4 relative z-10">
                                                 <div className="flex justify-between items-end mb-1.5 text-xs font-bold">
-                                                    <span className="text-black font-bold">Order Progress</span>
+                                                    <span className="text-black font-bold">Order Status</span>
                                                     <span className="text-brand font-black">
-                                                        {order.status === 'Completed' ? '100% Finalized' : order.status === 'Processing' ? '65% Routing' : '15% Initialization'}
+                                                        {order.status === 'Completed' ? 'Completed' : order.status === 'Processing' ? 'On the Way' : 'Order Placed'}
                                                     </span>
                                                 </div>
                                                 <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
@@ -874,6 +955,7 @@ const CustomerOrders = () => {
                                                             type="button"
                                                             onClick={(e) => { 
                                                                 e.stopPropagation(); 
+                                                                returnOpenerRef.current = e.currentTarget;
                                                                 setSelectedOrder(order);
                                                                 setShowReturnModal(true);
                                                             }}
@@ -884,10 +966,19 @@ const CustomerOrders = () => {
                                                         </motion.button>
                                                     )}
 
-                                                    {order.return_status && (
+                                                    {order.status === 'Rejected' && (
+                                                        <div className="min-h-[44px] flex-1 sm:flex-initial px-2.5 xs:px-3.5 py-2 bg-rose-500/10 border border-rose-500/20 text-rose-600 rounded-xl flex items-center justify-center gap-1.5 xs:gap-2 text-[11px] xs:text-xs font-bold whitespace-nowrap shrink-0 cursor-default">
+                                                            <ShieldAlert className="w-4 h-4 shrink-0" />
+                                                            <span className="whitespace-nowrap">Rejected</span>
+                                                        </div>
+                                                    )}
+
+                                                    {order.status !== 'Rejected' && order.return_status && (order.status !== 'Completed' || order.return_status !== 'Rejected') && (
                                                         <div className="min-h-[44px] flex-1 sm:flex-initial px-2.5 xs:px-3.5 py-2 bg-accent-peach/20 border border-accent-peach/30 text-accent-brown rounded-xl flex items-center justify-center gap-1.5 xs:gap-2 text-[11px] xs:text-xs font-bold whitespace-nowrap opacity-90 cursor-default shrink-0">
                                                             <ShieldAlert className="w-4 h-4 shrink-0" />
-                                                            <span className="whitespace-nowrap">{toTitleCase(order.return_status)}</span>
+                                                            <span className="whitespace-nowrap">
+                                                                {order.return_status.toLowerCase() === 'requested' ? 'Return Requested' : toTitleCase(order.return_status)}
+                                                            </span>
                                                         </div>
                                                     )}
 
@@ -1002,7 +1093,7 @@ const CustomerOrders = () => {
                                                             </div>
                                                             <div>
                                                                 <p className="text-[9px] font-bold text-black/60 leading-none mb-1">
-                                                                    Destination (Encrypted address)
+                                                                    Destination (Delivery Address)
                                                                 </p>
                                                                 <p className="text-xs font-bold text-accent-brown leading-relaxed break-words">
                                                                     {order.delivery_address || order.branch_address || 'Clinic Pickup Point'}
@@ -1016,7 +1107,7 @@ const CustomerOrders = () => {
                                                 <OrderRouteMap order={order} />
                                             </div>
 
-                                            {/* RIGHT CONTENT PANE: Order Summary, Tiles, Items & Settlement */}
+                                            {/* RIGHT CONTENT PANE: Order Summary, Tiles, Items & Payment */}
                                             <div className="w-full lg:flex-1 flex flex-col bg-white lg:overflow-hidden relative shrink-0 lg:shrink">
                                                 {/* Summary Header */}
                                                 <div className="flex items-center gap-3.5 p-4 sm:p-6 pb-2 shrink-0">
@@ -1025,7 +1116,7 @@ const CustomerOrders = () => {
                                                     </div>
                                                     <div className="min-w-0">
                                                         <p className="text-xs font-bold text-brand leading-none mb-1">
-                                                            Receipt Intelligence
+                                                            Order Summary
                                                         </p>
                                                         <h4 className="text-xl sm:text-2xl font-black text-accent-brown tracking-tight leading-tight">
                                                             Order Summary
@@ -1033,19 +1124,19 @@ const CustomerOrders = () => {
                                                     </div>
                                                 </div>
 
-                                                {/* 4 Tiles (Status, Payment, Deployment, Payload) */}
+                                                {/* 4 Tiles (Status, Payment, Order Date, Items) */}
                                                 <div className="px-4 sm:px-6 py-2 grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 shrink-0">
                                                     {[
                                                         { label: 'Status', value: toTitleCase(order.status), icon: getStatusIcon(order.status) },
                                                         { label: 'Payment', value: toTitleCase(order.payment_method || 'Standard'), icon: <CreditCard className="w-4 h-4" /> },
                                                         {
-                                                            label: 'Deployment',
+                                                            label: 'Order Date',
                                                             value: new Date(order.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
                                                             icon: <Clock className="w-4 h-4" />
                                                         },
                                                         {
-                                                            label: 'Payload',
-                                                            value: (order.items.reduce((acc, it) => acc + (it.quantity || 1), 0) || order.items.length) === 1 ? '1 Unit' : `${order.items.reduce((acc, it) => acc + (it.quantity || 1), 0) || order.items.length} Units`,
+                                                            label: 'Items',
+                                                            value: (order.items.reduce((acc, it) => acc + (it.quantity || 1), 0) || order.items.length) === 1 ? '1 Item' : `${order.items.reduce((acc, it) => acc + (it.quantity || 1), 0) || order.items.length} Items`,
                                                             icon: <Package className="w-4 h-4" />
                                                         }
                                                     ].map((stat, i) => (
@@ -1123,8 +1214,8 @@ const CustomerOrders = () => {
                                                                 </button>
                                                             )}
                                                             <div>
-                                                                <p className="text-[10px] font-bold text-slate-700">Secure transaction</p>
-                                                                <p className="text-[10px] font-medium text-slate-400">All calculations final</p>
+                                                                <p className="text-[10px] font-bold text-slate-700">Secure Payment</p>
+                                                                <p className="text-[10px] font-medium text-slate-400">Price verified</p>
                                                             </div>
                                                         </div>
 
@@ -1135,7 +1226,7 @@ const CustomerOrders = () => {
                                                                     <span className="font-bold text-slate-700">₱{(order.total_amount - (order.shipping_fee || 0) + (order.discount_amount || 0)).toLocaleString()}</span>
                                                                 </div>
                                                                 <div className="flex items-center justify-between sm:justify-end gap-6 text-[10px] font-bold text-brand w-full">
-                                                                    <span>Logistics Fee</span>
+                                                                    <span>Delivery Fee</span>
                                                                     <span>{(order.shipping_fee && order.shipping_fee > 0) ? `₱${order.shipping_fee.toLocaleString()}` : "FREE"}</span>
                                                                 </div>
                                                                 {order.discount_amount !== undefined && order.discount_amount > 0 && (
@@ -1147,7 +1238,7 @@ const CustomerOrders = () => {
                                                             </div>
 
                                                             <div className="flex items-baseline justify-between sm:justify-end gap-4 w-full pt-1">
-                                                                <span className="text-xs font-bold text-brand">Total settlement</span>
+                                                                <span className="text-xs font-bold text-brand">Total Price</span>
                                                                 <span className="text-2xl sm:text-3xl font-black text-accent-brown tracking-tight">
                                                                     ₱{order.total_amount.toLocaleString()}
                                                                 </span>
@@ -1166,85 +1257,211 @@ const CustomerOrders = () => {
                 )}
 
                 {/* Refund/Return Modal */}
-                {showReturnModal && createPortal(
-                    <div className="fixed inset-0 z-[5000] flex items-center justify-center p-6">
-                        <motion.div 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setShowReturnModal(false)}
-                            className="absolute inset-0 bg-black/40 backdrop-blur-md"
-                        />
-                        <motion.div 
-                            initial={{ scale: 0.9, opacity: 0, y: 30 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 30 }}
-                            className="bg-white rounded-[4rem] w-full max-w-2xl p-16 shadow-3xl overflow-hidden relative z-10 border border-white"
-                        >
-                            <div className="absolute top-0 right-0 w-64 h-64 bg-brand/5 rounded-full -mr-32 -mt-32" />
-                            
-                            <h2 className="text-4xl font-black text-accent-brown tracking-tighter mb-2 relative">Request a Return</h2>
-                            <p className="text-xs font-semibold text-accent-brown/50 mb-12 relative">Order HV-{new Date(selectedOrder?.created_at || '').getFullYear()}-{selectedOrder?.id.toString().padStart(6, '0')}</p>
+                {createPortal(
+                    <AnimatePresence>
+                        {showReturnModal && (
+                            <div
+                                className="fixed inset-0 z-[5000] flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 overflow-hidden"
+                                role="presentation"
+                            >
+                                <motion.div 
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    onClick={() => {
+                                        if (!submittingReturn) {
+                                            setShowReturnModal(false);
+                                        }
+                                    }}
+                                    className="absolute inset-0 bg-black/40 backdrop-blur-none cursor-pointer"
+                                    aria-hidden="true"
+                                />
+                                <motion.div 
+                                    role="dialog"
+                                    aria-modal="true"
+                                    aria-labelledby="return-modal-title"
+                                    initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 30, scale: 0.98 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 30, scale: 0.98 }}
+                                    transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+                                    className="bg-white w-full sm:max-w-[600px] md:max-w-[640px] lg:max-w-[820px] xl:max-w-[880px] h-auto max-h-[92dvh] sm:max-h-[90dvh] rounded-t-[24px] sm:rounded-3xl shadow-2xl relative z-10 overflow-hidden flex flex-col border border-slate-100"
+                                >
+                                    {/* Fixed Header */}
+                                    <div className="shrink-0 p-4 sm:p-6 pb-3 sm:pb-4 border-b border-slate-100 bg-white relative">
+                                        {/* Mobile drag handle indicator */}
+                                        <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-3 sm:hidden" aria-hidden="true" />
 
-                            <div className="space-y-10 relative">
-                                <div>
-                                    <label className="text-xs font-bold text-black block mb-4 ml-2">Reason for request</label>
-                                    <textarea 
-                                        value={returnReason}
-                                        onChange={e => setReturnReason(e.target.value)}
-                                        placeholder="Please provide a detailed explanation..."
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-[2.5rem] p-8 text-sm font-bold text-accent-brown outline-none focus:border-brand/50 transition-all min-h-[160px] resize-none shadow-inner"
-                                    />
-                                </div>
+                                        {/* Decorative cream/brand shape at top right */}
+                                        <div
+                                            className="absolute top-0 right-0 w-32 h-32 sm:w-48 sm:h-48 bg-brand/5 rounded-full -mr-16 -mt-16 sm:-mr-20 sm:-mt-20 pointer-events-none"
+                                            aria-hidden="true"
+                                        />
 
-                                <div>
-                                    <div className="flex justify-between items-center mb-4 px-2">
-                                        <label className="text-xs font-bold text-black block">Evidence photos</label>
-                                        <span className="text-xs font-semibold text-accent-brown/60 bg-accent-peach/5 px-4 py-1.5 rounded-full border border-accent-peach/10">{returnPhotos.length} / 4 Slots</span>
-                                    </div>
-                                    <div className="grid grid-cols-4 gap-4">
-                                        {returnPhotos.map((url, i) => (
-                                            <div key={i} className="aspect-square rounded-[2rem] border-2 border-slate-100 overflow-hidden relative group shadow-lg">
-                                                <img src={url} className="w-full h-full object-cover" />
-                                                <button 
-                                                    onClick={() => setReturnPhotos(prev => prev.filter((_, idx) => idx !== i))}
-                                                    className="absolute inset-0 bg-red-500/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-[2px]"
+                                        <div className="flex items-start justify-between gap-3 relative z-10">
+                                            <div className="flex-1 min-w-0 pr-2">
+                                                <h2
+                                                    id="return-modal-title"
+                                                    className="text-xl xs:text-2xl sm:text-3xl lg:text-4xl font-black text-accent-brown tracking-tight leading-tight"
                                                 >
-                                                    <X className="w-6 h-6" />
-                                                </button>
+                                                    Request a Return
+                                                </h2>
+                                                <p className="text-sm font-bold text-accent-brown/70 mt-1 break-words">
+                                                    Order HV-{new Date(selectedOrder?.created_at || '').getFullYear()}-{selectedOrder?.id.toString().padStart(6, '0')}
+                                                </p>
                                             </div>
-                                        ))}
-                                        {returnPhotos.length < 4 && (
-                                            <label className="aspect-square rounded-[2rem] border-4 border-dashed border-slate-100 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-brand/40 hover:bg-brand/5 transition-all group active:scale-95">
-                                                <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-brand/10 group-hover:text-brand transition-all">
-                                                    {uploadingImage ? <Loader2 className="w-6 h-6 animate-spin" /> : <Upload className="w-6 h-6" />}
-                                                </div>
-                                                <span className="text-xs font-bold text-slate-400 group-hover:text-brand transition-all">Upload</span>
-                                                <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" disabled={uploadingImage} />
-                                            </label>
-                                        )}
-                                    </div>
-                                </div>
 
-                                <div className="flex gap-6 pt-6 items-center">
-                                    <button 
-                                        onClick={() => setShowReturnModal(false)}
-                                        className="flex-1 py-6 rounded-[2rem] font-bold text-xs text-black border-2 border-slate-100 hover:bg-slate-50 transition-all active:scale-95"
-                                    >
-                                        Dismiss
-                                    </button>
-                                    <button 
-                                        onClick={submitReturnRequest}
-                                        disabled={!returnReason || returnPhotos.length === 0 || submittingReturn}
-                                        className="flex-[2] py-6 px-12 bg-black text-white rounded-[2rem] font-bold text-xs hover:bg-brand-dark transition-all disabled:opacity-30 disabled:grayscale flex items-center justify-center gap-3 shadow-2xl active:scale-[0.98]"
-                                    >
-                                        {submittingReturn ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                        {submittingReturn ? 'Processing...' : 'Finalize Request'}
-                                    </button>
-                                </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (!submittingReturn) {
+                                                        setShowReturnModal(false);
+                                                    }
+                                                }}
+                                                disabled={submittingReturn}
+                                                className="min-w-[44px] min-h-[44px] p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-accent-brown/70 hover:text-accent-brown flex items-center justify-center transition-colors shrink-0 focus-visible:ring-2 focus-visible:ring-brand focus:outline-none"
+                                                aria-label="Close Request a Return dialog"
+                                            >
+                                                <X className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Scrolling Body */}
+                                    <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-6 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-8 relative">
+                                        {/* Left Column: Reason for request */}
+                                        <div className="space-y-2 flex flex-col">
+                                            <label htmlFor="return-reason-input" className="text-sm font-bold text-accent-brown block">
+                                                Reason for request <span className="text-rose-500 font-bold ml-0.5" aria-hidden="true">*</span>
+                                            </label>
+                                            <textarea 
+                                                id="return-reason-input"
+                                                value={returnReason}
+                                                onChange={e => setReturnReason(e.target.value)}
+                                                placeholder="Please provide a detailed explanation..."
+                                                rows={5}
+                                                className="w-full flex-1 bg-slate-50 border border-slate-200 rounded-2xl p-3.5 sm:p-4 text-base font-medium text-accent-brown placeholder:text-slate-400 outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 transition-all min-h-[140px] sm:min-h-[160px] resize-y shadow-inner"
+                                                required
+                                                aria-required="true"
+                                            />
+                                        </div>
+
+                                        {/* Right Column: Evidence photos */}
+                                        <div className="space-y-2 flex flex-col" role="group" aria-labelledby="evidence-photos-heading">
+                                            <div className="flex justify-between items-center gap-2">
+                                                <span id="evidence-photos-heading" className="text-sm font-bold text-accent-brown block">
+                                                    Photos <span className="text-rose-500 font-bold ml-0.5" aria-hidden="true">*</span>
+                                                </span>
+                                                <span
+                                                    className="text-xs font-bold text-accent-brown/80 bg-slate-100 px-3 py-1 rounded-full border border-slate-200"
+                                                    aria-label={`${returnPhotos.length} of 4 photos uploaded`}
+                                                >
+                                                    {returnPhotos.length} of 4 Photos
+                                                </span>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 xs:grid-cols-4 sm:grid-cols-4 gap-3 sm:gap-4 pt-1">
+                                                {returnPhotos.map((url, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className="aspect-square min-h-[72px] sm:min-h-[88px] rounded-2xl border border-slate-200 overflow-hidden relative group shadow-sm bg-slate-50"
+                                                    >
+                                                        <img
+                                                            src={url}
+                                                            alt={`Evidence photo ${i + 1}`}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => setReturnPhotos(prev => prev.filter((_, idx) => idx !== i))}
+                                                            className="absolute top-1.5 right-1.5 sm:inset-0 sm:opacity-0 sm:group-hover:opacity-100 bg-black/60 sm:bg-black/50 hover:bg-rose-600 text-white min-w-[44px] min-h-[44px] rounded-xl sm:rounded-none flex items-center justify-center transition-all duration-200 focus-visible:opacity-100 focus:outline-none"
+                                                            aria-label={`Remove photo ${i + 1}`}
+                                                            title={`Remove photo ${i + 1}`}
+                                                        >
+                                                            <X className="w-5 h-5" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+
+                                                {returnPhotos.length < 4 && (
+                                                    <label
+                                                        className={`aspect-square min-h-[72px] sm:min-h-[88px] rounded-2xl border-2 border-dashed border-slate-300 hover:border-brand/60 bg-slate-50/70 hover:bg-brand/5 flex flex-col items-center justify-center gap-1.5 p-2 cursor-pointer transition-all group active:scale-95 focus-within:ring-2 focus-within:ring-brand focus-within:border-brand ${uploadingImage ? 'pointer-events-none opacity-60' : ''}`}
+                                                        tabIndex={0}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                                e.preventDefault();
+                                                                document.getElementById('return-photo-upload')?.click();
+                                                            }
+                                                        }}
+                                                        role="button"
+                                                        aria-label="Upload photo"
+                                                    >
+                                                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-brand/10 group-hover:text-brand transition-colors">
+                                                            {uploadingImage ? (
+                                                                <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin text-brand" />
+                                                            ) : (
+                                                                <Upload className="w-5 h-5 sm:w-6 sm:h-6" />
+                                                            )}
+                                                        </div>
+                                                        <span className="text-xs font-bold text-slate-600 group-hover:text-brand transition-colors">
+                                                            {uploadingImage ? 'Uploading...' : 'Upload'}
+                                                        </span>
+                                                        <input
+                                                            id="return-photo-upload"
+                                                            type="file"
+                                                            accept="image/*"
+                                                            onChange={handleImageUpload}
+                                                            className="sr-only"
+                                                            disabled={uploadingImage}
+                                                        />
+                                                    </label>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Fixed Footer */}
+                                    <div className="shrink-0 p-4 sm:p-5 md:p-6 bg-slate-50/90 border-t border-slate-100 flex flex-col-reverse xs:flex-row items-center gap-3 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+                                        <button 
+                                            type="button"
+                                            onClick={() => {
+                                                if (!submittingReturn) {
+                                                    setShowReturnModal(false);
+                                                }
+                                            }}
+                                            disabled={submittingReturn}
+                                            className="w-full xs:w-[35%] min-h-[48px] sm:min-h-[52px] px-5 py-3 rounded-2xl font-bold text-sm text-accent-brown bg-white border border-slate-200 hover:bg-slate-100 transition-all active:scale-[0.98] shadow-sm flex items-center justify-center focus-visible:ring-2 focus-visible:ring-brand focus:outline-none"
+                                        >
+                                            Close
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={submitReturnRequest}
+                                            disabled={!returnReason.trim() || returnPhotos.length === 0 || submittingReturn}
+                                            aria-disabled={!returnReason.trim() || returnPhotos.length === 0 || submittingReturn}
+                                            className={`w-full xs:w-[65%] min-h-[48px] sm:min-h-[52px] px-6 py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
+                                                !returnReason.trim() || returnPhotos.length === 0 || submittingReturn
+                                                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed shadow-none'
+                                                    : 'bg-brand hover:bg-brand-dark text-white shadow-brand/20 active:scale-[0.98]'
+                                            }`}
+                                        >
+                                            {submittingReturn ? (
+                                                <>
+                                                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                                                    <span>Processing...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Send className="w-4 h-4 shrink-0" />
+                                                    <span>Send Request</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </motion.div>
                             </div>
-                        </motion.div>
-                    </div>,
+                        )}
+                    </AnimatePresence>,
                     document.body
                 )}
 
@@ -1252,71 +1469,192 @@ const CustomerOrders = () => {
                 {createPortal(
                     <AnimatePresence>
                         {isCancelModalOpen && (
-                            <div className="fixed inset-0 z-[5000] flex items-center justify-center p-6">
+                            <div
+                                className="fixed inset-0 z-[5000] flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6 overflow-hidden"
+                                role="presentation"
+                            >
                                 <motion.div
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                     exit={{ opacity: 0 }}
-                                    onClick={() => setIsCancelModalOpen(false)}
-                                    className="absolute inset-0 bg-rose-950/20 backdrop-blur-xl"
+                                    transition={{ duration: 0.2 }}
+                                    onClick={() => {
+                                        if (!isCancelling) {
+                                            setIsCancelModalOpen(false);
+                                            setCancelReason('');
+                                            setOtherReasonText('');
+                                        }
+                                    }}
+                                    className="absolute inset-0 bg-black/40 backdrop-blur-none cursor-pointer"
+                                    aria-hidden="true"
                                 />
                                 <motion.div
-                                    initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                                    animate={{ scale: 1, opacity: 1, y: 0 }}
-                                    exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                                    className="bg-white w-full max-w-4xl rounded-[4rem] shadow-2xl relative z-10 overflow-hidden border border-white"
+                                    role="alertdialog"
+                                    aria-modal="true"
+                                    aria-labelledby="cancel-order-title"
+                                    aria-describedby="cancel-order-desc"
+                                    initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 30, scale: 0.98 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 30, scale: 0.98 }}
+                                    transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+                                    className="bg-white w-full sm:max-w-[560px] md:max-w-[620px] h-auto max-h-[92dvh] sm:max-h-[90dvh] rounded-t-[24px] sm:rounded-3xl shadow-2xl relative z-10 overflow-hidden flex flex-col border border-slate-100"
                                 >
-                                    <div className="p-12 border-b border-rose-100/10 bg-rose-50/50">
-                                        <div className="flex items-center gap-6 mb-8">
-                                            <div className="w-20 h-20 bg-rose-500 rounded-[2.5rem] flex items-center justify-center text-white shadow-2xl shadow-rose-500/30">
-                                                <ShieldAlert className="w-10 h-10" />
+                                    {/* Fixed Header */}
+                                    <div className="shrink-0 p-4 sm:p-6 bg-rose-50/70 border-b border-rose-100/80 relative">
+                                        {/* Mobile drag handle indicator */}
+                                        <div className="w-10 h-1 bg-rose-200/80 rounded-full mx-auto mb-3 sm:hidden" aria-hidden="true" />
+
+                                        <div className="flex items-start justify-between gap-3 sm:gap-4">
+                                            <div className="flex items-center gap-3.5 sm:gap-4 flex-1 min-w-0">
+                                                <div
+                                                    className="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-rose-500/25"
+                                                    aria-hidden="true"
+                                                >
+                                                    <ShieldAlert className="w-7 h-7 sm:w-8 sm:h-8" />
+                                                </div>
+
+                                                <div className="flex-1 min-w-0">
+                                                    <h3
+                                                        id="cancel-order-title"
+                                                        className="text-xl xs:text-2xl sm:text-3xl font-black text-accent-brown tracking-tight leading-tight"
+                                                    >
+                                                        Cancel Order
+                                                    </h3>
+                                                    <p className="text-[12px] sm:text-xs font-bold text-rose-600 mt-0.5 tracking-normal">
+                                                        This cannot be undone.
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <h3 className="text-4xl font-black text-accent-brown tracking-tight">Cancel Order</h3>
-                                                <p className="text-xs font-semibold text-rose-500/80 mt-1">Permanent transaction withdrawal</p>
-                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (!isCancelling) {
+                                                        setIsCancelModalOpen(false);
+                                                        setCancelReason('');
+                                                        setOtherReasonText('');
+                                                    }
+                                                }}
+                                                aria-label="Close cancel order dialog"
+                                                className="w-11 h-11 rounded-full hover:bg-rose-100/70 text-slate-500 hover:text-accent-brown flex items-center justify-center transition-colors shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 cursor-pointer"
+                                            >
+                                                <X className="w-5 h-5" />
+                                            </button>
                                         </div>
-                                        <p className="text-sm font-medium text-accent-brown/60 leading-relaxed max-w-2xl">
+
+                                        <p
+                                            id="cancel-order-desc"
+                                            className="text-sm font-medium text-slate-700 leading-relaxed mt-3.5 sm:mt-4 px-0.5"
+                                        >
                                             You are about to cancel this order. This action cannot be undone. Please select a reason for the cancellation.
                                         </p>
                                     </div>
 
-                                    <div className="p-12 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {[
-                                            "Change of mind",
-                                            "Algorithm optimization error",
-                                            "Financial pivot",
-                                            "Logistic delay concerns",
-                                            "Duplicate order",
-                                            "Others"
-                                        ].map(reason => (
-                                            <button
-                                                key={reason}
-                                                onClick={() => setCancelReason(reason)}
-                                                className={`flex items-center justify-between p-6 rounded-[1.5rem] border-2 transition-all cursor-pointer ${cancelReason === reason
-                                                    ? 'border-rose-500 bg-rose-50 text-rose-600'
-                                                    : 'border-accent-brown/5 hover:border-brand/40 text-accent-brown/40 hover:bg-slate-50'
-                                                    }`}
+                                    {/* Scrolling Middle Body */}
+                                    <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 sm:py-5 space-y-2.5 sm:space-y-3">
+                                        <div
+                                            role="radiogroup"
+                                            aria-label="Reason for cancellation"
+                                            className="space-y-2.5 sm:space-y-3"
+                                        >
+                                            {cancellationReasons.map((reason, idx) => {
+                                                const isSelected = cancelReason === reason.value;
+                                                return (
+                                                    <button
+                                                        key={reason.value}
+                                                        id={`cancel-reason-${idx}`}
+                                                        role="radio"
+                                                        type="button"
+                                                        aria-checked={isSelected}
+                                                        tabIndex={isSelected ? 0 : (cancelReason === '' && idx === 0 ? 0 : -1)}
+                                                        onClick={() => setCancelReason(reason.value)}
+                                                        onKeyDown={(e) => handleReasonKeyDown(e, idx)}
+                                                        className={`w-full min-h-[52px] sm:min-h-[56px] flex items-center justify-between p-3.5 sm:p-4 rounded-2xl border-2 transition-all cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 active:scale-[0.99] ${
+                                                            isSelected
+                                                                ? 'border-rose-500 bg-rose-50/80 text-rose-800 shadow-sm'
+                                                                : 'border-slate-200/90 bg-white hover:border-slate-300 text-slate-800 hover:bg-slate-50'
+                                                        }`}
+                                                    >
+                                                        <span className="text-sm font-bold leading-snug flex-1 pr-3 break-words">
+                                                            {reason.label}
+                                                        </span>
+                                                        <div className="shrink-0">
+                                                            {isSelected ? (
+                                                                <div className="w-5.5 h-5.5 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-sm">
+                                                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                                                </div>
+                                                            ) : (
+                                                                <div className="w-5.5 h-5.5 rounded-full border-2 border-slate-300 bg-white" />
+                                                            )}
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Textarea for "Others" option */}
+                                        {cancelReason === 'Others' && (
+                                            <motion.div
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                className="pt-2"
                                             >
-                                                <span className="text-xs font-bold">{reason}</span>
-                                                {cancelReason === reason && <CheckCircle className="w-5 h-5" />}
-                                            </button>
-                                        ))}
+                                                <label
+                                                    htmlFor="cancel-other-reason-input"
+                                                    className="block text-xs font-bold text-slate-700 mb-1.5"
+                                                >
+                                                    Additional Details (Optional)
+                                                </label>
+                                                <textarea
+                                                    id="cancel-other-reason-input"
+                                                    value={otherReasonText}
+                                                    onChange={(e) => setOtherReasonText(e.target.value)}
+                                                    placeholder="Please describe why you are cancelling this order..."
+                                                    rows={3}
+                                                    className="w-full min-h-[96px] p-3.5 bg-slate-50 border-2 border-slate-200 rounded-2xl text-base sm:text-sm font-medium text-accent-brown focus:border-rose-500 focus:bg-white outline-none transition-all placeholder:text-slate-400 resize-none"
+                                                />
+                                            </motion.div>
+                                        )}
+
+                                        {/* Safe bottom clearance inside scroll container */}
+                                        <div className="h-4 sm:h-6" aria-hidden="true" />
                                     </div>
 
-                                    <div className="p-12 bg-slate-50 flex gap-4">
+                                    {/* Fixed Footer */}
+                                    <div className="shrink-0 p-4 sm:p-5 bg-white sm:bg-slate-50/90 border-t border-slate-100 flex flex-col-reverse xs:flex-row items-stretch xs:items-center gap-3 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
                                         <button
-                                            onClick={() => setIsCancelModalOpen(false)}
-                                            className="flex-1 py-6 bg-white border border-accent-brown/5 text-accent-brown rounded-3xl font-bold text-xs hover:bg-accent-peach/10 transition-all cursor-pointer shadow-sm"
+                                            type="button"
+                                            onClick={() => {
+                                                if (!isCancelling) {
+                                                    setIsCancelModalOpen(false);
+                                                    setCancelReason('');
+                                                    setOtherReasonText('');
+                                                }
+                                            }}
+                                            className="flex-1 h-12 sm:h-13 min-h-[48px] bg-white border-2 border-slate-200 text-slate-800 hover:text-accent-brown hover:bg-slate-50 hover:border-slate-300 rounded-2xl font-bold text-sm sm:text-base transition-all cursor-pointer shadow-sm active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                                         >
-                                            Abort
+                                            Go Back
                                         </button>
                                         <button
+                                            type="button"
                                             onClick={handleCancelOrder}
                                             disabled={!cancelReason || isCancelling}
-                                            className="flex-1 py-6 bg-rose-500 text-white rounded-3xl font-bold text-xs hover:bg-rose-600 transition-all disabled:opacity-30 shadow-2xl shadow-rose-500/20 cursor-pointer"
+                                            aria-disabled={!cancelReason || isCancelling}
+                                            className={`flex-1 h-12 sm:h-13 min-h-[48px] rounded-2xl font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 ${
+                                                !cancelReason || isCancelling
+                                                    ? 'bg-rose-200 text-rose-800/80 cursor-not-allowed shadow-none'
+                                                    : 'bg-rose-500 text-white hover:bg-rose-600 shadow-lg shadow-rose-500/25 active:scale-[0.98] cursor-pointer'
+                                            }`}
                                         >
-                                            {isCancelling ? 'Processing...' : 'Confirm'}
+                                            {isCancelling ? (
+                                                <>
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                    <span>Processing...</span>
+                                                </>
+                                            ) : (
+                                                <span>Cancel Order</span>
+                                            )}
                                         </button>
                                     </div>
                                 </motion.div>

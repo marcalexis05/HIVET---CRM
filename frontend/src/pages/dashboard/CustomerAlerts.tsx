@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Gift, Info, Bell, CheckCircle2, Trash2, BellOff } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useNavigate } from 'react-router-dom';
-import { toTitleCase, toSentenceCase } from '../../utils/textFormatters';
+import { toTitleCase, toSentenceCase, formatReviewIdInText } from '../../utils/textFormatters';
 
 const CustomerAlerts = () => {
     const [notifications, setNotifications] = useState<any[]>([]);
@@ -150,7 +150,7 @@ const CustomerAlerts = () => {
                                 <div className="w-16 h-16 bg-brand-dark/5 rounded-2xl flex items-center justify-center mx-auto mb-4">
                                     <BellOff className="w-8 h-8 text-black/20" />
                                 </div>
-                                <p className="text-sm font-bold text-black/50">No alerts to show</p>
+                                <p className="text-sm font-bold text-black/50">No notifications to show</p>
                                 <p className="text-xs text-black/30 font-medium mt-1">You're all caught up!</p>
                             </motion.div>
                         ) : (
@@ -202,12 +202,12 @@ const CustomerAlerts = () => {
                                                 <h3 className={`font-black tracking-tight text-base leading-snug mb-0.5 ${
                                                     alert.read ? 'text-black/50' : 'text-black'
                                                 }`}>
-                                                    {alert.title}
+                                                    {formatReviewIdInText(alert.title)}
                                                 </h3>
                                                 <p className={`text-sm font-medium leading-relaxed ${
                                                     alert.read ? 'text-black opacity-40' : 'text-black'
                                                 }`}>
-                                                    {alert.desc}
+                                                    {formatReviewIdInText(alert.desc)}
                                                 </p>
                                             </div>
                                         </div>

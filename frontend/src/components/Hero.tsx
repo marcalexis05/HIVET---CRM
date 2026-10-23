@@ -2,50 +2,25 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingCart, PawPrint, ChevronRight, ChevronLeft, Building2, Car, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { MAIN_LANDING_TEXT } from '../constants/mainLandingWording';
 
 // New Cinematic Images
 import heroCustomer from '../assets/hero_customer.png';
 import heroDoctor from '../assets/hero_doctor.png';
 import heroRider from '../assets/hero_rider.png';
 
-const SLIDES = [
-    {
-        title: "Treat Your Best Friend to the Best",
-        subtitle: "From gourmet snacks to cozy beds, we've got the wags covered. Register now for a world of premium care.",
-        primaryBtn: "Start Health Journey",
-        secondaryBtn: "Explore Store",
-        primaryLink: "/register",
-        secondaryLink: "/catalog",
-        icon: <ShoppingCart className="w-5 h-5" />,
-        image: heroCustomer,
-        accent: "Join Now",
-        witty: "More Treats, Less Zoomies."
-    },
-    {
-        title: "Precision Care for Every Patient",
-        subtitle: "Empowering clinics with seamless CRM and logistics. We handle the tech, you handle the tails.",
-        primaryBtn: "Partner with Us",
-        secondaryBtn: "Clinic Features",
-        primaryLink: "/register/business",
-        secondaryLink: "/for-clinics",
-        icon: <Building2 className="w-5 h-5" />,
-        image: heroDoctor,
-        accent: "Partner Network",
-        witty: "Professional Paws, Reliable Care."
-    },
-    {
-        title: "The Fastest Paws in the City",
-        subtitle: "Reliability that makes tails wag and owners smile. Apply as a driver and be the hero every pet awaits.",
-        primaryBtn: "Apply to Drive",
-        secondaryBtn: "Rider Benefits",
-        primaryLink: "/register/rider",
-        secondaryLink: "/for-riders",
-        icon: <Car className="w-5 h-5" />,
-        image: heroRider,
-        accent: "Rider Force",
-        witty: "Drive the Joy, One Tail at a Time."
-    }
+const SLIDE_IMAGES = [heroCustomer, heroDoctor, heroRider];
+const SLIDE_ICONS = [
+    <ShoppingCart className="w-5 h-5" />,
+    <Building2 className="w-5 h-5" />,
+    <Car className="w-5 h-5" />,
 ];
+
+const SLIDES = MAIN_LANDING_TEXT.hero.slides.map((s, idx) => ({
+    ...s,
+    image: SLIDE_IMAGES[idx],
+    icon: SLIDE_ICONS[idx],
+}));
 
 export const Hero = () => {
     const [current, setCurrent] = useState(0);
@@ -61,7 +36,7 @@ export const Hero = () => {
     const prevSlide = () => setCurrent((prev) => (prev === 0 ? SLIDES.length - 1 : prev - 1));
 
     return (
-        <section className="relative h-screen w-full flex items-center justify-center overflow-hidden bg-black font-brand">
+        <section className="relative min-h-[680px] h-screen w-full flex items-center justify-center overflow-hidden bg-black font-brand">
             {/* Background Slideshow */}
             <div className="absolute inset-0 z-0">
                 <AnimatePresence mode="wait">
@@ -75,7 +50,7 @@ export const Hero = () => {
                     >
                         <img 
                             src={SLIDES[current].image} 
-                            alt="Hero" 
+                            alt={SLIDES[current].imageAlt} 
                             className="w-full h-full object-cover object-center sm:object-right md:object-[75%_center]" 
                         />
                         {/* High-Contrast Professional Mask */}
@@ -86,7 +61,7 @@ export const Hero = () => {
             </div>
 
             {/* Content Container - Grid Layout */}
-            <div className="container mx-auto px-6 sm:px-12 lg:px-20 relative z-10 w-full h-full">
+            <div className="container mx-auto px-6 sm:px-12 lg:px-20 relative z-30 w-full h-full pointer-events-none">
                 <div className="grid grid-cols-1 lg:grid-cols-2 h-full items-center">
                     <AnimatePresence mode="wait">
                         <motion.div
@@ -95,7 +70,7 @@ export const Hero = () => {
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 50 }}
                             transition={{ duration: 0.8 }}
-                            className="space-y-6 sm:space-y-8"
+                            className="space-y-6 sm:space-y-8 pointer-events-auto"
                         >
                             <div className="space-y-4">
                                 <h1 className="text-white text-5xl sm:text-7xl xl:text-8xl font-black leading-tight tracking-tight drop-shadow-2xl">
@@ -110,10 +85,10 @@ export const Hero = () => {
                                 {SLIDES[current].subtitle}
                             </p>
 
-                            <div className="flex flex-col sm:flex-row gap-5 pt-4">
+                            <div className="flex flex-col sm:flex-row gap-5 pt-4 relative z-30 pointer-events-auto">
                                 <Link 
                                     to={SLIDES[current].primaryLink} 
-                                    className="group bg-brand-dark text-white px-10 py-5 rounded-full font-black flex items-center justify-center gap-4 text-sm  shadow-xl shadow-brand/20 hover:bg-brand-dark/90 transition-all transform hover:-translate-y-1 active:scale-95"
+                                    className="group bg-brand-dark text-white px-8 sm:px-10 py-4 sm:py-5 rounded-full font-black flex items-center justify-center gap-4 text-sm shadow-xl shadow-brand/20 hover:bg-brand-dark/90 transition-all transform hover:-translate-y-1 active:scale-95 cursor-pointer relative z-30 pointer-events-auto"
                                 >
                                     {SLIDES[current].icon}
                                     {SLIDES[current].primaryBtn}
@@ -121,7 +96,7 @@ export const Hero = () => {
                                 </Link>
                                 <Link 
                                     to={SLIDES[current].secondaryLink} 
-                                    className="bg-white/10 backdrop-blur-md text-white border-2 border-white/20 px-10 py-5 rounded-full font-black flex items-center justify-center gap-4 text-sm  hover:bg-white/20 transition-all shadow-xl"
+                                    className="bg-white/10 backdrop-blur-md text-white border-2 border-white/20 px-8 sm:px-10 py-4 sm:py-5 rounded-full font-black flex items-center justify-center gap-4 text-sm hover:bg-white/20 transition-all shadow-xl cursor-pointer relative z-30 pointer-events-auto"
                                 >
                                     {SLIDES[current].secondaryBtn}
                                 </Link>
@@ -132,31 +107,37 @@ export const Hero = () => {
             </div>
 
             {/* Bottom Controls */}
-            <div className="absolute bottom-10 left-0 right-0 z-20 flex flex-col items-center gap-8">
+            <div className="absolute bottom-6 sm:bottom-10 left-0 right-0 z-20 flex flex-col items-center gap-4 sm:gap-8 pointer-events-none">
                 {/* Dots */}
-                <div className="flex gap-3">
+                <div className="flex gap-3 pointer-events-auto">
                     {SLIDES.map((_, i) => (
                         <button
                             key={i}
+                            type="button"
                             onClick={() => setCurrent(i)}
-                            className={`h-1.5 rounded-full transition-all duration-500 ${current === i ? 'w-16 bg-brand-dark' : 'w-4 bg-white/30 hover:bg-white/50'}`}
+                            className={`h-1.5 rounded-full transition-all duration-500 cursor-pointer ${current === i ? 'w-16 bg-brand-dark' : 'w-4 bg-white/30 hover:bg-white/50'}`}
+                            aria-label={MAIN_LANDING_TEXT.hero.controls.slideIndicatorAria(i, SLIDES.length)}
                         />
                     ))}
                 </div>
 
                 {/* Arrow Navigation */}
-                <div className="flex gap-4">
+                <div className="flex gap-4 pointer-events-auto">
                     <button 
+                        type="button"
                         onClick={prevSlide}
-                        className="w-14 h-14 rounded-full border-2 border-white/20 bg-black/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-brand-dark hover:border-brand-dark transition-all group"
+                        className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-white/20 bg-black/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-brand-dark hover:border-brand-dark transition-all group cursor-pointer active:scale-95"
+                        aria-label={MAIN_LANDING_TEXT.hero.controls.prevSlideAria}
                     >
-                        <ChevronLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
+                        <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 group-hover:-translate-x-1 transition-transform" />
                     </button>
                     <button 
+                        type="button"
                         onClick={nextSlide}
-                        className="w-14 h-14 rounded-full border-2 border-white/20 bg-black/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-brand-dark hover:border-brand-dark transition-all group"
+                        className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-white/20 bg-black/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-brand-dark hover:border-brand-dark transition-all group cursor-pointer active:scale-95"
+                        aria-label={MAIN_LANDING_TEXT.hero.controls.nextSlideAria}
                     >
-                        <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                        <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 group-hover:translate-x-1 transition-transform" />
                     </button>
                 </div>
             </div>

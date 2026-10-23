@@ -309,9 +309,9 @@ const CustomerLoyalty = () => {
                             {/* Gap to Upgrade Row */}
                             <div className="bg-white/10 rounded-xl p-3 flex items-center justify-between gap-3 border border-white/15">
                                 <div className="min-w-0">
-                                    <p className="text-xs font-medium text-white/80 mb-0.5">Gap to upgrade</p>
+                                    <p className="text-xs font-medium text-white/80 mb-0.5">Points to next level</p>
                                     <p className="text-base font-black text-white tabular-nums leading-none">
-                                        {(loyalty.next_tier_points - loyalty.points).toLocaleString()} pts
+                                        {(loyalty.next_tier_points - loyalty.points).toLocaleString()} Points
                                     </p>
                                 </div>
                                 <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0 border border-white/20 text-white" aria-hidden="true">
@@ -325,9 +325,9 @@ const CustomerLoyalty = () => {
                 {/* Section 1: Earn Methods (Commerce, Schedules, Network) */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
                     {[
-                        { title: 'Commerce', pts: 'Per Transaction', icon: TrendingUp, desc: 'Earn points on every pharmaceutical and supply purchase.' },
-                        { title: 'Schedules', pts: 'Check-in Bonus', icon: Award, desc: 'Receive points automatically upon completing clinic appointments.' },
-                        { title: 'Network', pts: '500 Pts / Referral', icon: Sparkles, desc: 'Receive rewards for growing the Hi-Vet ecosystem.' },
+                        { title: 'Shopping', pts: 'Every Order', icon: TrendingUp, desc: 'Earn points every time you buy pet food and supplies.' },
+                        { title: 'Clinic Visits', pts: 'Visit Bonus', icon: Award, desc: 'Get points automatically after every clinic appointment.' },
+                        { title: 'Referrals', pts: '500 Points / Friend', icon: Sparkles, desc: 'Get rewarded when you invite friends to Hi-Vet.' },
                     ].map((item) => (
                         <div
                             key={item.title}
@@ -488,7 +488,7 @@ const CustomerLoyalty = () => {
                             type="button"
                             className="w-full min-h-[44px] h-11 mt-4 rounded-xl bg-brand/10 text-brand text-xs font-bold hover:bg-brand hover:text-white transition-all cursor-pointer"
                         >
-                            Full Registry History
+                            Full Points History
                         </button>
                     </div>
 
@@ -502,9 +502,9 @@ const CustomerLoyalty = () => {
                                 <div className="w-10 h-10 bg-white/20 backdrop-blur-sm border border-white/20 rounded-xl flex items-center justify-center">
                                     <Gift className="w-5 h-5 text-white" />
                                 </div>
-                                <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">Network <span className="text-accent-brown">Growth</span></h3>
+                                <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">Invite <span className="text-accent-brown">Friends</span></h3>
                                 <p className="text-xs font-medium text-white/90 leading-relaxed">
-                                    Acquire 500 pts for every verified provider successfully integrated into the system.
+                                    Earn 500 Points for every friend or clinic that joins.
                                 </p>
                             </div>
 

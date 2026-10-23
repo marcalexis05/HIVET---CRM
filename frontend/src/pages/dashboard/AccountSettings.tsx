@@ -1,20 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    User, Lock, Bell, Trash2, Loader2, Eye, EyeOff,
+    User, Lock, AlertCircle, Bell, Trash2, Loader2, Eye, EyeOff,
     AlertTriangle, CheckCircle, MapPin, Plus, Edit2, Trash,
     Store, ShieldCheck, X, Truck, Bike, ChevronRight, ChevronLeft,
-    HelpCircle, LogOut, ArrowLeft
+    HelpCircle, LogOut, ArrowLeft, Check
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { PasswordStrength } from '../../components/PasswordStrength';
 import { CustomDatePicker } from '../../components/CustomDatePicker';
+import { calculateAgeFullYears, validateBirthday } from '../../utils/dateValidation';
+import { checkContactAvailability, isValidPhMobile, isValidEmail } from '../../utils/contactValidation';
+import { CONTACT_VALIDATION_MESSAGES } from '../../constants/contactValidationWording';
 import { CustomDropdown } from '../../components/CustomDropdown';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import MapPickerModal from '../../components/MapPickerModal';
 import ModernModal from '../../components/ModernModal';
+import ConfirmLogoutModal from '../../components/ConfirmLogoutModal';
+import RiderBottomNav from '../../components/RiderBottomNav';
+import { RIDER_TEXT } from '../../constants/riderWording';
 
 type Section = 'profile' | 'addresses' | 'password' | 'notifications' | 'danger';
 
@@ -28,16 +34,8 @@ const NAV: { id: Section; label: string; icon: React.ElementType }[] = [
 
 const calculateAge = (birthday: string) => {
     if (!birthday) return '';
-    try {
-        const birthDate = new Date(birthday);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const month = today.getMonth() - birthDate.getMonth();
-        if (month < 0 || (month === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-        }
-        return age >= 0 ? age.toString() : '0';
-    } catch (e) { return ''; }
+    const age = calculateAgeFullYears(birthday);
+    return age !== null && age >= 0 ? age.toString() : '';
 };
 
 const getNavLinks = (role: string) => {
@@ -56,6 +54,8 @@ const Toggle = ({ checked, onChange }: { checked: boolean; onChange: () => void 
 const AccountSettings = () => {
     const { user, logout, loginWithToken } = useAuth();
     const navigate = useNavigate();
+    const isBusiness = user?.role === 'business';
+    const isRider = user?.role === 'rider';
     const [section, setSection] = useState<Section>('profile');
     const [mobileView, setMobileView] = useState<'menu' | 'form'>('menu');
 
@@ -66,12 +66,159 @@ const AccountSettings = () => {
     const [suffix, setSuffix] = useState(user?.suffix ?? '');
     const [email, setEmail] = useState(user?.email ?? '');
     const [phone, setPhone] = useState(user?.phone ?? '');
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [newEmail, setNewEmail] = useState('');
     const [vehicleType, setVehicleType] = useState(user?.vehicle_type ?? '');
     const [gender, setGender] = useState(user?.gender ?? '');
     const [birthday, setBirthday] = useState(user?.birthday ?? '');
     const [ownerBirthday, setOwnerBirthday] = useState('');
     const [ownerGender, setOwnerGender] = useState('');
     const [savingProfile, setSavingProfile] = useState(false);
+    const [phoneError, setPhoneError] = useState<string | null>(null);
+    const [phoneChecking, setPhoneChecking] = useState(false);
+    const [modalEmailError, setModalEmailError] = useState<string | null>(null);
+    const [modalEmailChecking, setModalEmailChecking] = useState(false);
+
+    // Profile Save & Unsaved Changes Tracking
+    type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+    const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+    const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
+    const [initialProfile, setInitialProfile] = useState<{
+        firstName: string;
+        middleName: string;
+        lastName: string;
+        suffix: string;
+        phone: string;
+        gender: string;
+        birthday: string;
+        vehicleType?: string;
+    } | null>(null);
+
+    // Initialize initialProfile fallback if not yet loaded from API
+    useEffect(() => {
+        if (!initialProfile && user) {
+            setInitialProfile({
+                firstName: user.first_name ?? '',
+                middleName: user.middle_name ?? '',
+                lastName: user.last_name ?? '',
+                suffix: user.suffix ?? '',
+                phone: user.phone ?? '',
+                gender: user.gender ?? '',
+                birthday: user.birthday ?? '',
+                vehicleType: user.vehicle_type ?? ''
+            });
+        }
+    }, [user, initialProfile]);
+
+    const isProfileChanged = useMemo(() => {
+        if (!initialProfile) return false;
+        return (
+            firstName.trim() !== (initialProfile.firstName || '').trim() ||
+            middleName.trim() !== (initialProfile.middleName || '').trim() ||
+            lastName.trim() !== (initialProfile.lastName || '').trim() ||
+            suffix.trim() !== (initialProfile.suffix || '').trim() ||
+            phone.trim() !== (initialProfile.phone || '').trim() ||
+            gender !== (initialProfile.gender || '') ||
+            birthday !== (initialProfile.birthday || '') ||
+            (isRider && vehicleType !== (initialProfile.vehicleType || ''))
+        );
+    }, [initialProfile, firstName, middleName, lastName, suffix, phone, gender, birthday, vehicleType, isRider]);
+
+    // Clear error message when user makes edits
+    useEffect(() => {
+        if (saveStatus === 'error') {
+            setSaveStatus('idle');
+            setSaveErrorMessage(null);
+        }
+    }, [firstName, middleName, lastName, suffix, phone, gender, birthday, vehicleType]);
+
+    // Debounced Phone validation (ignores current user's own number)
+    useEffect(() => {
+        if (!phone) {
+            setPhoneError(null);
+            return;
+        }
+        const cleanCurrent = (user?.phone || '').replace(/\D/g, '');
+        const cleanEntered = phone.replace(/\D/g, '');
+        if (cleanCurrent && cleanCurrent === cleanEntered) {
+            setPhoneError(null);
+            return;
+        }
+        if (cleanEntered.length === 10 && !cleanEntered.startsWith('9')) {
+            setPhoneError(CONTACT_VALIDATION_MESSAGES.invalidNumber);
+            return;
+        }
+        if (cleanEntered.length < 10) {
+            setPhoneError(null);
+            return;
+        }
+        if (cleanEntered.length === 10 && cleanEntered.startsWith('9')) {
+            const timer = setTimeout(async () => {
+                setPhoneChecking(true);
+                const res = await checkContactAvailability('phone', phone, user?.id, user?.role || undefined);
+                setPhoneChecking(false);
+                setPhoneError(res.error);
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [phone, user?.phone, user?.id, user?.role]);
+
+    // Debounced Modal Email validation (ignores current user's own email)
+    useEffect(() => {
+        if (!newEmail) {
+            setModalEmailError(null);
+            return;
+        }
+        if (user?.email && user.email.toLowerCase().trim() === newEmail.toLowerCase().trim()) {
+            setModalEmailError(null);
+            return;
+        }
+        if (!isValidEmail(newEmail)) {
+            setModalEmailError(null);
+            return;
+        }
+        const timer = setTimeout(async () => {
+            setModalEmailChecking(true);
+            const res = await checkContactAvailability('email', newEmail, user?.id, user?.role || undefined);
+            setModalEmailChecking(false);
+            setModalEmailError(res.error);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [newEmail, user?.email, user?.id, user?.role]);
+
+    const handlePhoneBlur = async () => {
+        if (!phone) return;
+        const cleanCurrent = (user?.phone || '').replace(/\D/g, '');
+        const cleanEntered = phone.replace(/\D/g, '');
+        if (cleanCurrent && cleanCurrent === cleanEntered) {
+            setPhoneError(null);
+            return;
+        }
+        if (!isValidPhMobile(phone)) {
+            setPhoneError(CONTACT_VALIDATION_MESSAGES.invalidNumber);
+            return;
+        }
+        setPhoneChecking(true);
+        const res = await checkContactAvailability('phone', phone, user?.id, user?.role || undefined);
+        setPhoneChecking(false);
+        setPhoneError(res.error);
+    };
+
+    const handleModalEmailBlur = async () => {
+        if (!newEmail) return;
+        if (user?.email && user.email.toLowerCase().trim() === newEmail.toLowerCase().trim()) {
+            setModalEmailError(null);
+            return;
+        }
+        if (!isValidEmail(newEmail)) {
+            setModalEmailError(CONTACT_VALIDATION_MESSAGES.invalidEmail);
+            return;
+        }
+        setModalEmailChecking(true);
+        const res = await checkContactAvailability('email', newEmail, user?.id, user?.role || undefined);
+        setModalEmailChecking(false);
+        setModalEmailError(res.error);
+    };
 
     // Business specific
     const [clinicName, setClinicName] = useState('');
@@ -124,8 +271,7 @@ const AccountSettings = () => {
         delivery_notes: string;
     }
     const [addresses, setAddresses] = useState<Address[]>([]);
-    const isBusiness = user?.role === 'business';
-    const isRider = user?.role === 'rider';
+
     const [loadingAddresses, setLoadingAddresses] = useState(false);
     const [showAddrModal, setShowAddrModal] = useState(false);
     const [editingAddr, setEditingAddr] = useState<Address | null>(null);
@@ -161,6 +307,7 @@ const AccountSettings = () => {
         message: '',
         type: 'info'
     });
+    const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
     const [isGoogleUser, setIsGoogleUser] = useState(false);
     const [hasPassword, setHasPassword] = useState(true);
 
@@ -297,6 +444,27 @@ const AccountSettings = () => {
                         setVehicleType(data.vehicle_type || '');
                         setGender(data.gender || '');
                         setBirthday(data.birthday || '');
+
+                        const f = data.first_name || '';
+                        const m = data.middle_name || '';
+                        const l = data.last_name || '';
+                        let initFirst = f, initMiddle = m, initLast = l;
+                        if (!f && !l && (data.name || data.full_name)) {
+                            const parts = (data.name || data.full_name).trim().split(/\s+/);
+                            if (parts.length === 1) initFirst = parts[0];
+                            else if (parts.length === 2) { initFirst = parts[0]; initLast = parts[1]; }
+                            else if (parts.length >= 3) { initFirst = parts[0]; initMiddle = parts[1]; initLast = parts.slice(2).join(' '); }
+                        }
+                        setInitialProfile({
+                            firstName: initFirst,
+                            middleName: initMiddle,
+                            lastName: initLast,
+                            suffix: data.suffix || '',
+                            phone: data.phone || '',
+                            gender: data.gender || '',
+                            birthday: data.birthday || '',
+                            vehicleType: data.vehicle_type || ''
+                        });
                     }
                     setIsGoogleUser(!!data.google_id);
                     setHasPassword(!!data.has_password);
@@ -391,16 +559,26 @@ const AccountSettings = () => {
         setTimeout(() => setToast(null), 3000);
     };
 
-    const [showEmailModal, setShowEmailModal] = useState(false);
-    const [newEmail, setNewEmail] = useState('');
     const [emailOtp, setEmailOtp] = useState('');
     const [otpSent, setOtpSent] = useState(false);
     const [sendingOtp, setSendingOtp] = useState(false);
     const [verifyingEmail, setVerifyingEmail] = useState(false);
 
     const handleRequestEmailChange = async () => {
-        if (!newEmail || !newEmail.includes('@')) {
-            showToast('Please enter a valid email address.', 'error');
+        if (modalEmailError) {
+            showToast(modalEmailError, 'error');
+            return;
+        }
+        if (!newEmail || !isValidEmail(newEmail)) {
+            showToast(CONTACT_VALIDATION_MESSAGES.invalidEmail, 'error');
+            return;
+        }
+        setModalEmailChecking(true);
+        const check = await checkContactAvailability('email', newEmail, user?.id, user?.role || undefined);
+        setModalEmailChecking(false);
+        if (!check.available) {
+            setModalEmailError(check.error);
+            showToast(check.error || CONTACT_VALIDATION_MESSAGES.emailUsed, 'error');
             return;
         }
         setSendingOtp(true);
@@ -465,19 +643,34 @@ const AccountSettings = () => {
 
     const handleSaveProfile = async () => {
         if (!user?.token) return;
-        // AGE VALIDATION (18+)
+        setSaveErrorMessage(null);
+
+        // AGE & BIRTHDAY VALIDATION (18+)
         const checkBirthday = isBusiness ? ownerBirthday : birthday;
         if (!checkBirthday) {
-            showToast('Birthdate is required.', 'error');
+            const err = 'Birthdate is required.';
+            setSaveErrorMessage(err);
+            setSaveStatus('error');
+            showToast(err, 'error');
             return;
         }
-        const age = parseInt(calculateAge(checkBirthday));
-        if (isNaN(age) || age < 18) {
-            showToast('You must be at least 18 years old to use this platform.', 'error');
+        const validation = validateBirthday(checkBirthday, 'person birthday');
+        if (!validation.isValid) {
+            const err = validation.error || 'You must be at least 18 years old.';
+            setSaveErrorMessage(err);
+            setSaveStatus('error');
+            showToast(err, 'error');
+            return;
+        }
+        if (phoneError) {
+            setSaveErrorMessage(phoneError);
+            setSaveStatus('error');
+            showToast(phoneError, 'error');
             return;
         }
 
         setSavingProfile(true);
+        setSaveStatus('saving');
         try {
             const res = await fetch('http://localhost:8000/api/customer/profile', {
                 method: 'PUT',
@@ -529,13 +722,32 @@ const AccountSettings = () => {
             if (res.ok) {
                 const data = await res.json();
                 if (data.token) loginWithToken(data.token);
+                setInitialProfile({
+                    firstName,
+                    middleName,
+                    lastName,
+                    suffix,
+                    phone,
+                    gender,
+                    birthday,
+                    vehicleType
+                });
+                setSaveStatus('saved');
                 showToast('Profile updated successfully!');
+                setTimeout(() => {
+                    setSaveStatus('idle');
+                }, 2000);
             } else {
                 const errorData = await res.json().catch(() => ({}));
-                showToast(errorData.detail || 'Failed to update profile.', 'error');
+                const err = errorData.detail || 'We could not save your changes. Please try again.';
+                setSaveErrorMessage(err);
+                setSaveStatus('error');
+                showToast(err, 'error');
             }
         } catch (err) {
             console.error('Save profile error:', err);
+            setSaveErrorMessage('We could not save your changes. Please try again.');
+            setSaveStatus('error');
             showToast('Error updating profile.', 'error');
         } finally {
             setSavingProfile(false);
@@ -608,7 +820,7 @@ const AccountSettings = () => {
         });
     };
 
-    const isAnyModalOpen = showAddrModal || !!editingAddr || showMapPicker || isDatePickerOpen || showEmailModal || showGooglePwModal || modal.isOpen;
+    const isAnyModalOpen = showAddrModal || !!editingAddr || showMapPicker || isDatePickerOpen || showEmailModal || showGooglePwModal || modal.isOpen || isLogoutModalOpen;
 
     // Manage body scroll
     useEffect(() => {
@@ -675,14 +887,7 @@ const AccountSettings = () => {
             sub: 'Sign out of your account',
             icon: LogOut,
             onClick: () => {
-                showConfirm(
-                    'Confirm Log Out',
-                    'Are you sure you want to log out of your Hi-Vet account?',
-                    () => {
-                        logout();
-                        navigate('/');
-                    }
-                );
+                setIsLogoutModalOpen(true);
             },
         },
     ];
@@ -697,9 +902,9 @@ const AccountSettings = () => {
     };
 
     const renderHeaderCard = () => (
-        <div className="relative bg-white rounded-[2.5rem] p-6 sm:p-8 pb-7 overflow-hidden shadow-lg border border-slate-100 text-slate-800">
-            {/* Top Bar */}
-            <div className="relative z-10 flex items-center justify-between mb-3">
+        <div className="relative bg-white rounded-[1.5rem] p-4 sm:p-5 shadow-sm border border-slate-100 text-slate-800">
+            {/* Top Bar with Back Arrow and Centered Label */}
+            <div className="relative z-10 flex items-center justify-between mb-3 sm:mb-4">
                 <button
                     onClick={() => {
                         if (mobileView === 'form') {
@@ -708,55 +913,61 @@ const AccountSettings = () => {
                             navigate(-1);
                         }
                     }}
-                    className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 transition-all active:scale-95 shadow-sm cursor-pointer"
+                    className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 transition-all active:scale-95 shadow-sm cursor-pointer"
                     aria-label="Back"
                 >
                     <ArrowLeft className="w-5 h-5" />
                 </button>
-                <span className="text-xs font-semibold text-slate-400">
-                    {isBusiness ? 'Clinic Hub' : isRider ? 'Rider Hub' : 'My Account'}
+                <span className="text-xs font-bold text-slate-600 tracking-normal">
+                    {isBusiness ? 'Clinic Hub' : isRider ? RIDER_TEXT.profile.pageTitle : 'My Account'}
                 </span>
-                <div className="w-10" />
+                <div className="w-11 min-w-[44px]" aria-hidden="true" />
             </div>
 
-            {/* Centered Avatar and User Info */}
-            <div className="relative z-10 flex flex-col items-center text-center mt-2">
-                <div className="relative mb-3">
-                    <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-slate-100 shadow-xl overflow-hidden bg-brand/10 flex items-center justify-center text-brand text-3xl font-black">
+            {/* Avatar and User Info: Stacked on phones, Horizontal on Tablets & Desktops */}
+            <div className="relative z-10 flex flex-col sm:flex-row items-center text-center sm:text-left gap-3 sm:gap-5 mt-1 sm:mt-0">
+                <div className="relative shrink-0">
+                    <div className="w-20 h-20 sm:w-22 sm:h-22 md:w-24 md:h-24 rounded-full border-3 sm:border-4 border-slate-100 shadow-md overflow-hidden bg-brand/10 flex items-center justify-center text-brand text-2xl sm:text-3xl font-black">
                         {user?.avatar ? (
-                            <img src={user?.avatar} alt={user?.name || 'User Profile'} className="w-full h-full object-cover" />
+                            <img src={user?.avatar} alt={user?.name || (isBusiness ? clinicName : 'User Profile')} className="w-full h-full object-cover" />
                         ) : (
                             initials
                         )}
                     </div>
-                    {/* Small edit icon badge at bottom-right of avatar */}
-                    <button
-                        onClick={() => {
-                            setSection('profile');
-                            setMobileView('form');
-                        }}
-                        className="absolute bottom-0 right-0 w-8 h-8 rounded-lg bg-white text-brand shadow-md flex items-center justify-center hover:scale-110 active:scale-95 transition-transform border border-slate-200 cursor-pointer"
-                        title="Edit Profile"
-                    >
-                        <Edit2 className="w-4 h-4 text-brand" />
-                    </button>
+                    {/* 44px hit-target wrapper for the 32px visible edit pencil */}
+                    <div className="absolute -bottom-1 -right-1 w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSection('profile');
+                                setMobileView('form');
+                            }}
+                            aria-label={isBusiness ? "Change clinic photo" : isRider ? "Change rider photo" : "Change profile photo"}
+                            title={isBusiness ? "Change clinic photo" : "Change profile photo"}
+                            className="w-8 h-8 rounded-full bg-white text-brand shadow-md flex items-center justify-center hover:scale-105 active:scale-95 transition-transform border border-slate-200 cursor-pointer"
+                        >
+                            <Edit2 className="w-4 h-4 text-brand" />
+                        </button>
+                    </div>
                 </div>
 
-                <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-tight">
-                    {user?.name || clinicName || 'Hi-Vet User'}
-                </h2>
-                <p className="text-xs font-bold text-brand tracking-wide mt-1">
-                    {isBusiness ? (clinicName || 'Partner Business') : isRider ? (vehicleType ? `${vehicleType} • Certified Rider` : 'Certified Rider') : 'Bronze Elite Member'}
-                </p>
-                <p className="text-[11px] font-medium text-slate-400 tracking-wide mt-0.5">
-                    {user?.email}
-                </p>
+                <div className="min-w-0 flex-1 max-w-full">
+                    <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-snug line-clamp-2">
+                        {user?.name || clinicName || 'Hi-Vet User'}
+                    </h2>
+                    <p className="text-sm font-bold text-brand tracking-wide mt-0.5 line-clamp-2">
+                        {isBusiness ? (clinicName || 'Partner Business') : isRider ? (vehicleType ? `${vehicleType} • ${RIDER_TEXT.profile.portalBadge}` : RIDER_TEXT.profile.portalBadge) : 'Bronze Elite Member'}
+                    </p>
+                    <p className="text-sm font-medium text-slate-600 mt-0.5 break-words max-w-full leading-normal">
+                        {user?.email}
+                    </p>
+                </div>
             </div>
         </div>
     );
 
     const renderNavList = () => (
-        <div className="bg-white rounded-[2.5rem] p-4 sm:p-5 mt-4 relative z-20 shadow-lg border border-slate-100 space-y-1">
+        <div className="bg-white rounded-[1.5rem] p-3 sm:p-4 mt-4 relative z-20 shadow-sm border border-slate-100 space-y-1">
             {navItems.map((item) => {
                 const isActive = section === item.id;
                 const Icon = item.icon;
@@ -830,21 +1041,40 @@ const AccountSettings = () => {
         >
                         {section === 'profile' && (
                             <div>
-                                <h3 className="text-xl font-black text-accent-brown tracking-tight mb-6">{isBusiness ? 'Clinic Information' : isRider ? 'Rider Information' : 'Profile Information'}</h3>
-                                <div className="space-y-5">
+                                <h3 className="text-[22px] sm:text-2xl lg:text-[26px] font-black text-accent-brown tracking-tight my-4 sm:my-6 leading-snug">
+                                    {isBusiness ? 'Clinic Information' : isRider ? 'Rider Information' : 'Profile Information'}
+                                </h3>
+                                <div className="space-y-4 sm:space-y-5">
                                     {isBusiness ? (
                                         <>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+                                                {/* Clinic Name */}
                                                 <div>
-                                                    <label className="text-xs font-semibold text-slate-700 block mb-2 pl-1">Clinic Name</label>
-                                                    <input type="text" value={clinicName} onChange={e => setClinicName(e.target.value)} placeholder="My Veterinary Clinic"
-                                                        className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-black/40" />
+                                                    <label htmlFor="clinic-name" className="text-sm font-bold text-slate-800 mb-2 block">
+                                                        Clinic Name
+                                                    </label>
+                                                    <input
+                                                        id="clinic-name"
+                                                        type="text"
+                                                        value={clinicName}
+                                                        onChange={e => setClinicName(e.target.value)}
+                                                        placeholder="My Veterinary Clinic"
+                                                        className="w-full bg-accent-peach/20 border border-amber-900/15 focus:border-brand focus:ring-2 focus:ring-brand/20 focus:bg-white rounded-2xl min-h-[52px] h-[52px] sm:h-14 px-4 text-base font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-black/40"
+                                                    />
                                                 </div>
+
+                                                {/* Clinic Phone */}
                                                 <div>
-                                                    <label className="text-xs font-semibold text-slate-700 block mb-2 pl-1">Clinic Phone <span className="text-accent-brown">*</span></label>
-                                                    <div className="relative group">
-                                                        <span className="absolute left-5 top-1/2 -translate-y-1/2 text-sm font-black text-black tracking-tight transition-colors group-focus-within:text-accent-brown">+63</span>
+                                                    <label htmlFor="clinic-phone" className="text-sm font-bold text-slate-800 mb-2 block">
+                                                        Clinic Phone <span className="text-brand">*</span>
+                                                        <span className="sr-only"> (required)</span>
+                                                    </label>
+                                                    <div className="w-full min-h-[52px] h-[52px] sm:h-14 px-4 rounded-2xl bg-accent-peach/20 border border-amber-900/15 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20 focus-within:bg-white flex items-center transition-all">
+                                                        <div className="flex items-center gap-1.5 border-r border-accent-brown/20 pr-3 mr-3 text-base font-black text-slate-900 shrink-0 select-none">
+                                                            +63
+                                                        </div>
                                                         <input
+                                                            id="clinic-phone"
                                                             type="tel"
                                                             value={clinicPhone}
                                                             maxLength={10}
@@ -855,86 +1085,186 @@ const AccountSettings = () => {
                                                                 setClinicPhone(val.slice(0, 10));
                                                             }}
                                                             placeholder="9XX XXX XXXX"
-                                                            className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 pl-14 pr-4 sm:pr-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-black/40" />
+                                                            className="w-full bg-transparent text-base font-bold text-accent-brown outline-none tabular-nums placeholder:font-normal placeholder:text-black/40"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* Owner Full Name */}
+                                                <div>
+                                                    <label htmlFor="owner-full-name" className="text-sm font-bold text-slate-800 mb-2 block">
+                                                        Owner Full Name
+                                                    </label>
+                                                    <input
+                                                        id="owner-full-name"
+                                                        type="text"
+                                                        value={ownerFullName}
+                                                        onChange={e => setOwnerFullName(e.target.value)}
+                                                        placeholder="Juan Dela Cruz"
+                                                        className="w-full bg-accent-peach/20 border border-amber-900/15 focus:border-brand focus:ring-2 focus:ring-brand/20 focus:bg-white rounded-2xl min-h-[52px] h-[52px] sm:h-14 px-4 text-base font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30"
+                                                    />
+                                                </div>
+
+                                                {/* Sex */}
+                                                <div>
+                                                    <CustomDropdown
+                                                        label="Sex"
+                                                        value={ownerGender}
+                                                        onChange={setOwnerGender}
+                                                        labelClassName="text-sm font-bold text-slate-800 mb-2 block"
+                                                        buttonClassName="w-full bg-accent-peach/20 border border-amber-900/15 focus:border-brand focus:ring-2 focus:ring-brand/20 rounded-2xl min-h-[52px] h-[52px] sm:h-14 px-4 text-base font-bold text-accent-brown flex items-center justify-between text-left transition-all hover:bg-accent-peach/30"
+                                                        options={[
+                                                            { label: 'Male', value: 'Male' },
+                                                            { label: 'Female', value: 'Female' },
+                                                            { label: 'Other', value: 'Other' },
+                                                            { label: 'Rather not say', value: 'Rather not say' },
+                                                        ]}
+                                                    />
+                                                </div>
+
+                                                {/* Birthdate & Age Auto-fill: across both columns */}
+                                                <div className="md:col-span-2">
+                                                    <div className="grid grid-cols-1 min-[360px]:grid-cols-[1.6fr_1fr] sm:grid-cols-[1.6fr_1fr] md:grid-cols-[1.6fr_1fr] gap-3 sm:gap-4 items-start">
+                                                        <div>
+                                                            <CustomDatePicker
+                                                                mode="person birthday"
+                                                                label="Birthdate"
+                                                                value={ownerBirthday}
+                                                                onChange={setOwnerBirthday}
+                                                                onModalOpenChange={setIsDatePickerOpen}
+                                                                labelClassName="text-sm font-bold text-slate-800 mb-2 block"
+                                                                buttonClassName="w-full bg-accent-peach/20 border border-amber-900/15 focus:border-brand focus:ring-2 focus:ring-brand/20 rounded-2xl min-h-[52px] h-[52px] sm:h-14 px-4 text-base font-bold text-accent-brown flex items-center justify-between text-left transition-all hover:bg-accent-peach/30"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label htmlFor="age-autofill" className="text-sm font-bold text-slate-800 mb-2 block">
+                                                                Age <span className="text-brand text-xs font-semibold">Auto-fill</span>
+                                                            </label>
+                                                            <div className="relative">
+                                                                <input
+                                                                    id="age-autofill"
+                                                                    type="text"
+                                                                    value={calculateAge(ownerBirthday)}
+                                                                    readOnly
+                                                                    aria-readonly="true"
+                                                                    tabIndex={-1}
+                                                                    aria-label="Age Auto-fill, read-only"
+                                                                    placeholder="—"
+                                                                    className="w-full bg-accent-peach/10 border border-slate-200/90 rounded-2xl min-h-[52px] h-[52px] sm:h-14 px-4 text-base font-black text-slate-700 outline-none cursor-default select-none pointer-events-none"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Registered Email: across both columns */}
+                                                <div className="md:col-span-2 pt-2 border-t border-accent-brown/10">
+                                                    <label htmlFor="registered-email" className="text-sm font-bold text-slate-800 mb-2 block">
+                                                        Registered Email
+                                                    </label>
+                                                    <div className="relative">
+                                                        <input
+                                                            id="registered-email"
+                                                            type="email"
+                                                            value={email}
+                                                            readOnly
+                                                            aria-readonly="true"
+                                                            className="w-full bg-accent-peach/20 border border-amber-900/15 rounded-2xl min-h-[52px] h-[52px] sm:h-14 pl-4 sm:pl-5 pr-28 text-base font-bold text-slate-800 outline-none cursor-default"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { setShowEmailModal(true); setNewEmail(email); }}
+                                                            className="absolute right-2 top-1/2 -translate-y-1/2 min-h-[44px] px-4 rounded-xl text-xs sm:text-sm font-bold text-brand-dark bg-brand/10 hover:bg-brand/20 transition-all flex items-center justify-center active:scale-95 cursor-pointer"
+                                                        >
+                                                            Verify
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div>
-                                                <label className="text-xs font-semibold text-slate-500 block mb-2 pl-1">Owner Full Name</label>
-                                                <input type="text" value={ownerFullName} onChange={e => setOwnerFullName(e.target.value)} placeholder="Juan Dela Cruz"
-                                                    className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-3 sm:py-4 px-4 sm:px-5 text-sm font-bold text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/30" />
-                                            </div>
 
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <CustomDatePicker
-                                                        label="Birthdate"
-                                                        value={ownerBirthday}
-                                                        onChange={setOwnerBirthday}
-                                                        onModalOpenChange={setIsDatePickerOpen}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="text-xs font-semibold text-slate-700 block mb-2 pl-1">Age <span className="text-accent-brown text-[11px] font-bold">Auto-fill</span></label>
-                                                    <input type="text" value={calculateAge(ownerBirthday)} readOnly
-                                                        className="w-full bg-accent-peach/5 border-2 border-transparent rounded-2xl py-3 sm:py-4 px-4 text-sm font-black text-black outline-none transition-all cursor-default" />
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <CustomDropdown
-                                                    label="Sex"
-                                                    value={ownerGender}
-                                                    onChange={setOwnerGender}
-                                                    options={[
-                                                        { label: 'Male', value: 'Male' },
-                                                        { label: 'Female', value: 'Female' },
-                                                        { label: 'Other', value: 'Other' },
-                                                        { label: 'Rather not say', value: 'Rather not say' },
-                                                    ]}
-                                                />
-                                            </div>
-
-
-                                            <div className="pt-4 border-t border-accent-brown/5">
-                                                <label className="text-xs font-semibold text-slate-700 block mb-2 pl-1">Registered Email</label>
-                                                <div className="relative group">
-                                                    <input type="email" value={email} readOnly
-                                                        className="w-full bg-accent-peach/20 border-2 border-transparent rounded-2xl py-3 sm:py-4 pl-4 sm:pl-5 pr-24 text-sm font-bold text-black outline-none transition-all cursor-default" />
-                                                    <button onClick={() => { setShowEmailModal(true); setNewEmail(email); }}
-                                                        className="absolute right-5 top-1/2 -translate-y-1/2 text-xs font-bold text-accent-brown hover:text-black transition-colors">
-                                                        Verify
-                                                    </button>
-                                                </div>
+                                            {/* Action Buttons for Business: Cancel & Save Changes */}
+                                            <div className="flex flex-col-reverse sm:flex-row items-center sm:justify-end gap-3 pt-6 mt-6 border-t border-accent-brown/10">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setMobileView('menu')}
+                                                    className="w-full sm:w-auto min-h-[48px] h-12 sm:h-14 px-6 rounded-2xl font-bold text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all active:scale-95 flex items-center justify-center cursor-pointer"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSaveProfile}
+                                                    disabled={savingProfile}
+                                                    aria-disabled={savingProfile}
+                                                    className="w-full sm:w-auto min-h-[48px] h-12 sm:h-14 px-8 rounded-2xl font-bold text-sm sm:text-base text-white bg-brand-dark hover:bg-black transition-all shadow-lg shadow-brand-dark/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none flex items-center justify-center gap-2 cursor-pointer"
+                                                >
+                                                    {savingProfile ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
+                                                    <span>Save Changes</span>
+                                                </button>
                                             </div>
                                         </>
                                     ) : (
                                         <>
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                <div className="md:col-span-1">
-                                                    <label className="text-xs font-semibold text-slate-700 block mb-3 pl-1">First Name <span className="text-red-500">*</span></label>
-                                                    <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Enter First Name"
-                                                        className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 px-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-black/40" />
+                                            {/* Name fields: 1 per row on phones (< 640px), 3 equal columns from sm (>= 640px) */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
+                                                <div>
+                                                    <label htmlFor="profile-first-name" className="text-sm font-bold text-slate-800 mb-2 block">
+                                                        First Name <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+                                                        <span className="sr-only"> (required)</span>
+                                                    </label>
+                                                    <input
+                                                        id="profile-first-name"
+                                                        type="text"
+                                                        disabled={savingProfile || saveStatus === "saving"}
+                                                        value={firstName}
+                                                        onChange={e => setFirstName(e.target.value)}
+                                                        placeholder="Enter First Name"
+                                                        className="w-full bg-accent-peach/20 border border-amber-900/15 focus:border-brand focus:ring-2 focus:ring-brand/20 focus:bg-white rounded-2xl min-h-[52px] h-[52px] sm:h-14 px-4 text-base font-bold text-accent-brown outline-none transition-all placeholder:text-stone-500 placeholder:font-normal placeholder:text-base"
+                                                    />
                                                 </div>
-                                                <div className="md:col-span-1">
-                                                    <label className="text-xs font-semibold text-slate-700 block mb-3 pl-1">Middle Name <span className="text-slate-400 text-[11px] font-medium">Optional</span></label>
-                                                    <input type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} placeholder="Enter Middle Name"
-                                                        className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 px-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/20" />
+                                                <div>
+                                                    <label htmlFor="profile-middle-name" className="text-sm font-bold text-slate-800 mb-2 flex items-center flex-wrap">
+                                                        <span>Middle Name</span>
+                                                        <span className="text-slate-600 text-xs font-normal ml-1.5">Optional</span>
+                                                    </label>
+                                                    <input
+                                                        id="profile-middle-name"
+                                                        type="text"
+                                                        disabled={savingProfile || saveStatus === "saving"}
+                                                        value={middleName}
+                                                        onChange={e => setMiddleName(e.target.value)}
+                                                        placeholder="Enter Middle Name"
+                                                        className="w-full bg-accent-peach/20 border border-amber-900/15 focus:border-brand focus:ring-2 focus:ring-brand/20 focus:bg-white rounded-2xl min-h-[52px] h-[52px] sm:h-14 px-4 text-base font-bold text-accent-brown outline-none transition-all placeholder:text-stone-500 placeholder:font-normal placeholder:text-base"
+                                                    />
                                                 </div>
-                                                <div className="md:col-span-1">
-                                                    <label className="text-xs font-semibold text-slate-700 block mb-3 pl-1">Surname <span className="text-red-500">*</span></label>
-                                                    <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Enter Surname"
-                                                        className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 px-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-accent-brown/20" />
+                                                <div>
+                                                    <label htmlFor="profile-surname" className="text-sm font-bold text-slate-800 mb-2 block">
+                                                        Surname <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+                                                        <span className="sr-only"> (required)</span>
+                                                    </label>
+                                                    <input
+                                                        id="profile-surname"
+                                                        type="text"
+                                                        disabled={savingProfile || saveStatus === "saving"}
+                                                        value={lastName}
+                                                        onChange={e => setLastName(e.target.value)}
+                                                        placeholder="Enter Surname"
+                                                        className="w-full bg-accent-peach/20 border border-amber-900/15 focus:border-brand focus:ring-2 focus:ring-brand/20 focus:bg-white rounded-2xl min-h-[52px] h-[52px] sm:h-14 px-4 text-base font-bold text-accent-brown outline-none transition-all placeholder:text-stone-500 placeholder:font-normal placeholder:text-base"
+                                                    />
                                                 </div>
                                             </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6">
-                                                <div className="md:col-span-1">
+                                            {/* Suffix and Sex: 2 columns on tablet/desktop */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+                                                <div>
                                                     <CustomDropdown
                                                         label="Suffix"
                                                         isOptional={true}
+                                                        disabled={savingProfile || saveStatus === "saving"}
                                                         value={suffix}
                                                         onChange={setSuffix}
+                                                        labelClassName="text-sm font-bold text-slate-800 mb-2 block"
+                                                        buttonClassName="w-full bg-accent-peach/20 border border-amber-900/15 focus:border-brand focus:ring-2 focus:ring-brand/20 rounded-2xl min-h-[52px] h-[52px] sm:h-14 px-4 text-base font-bold text-accent-brown flex items-center justify-between text-left transition-all hover:bg-accent-peach/30"
                                                         options={[
                                                             { label: 'None', value: '' },
                                                             { label: 'Jr.', value: 'Jr.' },
@@ -945,11 +1275,14 @@ const AccountSettings = () => {
                                                         ]}
                                                     />
                                                 </div>
-                                                <div className="md:col-span-1">
+                                                <div>
                                                     <CustomDropdown
                                                         label="Sex"
+                                                        disabled={savingProfile || saveStatus === "saving"}
                                                         value={gender}
                                                         onChange={setGender}
+                                                        labelClassName="text-sm font-bold text-slate-800 mb-2 block"
+                                                        buttonClassName="w-full bg-accent-peach/20 border border-amber-900/15 focus:border-brand focus:ring-2 focus:ring-brand/20 rounded-2xl min-h-[52px] h-[52px] sm:h-14 px-4 text-base font-bold text-accent-brown flex items-center justify-between text-left transition-all hover:bg-accent-peach/30"
                                                         options={[
                                                             { label: 'Male', value: 'Male' },
                                                             { label: 'Female', value: 'Female' },
@@ -958,116 +1291,271 @@ const AccountSettings = () => {
                                                         ]}
                                                     />
                                                 </div>
-                                                <div className="md:col-span-1">
-                                                    <CustomDatePicker
-                                                        label="Date of Birth"
-                                                        isRequired={true}
-                                                        value={birthday}
-                                                        onChange={setBirthday}
-                                                        onModalOpenChange={setIsDatePickerOpen}
-                                                    />
-                                                </div>
                                             </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-accent-brown/5">
-                                                <div className="space-y-6">
+
+                                            {/* Date of Birth & Age Auto-fill: 62% / 38% split from 360px */}
+                                            <div>
+                                                <div className="grid grid-cols-1 min-[360px]:grid-cols-[1.6fr_1fr] sm:grid-cols-[1.6fr_1fr] md:grid-cols-[1.6fr_1fr] gap-3 sm:gap-4 items-start">
                                                     <div>
-                                                        <label className="text-xs font-semibold text-slate-700 block mb-3 pl-1">Contact Number <span className="text-red-500">*</span></label>
-                                                        <div className="relative group">
-                                                            <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-2 border-r border-accent-brown/10 pr-3 transition-colors group-focus-within:border-brand/30">
-                                                                <span className="text-xs font-black text-black group-focus-within:text-accent-brown">+63</span>
-                                                            </div>
+                                                        <CustomDatePicker
+                                                            mode="person birthday"
+                                                            label="Date of Birth"
+                                                            isRequired={true}
+                                                            disabled={savingProfile || saveStatus === "saving"}
+                                                            value={birthday}
+                                                            onChange={setBirthday}
+                                                            onModalOpenChange={setIsDatePickerOpen}
+                                                            labelClassName="text-sm font-bold text-slate-800 mb-2 block"
+                                                            buttonClassName="w-full bg-accent-peach/20 border border-amber-900/15 focus:border-brand focus:ring-2 focus:ring-brand/20 rounded-2xl min-h-[52px] h-[52px] sm:h-14 px-4 text-base font-bold text-accent-brown flex items-center justify-between text-left transition-all hover:bg-accent-peach/30"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label htmlFor="profile-age-autofill" className="text-sm font-bold text-slate-800 mb-2 block">
+                                                            Age <span className="text-brand text-xs font-semibold">Auto-fill</span>
+                                                        </label>
+                                                        <div className="relative">
                                                             <input
-                                                                type="tel"
-                                                                value={phone.replace(/^\+63/, '')}
-                                                                maxLength={10}
-                                                                onChange={e => {
-                                                                    let val = e.target.value.replace(/\D/g, '');
-                                                                    if (val.startsWith('0')) val = val.substring(1);
-                                                                    if (val.length > 0 && !val.startsWith('9')) val = '';
-                                                                    setPhone(val ? `+63${val}` : '');
-                                                                }}
-                                                                placeholder="9XX XXX XXXX"
-                                                                className="w-full bg-[#FAF9F6] border-2 border-transparent focus:border-brand-dark/30 focus:bg-white rounded-[1.25rem] py-4 pl-20 pr-6 text-sm font-black text-accent-brown outline-none transition-all placeholder:font-normal placeholder:text-black/40 tabular-nums" />
+                                                                id="profile-age-autofill"
+                                                                type="text"
+                                                                value={calculateAge(birthday)}
+                                                                readOnly
+                                                                aria-readonly="true"
+                                                                tabIndex={-1}
+                                                                aria-label="Age Auto-fill, read-only"
+                                                                placeholder="—"
+                                                                className="w-full bg-accent-peach/10 border border-slate-200/90 rounded-2xl min-h-[52px] h-[52px] sm:h-14 px-4 text-base font-black text-slate-700 outline-none cursor-default select-none pointer-events-none"
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>
+                                            </div>
 
-                                                <div className="space-y-6">
+                                            {/* Contact Number & Email Address: 2 columns on tablet/desktop */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 pt-4 border-t border-accent-brown/10">
+                                                <div>
+                                                    <label htmlFor="profile-phone" className="text-sm font-bold text-slate-800 mb-2 block">
+                                                        Contact Number <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+                                                        <span className="sr-only"> (required)</span>
+                                                    </label>
+                                                    <div className="w-full min-h-[52px] h-[52px] sm:h-14 px-4 rounded-2xl bg-accent-peach/20 border border-amber-900/15 focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/20 focus-within:bg-white flex items-center transition-all">
+                                                        <div className="flex items-center gap-1.5 border-r border-accent-brown/20 pr-3 mr-3 text-base font-black text-slate-900 shrink-0 select-none">
+                                                            +63
+                                                        </div>
+                                                        <input
+                                                            id="profile-phone"
+                                                            type="tel"
+                                                            value={phone.replace(/^\+63/, '')}
+                                                            maxLength={10}
+                                                            onChange={e => {
+                                                                let val = e.target.value.replace(/\D/g, '');
+                                                                if (val.startsWith('0')) val = val.substring(1);
+                                                                if (val.length > 0 && !val.startsWith('9')) val = '';
+                                                                setPhone(val ? `+63${val}` : '');
+                                                            }}
+                                                            placeholder="9XX XXX XXXX"
+                                                            className="w-full bg-transparent text-base font-bold text-accent-brown outline-none tabular-nums placeholder:text-stone-500 placeholder:font-normal placeholder:text-base"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <label htmlFor="profile-email" className="text-sm font-bold text-slate-800 mb-2 block">
+                                                        Email Address
+                                                    </label>
+                                                    <div className="relative">
+                                                        <input
+                                                            id="profile-email"
+                                                            type="email"
+                                                            value={email}
+                                                            readOnly
+                                                            aria-readonly="true"
+                                                            className="w-full bg-accent-peach/20 border border-amber-900/15 rounded-2xl min-h-[52px] h-[52px] sm:h-14 pl-4 sm:pl-5 pr-28 text-base font-bold text-slate-800 outline-none cursor-default"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { setShowEmailModal(true); setNewEmail(email); }}
+                                                            className="absolute right-2 top-1/2 -translate-y-1/2 min-h-[44px] px-4 rounded-xl text-xs sm:text-sm font-bold text-brand-dark bg-brand/10 hover:bg-brand/20 transition-all flex items-center justify-center active:scale-95 cursor-pointer"
+                                                        >
+                                                            Update
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Rider Specific: Vehicle Type & Registered Address */}
+                                            {isRider && (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 pt-4 border-t border-accent-brown/10">
                                                     <div>
-                                                        <label className="text-xs font-semibold text-slate-700 block mb-3 pl-1">Email Address</label>
-                                                        <div className="relative group">
-                                                            <input type="email" value={email} readOnly
-                                                                className="w-full bg-[#FAF9F6] border-2 border-transparent rounded-[1.25rem] py-4 pl-6 pr-24 text-sm font-black text-accent-brown/80 outline-none transition-all cursor-not-allowed tabular-nums" />
-                                                            <button onClick={() => { setShowEmailModal(true); setNewEmail(email); }}
-                                                                className="absolute right-6 top-1/2 -translate-y-1/2 text-xs font-bold text-accent-brown hover:text-brand-dark transition-colors bg-brand-dark/10 px-3 py-1.5 rounded-lg">
-                                                                Update
+                                                        <label className="text-sm font-bold text-slate-800 mb-2 flex items-center justify-between">
+                                                            <span>{RIDER_TEXT.profile.vehicleLabel}</span>
+                                                            <span className="text-brand-dark text-xs font-bold">{RIDER_TEXT.profile.vehicleVerified}</span>
+                                                        </label>
+                                                        <div className="relative w-full min-h-[52px] h-[52px] sm:h-14 px-4 rounded-2xl bg-accent-peach/20 border border-amber-900/15 flex items-center">
+                                                            <span className="text-brand-dark mr-3 shrink-0">
+                                                                <Bike className="w-5 h-5" />
+                                                            </span>
+                                                            <input
+                                                                type="text"
+                                                                value={vehicleType}
+                                                                readOnly
+                                                                aria-readonly="true"
+                                                                tabIndex={-1}
+                                                                className="w-full bg-transparent text-base font-bold text-accent-brown outline-none cursor-default"
+                                                            />
+                                                            <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                                                                <span className="text-xs font-bold text-green-600">{RIDER_TEXT.profile.vehicleActive}</span>
+                                                                <CheckCircle className="w-4 h-4 text-green-500" />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="text-sm font-bold text-slate-800 mb-2 flex items-center justify-between">
+                                                            <span>{RIDER_TEXT.profile.addressLabel}</span>
+                                                            <span className="text-slate-600 text-xs font-normal">{RIDER_TEXT.profile.addressSub}</span>
+                                                        </label>
+                                                        <div className="relative w-full min-h-[52px] sm:min-h-[56px] py-2 px-4 rounded-2xl bg-accent-peach/20 border border-amber-900/15 flex items-center justify-between gap-3">
+                                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                                <span className="text-brand-dark shrink-0">
+                                                                    <MapPin className="w-5 h-5" />
+                                                                </span>
+                                                                <span className="text-base font-bold text-accent-brown truncate">
+                                                                    {addresses.find(a => a.is_default)?.address_line1 || addresses[0]?.address_line1 || 'No address registered'}
+                                                                </span>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setSection('addresses')}
+                                                                className="min-h-[44px] px-4 rounded-xl text-xs sm:text-sm font-bold text-brand-dark bg-brand/10 hover:bg-brand/20 transition-all active:scale-95 shrink-0 flex items-center justify-center cursor-pointer"
+                                                            >
+                                                                Change
                                                             </button>
                                                         </div>
                                                     </div>
                                                 </div>
+                                            )}
+
+                                            {/* Redesigned Verification Card */}
+                                            <section
+                                                aria-label="Profile verification"
+                                                className="bg-white sm:bg-[#FAF9F5]/70 rounded-[1.25rem] p-4 sm:p-5 border border-emerald-900/10 shadow-sm transition-all"
+                                            >
+                                                {/* Header row: soft green tile (44px) + title + green status chip */}
+                                                <div className="flex items-start sm:items-center gap-3.5">
+                                                    <div
+                                                        aria-hidden="true"
+                                                        className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200/60 flex items-center justify-center shrink-0 shadow-sm"
+                                                    >
+                                                        <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <h4 className="text-base sm:text-[17px] font-bold text-slate-900 tracking-tight leading-snug">
+                                                                Profile Verified
+                                                            </h4>
+                                                            <span
+                                                                role="status"
+                                                                aria-label="Verified"
+                                                                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200/50"
+                                                            >
+                                                                Verified
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-sm text-slate-600 font-medium leading-relaxed mt-1">
+                                                            Your identity has been verified.
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Thin divider */}
+                                                <div className="my-3.5 sm:my-4 border-t border-accent-brown/10" />
+
+                                                {/* Information row: tidy label and value pair */}
+                                                <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 sm:gap-4">
+                                                    <div className="bg-white/80 rounded-xl p-2.5 sm:p-3 border border-accent-brown/5">
+                                                        <span className="text-xs sm:text-[13px] font-medium text-slate-500 block">
+                                                            Age verified
+                                                        </span>
+                                                        <span
+                                                            className="text-sm sm:text-base font-bold text-slate-800 mt-0.5 block tabular-nums"
+                                                            aria-label={`Age verified: ${calculateAge(birthday) || 'Not provided'}`}
+                                                        >
+                                                            {calculateAge(birthday) || '—'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </section>
+                                        </>
+                                    )}
+
+                                    {!isBusiness && (
+                                        <>
+                                            {/* Screen Reader Live Announcement */}
+                                            <div className="sr-only" aria-live="polite" aria-atomic="true">
+                                                {saveStatus === 'saved' && 'Profile saved'}
+                                                {saveStatus === 'saving' && 'Saving profile changes'}
+                                                {saveStatus === 'error' && (saveErrorMessage || 'Could not save profile changes')}
                                             </div>
 
-                                            {isRider && (
-                                                <div className="pt-6">
-                                                    <label className="text-xs font-semibold text-slate-700 block mb-3 pl-1">Vehicle Assignment <span className="text-brand-dark text-[11px] font-bold transition-all ml-2">Verified Status</span></label>
-                                                    <div className="relative group">
-                                                        <span className="absolute left-6 top-1/2 -translate-y-1/2 text-brand-dark transition-colors">
-                                                            <Bike className="w-5 h-5" />
-                                                        </span>
-                                                        <input type="text" value={vehicleType} readOnly
-                                                            className="w-full bg-[#FAF9F6] border-2 border-transparent rounded-[1.25rem] py-4 pl-16 pr-6 text-sm font-semibold text-accent-brown/80 outline-none transition-all cursor-not-allowed" />
-                                                        <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                            <span className="text-xs font-bold text-green-600">Active</span>
-                                                            <CheckCircle className="w-4 h-4 text-green-500" />
+                                            {/* Save Changes Action Footer (Sticky on Mobile, Aligned Right on Tablets/Desktops) */}
+                                            <div className="sticky bottom-16 sm:bottom-0 sm:static z-30 bg-white/95 sm:bg-transparent backdrop-blur-md sm:backdrop-blur-none p-3 sm:p-0 -mx-4 sm:mx-0 border-t border-accent-brown/10 sm:border-0 shadow-[0_-8px_20px_rgba(0,0,0,0.06)] sm:shadow-none transition-all mt-6 sm:mt-8">
+                                                <div className="flex flex-col gap-2.5 sm:gap-3 max-w-full">
+                                                    {/* Error State Message */}
+                                                    {saveStatus === 'error' && saveErrorMessage && (
+                                                        <div role="alert" className="w-full flex items-center gap-2 text-xs font-bold text-red-600 bg-red-50 border border-red-200/80 px-3.5 py-2.5 rounded-xl">
+                                                            <AlertCircle className="w-4 h-4 shrink-0 text-red-500" aria-hidden="true" />
+                                                            <span>{saveErrorMessage}</span>
                                                         </div>
-                                                    </div>
-                                                </div>
-                                            )}
+                                                    )}
 
-                                            {isRider && (
-                                                <div className="grid grid-cols-1 gap-6 pt-6 mb-4">
-                                                    <div>
-                                                        <label className="text-xs font-semibold text-slate-700 block mb-3 pl-1">Residential Address <span className="text-slate-400 text-[11px] font-medium">Registration Address</span></label>
-                                                        <div className="relative group">
-                                                            <div className="w-full bg-[#FAF9F6] border-2 border-transparent rounded-[1.25rem] py-4 pl-16 pr-24 text-sm font-black text-accent-brown flex items-center min-h-[58px]">
-                                                                <span className="absolute left-6 top-1/2 -translate-y-1/2 text-brand-dark">
-                                                                    <MapPin className="w-5 h-5" />
+                                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-end gap-3">
+                                                        {/* Unsaved Changes Indicator */}
+                                                        {isProfileChanged && saveStatus !== 'saving' && saveStatus !== 'saved' && (
+                                                            <div className="flex items-center justify-center sm:justify-end">
+                                                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200/60">
+                                                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse motion-reduce:animate-none" aria-hidden="true" />
+                                                                    Unsaved changes
                                                                 </span>
-                                                                <span className="truncate pr-4">
-                                                                    {addresses.find(a => a.is_default)?.address_line1 || addresses[0]?.address_line1 || 'No address registered'}
-                                                                </span>
-                                                                <button
-                                                                    onClick={() => setSection('addresses')}
-                                                                    className="absolute right-4 top-1/2 -translate-y-1/2 bg-brand-dark/10 text-brand-dark px-4 py-2 rounded-xl text-xs font-bold hover:bg-brand-dark hover:text-white transition-all active:scale-95 shadow-sm"
-                                                                >
-                                                                    Change
-                                                                </button>
                                                             </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
+                                                        )}
 
-                                            <div className="pt-8 border-t border-accent-brown/5 flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-500">
-                                                        <ShieldCheck className="w-5 h-5" />
+                                                        {/* Save Changes Button (5 States) */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleSaveProfile}
+                                                            disabled={!isProfileChanged || savingProfile || saveStatus === 'saving' || !!phoneError || phoneChecking}
+                                                            aria-disabled={!isProfileChanged || savingProfile || saveStatus === 'saving' || !!phoneError || phoneChecking}
+                                                            className={`w-full sm:w-auto sm:min-w-[200px] sm:max-w-[240px] h-[52px] min-h-[52px] px-6 rounded-[1.25rem] font-bold text-base transition-all flex items-center justify-center gap-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-dark select-none ${
+                                                                saveStatus === 'saved'
+                                                                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                                                                    : isProfileChanged && !phoneError && !phoneChecking
+                                                                        ? 'bg-brand-dark hover:bg-black text-white shadow-lg shadow-brand-dark/20 active:scale-95 cursor-pointer'
+                                                                        : 'bg-brand/15 text-brand-dark/70 border border-brand/20 cursor-not-allowed shadow-none'
+                                                            }`}
+                                                        >
+                                                            {saveStatus === 'saving' ? (
+                                                                <>
+                                                                    <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                                                                    <span>Saving...</span>
+                                                                </>
+                                                            ) : saveStatus === 'saved' ? (
+                                                                <>
+                                                                    <Check className="w-4 h-4 text-white" aria-hidden="true" />
+                                                                    <span>Saved</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Check className={`w-4 h-4 ${isProfileChanged ? 'text-white' : 'text-brand-dark/50'}`} aria-hidden="true" />
+                                                                    <span>Save Changes</span>
+                                                                    {!isProfileChanged && <span className="sr-only"> (No changes to save)</span>}
+                                                                </>
+                                                            )}
+                                                        </button>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-xs font-bold text-accent-brown">Profile Verified</p>
-                                                        <p className="text-[9px] font-bold text-black mt-0.5">Your identity has been successfully validated by the system.</p>
-                                                    </div>
-                                                </div>
-                                                <div className="text-xs font-black text-black tabular-nums">
-                                                    Age Verified: {calculateAge(birthday)}
                                                 </div>
                                             </div>
                                         </>
                                     )}
-                                    <button onClick={handleSaveProfile} disabled={savingProfile}
-                                        className="mt-6 flex items-center gap-2 bg-brand-dark text-white px-8 py-4 rounded-2xl font-bold text-sm hover:bg-accent-brown transition-all disabled:opacity-50 shadow-xl shadow-brand-dark/20 active:scale-95">
-                                        {savingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} Save Changes
-                                    </button>
                                 </div>
                             </div>
                         )}
@@ -1304,9 +1792,9 @@ const AccountSettings = () => {
                                 <h3 className="text-xl font-black text-accent-brown tracking-tight mb-6">Notification Preferences</h3>
                                 <div className="space-y-2">
                                     {(isRider ? [
-                                        { key: 'orderUpdates', label: 'Delivery Requests', sub: 'New jobs and customer location updates. Includes shipping fee info for pending orders.' },
-                                        { key: 'loyaltyAlerts', label: 'Earnings & Payouts', sub: 'Weekly summaries and bonus notifications' },
-                                        { key: 'newsletter', label: 'Rider Community', sub: 'Safety tips, area alerts, and platform events' },
+                                        { key: 'orderUpdates', label: RIDER_TEXT.profile.notifRequests, sub: RIDER_TEXT.profile.notifRequestsSub },
+                                        { key: 'loyaltyAlerts', label: RIDER_TEXT.profile.notifEarnings, sub: RIDER_TEXT.profile.notifEarningsSub },
+                                        { key: 'newsletter', label: RIDER_TEXT.profile.notifUpdates, sub: RIDER_TEXT.profile.notifUpdatesSub },
                                         { key: 'gmailNotifications', label: 'Gmail Notifications', sub: 'Email alerts for critical account updates' },
                                     ] : isBusiness ? [
                                         { key: 'orderUpdates', label: 'Business Alerts', sub: 'New reservations and clinic inquiries' },
@@ -1364,8 +1852,8 @@ const AccountSettings = () => {
 
 
     return (
-        <DashboardLayout title="">
-            <div className={`w-full max-w-[1440px] mx-auto space-y-8 pb-20 ${isAnyModalOpen ? 'opacity-30 blur-2xl pointer-events-none' : 'opacity-100'}`}>
+        <DashboardLayout title="" hideHeader={true}>
+            <div className={`w-full max-w-[1440px] mx-auto space-y-6 sm:space-y-8 pb-28 sm:pb-32 lg:pb-12 px-4 sm:px-6 lg:px-8 ${isAnyModalOpen ? 'opacity-30 blur-2xl pointer-events-none' : 'opacity-100'}`}>
 
                 <AnimatePresence>
                     {toast && (
@@ -1377,21 +1865,25 @@ const AccountSettings = () => {
                     )}
                 </AnimatePresence>
 
-                {/* Mobile View: 1-to-1 Match with Reference Design */}
-                <div className="lg:hidden max-w-md mx-auto">
+                {/* Visually hidden heading for Rider a11y */}
+                {isRider && <h1 className="sr-only">{RIDER_TEXT.profile.pageTitle}</h1>}
+
+                {/* Mobile & Tablet View (< 1024px) */}
+                <div className="lg:hidden w-full sm:max-w-[760px] md:max-w-[840px] mx-auto space-y-4">
                     {renderHeaderCard()}
                     {mobileView === 'menu' ? (
                         renderNavList()
                     ) : (
-                        <div className="bg-white rounded-[2.5rem] p-6 sm:p-8 mt-4 relative z-20 shadow-lg border border-slate-100">
-                            <div className="flex items-center justify-between pb-6 mb-6 border-b border-slate-100">
+                        <div className="bg-white rounded-[1.5rem] p-4 sm:p-6 lg:p-8 mt-4 relative z-20 shadow-sm border border-slate-100">
+                            <div className="flex items-center justify-between min-h-[44px] pb-4 mb-4 sm:pb-5 sm:mb-6 border-b border-slate-100">
                                 <button
+                                    type="button"
                                     onClick={() => setMobileView('menu')}
-                                    className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-brand-dark transition-colors"
+                                    className="min-h-[44px] px-3 -ml-3 rounded-xl flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-brand-dark hover:bg-slate-50 transition-colors cursor-pointer"
                                 >
                                     <ChevronLeft className="w-4 h-4" /> Back to Menu
                                 </button>
-                                <span className="text-xs font-bold text-brand-dark">
+                                <span className="text-sm font-bold text-brand-dark min-h-[44px] flex items-center">
                                     {navItems.find(i => i.id === section)?.label}
                                 </span>
                             </div>
@@ -1401,12 +1893,12 @@ const AccountSettings = () => {
                 </div>
 
                 {/* Desktop View: Side-by-Side (Navigation Card Left, Active Section Form Right) */}
-                <div className="hidden lg:grid lg:grid-cols-12 gap-8 items-start">
+                <div className={`hidden lg:grid lg:grid-cols-12 gap-8 items-start mx-auto ${isBusiness ? 'lg:max-w-5xl xl:max-w-6xl' : 'lg:max-w-4xl xl:max-w-[960px]'}`}>
                     <div className="lg:col-span-5 xl:col-span-4 space-y-4">
                         {renderHeaderCard()}
                         {renderNavList()}
                     </div>
-                    <div className="lg:col-span-7 xl:col-span-8 bg-white rounded-[2.5rem] p-8 lg:p-12 shadow-2xl shadow-brand-dark/5 border border-slate-100">
+                    <div className="lg:col-span-7 xl:col-span-8 bg-white rounded-[1.5rem] p-6 lg:p-8 xl:p-10 shadow-sm border border-slate-100">
                         {renderSectionContent()}
                     </div>
                 </div>
@@ -1646,11 +2138,29 @@ const AccountSettings = () => {
                                 {!otpSent ? (
                                     <>
                                         <div>
-                                            <label className="text-xs font-semibold text-slate-700 block mb-2 pl-1">New Email Address</label>
-                                            <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="new-email@example.com"
-                                                className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 focus:bg-white rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all" />
+                                            <label htmlFor="modal-new-email" className="text-xs font-semibold text-slate-700 block mb-2 pl-1">New Email Address</label>
+                                            <input 
+                                                id="modal-new-email"
+                                                type="email" 
+                                                value={newEmail} 
+                                                onChange={e => {
+                                                    setNewEmail(e.target.value);
+                                                    if (modalEmailError) setModalEmailError(null);
+                                                }} 
+                                                onBlur={handleModalEmailBlur}
+                                                aria-invalid={!!modalEmailError}
+                                                aria-describedby={modalEmailError ? "modal-new-email-error" : undefined}
+                                                placeholder="new-email@example.com"
+                                                className={`w-full bg-accent-peach/20 border-2 ${modalEmailError ? 'border-red-400' : 'border-transparent focus:border-brand/30'} focus:bg-white rounded-2xl py-4 px-5 text-sm font-bold text-accent-brown outline-none transition-all`} 
+                                            />
+                                            {modalEmailError && (
+                                                <p id="modal-new-email-error" role="alert" aria-live="polite" className="text-xs font-bold text-red-500 flex items-center gap-1.5 mt-1.5 pl-1">
+                                                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                                    {modalEmailError}
+                                                </p>
+                                            )}
                                         </div>
-                                        <button onClick={handleRequestEmailChange} disabled={sendingOtp}
+                                        <button onClick={handleRequestEmailChange} disabled={sendingOtp || !!modalEmailError || modalEmailChecking}
                                             className="w-full bg-brand-dark text-white py-3.5 rounded-2xl font-bold text-xs hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-xl shadow-brand/10">
                                             {sendingOtp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />} Send Verification Code
                                         </button>
@@ -1694,6 +2204,17 @@ const AccountSettings = () => {
                 message={modal.message}
                 type={modal.type}
             />
+
+            <ConfirmLogoutModal
+                isOpen={isLogoutModalOpen}
+                onClose={() => setIsLogoutModalOpen(false)}
+                onConfirm={() => {
+                    logout();
+                    navigate('/');
+                }}
+            />
+
+            {isRider && <RiderBottomNav />}
         </DashboardLayout>
     );
 };

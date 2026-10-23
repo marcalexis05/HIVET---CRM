@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, X, Shield, Lock, FileText, Globe, HelpCircle, ArrowUpRight, Copy, Check, ArrowUp } from 'lucide-react';
+import { Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin, X, Shield, Lock, FileText, Globe, HelpCircle, ArrowUpRight, Copy, Check, ArrowUp, QrCode } from 'lucide-react';
+import { PwaInstallModal } from './PwaInstallModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Logo } from './Logo';
 
@@ -9,12 +10,13 @@ interface FooterProps {
     className?: string;
 }
 
-type LegalSection = 'Help Center' | 'FAQs' | 'About' | 'Customer Support' | 'Technical Support' | 'Safety Center' | 'Terms of Service' | 'Security' | 'Privacy Policy' | 'Cookies' | 'Direct Line' | null;
+type LegalSection = 'Help & Support' | 'About Hi-Vet' | 'Customer Support' | 'Technical Help' | 'Pet Safety' | 'Terms of Use' | 'Safe and Secure' | 'Privacy Policy' | 'Cookie Policy' | 'Direct Line' | null;
 
 export function Footer({ variant = 'main', className = '' }: FooterProps) {
     const [activeSection, setActiveSection] = useState<LegalSection>(null);
     const [isCopied, setIsCopied] = useState(false);
     const [showFloatingTop, setShowFloatingTop] = useState(false);
+    const [showPwaModal, setShowPwaModal] = useState(false);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -33,29 +35,28 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
     const isBusiness = variant === 'business';
     const isRider = variant === 'rider';
 
-    const brandName = isBusiness ? 'Partner Network' : isRider ? 'Rider Fleet' : 'Hi-Vet';
+    const brandName = isBusiness ? 'Hi-Vet for Clinics' : isRider ? 'Hi-Vet Riders' : 'Hi-Vet';
     const description = isBusiness 
-        ? 'High-performance infrastructure for the modern veterinary professional. Built for scale, security, and precision.'
+        ? 'Simple tools to help clinics manage bookings, orders, and deliveries in one place.'
         : isRider 
-            ? 'The logistical backbone of pet healthcare. Synchronizing deliveries with surgical precision across the network.'
-            : 'Architecting the future of veterinary care through advanced logistics and compassionate technology.';
+            ? 'Deliver pet food and medicine, help local pet owners, and earn on your schedule.'
+            : 'Helping pet owners get quality pet food, supplies, and vet care easily.';
 
     const globalEmail = 'hivetveterinary3@gmail.com';
     const globalPhone = '+63-912-345-6789';
     const globalAddress = "Deparo, Brgy 174, Caloocan City, Metro Manila";
 
     const legalContent = {
-        'Help Center': { title: 'Operational Support', icon: HelpCircle, content: 'Our precision response team is available 24/7 to manage logistical synchronization and platform utility.' },
-        'FAQs': { title: 'Standard Protocols', icon: HelpCircle, content: 'Comprehensive documentation on operational standards, fulfillment timelines, and network compliance.' },
-        'About': { title: 'The Manifesto', icon: Globe, content: 'Hi-Vet is a technological heritage company dedicated to the architectural advancement of pet healthcare delivery.' },
-        'Customer Support': { title: 'Concierge Care', icon: Mail, content: 'Direct access to our senior care architects for personalized solution management.' },
-        'Technical Support': { title: 'Systems Infrastructure', icon: Shield, content: 'Real-time monitoring and technical maintenance for the Hi-Vet global digital network.' },
-        'Safety Center': { title: 'Risk Integrity', icon: Globe, content: 'Our commitment to climate-controlled safety protocols and medical-grade delivery standards.' },
-        'Terms of Service': { title: 'Governance Agreement', icon: FileText, content: 'Professional standards of interaction and operational usage for all network participants.' },
-        'Security': { title: 'Encryption Standards', icon: Shield, content: 'AES-256 bank-grade encryption protocols protecting the sanctity of medical and personal data.' },
-        'Privacy Policy': { title: 'Data Sovereignty', icon: Lock, content: 'Rigorous privacy standards ensuring zero third-party data commercialization.' },
-        'Cookies': { title: 'Preference Nodes', icon: Globe, content: 'Essential operational data required for synchronized platform performance.' },
-        'Direct Line': { title: 'Direct Response Line', icon: Phone, content: 'Our senior care architects are available for immediate logistical synchronization. Reach us at +63-912-345-6789.' }
+        'Help & Support': { title: 'Help & Support', icon: HelpCircle, content: 'Our friendly support team is ready to help you with your orders and clinic visits.' },
+        'About Hi-Vet': { title: 'About Hi-Vet', icon: Globe, content: 'Hi-Vet connects pet owners with trusted clinics and riders for easy, reliable pet care.' },
+        'Customer Support': { title: 'Customer Support', icon: Mail, content: 'Contact our team anytime for help with your pet orders, products, or clinic visits.' },
+        'Technical Help': { title: 'Technical Help', icon: Shield, content: 'Need help with your account or the website? Reach out to our technical team.' },
+        'Pet Safety': { title: 'Pet Safety', icon: Globe, content: 'All our clinics and products meet strict quality and safety guidelines for your pets.' },
+        'Terms of Use': { title: 'Terms of Use', icon: FileText, content: 'Our terms and rules for using the Hi-Vet website and ordering platform.' },
+        'Safe and Secure': { title: 'Safe and Secure', icon: Shield, content: 'We protect your data and payment information with modern security standards.' },
+        'Privacy Policy': { title: 'Privacy Policy', icon: Lock, content: 'We care about your privacy. Your personal information is never sold to third parties.' },
+        'Cookie Policy': { title: 'Cookie Policy', icon: Globe, content: 'We use cookies to keep you signed in and give you a smooth browsing experience.' },
+        'Direct Line': { title: 'Call Us', icon: Phone, content: 'Need quick help? Call our support team directly at +63-912-345-6789.' }
     };
 
     useEffect(() => {
@@ -89,16 +90,25 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
                                 </button>
                             ))}
                         </div>
+                        <div className="pt-2">
+                            <button
+                                onClick={() => setShowPwaModal(true)}
+                                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/90 text-xs font-semibold border border-white/10 transition-all hover:border-brand/40 group"
+                            >
+                                <QrCode className="w-4 h-4 text-brand group-hover:scale-110 transition-transform" />
+                                <span>Get Mobile App (QR Code)</span>
+                            </button>
+                        </div>
                     </div>
 
                     {/* Navigation Columns */}
                     <div className="md:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-6">
                         <div className="space-y-3">
-                            <h4 className="text-xs font-bold text-brand">Ecosystem</h4>
+                            <h4 className="text-xs font-bold text-brand">About & Help</h4>
                             <ul className="space-y-2.5">
-                                {['About', 'Help Center', 'Safety Center'].map((item) => (
+                                {['About Hi-Vet', 'Help & Support', 'Pet Safety'].map((item) => (
                                     <li key={item}>
-                                        <button onClick={() => setActiveSection(item as LegalSection)} className="text-white/40 hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5 group">
+                                        <button onClick={() => setActiveSection(item as LegalSection)} className="text-white/40 hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5 group cursor-pointer">
                                             {item}
                                             <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                                         </button>
@@ -107,11 +117,11 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
                             </ul>
                         </div>
                         <div className="space-y-3">
-                            <h4 className="text-xs font-bold text-brand">Protocols</h4>
+                            <h4 className="text-xs font-bold text-brand">Legal & Privacy</h4>
                             <ul className="space-y-2.5">
-                                {['Terms of Service', 'Security', 'Privacy Policy'].map((item) => (
+                                {['Terms of Use', 'Safe and Secure', 'Privacy Policy'].map((item) => (
                                     <li key={item}>
-                                        <button onClick={() => setActiveSection(item as LegalSection)} className="text-white/40 hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5 group">
+                                        <button onClick={() => setActiveSection(item as LegalSection)} className="text-white/40 hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5 group cursor-pointer">
                                             {item}
                                             <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                                         </button>
@@ -120,7 +130,7 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
                             </ul>
                         </div>
                         <div className="col-span-2 sm:col-span-1 space-y-3">
-                            <h4 className="text-xs font-bold text-brand">Direct Sync</h4>
+                            <h4 className="text-xs font-bold text-brand">Contact Us</h4>
                             <div className="space-y-2.5">
                                 <a href={`mailto:${globalEmail}`} className="block border-l-2 border-brand/30 pl-3 py-0.5 hover:border-brand transition-colors">
                                     <p className="text-[10px] text-white/40">Email</p>
@@ -130,7 +140,7 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
                                     onClick={() => setActiveSection('Direct Line')} 
                                     className="block w-full text-left border-l-2 border-brand/30 pl-3 py-0.5 hover:border-brand transition-colors cursor-pointer"
                                 >
-                                    <p className="text-[10px] text-white/40">Direct Line</p>
+                                    <p className="text-[10px] text-white/40">Call Us</p>
                                     <p className="text-xs font-semibold text-white/80">{globalPhone}</p>
                                 </button>
                                 <div className="block border-l-2 border-brand/30 pl-3 py-0.5">
@@ -145,18 +155,19 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
                 {/* Bottom Bar */}
                 <div className="pt-4 sm:pt-5 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-3 text-center sm:text-left">
                     <p className="text-[11px] font-medium text-white/20">
-                        © 2026 Hi-Vet Infrastructure Solutions. All rights reserved.
+                        © 2026 Hi-Vet. All rights reserved.
                     </p>
                     <div className="flex gap-6">
-                        {['Cookies', 'Technical Support'].map((item) => (
-                            <button key={item} onClick={() => setActiveSection(item as LegalSection)} className="text-[11px] font-medium text-white/20 hover:text-brand transition-colors">
+                        {['Cookie Policy', 'Technical Help'].map((item) => (
+                            <button key={item} onClick={() => setActiveSection(item as LegalSection)} className="text-[11px] font-medium text-white/20 hover:text-brand transition-colors cursor-pointer">
                                 {item}
                             </button>
                         ))}
                     </div>
                 </div>
             </div>
-        {/* Professional Protocol Modal */}
+
+            {/* Information Modal */}
             <AnimatePresence>
                 {activeSection && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
@@ -174,13 +185,13 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
                                         })()}
                                     </div>
                                     <div className="space-y-2">
-                                        <p className="text-xs font-bold text-brand">System Protocol</p>
+                                        <p className="text-xs font-bold text-brand">Help & Information</p>
                                         <h3 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight">{legalContent[activeSection].title}</h3>
                                     </div>
                                 </div>
                                 <p className="text-base sm:text-lg text-white/60 leading-relaxed italic font-medium">"{legalContent[activeSection].content}"</p>
                                 
-                                {(activeSection === 'Direct Line' || activeSection === 'Technical Support' || activeSection === 'Customer Support') && (
+                                {(activeSection === 'Direct Line' || activeSection === 'Technical Help' || activeSection === 'Customer Support') && (
                                     <div className="flex flex-col sm:flex-row gap-4">
                                         <motion.button 
                                             whileHover={{ scale: 1.02 }}
@@ -193,44 +204,40 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
                                             className="flex-1 bg-white/5 border border-white/10 text-white py-5 rounded-2xl font-bold text-xs hover:bg-white/10 transition-all flex items-center justify-center gap-3"
                                         >
                                             {isCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                                            {isCopied ? 'Copied to Clipboard' : 'Copy Number'}
+                                            {isCopied ? 'Copied to Clipboard' : 'Copy Phone Number'}
                                         </motion.button>
                                         <motion.button 
                                             whileHover={{ scale: 1.02 }}
                                             whileTap={{ scale: 0.98 }}
-                                            onClick={() => window.open(`tel:${globalPhone}`, '_self')}
-                                            className="flex-1 bg-brand text-accent-brown py-5 rounded-2xl font-bold text-xs hover:brightness-110 transition-all flex items-center justify-center gap-3"
+                                            onClick={() => window.open(`tel:${globalPhone}`)}
+                                            className="flex-1 bg-brand text-accent-brown py-5 rounded-2xl font-bold text-xs hover:bg-brand-dark transition-all flex items-center justify-center gap-3"
                                         >
                                             <Phone className="w-4 h-4" />
-                                            Place Call Now
+                                            Call Directly
                                         </motion.button>
                                     </div>
                                 )}
-
-                                <button onClick={() => setActiveSection(null)} className="w-full bg-white text-black py-6 rounded-2xl font-bold text-xs hover:bg-brand hover:text-accent-brown transition-all" > Close Documentation </button>
                             </div>
                         </motion.div>
                     </div>
                 )}
             </AnimatePresence>
+
             {/* Floating Back to Top Button */}
-            <AnimatePresence>
-                {showFloating && (
-                    <motion.button
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.8 }}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        onClick={scrollToTop}
-                        aria-label="Back to top"
-                        title="Back to top"
-                        className="fixed bottom-6 right-6 z-40 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-brand text-white shadow-xl shadow-brand/30 border border-white/20 flex items-center justify-center transition-colors hover:bg-brand-dark"
-                    >
-                        <ArrowUp className="w-5 h-5 stroke-[2.5]" />
-                    </motion.button>
-                )}
-            </AnimatePresence>
+            {showFloating && (
+                <button
+                    onClick={scrollToTop}
+                    aria-label="Back to top"
+                    className="fixed bottom-6 right-6 z-40 bg-brand text-white p-3.5 rounded-full shadow-2xl hover:bg-brand-dark transition-all transform hover:-translate-y-1 active:scale-95"
+                >
+                    <ArrowUp className="w-5 h-5 text-white stroke-[2.5]" />
+                </button>
+            )}
+            <PwaInstallModal
+                isOpen={showPwaModal}
+                onClose={() => setShowPwaModal(false)}
+                initialRole={isBusiness ? 'business' : isRider ? 'rider' : 'customer'}
+            />
         </footer>
     );
 }

@@ -8,7 +8,9 @@ import { ReservationsSection } from './components/ReservationsSection';
 import { LoyaltySection } from './components/LoyaltySection';
 import { AboutSection } from './components/AboutSection';
 import { Logo } from './components/Logo';
-import { ShoppingCart, Menu, X, Home, ShoppingBag, Package, Award, Info, Zap, LayoutGrid, Shield, Sparkles, FileText } from 'lucide-react';
+import { ShoppingCart, Menu, X, Home, ShoppingBag, Package, Award, Info, Zap, LayoutGrid, Shield, Sparkles, FileText, QrCode } from 'lucide-react';
+import { PwaInstallModal } from './components/PwaInstallModal';
+import { setPwaManifestForRole, type PwaRole } from './utils/pwaManager';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -48,6 +50,9 @@ import BusinessProductEditor from './pages/dashboard/BusinessProductEditor';
 import AccountSettings from './pages/dashboard/AccountSettings';
 import GoogleCallback from './pages/GoogleCallback';
 import BusinessLanding from './pages/BusinessLanding';
+import { CLINIC_LANDING_TEXT } from './constants/clinicLandingWording';
+import { MAIN_LANDING_TEXT } from './constants/mainLandingWording';
+import { RIDER_LANDING_TEXT } from './constants/riderLandingWording';
 import BusinessLogin from './pages/BusinessLogin';
 import BusinessRegister from './pages/BusinessRegister';
 import RiderLanding from './pages/RiderLanding';
@@ -61,6 +66,7 @@ import RiderAlerts from './pages/dashboard/RiderAlerts';
 function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [showPwaModal, setShowPwaModal] = useState(false);
   const location = useLocation();
   const shouldReduceMotion = useReducedMotion();
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -119,6 +125,17 @@ function Navigation() {
     };
   }, [isMenuOpen]);
 
+  useEffect(() => {
+    document.title = 'Hi-Vet';
+    if (location.pathname.startsWith('/dashboard/business') || location.pathname.startsWith('/login/business') || location.pathname === '/for-clinics' || location.pathname.startsWith('/register/business')) {
+      setPwaManifestForRole('business');
+    } else if (location.pathname.startsWith('/dashboard/rider') || location.pathname.startsWith('/login/rider') || location.pathname === '/for-riders' || location.pathname.startsWith('/register/rider')) {
+      setPwaManifestForRole('rider');
+    } else {
+      setPwaManifestForRole('customer');
+    }
+  }, [location.pathname]);
+
   // Hide public navbar on auth pages and dashboard portals
   const shouldShowNavbar = !['/login', '/login/business', '/login/rider', '/register', '/register/business', '/register/rider', '/forgot-password', '/catalog'].includes(location.pathname) && !location.pathname.startsWith('/dashboard');
 
@@ -127,6 +144,7 @@ function Navigation() {
   const isBusinessLanding = location.pathname === '/for-clinics';
   const isRiderLanding = location.pathname === '/for-riders';
   const isHome = location.pathname === '/';
+  const currentPwaRole: PwaRole = isBusinessLanding ? 'business' : isRiderLanding ? 'rider' : 'customer';
   
   // Dynamic Styles based on scroll and page
   const isTransparent = (isHome || isBusinessLanding || isRiderLanding) && !isScrolled && !isMenuOpen;
@@ -155,19 +173,19 @@ function Navigation() {
   };
 
   const menuItems = isBusinessLanding ? [
-    { name: 'Features', href: '#features', type: 'anchor', icon: Zap },
-    { name: 'CRM & BI', href: '#capabilities', type: 'anchor', icon: LayoutGrid },
-    { name: 'Security', href: '#security', type: 'anchor', icon: Shield }
+    { name: CLINIC_LANDING_TEXT.nav.features, href: '#features', type: 'anchor', icon: Zap },
+    { name: CLINIC_LANDING_TEXT.nav.clinicTools, href: '#capabilities', type: 'anchor', icon: LayoutGrid },
+    { name: CLINIC_LANDING_TEXT.nav.safety, href: '#security', type: 'anchor', icon: Shield }
   ] : isRiderLanding ? [
-    { name: 'Benefits', href: '#benefits', type: 'anchor', icon: Award },
-    { name: 'Perks', href: '#perks', type: 'anchor', icon: Sparkles },
-    { name: 'Requirements', href: '#requirements', type: 'anchor', icon: FileText }
+    { name: RIDER_LANDING_TEXT.nav.benefits, href: '#benefits', type: 'anchor', icon: Award },
+    { name: RIDER_LANDING_TEXT.nav.rewards, href: '#perks', type: 'anchor', icon: Sparkles },
+    { name: RIDER_LANDING_TEXT.nav.whatYouNeed, href: '#requirements', type: 'anchor', icon: FileText }
   ] : [
-    { name: 'Home', href: '/', type: 'link', icon: Home },
-    { name: 'Store', href: '/catalog', type: 'link', icon: ShoppingBag },
-    { name: 'Orders', href: '/#orders', type: 'anchor', icon: Package },
-    { name: 'Loyalty', href: '/#loyalty', type: 'anchor', icon: Award },
-    { name: 'About', href: '/#about', type: 'anchor', icon: Info },
+    { name: MAIN_LANDING_TEXT.nav.home, href: '/', type: 'link', icon: Home },
+    { name: MAIN_LANDING_TEXT.nav.store, href: '/catalog', type: 'link', icon: ShoppingBag },
+    { name: MAIN_LANDING_TEXT.nav.orders, href: '/#orders', type: 'anchor', icon: Package },
+    { name: MAIN_LANDING_TEXT.nav.rewards, href: '/#loyalty', type: 'anchor', icon: Award },
+    { name: MAIN_LANDING_TEXT.nav.about, href: '/#about', type: 'anchor', icon: Info },
   ];
 
   const isItemActive = (item: { href: string; type: string }) => {
@@ -199,28 +217,40 @@ function Navigation() {
         <div className={`hidden lg:flex items-center gap-8 xl:gap-10 font-bold text-xs xl:text-sm uppercase tracking-widest ${linkColor}`}>
           {isBusinessLanding ? (
             <>
-              <a href="#features" className="hover:text-brand-dark transition-colors">Features</a>
-              <a href="#capabilities" className="hover:text-brand-dark transition-colors">CRM & BI</a>
-              <a href="#security" className="hover:text-brand-dark transition-colors">Security</a>
+              <a href="#features" className="hover:text-brand-dark transition-colors">{CLINIC_LANDING_TEXT.nav.features}</a>
+              <a href="#capabilities" className="hover:text-brand-dark transition-colors">{CLINIC_LANDING_TEXT.nav.clinicTools}</a>
+              <a href="#security" className="hover:text-brand-dark transition-colors">{CLINIC_LANDING_TEXT.nav.safety}</a>
             </>
           ) : isRiderLanding ? (
             <>
-              <a href="#benefits" className="hover:text-brand-dark transition-colors">Benefits</a>
-              <a href="#perks" className="hover:text-brand-dark transition-colors">Perks</a>
-              <a href="#requirements" className="hover:text-brand-dark transition-colors">Requirements</a>
+              <a href="#benefits" className="hover:text-brand-dark transition-colors">{RIDER_LANDING_TEXT.nav.benefits}</a>
+              <a href="#perks" className="hover:text-brand-dark transition-colors">{RIDER_LANDING_TEXT.nav.rewards}</a>
+              <a href="#requirements" className="hover:text-brand-dark transition-colors">{RIDER_LANDING_TEXT.nav.whatYouNeed}</a>
             </>
           ) : (
             <>
-              <Link to="/" className="hover:text-brand-dark transition-colors" onClick={handleHomeClick}>Home</Link>
-              <Link to="/catalog" className="hover:text-brand-dark transition-colors">Store</Link>
-              <a href="/#orders" className="hover:text-brand-dark transition-colors">Orders</a>
-              <a href="/#loyalty" className="hover:text-brand-dark transition-colors">Loyalty</a>
-              <a href="/#about" className="hover:text-brand-dark transition-colors">About</a>
+              <Link to="/" className="hover:text-brand-dark transition-colors" onClick={handleHomeClick}>{MAIN_LANDING_TEXT.nav.home}</Link>
+              <Link to="/catalog" className="hover:text-brand-dark transition-colors">{MAIN_LANDING_TEXT.nav.store}</Link>
+              <a href="/#orders" className="hover:text-brand-dark transition-colors">{MAIN_LANDING_TEXT.nav.orders}</a>
+              <a href="/#loyalty" className="hover:text-brand-dark transition-colors">{MAIN_LANDING_TEXT.nav.rewards}</a>
+              <a href="/#about" className="hover:text-brand-dark transition-colors">{MAIN_LANDING_TEXT.nav.about}</a>
             </>
           )}
         </div>
 
         <div className="flex-1 flex items-center justify-end gap-3 xs:gap-6">
+          <button
+            onClick={() => setShowPwaModal(true)}
+            className={`hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all border ${
+              isTransparent
+                ? 'border-white/30 text-white hover:bg-white/15'
+                : 'border-accent-brown/20 text-accent-brown hover:border-brand hover:text-brand hover:bg-brand/5'
+            }`}
+            title="Scan QR Code to install app"
+          >
+            <QrCode className="w-3.5 h-3.5" />
+            <span>Install App</span>
+          </button>
           {!isBusinessLanding && !isRiderLanding && (
             <>
               <button className={`relative p-2 transition-all ${isTransparent ? 'text-white/70 hover:text-white' : 'text-accent-brown/60 hover:text-brand'}`}>
@@ -233,28 +263,28 @@ function Navigation() {
           {isBusinessLanding ? (
             <div className="hidden sm:flex items-center gap-4 xs:gap-6">
               <Link to="/login/business" className={`text-xs xs:text-sm font-bold transition-colors uppercase tracking-widest ${isTransparent ? 'text-white/80 hover:text-white' : 'text-accent-brown/80 hover:text-brand'}`}>
-                Partner Login
+                {CLINIC_LANDING_TEXT.nav.loginBtn}
               </Link>
               <Link to="/register/business" className="bg-brand-dark text-white hover:bg-brand px-6 xs:px-8 py-2.5 xs:py-3 rounded-full text-[10px] xs:text-xs font-bold transition-colors uppercase tracking-widest shadow-md">
-                Register Clinic
+                {CLINIC_LANDING_TEXT.nav.registerBtn}
               </Link>
             </div>
           ) : isRiderLanding ? (
             <div className="hidden sm:flex items-center gap-4 xs:gap-6">
               <Link to="/login/rider" className={`text-xs xs:text-sm font-bold transition-colors uppercase tracking-widest ${isTransparent ? 'text-white/80 hover:text-white' : 'text-accent-brown/80 hover:text-brand'}`}>
-                Rider Login
+                {RIDER_LANDING_TEXT.nav.loginBtn}
               </Link>
               <Link to="/register/rider" className="bg-brand-dark text-white hover:bg-brand px-6 xs:px-8 py-2.5 xs:py-3 rounded-full text-[10px] xs:text-xs font-bold transition-colors uppercase tracking-widest shadow-md">
-                Apply to Drive
+                {RIDER_LANDING_TEXT.nav.registerBtn}
               </Link>
             </div>
           ) : (
             <div className="hidden sm:flex items-center gap-6">
               <Link to="/login" className={`text-xs xs:text-sm font-bold transition-colors uppercase tracking-widest ${isTransparent ? 'text-white/70 hover:text-white' : 'text-accent-brown/60 hover:text-brand'}`}>
-                Login
+                {MAIN_LANDING_TEXT.nav.loginBtn}
               </Link>
               <Link to="/register" className="btn-primary !px-6 xs:!px-8 !py-2.5 xs:!py-3 !text-[10px] xs:!text-xs !rounded-full">
-                Register
+                {MAIN_LANDING_TEXT.nav.registerBtn}
               </Link>
             </div>
           )}
@@ -351,6 +381,23 @@ function Navigation() {
                   })}
                 </div>
 
+                {/* Install PWA Prompt */}
+                <div className="px-3.5 pt-2 pb-1 shrink-0">
+                  <button
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      setShowPwaModal(true);
+                    }}
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-brand/5 border border-brand/20 hover:bg-brand/10 text-brand text-xs font-bold transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <QrCode className="w-4 h-4" />
+                      <span>Install App (QR Code)</span>
+                    </span>
+                    <span className="text-[10px] bg-brand text-white px-2 py-0.5 rounded-full uppercase tracking-wider font-extrabold">PWA</span>
+                  </button>
+                </div>
+
                 {/* Buttons Area */}
                 <div className="p-3.5 sm:p-4 border-t border-slate-100 bg-slate-50/60 shrink-0">
                   {isBusinessLanding ? (
@@ -360,14 +407,14 @@ function Navigation() {
                         onClick={() => setIsMenuOpen(false)}
                         className="h-12 min-h-[48px] rounded-xl border-2 border-brand text-brand hover:bg-brand/5 font-bold text-sm flex items-center justify-center transition-all active:scale-[0.98] bg-white"
                       >
-                        Partner Login
+                        {CLINIC_LANDING_TEXT.nav.loginBtn}
                       </Link>
                       <Link
                         to="/register/business"
                         onClick={() => setIsMenuOpen(false)}
                         className="h-12 min-h-[48px] rounded-xl bg-brand hover:bg-brand-dark text-white font-bold text-sm shadow-md shadow-brand/20 flex items-center justify-center transition-all active:scale-[0.98]"
                       >
-                        Register Clinic
+                        {CLINIC_LANDING_TEXT.nav.registerBtn}
                       </Link>
                     </div>
                   ) : isRiderLanding ? (
@@ -377,14 +424,14 @@ function Navigation() {
                         onClick={() => setIsMenuOpen(false)}
                         className="h-12 min-h-[48px] rounded-xl border-2 border-brand text-brand hover:bg-brand/5 font-bold text-sm flex items-center justify-center transition-all active:scale-[0.98] bg-white"
                       >
-                        Rider Login
+                        {RIDER_LANDING_TEXT.nav.loginBtn}
                       </Link>
                       <Link
                         to="/register/rider"
                         onClick={() => setIsMenuOpen(false)}
                         className="h-12 min-h-[48px] rounded-xl bg-brand hover:bg-brand-dark text-white font-bold text-sm shadow-md shadow-brand/20 flex items-center justify-center transition-all active:scale-[0.98]"
                       >
-                        Apply to Drive
+                        {RIDER_LANDING_TEXT.nav.registerBtn}
                       </Link>
                     </div>
                   ) : (
@@ -394,14 +441,14 @@ function Navigation() {
                         onClick={() => setIsMenuOpen(false)}
                         className="h-12 min-h-[48px] rounded-xl border-2 border-brand text-brand hover:bg-brand/5 font-bold text-sm flex items-center justify-center transition-all active:scale-[0.98] bg-white"
                       >
-                        Login
+                        {MAIN_LANDING_TEXT.nav.loginBtn}
                       </Link>
                       <Link
                         to="/register"
                         onClick={() => setIsMenuOpen(false)}
                         className="h-12 min-h-[48px] rounded-xl bg-brand hover:bg-brand-dark text-white font-bold text-sm shadow-md shadow-brand/20 flex items-center justify-center transition-all active:scale-[0.98]"
                       >
-                        Register Now
+                        {MAIN_LANDING_TEXT.nav.registerBtn}
                       </Link>
                     </div>
                   )}
@@ -411,6 +458,11 @@ function Navigation() {
           </>
         )}
       </AnimatePresence>
+      <PwaInstallModal
+        isOpen={showPwaModal}
+        onClose={() => setShowPwaModal(false)}
+        initialRole={currentPwaRole}
+      />
     </nav>
   );
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, QrCode, ShieldCheck, Loader2, CheckCircle2, Info } from 'lucide-react';
+import { formatReviewId } from '../utils/textFormatters';
 
 interface QrCodeModalProps {
     isOpen: boolean;
@@ -116,7 +117,7 @@ const QrCodeModal: React.FC<QrCodeModalProps> = ({
                                         <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 block mb-3">{referenceLabel}</span>
                                         <div className="text-xl font-black text-accent-brown/60 tracking-tight flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full bg-brand" />
-                                            {reference}
+                                            {formatReviewId(reference)}
                                         </div>
                                     </div>
                                 </div>

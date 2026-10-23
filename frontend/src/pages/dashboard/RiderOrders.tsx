@@ -1,133 +1,250 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Package, Bike, ChevronRight,
-    Search, Loader2, Star, ArrowLeft, ArrowRight,
-    X, MapPin, Store, Phone, User, Clock, ShieldCheck
+    Search, Loader2, Star,
+    X, Clock, ShieldCheck
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import Pagination from '../../components/Pagination';
 import RiderBottomNav from '../../components/RiderBottomNav';
+import { RIDER_TEXT } from '../../constants/riderWording';
+import { formatRiderOrderId, formatRiderOrderIdForAria, matchesRiderOrderIdSearch } from '../../utils/textFormatters';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const OrderDetailsModal = ({ order, isOpen, onClose }: { order: any, isOpen: boolean, onClose: () => void }) => {
+    const dialogRef = React.useRef<HTMLDivElement | null>(null);
+    const closeBtnRef = React.useRef<HTMLButtonElement | null>(null);
+
+    // Lock body scroll while modal is open to prevent page shifting/scrolling behind
+    useEffect(() => {
+        if (!isOpen) return;
+        const originalOverflow = document.body.style.overflow;
+        const originalPaddingRight = document.body.style.paddingRight;
+        const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+        document.body.style.overflow = 'hidden';
+        if (scrollbarWidth > 0) {
+            document.body.style.paddingRight = `${scrollbarWidth}px`;
+        }
+
+        // Auto-focus close button for keyboard accessibility
+        const timer = setTimeout(() => {
+            closeBtnRef.current?.focus();
+        }, 50);
+
+        return () => {
+            clearTimeout(timer);
+            document.body.style.overflow = originalOverflow;
+            document.body.style.paddingRight = originalPaddingRight;
+        };
+    }, [isOpen]);
+
     if (!order) return null;
+
+    // Handle Escape key and focus trapping
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            e.stopPropagation();
+            onClose();
+            return;
+        }
+
+        if (e.key === 'Tab' && dialogRef.current) {
+            const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+
+            if (e.shiftKey) {
+                if (document.activeElement === first) {
+                    last.focus();
+                    e.preventDefault();
+                }
+            } else {
+                if (document.activeElement === last) {
+                    first.focus();
+                    e.preventDefault();
+                }
+            }
+        }
+    };
+
+    const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const orderNumber = order?.id?.toString().slice(-4) || '0000';
 
     return (
         <AnimatePresence>
             {isOpen && (
                 <>
+                    {/* Plain light dim backdrop, max 40% dark, zero blur */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
+                        transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
                         onClick={onClose}
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200]"
+                        className="fixed inset-0 bg-black/40 z-[200]"
+                        aria-hidden="true"
                     />
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[201] bg-white rounded-[2.5rem] p-8 w-[95%] max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto"
-                    >
-                        {/* Header */}
-                        <div className="flex justify-between items-center mb-8 pb-4 border-b border-accent-brown/5">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-brand-dark rounded-2xl flex items-center justify-center text-white">
-                                    <ShieldCheck size={24} />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black uppercase text-accent-brown/30 tracking-[0.3em]">Operational Review</p>
-                                    <h3 className="text-xl font-black text-accent-brown uppercase tracking-tighter">#HY-{order.id.toString().slice(-6)}</h3>
-                                </div>
-                            </div>
-                            <button onClick={onClose} className="w-10 h-10 bg-accent-peach/10 rounded-xl flex items-center justify-center text-accent-brown/40 hover:bg-red-50 hover:text-red-500 transition-all">
-                                <X size={20} />
-                            </button>
-                        </div>
 
-                        {/* Content Grid */}
-                        <div className="space-y-8">
-                            {/* Status & Date */}
-                            <div className="flex items-center justify-between">
-                                <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${
-                                    ['Completed', 'Delivered'].includes(order.status) ? 'bg-green-500 text-white' : 'bg-brand-dark text-white'
-                                }`}>
-                                    {order.status}
+                    {/* Modal Wrapper: Mobile Bottom Sheet / Desktop Centered Dialog */}
+                    <div className="fixed inset-0 z-[201] flex flex-col justify-end sm:justify-center sm:items-center p-0 sm:p-4 pointer-events-none">
+                        <motion.div
+                            ref={dialogRef}
+                            role="dialog"
+                            aria-modal="true"
+                            aria-label={formatRiderOrderIdForAria(order)}
+                            tabIndex={-1}
+                            onKeyDown={handleKeyDown}
+                            initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 30 }}
+                            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 30 }}
+                            transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
+                            className="pointer-events-auto bg-white shadow-2xl flex flex-col w-full max-h-[92vh] sm:max-h-[90vh] rounded-t-[24px] sm:rounded-[2rem] border border-accent-brown/10 sm:max-w-lg md:max-w-xl overflow-hidden outline-none"
+                        >
+                            {/* Fixed Header */}
+                            <div className="flex items-center justify-between p-4 sm:p-6 pb-3 sm:pb-4 border-b border-accent-brown/10 shrink-0 bg-white">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className="w-10 h-10 sm:w-11 sm:h-11 bg-accent-peach/20 rounded-xl flex items-center justify-center text-accent-brown shrink-0" aria-hidden="true">
+                                        <Package size={20} />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-0.5">
+                                            {RIDER_TEXT.orders.orderIdLabel}
+                                        </p>
+                                        <h2 className="text-lg sm:text-xl font-black text-accent-brown uppercase tracking-tight truncate">
+                                            {formatRiderOrderId(order)}
+                                        </h2>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2 text-[10px] font-black text-accent-brown/40 uppercase tracking-widest">
-                                    <Clock size={12} /> {new Date(order.created_at).toLocaleString()}
-                                </div>
-                            </div>
-
-                            {/* Logistics Route */}
-                            <div className="space-y-6 bg-accent-peach/5 rounded-[2rem] p-6 border border-accent-brown/5 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-brand-dark/[0.02] rounded-full -mr-16 -mt-16" />
-                                
-                                <div className="relative pl-8">
-                                    <div className="absolute left-0 top-1.5 w-3 h-3 rounded-full bg-brand-dark ring-4 ring-brand-dark/10" />
-                                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-accent-brown/30 mb-1">Source Protocol</p>
-                                    <p className="font-black text-accent-brown text-sm uppercase leading-tight">{order.pickup_name || 'Clinic Hub'}</p>
-                                    <p className="text-[11px] font-bold text-accent-brown/50 mt-1 leading-snug">{order.pickup_address || 'Extraction point not specified'}</p>
-                                </div>
-
-                                <div className="h-8 border-l-2 border-dashed border-accent-brown/10 ml-1.5" />
-
-                                <div className="relative pl-8">
-                                    <div className="absolute left-0 top-1.5 w-3 h-3 rounded-full bg-orange-500 ring-4 ring-orange-500/10" />
-                                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-accent-brown/30 mb-1">Target Mission</p>
-                                    <p className="font-black text-accent-brown text-sm uppercase leading-tight">{order.customer_name || 'Customer Drop-off'}</p>
-                                    <p className="text-[11px] font-bold text-accent-brown/50 mt-1 leading-snug">{order.delivery_address}</p>
+                                <div className="flex items-center gap-2.5">
+                                    <span className={`px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                                        ['Completed', 'Delivered'].includes(order.status) 
+                                            ? 'bg-green-500/15 text-green-700' 
+                                            : 'bg-brand-dark/15 text-brand-dark'
+                                    }`}>
+                                        {order.status}
+                                    </span>
+                                    <button 
+                                        ref={closeBtnRef}
+                                        type="button"
+                                        onClick={onClose} 
+                                        aria-label="Close delivery details"
+                                        className="min-w-[44px] min-h-[44px] w-11 h-11 bg-accent-peach/15 rounded-xl flex items-center justify-center text-accent-brown hover:bg-red-50 hover:text-red-500 active:scale-95 transition-all outline-none focus-visible:ring-2 focus-visible:ring-brand-dark/40"
+                                    >
+                                        <X size={20} />
+                                    </button>
                                 </div>
                             </div>
 
-                            {/* Inventory Manifest */}
-                            <div>
-                                <h4 className="text-[10px] font-black text-accent-brown/30 uppercase tracking-[0.4em] mb-4">Inventory Manifest</h4>
-                                <div className="space-y-3">
-                                    {(order.items || []).map((item: any, idx: number) => (
-                                        <div key={idx} className="flex gap-4 items-center bg-white rounded-2xl p-4 border border-accent-brown/5 shadow-sm">
-                                            <div className="w-14 h-14 bg-accent-peach/5 rounded-xl border border-accent-brown/5 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
-                                                {item.image_url ? (
-                                                    <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <Package size={20} className="text-accent-brown/20" />
-                                                )}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-xs font-black text-accent-brown leading-tight uppercase tracking-tight truncate">{item.name}</p>
-                                                <div className="flex items-center gap-3 mt-1.5">
-                                                    <span className="px-2 py-0.5 bg-brand-dark/10 text-brand-dark rounded-md text-[9px] font-black uppercase tracking-widest">Qty: {item.quantity}</span>
-                                                    <span className="text-[10px] font-bold text-accent-brown/30">ID: {idx + 1}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Payout Summary */}
-                            <div className="pt-6 border-t border-accent-brown/5">
-                                <div className="flex items-center justify-between">
+                            {/* Scrolling Body */}
+                            <div className="overflow-y-auto flex-1 p-4 sm:p-6 space-y-4 sm:space-y-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px)+1rem)]">
+                                {/* Pay & Date Bar */}
+                                <div className="p-4 bg-accent-peach/10 rounded-2xl border border-accent-brown/10 flex items-center justify-between gap-4">
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown/30">Service Compensation</p>
-                                        <h3 className="text-3xl font-black text-[#FB8500] tracking-tighter">₱{order.total_amount}</h3>
+                                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-0.5">
+                                            {RIDER_TEXT.orders.payLabel}
+                                        </p>
+                                        <h3 className="text-2xl sm:text-3xl font-black text-[#FB8500] tracking-tight">
+                                            ₱{order.total_amount}
+                                        </h3>
                                     </div>
-                                    <div className="px-4 py-2 bg-green-50 text-green-600 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
-                                        <Star size={12} /> Performance Verified
+                                    <div className="text-right">
+                                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-0.5">
+                                            Delivery Date
+                                        </p>
+                                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 uppercase">
+                                            <Clock size={13} aria-hidden="true" />
+                                            <time dateTime={new Date(order.created_at || Date.now()).toISOString()}>
+                                                {new Date(order.created_at || Date.now()).toLocaleDateString()}
+                                            </time>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Delivery Route Section (Pickup Place & Drop-off Location) */}
+                                <div className="p-4 sm:p-5 bg-white rounded-2xl border border-accent-brown/10 space-y-4">
+                                    {/* Pickup Place */}
+                                    <div className="flex gap-3 items-start">
+                                        <div className="w-3 h-3 rounded-full bg-brand-dark ring-4 ring-brand-dark/15 mt-1 shrink-0" aria-hidden="true" />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-0.5">
+                                                {RIDER_TEXT.orders.pickupLabel}
+                                            </p>
+                                            <p className="text-base font-bold text-accent-brown uppercase leading-snug break-words">
+                                                {order.pickup_name || 'Hi-Vet Site'}
+                                            </p>
+                                            <p className="text-sm font-medium text-slate-600 mt-1 leading-relaxed break-words">
+                                                {order.pickup_address || RIDER_TEXT.orders.modal.pickupFallback}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Dashed line */}
+                                    <div className="border-l-2 border-dashed border-accent-brown/20 ml-[5px] h-6" aria-hidden="true" />
+
+                                    {/* Drop-off Location */}
+                                    <div className="flex gap-3 items-start">
+                                        <div className="w-3 h-3 rounded-full bg-orange-500 ring-4 ring-orange-500/15 mt-1 shrink-0" aria-hidden="true" />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-0.5">
+                                                {RIDER_TEXT.orders.dropoffLabel}
+                                            </p>
+                                            <p className="text-base font-bold text-accent-brown leading-snug break-words">
+                                                {order.customer_name || 'Customer Point'}
+                                            </p>
+                                            <p className="text-sm font-medium text-slate-600 mt-1 leading-relaxed break-words">
+                                                {order.delivery_address || 'Customer Point'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Package Items (if any) */}
+                                {order.items && order.items.length > 0 && (
+                                    <div>
+                                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">
+                                            {RIDER_TEXT.orders.modal.itemsTitle}
+                                        </h4>
+                                        <div className="space-y-2.5">
+                                            {order.items.map((item: any, idx: number) => (
+                                                <div key={idx} className="flex gap-3.5 items-center bg-white rounded-xl p-3 sm:p-4 border border-accent-brown/10 shadow-sm">
+                                                    <div className="w-12 h-12 bg-accent-peach/10 rounded-xl border border-accent-brown/10 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+                                                        {item.image_url ? (
+                                                            <img src={item.image_url} alt="" className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <Package size={20} className="text-accent-brown/30" />
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-bold text-accent-brown leading-snug uppercase tracking-tight truncate">{item.name}</p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <span className="px-2 py-0.5 bg-brand-dark/10 text-brand-dark rounded-md text-xs font-bold uppercase tracking-wider">Qty: {item.quantity}</span>
+                                                            <span className="text-xs font-semibold text-slate-500">Item #{idx + 1}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Payout Summary */}
+                                <div className="pt-3 border-t border-accent-brown/10 flex items-center justify-between">
+                                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                                        Fulfillment Status
+                                    </div>
+                                    <div className="px-3 py-1 bg-green-50 text-green-700 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                        <Star size={14} aria-hidden="true" /> {RIDER_TEXT.orders.modal.statusCompleted}
                                     </div>
                                 </div>
                             </div>
-
-                            <button
-                                onClick={onClose}
-                                className="w-full bg-accent-brown text-white py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-black transition-all active:scale-95"
-                            >
-                                Acknowledge Data
-                            </button>
-                        </div>
-                    </motion.div>
+                        </motion.div>
+                    </div>
                 </>
             )}
         </AnimatePresence>
@@ -148,6 +265,20 @@ const RiderOrders = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
+    const triggerRef = React.useRef<HTMLElement | null>(null);
+
+    const handleOpenOrder = (order: any, e?: React.MouseEvent) => {
+        triggerRef.current = (e?.currentTarget as HTMLElement) || (document.activeElement as HTMLElement);
+        setSelectedOrder(order);
+    };
+
+    const handleCloseOrder = () => {
+        setSelectedOrder(null);
+        if (triggerRef.current) {
+            triggerRef.current.focus();
+            triggerRef.current = null;
+        }
+    };
     const ITEMS_PER_PAGE = 6;
 
     const fetchOrders = async () => {
@@ -188,9 +319,11 @@ const RiderOrders = () => {
     }, []);
 
     const filteredOrders = orders.filter(o => {
-        const matchesSearch = o.id.toString().includes(searchQuery) || 
-                            o.pickup_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            o.delivery_address?.toLowerCase().includes(searchQuery.toLowerCase());
+        const query = searchQuery.trim().toLowerCase();
+        const matchesSearch = !query ||
+            matchesRiderOrderIdSearch(o, query) ||
+            o.pickup_name?.toLowerCase().includes(query) ||
+            o.delivery_address?.toLowerCase().includes(query);
         
         if (!matchesSearch) return false;
         if (filter === 'all') return true;
@@ -199,206 +332,280 @@ const RiderOrders = () => {
         return true;
     });
 
+    const handleTabKeyDown = (e: React.KeyboardEvent) => {
+        const tabKeys = ['all', 'active', 'completed'];
+        const currentIndex = tabKeys.indexOf(filter);
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            const next = (currentIndex + 1) % tabKeys.length;
+            setFilter(tabKeys[next]);
+            setCurrentPage(1);
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            const prev = (currentIndex - 1 + tabKeys.length) % tabKeys.length;
+            setFilter(tabKeys[prev]);
+            setCurrentPage(1);
+        }
+    };
+
     return (
-        <DashboardLayout title="Orders">
+        <DashboardLayout title={RIDER_TEXT.orders.pageTitle}>
             <OrderDetailsModal 
                 isOpen={!!selectedOrder} 
                 order={selectedOrder} 
-                onClose={() => setSelectedOrder(null)} 
+                onClose={handleCloseOrder} 
             />
-            <div className="space-y-6 pb-32">
+            <div className="w-full max-w-[1200px] min-[1360px]:max-w-[1360px] mx-auto px-3.5 sm:px-6 lg:px-8 space-y-4 sm:space-y-5 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]">
                 
-                {/* ── LOGISTICS COMMAND CENTER HEADER ── */}
-                <div className="bg-brand-dark rounded-2xl px-6 py-4 flex items-center justify-between gap-4 shadow-sm transition-all duration-500">
-                    <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse" />
-                        <div>
-                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Real-time Analytics</p>
-                            <h2 className="text-lg font-black tracking-tighter uppercase leading-none text-white">
-                                Logistics Command Center
-                            </h2>
-                        </div>
-                    </div>
-                </div>
+                {/* Visually hidden heading for a11y */}
+                <h1 className="sr-only">{RIDER_TEXT.orders.pageTitle}</h1>
 
-                {/* ── KPI TIERS ── */}
-                <div className="grid grid-cols-3 gap-4">
-                    {[
-                        { label: "Success Rate", value: stats.success_rate, icon: Star, desc: "Consistency across active cycles." },
-                        { label: "Active Threads", value: stats.active_threads, icon: Bike, desc: "Ongoing operational logistics.", highlight: true },
-                        { label: "Total Fulfilled", value: stats.total_fulfilled, icon: Package, desc: "Verified delivery completions." },
-                    ].map((stat, i) => (
-                        <motion.div
-                            key={i}
-                            initial={{ opacity: 0, y: 15 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: i * 0.08 }}
-                            className={`rounded-2xl p-6 border border-accent-brown/5 shadow-sm flex flex-col gap-3 ${stat.highlight ? 'bg-brand-dark text-white' : 'bg-white'}`}
-                        >
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${stat.highlight ? 'bg-white/10 text-white' : 'bg-accent-peach/30 text-accent-brown'}`}>
-                                <stat.icon size={18} />
+                {/* ── SUMMARY STATS CARDS ── */}
+                <div 
+                    className="grid grid-cols-2 min-[481px]:grid-cols-3 gap-3 sm:gap-4 items-stretch"
+                    role="region"
+                    aria-label="Delivery Statistics"
+                >
+                    {/* Card 1: Completion Rate */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0 }}
+                        className="col-span-1 rounded-2xl p-4 sm:p-5 border border-accent-brown/10 shadow-sm bg-white flex flex-col justify-between"
+                    >
+                        <div className="space-y-3">
+                            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-accent-peach/30 text-accent-brown flex items-center justify-center shrink-0" aria-hidden="true">
+                                <Star size={20} />
                             </div>
                             <div>
-                                <p className={`text-[9px] font-black uppercase tracking-[0.2em] mb-1 ${stat.highlight ? 'text-white/40' : 'text-accent-brown/30'}`}>{stat.label}</p>
-                                <h3 className={`text-2xl font-black tracking-tighter leading-none ${stat.highlight ? 'text-white' : 'text-accent-brown'}`}>{stat.value}</h3>
+                                <p className="text-xs font-bold uppercase tracking-wide text-slate-600 mb-0.5">{RIDER_TEXT.orders.completionRate}</p>
+                                <h3 className="text-2xl sm:text-3xl font-black tracking-tight leading-none text-accent-brown whitespace-nowrap tabular-nums">{stats.success_rate}</h3>
                             </div>
-                            <p className={`text-[10px] font-bold leading-relaxed ${stat.highlight ? 'text-white/40' : 'text-accent-brown/40'}`}>{stat.desc}</p>
-                        </motion.div>
-                    ))}
+                        </div>
+                        <p className="text-xs font-medium leading-relaxed text-slate-600 mt-3">{RIDER_TEXT.orders.completionRateDesc}</p>
+                    </motion.div>
+
+                    {/* Card 2: Active Deliveries (solid orange highlight) */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.08 }}
+                        className="col-span-1 rounded-2xl p-4 sm:p-5 border border-transparent shadow-sm bg-brand-dark text-white flex flex-col justify-between"
+                    >
+                        <div className="space-y-3">
+                            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0" aria-hidden="true">
+                                <Bike size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold uppercase tracking-wide text-white/90 mb-0.5">{RIDER_TEXT.orders.activeDeliveries}</p>
+                                <h3 className="text-2xl sm:text-3xl font-black tracking-tight leading-none text-white whitespace-nowrap tabular-nums">{stats.active_threads}</h3>
+                            </div>
+                        </div>
+                        <p className="text-xs font-medium leading-relaxed text-white/85 mt-3">{RIDER_TEXT.orders.activeDeliveriesDesc}</p>
+                    </motion.div>
+
+                    {/* Card 3: Total Completed (full width below on <=480px, 3rd column on >=481px) */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.16 }}
+                        className="col-span-2 min-[481px]:col-span-1 rounded-2xl p-4 sm:p-5 border border-accent-brown/10 shadow-sm bg-white flex flex-col justify-between"
+                    >
+                        <div className="flex items-center gap-3.5 min-[481px]:flex-col min-[481px]:items-start min-[481px]:gap-3">
+                            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-accent-peach/30 text-accent-brown flex items-center justify-center shrink-0" aria-hidden="true">
+                                <Package size={20} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold uppercase tracking-wide text-slate-600 mb-0.5">{RIDER_TEXT.orders.totalCompleted}</p>
+                                <h3 className="text-2xl sm:text-3xl font-black tracking-tight leading-none text-accent-brown whitespace-nowrap tabular-nums">{stats.total_fulfilled}</h3>
+                            </div>
+                        </div>
+                        <p className="text-xs font-medium leading-relaxed text-slate-600 mt-2 min-[481px]:mt-3">{RIDER_TEXT.orders.totalCompletedDesc}</p>
+                    </motion.div>
                 </div>
 
-                {/* ── OPERATIONS HEADER CONTROLS ── */}
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between px-1">
-                        <div>
-                            <p className="text-[10px] font-black text-brand uppercase tracking-[0.4em]">Operational Ledger</p>
-                            <h4 className="text-xl font-black text-accent-brown tracking-tighter uppercase">Mission History</h4>
-                        </div>
+                {/* ── DELIVERY HISTORY & CONTROLS ── */}
+                <div className="space-y-3 sm:space-y-4 pt-2">
+                    <div>
+                        <p className="text-xs font-bold text-brand uppercase tracking-wider mb-1">
+                            {RIDER_TEXT.orders.historySub}
+                        </p>
+                        <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-accent-brown tracking-tight uppercase leading-tight">
+                            {RIDER_TEXT.orders.historyHeader}
+                        </h2>
                     </div>
 
-                    <div className="flex flex-col xl:flex-row gap-4">
+                    <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 items-stretch lg:items-center">
+                        {/* Search input */}
                         <div className="relative flex-1">
-                            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-accent-brown/20" size={18} />
+                            <label htmlFor="rider-orders-search" className="sr-only">
+                                {RIDER_TEXT.orders.searchPlaceholder}
+                            </label>
+                            <Search 
+                                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" 
+                                size={22} 
+                                aria-hidden="true" 
+                            />
                             <input
+                                id="rider-orders-search"
                                 type="text"
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="SEARCH LOGISTICS ID..."
-                                className="w-full h-14 bg-white border border-accent-brown/10 rounded-xl pl-12 pr-6 text-[10px] font-black uppercase tracking-[0.2em] outline-none focus:ring-4 focus:ring-brand-dark/5 transition-all placeholder:text-accent-brown/20"
+                                onChange={(e) => {
+                                    setSearchQuery(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                placeholder={RIDER_TEXT.orders.searchPlaceholder}
+                                className="w-full h-12 sm:h-14 min-h-[48px] bg-white border border-accent-brown/20 rounded-2xl pl-12 pr-10 text-base font-bold text-accent-brown outline-none focus:ring-2 focus:ring-brand focus:border-brand transition-all placeholder:text-slate-500 placeholder:font-medium shadow-sm"
                             />
+                            {searchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setCurrentPage(1);
+                                    }}
+                                    aria-label="Clear search"
+                                    className="absolute right-3.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-accent-peach/20 hover:bg-accent-peach/40 text-accent-brown flex items-center justify-center transition-all"
+                                >
+                                    <X size={16} />
+                                </button>
+                            )}
                         </div>
 
-                        <div className="flex p-1.5 bg-white border border-accent-brown/10 rounded-xl shadow-sm">
-                            {['all', 'active', 'completed'].map((t) => (
-                                <button
-                                    key={t}
-                                    onClick={() => { setFilter(t); setCurrentPage(1); }}
-                                    className={`px-6 py-2 rounded-lg text-[9px] font-black uppercase tracking-[0.2em] transition-all ${
-                                        filter === t ? 'text-white bg-brand-dark shadow-md' : 'text-accent-brown/40 hover:text-accent-brown'
-                                    }`}
-                                >
-                                    {t}
-                                </button>
-                            ))}
+                        {/* Filter tabs */}
+                        <div 
+                            role="tablist" 
+                            aria-label="Filter deliveries" 
+                            onKeyDown={handleTabKeyDown}
+                            className="flex p-1.5 bg-white border border-accent-brown/15 rounded-2xl shadow-sm shrink-0 overflow-x-auto no-scrollbar"
+                        >
+                            {[
+                                { key: 'all', label: RIDER_TEXT.orders.filterAll },
+                                { key: 'active', label: RIDER_TEXT.orders.filterActive },
+                                { key: 'completed', label: RIDER_TEXT.orders.filterCompleted },
+                            ].map(({ key, label }) => {
+                                const isSelected = filter === key;
+                                return (
+                                    <button
+                                        key={key}
+                                        role="tab"
+                                        id={`tab-${key}`}
+                                        aria-selected={isSelected}
+                                        aria-controls="delivery-history-list"
+                                        tabIndex={isSelected ? 0 : -1}
+                                        onClick={() => { setFilter(key); setCurrentPage(1); }}
+                                        className={`flex-1 sm:flex-initial min-h-[44px] h-11 sm:h-12 px-5 sm:px-6 rounded-xl text-sm font-bold tracking-normal sm:tracking-wide transition-all whitespace-nowrap flex items-center justify-center select-none ${
+                                            isSelected 
+                                                ? 'bg-brand-dark text-white shadow-md' 
+                                                : 'text-slate-600 hover:text-accent-brown hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        {label}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
-                    {/* Ledger Content */}
-                    <div className="relative min-h-[400px]">
+                    {/* Content Section */}
+                    <div className="relative min-h-[360px]" id="delivery-history-list" aria-live="polite">
                         {loading ? (
-                            <div className="py-24 flex flex-col items-center justify-center gap-4">
+                            <div className="py-20 flex flex-col items-center justify-center gap-3">
                                 <Loader2 className="animate-spin text-brand-dark" size={32} />
-                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-brown/20">Syncing Ledger...</p>
+                                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{RIDER_TEXT.orders.loading}</p>
                             </div>
                         ) : filteredOrders.length === 0 ? (
-                            <div className="bg-white rounded-2xl py-16 border border-accent-brown/5 flex flex-col items-center justify-center text-center px-6 shadow-sm">
-                                <div className="w-16 h-16 bg-accent-peach/10 rounded-full flex items-center justify-center mb-5">
-                                    <Package className="w-8 h-8 text-accent-brown/20" />
+                            <div className="bg-white rounded-2xl py-14 border border-accent-brown/10 flex flex-col items-center justify-center text-center px-6 shadow-sm">
+                                <div className="w-16 h-16 bg-accent-peach/20 rounded-full flex items-center justify-center mb-4">
+                                    <Package className="w-8 h-8 text-accent-brown/40" />
                                 </div>
-                                <h4 className="text-xl font-black text-accent-brown mb-2 tracking-tighter uppercase">Silence in Ledger</h4>
-                                <p className="text-sm text-accent-brown/40 font-medium max-w-sm leading-relaxed italic">
-                                    "Even the quietest operations are recorded. Our sensors show no data for this specific query."
+                                <h3 className="text-lg sm:text-xl font-black text-accent-brown mb-1 tracking-tight uppercase">{RIDER_TEXT.orders.emptyTitle}</h3>
+                                <p className="text-sm text-slate-600 font-medium max-w-sm leading-relaxed">
+                                    {RIDER_TEXT.orders.emptyDesc}
                                 </p>
                             </div>
                         ) : (
                             <div className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <ul className="grid grid-cols-1 min-[340px]:grid-cols-2 sm:grid-cols-3 min-[1360px]:grid-cols-4 gap-2.5 sm:gap-4 lg:gap-5 items-stretch list-none p-0 m-0" role="list">
                                     <AnimatePresence mode="popLayout">
                                         {filteredOrders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((order) => (
-                                            <motion.div
-                                                key={order.id}
-                                                layout
-                                                initial={{ opacity: 0, y: 15 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, scale: 0.95 }}
-                                                className="bg-white rounded-2xl border border-accent-brown/5 shadow-sm overflow-hidden hover:border-accent-brown/20 transition-all flex flex-col"
-                                            >
-                                                {/* Card Header */}
-                                                <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-accent-brown/5">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 bg-accent-peach/20 rounded-xl flex items-center justify-center text-accent-brown shrink-0">
-                                                            <Package size={18} />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-accent-brown/30">Logistics ID</p>
-                                                            <p className="font-black text-lg text-accent-brown tracking-tighter">#HY-{order?.id?.toString().slice(-4) || '0000'}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-[9px] font-black uppercase tracking-[0.2em] text-accent-brown/30 mb-0.5">Value</p>
-                                                        <p className="text-xl font-black text-accent-brown tracking-tighter">₱{order.total_amount}</p>
-                                                    </div>
-                                                </div>
-
-                                                {/* Content Area */}
-                                                <div className="px-6 py-5 space-y-5 flex-1">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                                                            ['Completed', 'Delivered'].includes(order.status) ? 'bg-green-500/10 text-green-600' : 'bg-brand-dark/10 text-brand-dark'
-                                                        }`}>
-                                                            {order.status}
-                                                        </span>
-                                                        <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-[0.1em]">
-                                                            {new Date(order.created_at || Date.now()).toLocaleDateString()}
-                                                        </p>
-                                                    </div>
-
-                                                    {/* Route Info */}
-                                                    <div className="space-y-4">
-                                                        <div className="flex gap-4 items-start">
-                                                            <div className="w-2 h-2 rounded-full bg-brand-dark mt-1.5 shrink-0" />
-                                                            <div className="min-w-0">
-                                                                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-accent-brown/30 mb-1">Pickup Hub</p>
-                                                                <p className="text-xs font-black text-accent-brown truncate uppercase tracking-tight leading-none">{order.pickup_name || 'Hi-Vet Site'}</p>
+                                            <li key={order.id} className="h-full flex" role="listitem">
+                                                <motion.article
+                                                    layout
+                                                    initial={{ opacity: 0, y: 15 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, scale: 0.95 }}
+                                                    className="w-full bg-white rounded-2xl sm:rounded-[1.25rem] border border-accent-brown/10 shadow-sm hover:shadow-md hover:border-brand-dark/30 transition-all flex flex-col justify-between overflow-hidden"
+                                                >
+                                                    {/* Card Body */}
+                                                    <div className="p-3 sm:p-4 lg:p-5 flex flex-col flex-1">
+                                                        {/* 1. Top: Icon Tile & Order ID + 2. Pay */}
+                                                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5 sm:gap-3 pb-3 sm:pb-3.5 border-b border-accent-brown/10">
+                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                <div className="w-8 h-8 sm:w-9 sm:h-9 bg-accent-peach/20 rounded-xl flex items-center justify-center text-accent-brown shrink-0" aria-hidden="true">
+                                                                    <Package size={18} />
+                                                                </div>
+                                                                <div className="min-w-0 flex-1">
+                                                                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-0.5 leading-none">
+                                                                        {RIDER_TEXT.orders.orderIdLabel}
+                                                                    </p>
+                                                                    <h3 className="font-black text-xs min-[360px]:text-sm sm:text-base text-accent-brown tracking-tight whitespace-nowrap leading-tight">
+                                                                        {formatRiderOrderId(order)}
+                                                                    </h3>
+                                                                </div>
+                                                            </div>
+                                                            <div className="sm:text-right shrink-0">
+                                                                <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-0.5 leading-none">
+                                                                    {RIDER_TEXT.orders.payLabel}
+                                                                </p>
+                                                                <p className="text-lg sm:text-xl font-black text-accent-brown tracking-tight whitespace-nowrap tabular-nums leading-tight" aria-label={`Pay: ${order.total_amount} pesos`}>
+                                                                    ₱{order.total_amount}
+                                                                </p>
                                                             </div>
                                                         </div>
-                                                        
-                                                        <div className="border-l-2 border-dashed border-accent-brown/10 ml-[3px] h-4" />
-                                                        
-                                                        <div className="flex gap-4 items-start">
-                                                            <div className="w-2 h-2 rounded-full bg-orange-500 mt-1.5 shrink-0" />
-                                                            <div className="min-w-0">
-                                                                <p className="text-[9px] font-black uppercase tracking-[0.3em] text-accent-brown/30 mb-1">Drop-off Point</p>
-                                                                <p className="text-xs font-black text-accent-brown truncate" title={order.delivery_address}>{order.delivery_address || 'Customer Point'}</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
 
-                                                    {/* Items Preview */}
-                                                    <div className="flex items-center justify-between pt-4 border-t border-accent-brown/5">
-                                                        <div className="flex -space-x-3">
-                                                            {(order.items || []).slice(0, 3).map((item: any, i: number) => (
-                                                                <div key={i} className="h-8 w-8 rounded-lg ring-2 ring-white border border-accent-brown/5 bg-[#FAF9F6] overflow-hidden">
-                                                                    {item.image_url ? (
-                                                                        <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
-                                                                    ) : (
-                                                                        <div className="h-full w-full flex items-center justify-center">
-                                                                            <Package size={12} className="text-accent-brown/20" />
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            ))}
-                                                            {(order.items || []).length > 3 && (
-                                                                <div className="h-8 w-8 flex items-center justify-center rounded-lg bg-brand-dark text-[8px] font-black text-white ring-2 ring-white">
-                                                                    +{(order.items || []).length - 3}
-                                                                </div>
-                                                            )}
+                                                        {/* 3. Status Badge & Date */}
+                                                        <div className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2">
+                                                            <div>
+                                                                <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                                                                    ['Completed', 'Delivered'].includes(order.status) 
+                                                                        ? 'bg-green-500/15 text-green-700' 
+                                                                        : 'bg-brand-dark/15 text-brand-dark'
+                                                                }`}>
+                                                                    {order.status}
+                                                                </span>
+                                                            </div>
+                                                            <time className="text-xs font-semibold text-slate-600 uppercase tracking-normal" dateTime={new Date(order.created_at || Date.now()).toISOString()}>
+                                                                {new Date(order.created_at || Date.now()).toLocaleDateString()}
+                                                            </time>
                                                         </div>
-                                                        <button 
-                                                            onClick={() => setSelectedOrder(order)}
-                                                            className="flex items-center gap-2 text-[9px] font-black text-brand-dark uppercase tracking-widest cursor-pointer hover:gap-3 transition-all outline-none"
-                                                        >
-                                                            Details <ChevronRight size={14} />
-                                                        </button>
+
+                                                        {/* 4. Thin Divider & View Details Button */}
+                                                        <div className="pt-3 border-t border-accent-brown/10 mt-auto">
+                                                            <button 
+                                                                type="button"
+                                                                onClick={(e) => handleOpenOrder(order, e)}
+                                                                className="w-full min-h-[44px] px-3 py-2.5 rounded-xl flex items-center justify-center gap-1.5 text-sm font-bold text-brand-dark hover:bg-brand-dark/10 active:scale-[0.98] active:bg-brand-dark/15 transition-all outline-none focus-visible:ring-2 focus-visible:ring-brand-dark/40"
+                                                                aria-label={`View details of ${formatRiderOrderIdForAria(order)}`}
+                                                            >
+                                                                <span>{RIDER_TEXT.orders.detailsBtn}</span>
+                                                                <ChevronRight size={16} aria-hidden="true" />
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </motion.div>
+                                                </motion.article>
+                                            </li>
                                         ))}
                                     </AnimatePresence>
-                                </div>
+                                </ul>
 
                                 {/* Modern Pagination */}
-                                <Pagination currentPage={currentPage} totalPages={Math.ceil(filteredOrders.length / ITEMS_PER_PAGE)} onPageChange={setCurrentPage} scrollToTop={true} />
+                                <Pagination 
+                                    currentPage={currentPage} 
+                                    totalPages={Math.ceil(filteredOrders.length / ITEMS_PER_PAGE)} 
+                                    onPageChange={setCurrentPage} 
+                                    scrollToTop={true} 
+                                />
                             </div>
                         )}
                     </div>

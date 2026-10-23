@@ -325,7 +325,7 @@ const BusinessProductEditor = () => {
             <DashboardLayout title="Loading Product...">
                 <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-40">
                     <Loader2 className="w-10 h-10 animate-spin text-brand" />
-                    <p className="font-bold text-sm tracking-widest uppercase">Loading catalog data...</p>
+                    <p className="font-bold text-sm tracking-widest uppercase">Loading product...</p>
                 </div>
             </DashboardLayout>
         );

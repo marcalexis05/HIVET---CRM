@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { MapPin, ChevronDown } from 'lucide-react';
+import { MapPin, ChevronDown, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Branch {
@@ -27,6 +27,7 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
     const [branches, setBranches] = useState<Branch[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
+    const triggerBtnRef = useRef<HTMLButtonElement>(null);
     const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
 
     useEffect(() => {
@@ -65,10 +66,16 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
     const updatePosition = () => {
         if (containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
+            const isMobile = window.innerWidth < 640;
+            const width = isMobile ? Math.min(window.innerWidth - 32, rect.width) : Math.max(rect.width, 280);
+            const left = isMobile 
+                ? Math.max(16, rect.left + window.scrollX)
+                : Math.max(16, Math.min(rect.left + window.scrollX, window.innerWidth - width - 16));
+
             setDropdownPos({
-                top: rect.bottom + window.scrollY,
-                left: rect.left + window.scrollX,
-                width: rect.width
+                top: rect.bottom + window.scrollY + 6,
+                left: left,
+                width: width
             });
         }
     };
@@ -91,84 +98,120 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
                 setIsOpen(false);
             }
         };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' && isOpen) {
+                setIsOpen(false);
+                triggerBtnRef.current?.focus();
+            }
+        };
+
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isOpen]);
 
     const currentBranch = branches.find(b => b.id === currentBranchId);
+    const branchDisplayName = currentBranchId === null && allowAllBranches ? 'All Branches' : currentBranch ? currentBranch.name : 'Initializing...';
+    const branchSubLabel = currentBranchId === null && allowAllBranches ? 'Global System' : currentBranch ? `${currentBranch.city} Location` : 'Branch Discovery';
 
     if (branches.length === 0) return null;
-
-    const dropdownWidth = window.innerWidth < 640 ? 280 : 320;
-    const calculatedLeft = Math.max(16, dropdownPos.left + dropdownPos.width - dropdownWidth);
 
     const dropdownContent = (
         <AnimatePresence>
             {isOpen && (
                 <motion.div 
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    initial={{ opacity: 0, y: -6, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                    transition={{ duration: 0.15 }}
                     style={{ 
                         position: 'absolute',
-                        top: `${dropdownPos.top + 12}px`,
-                        left: `${calculatedLeft}px`,
-                        width: `${dropdownWidth}px`,
+                        top: `${dropdownPos.top}px`,
+                        left: `${dropdownPos.left}px`,
+                        width: `${dropdownPos.width}px`,
                         zIndex: 99999
                     }}
-                    className="bg-white rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] border border-accent-peach/20 p-4 overflow-hidden"
+                    role="listbox"
+                    aria-label="Clinic Branches"
+                    className="bg-white rounded-[20px] shadow-2xl border border-accent-brown/15 p-3 overflow-hidden outline-none"
                 >
-                    <div className="text-xs font-bold text-slate-700 px-4 py-3 border-b border-accent-peach/10 mb-3 flex items-center justify-between">
+                    <div className="text-xs font-bold text-slate-700 px-3 py-2 border-b border-accent-brown/10 mb-2 flex items-center justify-between">
                         <span>Select Clinic Branch</span>
-                        <div className="w-1.5 h-1.5 bg-brand rounded-full animate-pulse" />
+                        <div className="w-1.5 h-1.5 bg-brand rounded-full animate-pulse" aria-hidden="true" />
                     </div>
                     
-                    <div className="max-h-[300px] overflow-y-auto no-scrollbar space-y-2">
+                    <div className="max-h-[300px] overflow-y-auto space-y-1.5 focus:outline-none">
                         {allowAllBranches && (
                             <button
                                 type="button"
+                                role="option"
+                                aria-selected={currentBranchId === null}
                                 onClick={() => {
                                     localStorage.setItem('hivet_selected_branch', 'all');
                                     onBranchChange(null);
                                     setIsOpen(false);
+                                    triggerBtnRef.current?.focus();
                                 }}
-                                className={`w-full text-left p-4 rounded-2xl transition-all flex items-center justify-between group ${currentBranchId === null ? 'bg-brand text-white shadow-xl shadow-brand/20' : 'text-black hover:bg-accent-peach/10'}`}
+                                className={`w-full min-h-[48px] text-left p-3 rounded-xl transition-all flex items-center justify-between group outline-none focus-visible:ring-2 focus-visible:ring-brand/40 ${
+                                    currentBranchId === null 
+                                        ? 'bg-brand text-white shadow-md shadow-brand/20' 
+                                        : 'text-accent-brown hover:bg-accent-peach/10'
+                                }`}
                             >
-                                <div className="flex flex-col overflow-hidden pr-4">
-                                    <span className="font-bold truncate text-xs">All Branches</span>
-                                    <span className={`text-xs truncate font-medium mt-1 ${currentBranchId === null ? 'text-white/60' : 'text-slate-500'}`}>
+                                <div className="flex flex-col overflow-hidden pr-3">
+                                    <span className="font-bold truncate text-sm">All Branches</span>
+                                    <span className={`text-xs truncate font-medium mt-0.5 ${currentBranchId === null ? 'text-white/80' : 'text-slate-600'}`}>
                                         View complete metrics
                                     </span>
                                 </div>
-                                <span className={`text-[11px] shrink-0 font-bold px-2 py-0.5 rounded-lg ${currentBranchId === null ? 'bg-white/10 text-white' : 'bg-accent-peach/30 text-accent-brown/60'}`}>
-                                    Global
-                                </span>
-                            </button>
-                        )}
-                        {branches.map(b => (
-                            <button
-                                key={b.id}
-                                type="button"
-                                onClick={() => {
-                                    localStorage.setItem('hivet_selected_branch', String(b.id));
-                                    onBranchChange(b.id);
-                                    setIsOpen(false);
-                                }}
-                                className={`w-full text-left p-4 rounded-2xl transition-all flex items-center justify-between group ${currentBranchId === b.id ? 'bg-brand text-white shadow-xl shadow-brand/20' : 'text-black hover:bg-accent-peach/10'}`}
-                            >
-                                <div className="flex flex-col overflow-hidden pr-4">
-                                    <span className="font-bold truncate text-xs">{b.name}</span>
-                                    <span className={`text-xs truncate font-medium mt-1 ${currentBranchId === b.id ? 'text-white/60' : 'text-slate-500'}`}>
-                                        {b.city} Location
-                                    </span>
-                                </div>
-                                {b.is_main && (
-                                    <span className={`text-[11px] shrink-0 font-bold px-2 py-0.5 rounded-lg ${currentBranchId === b.id ? 'bg-white/10 text-white' : 'bg-brand/10 text-brand-dark'}`}>
-                                        Core
+                                {currentBranchId === null ? (
+                                    <Check className="w-4 h-4 text-white shrink-0" aria-hidden="true" />
+                                ) : (
+                                    <span className="text-xs shrink-0 font-bold px-2 py-0.5 rounded-md bg-accent-peach/30 text-accent-brown/80">
+                                        Global
                                     </span>
                                 )}
                             </button>
-                        ))}
+                        )}
+                        {branches.map(b => {
+                            const isSelected = currentBranchId === b.id;
+                            return (
+                                <button
+                                    key={b.id}
+                                    type="button"
+                                    role="option"
+                                    aria-selected={isSelected}
+                                    onClick={() => {
+                                        localStorage.setItem('hivet_selected_branch', String(b.id));
+                                        onBranchChange(b.id);
+                                        setIsOpen(false);
+                                        triggerBtnRef.current?.focus();
+                                    }}
+                                    className={`w-full min-h-[48px] text-left p-3 rounded-xl transition-all flex items-center justify-between group outline-none focus-visible:ring-2 focus-visible:ring-brand/40 ${
+                                        isSelected 
+                                            ? 'bg-brand text-white shadow-md shadow-brand/20' 
+                                            : 'text-accent-brown hover:bg-accent-peach/10'
+                                    }`}
+                                >
+                                    <div className="flex flex-col overflow-hidden pr-3">
+                                        <span className="font-bold truncate text-sm">{b.name}</span>
+                                        <span className={`text-xs truncate font-medium mt-0.5 ${isSelected ? 'text-white/80' : 'text-slate-600'}`}>
+                                            {b.city ? `${b.city} Location` : 'Clinic Branch'}
+                                        </span>
+                                    </div>
+                                    {isSelected ? (
+                                        <Check className="w-4 h-4 text-white shrink-0" aria-hidden="true" />
+                                    ) : b.is_main ? (
+                                        <span className="text-xs shrink-0 font-bold px-2 py-0.5 rounded-md bg-brand/10 text-brand-dark">
+                                            Core
+                                        </span>
+                                    ) : null}
+                                </button>
+                            );
+                        })}
                     </div>
                 </motion.div>
             )}
@@ -176,24 +219,28 @@ const BranchSelector: React.FC<BranchSelectorProps> = ({ token, onBranchChange, 
     );
 
     return (
-        <div className="relative inline-block" ref={containerRef}>
+        <div className="relative w-full sm:w-[280px] md:w-[320px] lg:w-[340px]" ref={containerRef}>
             <button 
+                ref={triggerBtnRef}
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3 bg-white hover:opacity-90 active:scale-95 rounded-2xl transition-all shadow-xl shadow-black/10 min-w-[160px] sm:min-w-[200px] font-brand group border border-accent-brown/5"
+                aria-haspopup="listbox"
+                aria-expanded={isOpen}
+                aria-label={`Branch selector: currently ${branchDisplayName}`}
+                className="w-full min-h-[52px] h-[52px] flex items-center gap-3 px-3.5 sm:px-4 py-2.5 bg-white hover:bg-slate-50/70 active:scale-[0.99] rounded-[16px] transition-all shadow-sm group border border-accent-brown/15 outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
             >
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand/10 shadow-sm flex items-center justify-center shrink-0">
-                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-brand" />
+                <div className="w-10 h-10 rounded-xl bg-brand/10 text-brand shadow-none flex items-center justify-center shrink-0" aria-hidden="true">
+                    <MapPin className="w-5 h-5 text-brand" />
                 </div>
-                <div className="flex flex-col items-start overflow-hidden text-left">
-                    <span className="truncate w-full font-bold text-slate-800 text-xs sm:text-sm leading-none">
-                        {currentBranchId === null && allowAllBranches ? 'All Branches' : currentBranch ? currentBranch.name : 'Initializing...'}
+                <div className="flex flex-col items-start overflow-hidden text-left flex-1 min-w-0">
+                    <span className="truncate w-full font-bold text-accent-brown text-sm leading-tight">
+                        {branchDisplayName}
                     </span>
-                    <span className="text-xs text-slate-500 font-medium leading-none mt-1.5">
-                        {currentBranchId === null && allowAllBranches ? 'Global System' : currentBranch ? `${currentBranch.city}` : 'Branch Discovery'}
+                    <span className="text-xs text-slate-600 font-medium leading-tight mt-0.5 truncate w-full">
+                        {branchSubLabel}
                     </span>
                 </div>
-                <ChevronDown className={`w-3.5 h-3.5 text-black/30 group-hover:text-black ml-auto transition-transform duration-500 ${isOpen ? 'rotate-180 text-black' : ''}`} />
+                <ChevronDown className={`w-4 h-4 text-accent-brown/70 group-hover:text-accent-brown ml-auto shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
             </button>
 
             {createPortal(dropdownContent, document.body)}

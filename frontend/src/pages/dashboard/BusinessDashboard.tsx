@@ -16,6 +16,7 @@ import DashboardLayout from '../../components/DashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import BranchSelector from '../../components/BranchSelector';
 import Sparkline from '../../components/Sparkline';
+import { CLINIC_TEXT } from '../../constants/clinicWording';
 
 interface ChartDataPoint { name: string; value: number; color?: string; }
 interface KPI { label: string; value: string; trend: string; icon: string; color: string; change?: string; sub?: string; chartData?: ChartDataPoint[]; }
@@ -156,76 +157,115 @@ const BusinessDashboard = () => {
 
 
     const currentBranchInfo = branchPerformance.find(b => b.id === branchId || b.branch_id === branchId);
+    const clinicDisplayName = user?.clinic_name || user?.name || 'Alpha Veterinary Clinic';
 
     return (
-        <DashboardLayout
-            title=""
-            branchContext={branchId ? { id: branchId, name: currentBranchInfo?.branch || 'Branch', address: currentBranchInfo?.address } : undefined}
-        >
-            <div className="space-y-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <DashboardLayout title="">
+            <div className="w-full max-w-[1280px] mx-auto space-y-4 sm:space-y-5 lg:space-y-6 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] md:pb-6">
+                {/* Greeting & Branch Picker Header (Top) */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 py-1">
                     <motion.div
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="flex flex-col"
+                        className="flex-1 min-w-0"
                     >
-                        <h1 className="text-3xl font-black text-accent-brown tracking-tighter">
-                            Welcome back, <span className="text-brand">Alpha Veterinary Clinic</span>
+                        <h1 className="text-2xl min-[360px]:text-[26px] sm:text-3xl lg:text-[34px] font-black text-accent-brown tracking-normal sm:tracking-tight leading-snug break-words">
+                            Welcome back, <span className="text-brand break-words">{clinicDisplayName}</span>
                         </h1>
-                        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-accent-brown/40 mt-1">
-                            {stats.length > 0 ? (
-                                <>
-                                    The clinic business is <span className="text-green-600">doing well</span> with a net revenue of <span className="text-accent-brown">{stats[0].value}</span> this period.
-                                </>
-                            ) : (
-                                "Analyzing your clinic's business performance..."
-                            )}
-                        </p>
                     </motion.div>
-                    <div className="flex items-center gap-3">
-                        {user?.token && <BranchSelector token={user.token} onBranchChange={setBranchId} currentBranchId={branchId} allowAllBranches={true} />}
+                    <div className="w-full md:w-auto shrink-0">
+                        {user?.token && (
+                            <BranchSelector 
+                                token={user.token} 
+                                onBranchChange={setBranchId} 
+                                currentBranchId={branchId} 
+                                allowAllBranches={true} 
+                            />
+                        )}
                     </div>
                 </div>
 
-                {/* Standard KPI Grid */}
+                {/* Active Branch Banner (Below Welcome Back) */}
+                {branchId && currentBranchInfo && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 sm:p-5 bg-brand-dark rounded-2xl sm:rounded-[20px] text-white flex items-center justify-between shadow-md"
+                    >
+                        <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+                            <div className="w-10 h-10 sm:w-11 sm:h-11 bg-white/10 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0">
+                                <MapPin className="w-5 h-5 sm:w-6 sm:h-6 text-white" aria-hidden="true" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-white/80 leading-none mb-1">
+                                    {CLINIC_TEXT.nav.activeHub || 'Active Branch'}
+                                </p>
+                                <h4 className="text-sm sm:text-base font-bold tracking-tight text-white break-words leading-snug">
+                                    {currentBranchInfo.branch || 'Branch'}{currentBranchInfo.address ? ` | ${currentBranchInfo.address}` : ''}
+                                </h4>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* Standard KPI Grid (2 rows of 2 on mobile/tablet, 4 columns on desktop) */}
                 <motion.div
                     initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+                    className="grid grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 items-stretch"
+                    role="region"
+                    aria-label="Summary Cards"
                 >
                     {stats.map((s, i) => {
                         const Icon = ICON_MAP[s.icon] || Zap;
                         const isRevenue = s.label.toLowerCase().includes('revenue') || s.label.toLowerCase().includes('earnings');
                         const isFeedback = s.label.toLowerCase().includes('feedback') || s.label.toLowerCase().includes('pulse') || s.icon === 'Star';
+                        const isNoData = (s.value === '₱0' || s.value === '0' || s.value === '—' || !s.value);
                         
                         return (
                             <motion.div
                                 key={s.label}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.1 * i }}
-                                className={`bg-white p-7 rounded-[2rem] border transition-all group ${isRevenue ? 'border-brand/40 shadow-xl shadow-brand/5' : 'border-accent-brown/5 shadow-sm hover:shadow-xl hover:border-brand/20'}`}
+                                transition={{ delay: 0.08 * i }}
+                                className={`bg-white p-3.5 sm:p-5 rounded-[20px] border transition-all flex flex-col justify-between h-full col-span-1 group ${
+                                    isRevenue 
+                                        ? 'border-brand/40 shadow-sm shadow-brand/5' 
+                                        : 'border-accent-brown/10 shadow-sm hover:shadow-md hover:border-brand/30'
+                                }`}
                                 onClick={() => s.label === 'Inventory Status' && fetchLowStock()}
+                                role="article"
+                                aria-label={`${s.label}: ${isNoData ? 'No data yet' : s.value}`}
                             >
-                                <div className="mb-6">
-                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${isRevenue ? 'bg-brand/10 text-brand' : 'bg-slate-50 text-accent-brown group-hover:bg-brand group-hover:text-white'}`}>
+                                {/* Top: Icon tile + Label */}
+                                <div className="flex items-center gap-3 mb-2.5">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                                        isRevenue 
+                                            ? 'bg-brand/10 text-brand' 
+                                            : 'bg-slate-50 text-accent-brown group-hover:bg-brand group-hover:text-white'
+                                    }`} aria-hidden="true">
                                         <Icon className="w-5 h-5" />
                                     </div>
+                                    <p className="text-xs font-bold text-slate-600 uppercase tracking-wide leading-tight min-w-0 break-words">
+                                        {s.label}
+                                    </p>
                                 </div>
                                 
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest leading-none mb-1">{s.label}</p>
-                                    <div className="flex items-center gap-1.5">
-                                        <h3 className="text-3xl font-black text-accent-brown tracking-tighter">
-                                            {(s.value === '₱0' || s.value === '0') ? '—' : s.value}
-                                        </h3>
-                                        {isFeedback && <span className="text-xl text-brand">★</span>}
-                                    </div>
+                                {/* Middle: Value */}
+                                <div className="my-1 flex-1 flex items-baseline gap-1.5 min-w-0">
+                                    <h3 
+                                        className="text-2xl min-[360px]:text-[26px] sm:text-3xl font-black text-accent-brown tracking-tight leading-tight truncate"
+                                        aria-label={isNoData ? 'No data yet' : `${s.label} ${s.value}`}
+                                    >
+                                        {isNoData ? '—' : s.value}
+                                    </h3>
+                                    {isFeedback && !isNoData && <span className="text-lg text-brand" aria-hidden="true">★</span>}
                                 </div>
 
-                                <div className="mt-4 pt-4 border-t border-slate-50/50">
-                                    <p className="text-[10px] font-black text-accent-brown uppercase italic opacity-60 tracking-tight">
-                                        {s.change || (s.value === '0' || s.value === '₱0' ? 'No data' : 'Real-time validated')}
+                                {/* Bottom: Description */}
+                                <div className="pt-2.5 border-t border-slate-100 mt-2">
+                                    <p className="text-xs font-medium text-slate-600 tracking-normal leading-tight break-words">
+                                        {s.change || (isNoData ? 'No data' : CLINIC_TEXT.dashboard.upToDate)}
                                     </p>
                                 </div>
                             </motion.div>
@@ -234,12 +274,12 @@ const BusinessDashboard = () => {
                 </motion.div>
 
                 {/* Analytics Main Grid (Hero Row) */}
-                <div className="grid lg:grid-cols-6 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-6 gap-4 sm:gap-5 lg:gap-6">
                     {/* Revenue Dynamics (Prominent) */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="lg:col-span-3 bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col"
+                        className="lg:col-span-3 bg-white rounded-[20px] sm:rounded-[24px] p-4 min-[400px]:p-5 sm:p-6 lg:p-7 shadow-sm border border-accent-brown/10 flex flex-col"
                     >
                         <div className="flex items-center justify-between mb-8">
                             <div className="flex items-center gap-4">
@@ -247,8 +287,8 @@ const BusinessDashboard = () => {
                                     <TrendingUp className="w-6 h-6" />
                                 </div>
                                 <div>
-                                    <h3 className="text-xl font-black text-accent-brown tracking-tight">Revenue Dynamics</h3>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown">Total Financial Trajectory</p>
+                                    <h3 className="text-xl font-black text-accent-brown tracking-tight">{CLINIC_TEXT.dashboard.earningsOverview}</h3>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown">{CLINIC_TEXT.dashboard.earningsOverTime}</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-1 bg-accent-brown/5 p-1 rounded-xl">
@@ -266,7 +306,7 @@ const BusinessDashboard = () => {
 
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-4">
                             <div className="md:col-span-1">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown">Net Period</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-accent-brown">{CLINIC_TEXT.dashboard.totalEarnings}</span>
                                 <p className="text-3xl font-black text-accent-brown tracking-tighter mt-1">
                                     {(revenueData.chartData?.reduce((acc: number, d: ChartDataPoint) => acc + d.value, 0) || 0) === 0
                                         ? 'No Data Available'
@@ -332,7 +372,7 @@ const BusinessDashboard = () => {
                     <motion.div
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="lg:col-span-3 bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col"
+                        className="lg:col-span-3 bg-white rounded-[20px] sm:rounded-[24px] p-4 min-[400px]:p-5 sm:p-6 lg:p-7 shadow-sm border border-accent-brown/10 flex flex-col"
                     >
                         <div className="flex items-center justify-between mb-8">
                             <div className="flex items-center gap-4">
@@ -340,8 +380,8 @@ const BusinessDashboard = () => {
                                     <Users className="w-6 h-6" />
                                 </div>
                                 <div>
-                                    <h3 className="text-xl font-black text-accent-brown tracking-tighter">Pet Demographics</h3>
-                                    <p className="text-[10px] font-black text-accent-brown uppercase tracking-widest leading-none">Global Species Distribution</p>
+                                    <h3 className="text-xl font-black text-accent-brown tracking-tighter">{CLINIC_TEXT.dashboard.petTypes}</h3>
+                                    <p className="text-[10px] font-black text-accent-brown uppercase tracking-widest leading-none">{CLINIC_TEXT.dashboard.allPetTypes}</p>
                                 </div>
                             </div>
                         </div>
@@ -411,11 +451,11 @@ const BusinessDashboard = () => {
                 </div>
 
                 {/* Second Level Intelligence Grid (50-50 Row) */}
-                <div className="grid lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 lg:gap-6">
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="lg:col-span-1 bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/5 border border-white flex flex-col"
+                        className="lg:col-span-1 bg-white rounded-[20px] sm:rounded-[24px] p-4 min-[400px]:p-5 sm:p-6 shadow-sm border border-accent-brown/10 flex flex-col"
                     >
                         <h3 className="text-md font-black text-accent-brown tracking-tight mb-4 flex items-center gap-2">
                             <Star className="w-4 h-4 text-brand" /> Top Performance
@@ -444,10 +484,10 @@ const BusinessDashboard = () => {
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="lg:col-span-1 bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/5 border border-white flex flex-col relative overflow-hidden"
+                        className="lg:col-span-1 bg-white rounded-[20px] sm:rounded-[24px] p-4 min-[400px]:p-5 sm:p-6 shadow-sm border border-accent-brown/10 flex flex-col relative overflow-hidden"
                     >
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-black text-accent-brown tracking-tight">Geographic Performance</h3>
+                            <h3 className="text-lg font-black text-accent-brown tracking-tight">{CLINIC_TEXT.dashboard.topLocations}</h3>
                             {/* Branch Legend moved to Top */}
                             <div className="flex items-center gap-4">
                                 {branchPerformance.slice(0, 2).map((b, i) => (
@@ -538,7 +578,7 @@ const BusinessDashboard = () => {
                         <div className="mt-4 px-2">
                             <Link
                                 to="/dashboard/business/analytics"
-                                className="block w-full py-4 border-2 border-dashed border-accent-brown/10 rounded-[2rem] text-[9px] font-black uppercase tracking-[0.2em] text-accent-brown/60 text-center hover:bg-brand/5 hover:border-brand/40 hover:text-brand transition-all group active:scale-[0.98]"
+                                className="block w-full min-h-[44px] py-3.5 border-2 border-dashed border-accent-brown/15 rounded-xl text-xs font-bold uppercase tracking-wider text-accent-brown/70 text-center hover:bg-brand/5 hover:border-brand/40 hover:text-brand transition-all group active:scale-[0.98] flex items-center justify-center"
                             >
                                 Detailed Analytics
                             </Link>
@@ -548,12 +588,12 @@ const BusinessDashboard = () => {
 
 
                 {/* Dense Data Tables */}
-                <div className="grid lg:grid-cols-5 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-5 lg:gap-6">
                     <div className="lg:col-span-3">
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/5 border border-white h-full"
+                            className="bg-white rounded-[20px] sm:rounded-[24px] p-4 min-[400px]:p-5 sm:p-6 shadow-sm border border-accent-brown/10 h-full flex flex-col justify-between"
                         >
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-black text-accent-brown tracking-tight">Recent Activity Log</h3>
@@ -592,10 +632,10 @@ const BusinessDashboard = () => {
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="bg-white rounded-[2rem] p-6 shadow-xl shadow-accent-brown/10 border border-brand/10 h-full relative overflow-hidden"
+                            className="bg-white rounded-[20px] sm:rounded-[24px] p-4 min-[400px]:p-5 sm:p-6 shadow-sm border border-brand/20 h-full relative overflow-hidden flex flex-col justify-between"
                         >
                             <div className="flex items-center justify-between mb-6 relative z-10">
-                                <h3 className="text-lg font-black text-accent-brown tracking-tight">Voice of Customer</h3>
+                                <h3 className="text-lg font-black text-accent-brown tracking-tight">{CLINIC_TEXT.dashboard.customerReviews}</h3>
                                 <Star className="w-4 h-4 text-brand fill-brand" />
                             </div>
                             <div className="space-y-4 relative z-10">
@@ -674,8 +714,8 @@ const BusinessDashboard = () => {
                                             <Package className="w-6 h-6" />
                                         </div>
                                         <div>
-                                            <h3 className="text-2xl font-black text-accent-brown tracking-tight">Replenishment Alert</h3>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Critical Stock Levels • {branchId ? 'Selected Branch' : 'All Branches'}</p>
+                                            <h3 className="text-2xl font-black text-accent-brown tracking-tight">{CLINIC_TEXT.dashboard.lowStockAlert}</h3>
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40">Items running low • {branchId ? 'Selected Branch' : 'All Branches'}</p>
                                         </div>
                                     </div>
                                     <button
@@ -690,15 +730,15 @@ const BusinessDashboard = () => {
                                     {loadingLowStock ? (
                                         <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-40">
                                             <Loader2 className="w-10 h-10 animate-spin text-brand" />
-                                            <p className="font-bold text-sm tracking-widest uppercase">Analyzing Inventory...</p>
+                                            <p className="font-bold text-sm tracking-widest uppercase">Checking stock...</p>
                                         </div>
                                     ) : lowStockProducts.length === 0 ? (
                                         <div className="text-center py-20 bg-green-50/30 rounded-[2rem] border-2 border-dashed border-green-100/50">
                                             <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-green-500 mx-auto shadow-sm mb-4">
                                                 <Check className="w-8 h-8" />
                                             </div>
-                                            <h4 className="text-lg font-black text-accent-brown mb-1">Stock Levels Healthy</h4>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30">No critical shortages detected at this time.</p>
+                                            <h4 className="text-lg font-black text-accent-brown mb-1">{CLINIC_TEXT.dashboard.stockHealthy}</h4>
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30">{CLINIC_TEXT.dashboard.stockHealthySubtitle}</p>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -733,7 +773,7 @@ const BusinessDashboard = () => {
                                         }}
                                         className="w-full h-14 bg-brand-dark text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:brightness-110 transition-all flex items-center justify-center gap-3 shadow-lg shadow-brand-dark/20"
                                     >
-                                        Manage Inventory in Catalog
+                                        {CLINIC_TEXT.dashboard.manageInventoryInStore}
                                         <ArrowRight className="w-4 h-4" />
                                     </button>
                                 </div>

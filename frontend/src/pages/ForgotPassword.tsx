@@ -4,11 +4,13 @@ import { Mail, Lock, ArrowRight, ShieldCheck, MailCheck, Eye, EyeOff, ChevronLef
 import { Link, useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { PasswordStrength } from '../components/PasswordStrength';
+import { MAIN_LANDING_TEXT } from '../constants/mainLandingWording';
 import loginHero from '../assets/login_hero_landscape.png';
 
 const ForgotPassword = () => {
     const [step, setStep] = useState(1);
     const [email, setEmail] = useState('');
+    const [sentTo, setSentTo] = useState('');
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -63,7 +65,7 @@ const ForgotPassword = () => {
     };
 
     const handleSendOtp = async () => {
-        if (!email) return setError('Please enter your recovery email');
+        if (!email) return setError(MAIN_LANDING_TEXT.forgotPasswordPage.errors.enterEmail);
         setLoading(true);
         setError('');
         try {
@@ -74,13 +76,13 @@ const ForgotPassword = () => {
             });
             const data = await res.json();
             if (res.ok) {
-                setStep(2);
+                setSentTo(data.channel === 'sms' && data.masked_phone ? data.masked_phone : email); setStep(2);
                 setCountdown(60);
             } else {
-                setError(data.detail || 'Failed to send recovery code');
+                setError(data.detail || MAIN_LANDING_TEXT.forgotPasswordPage.errors.sendFailed);
             }
         } catch (err) {
-            setError('Global network failure. Try again.');
+            setError(MAIN_LANDING_TEXT.forgotPasswordPage.errors.networkError);
         } finally {
             setLoading(false);
         }
@@ -88,14 +90,14 @@ const ForgotPassword = () => {
 
     const handleVerifyOtp = () => {
         const otpCode = otp.join('');
-        if (otpCode.length !== 6) return setError('Code is incomplete');
+        if (otpCode.length !== 6) return setError(MAIN_LANDING_TEXT.forgotPasswordPage.errors.codeIncomplete);
         setError('');
         setStep(3);
     };
 
     const handleResetPassword = async () => {
-        if (!password || password !== confirmPassword) return setError('Credentials do not match');
-        if (password.length < 8) return setError('Security requires 8+ characters');
+        if (!password || password !== confirmPassword) return setError(MAIN_LANDING_TEXT.forgotPasswordPage.errors.passwordMismatch);
+        if (password.length < 8) return setError(MAIN_LANDING_TEXT.forgotPasswordPage.errors.passwordTooShort);
 
         const otpCode = otp.join('');
         setLoading(true);
@@ -113,10 +115,10 @@ const ForgotPassword = () => {
                 navigate(`${redirectPath}?msg=password_reset`);
             } else {
                 const data = await res.json();
-                setError(data.detail || 'Reset failed');
+                setError(data.detail || MAIN_LANDING_TEXT.forgotPasswordPage.errors.resetFailed);
             }
         } catch (err) {
-            setError('System failure during update.');
+            setError(MAIN_LANDING_TEXT.forgotPasswordPage.errors.networkError);
         } finally {
             setLoading(false);
         }
@@ -137,12 +139,12 @@ const ForgotPassword = () => {
                 return (
                     <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
                         <div className="space-y-1">
-                            <h3 className="text-5xl font-black text-accent-brown tracking-tight leading-none">Recovery</h3>
-                            <p className="text-xs text-accent-brown/40 font-medium italic">Enter your account email to proceed.</p>
+                            <h3 className="text-5xl font-black text-accent-brown tracking-tight leading-none">{MAIN_LANDING_TEXT.forgotPasswordPage.step1Title}</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">{MAIN_LANDING_TEXT.forgotPasswordPage.step1Subtitle}</p>
                         </div>
                         <div className="space-y-4">
                             <div className="group space-y-2">
-                                <label className="text-[11px] font-black text-accent-brown/30  pl-6 italic">Recovery Identity <span className="text-brand-dark">*</span></label>
+                                <label className="text-[11px] font-black text-accent-brown/30  pl-6 italic">{MAIN_LANDING_TEXT.forgotPasswordPage.emailLabel} <span className="text-brand-dark">*</span></label>
                                 <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                     <Mail className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
                                     <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" required />
@@ -151,7 +153,7 @@ const ForgotPassword = () => {
                         </div>
                         {error && <div className="text-[10px] font-black text-red-500  bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
                         <button type="submit" disabled={loading} className="bg-brand-dark text-white w-full py-5 rounded-full font-black text-xs  flex items-center justify-center gap-4 hover:shadow-2xl transition-all group shadow-xl">
-                            {loading ? 'Initializing...' : 'Send Recovery Code'} 
+                            {loading ? MAIN_LANDING_TEXT.forgotPasswordPage.sendingBtn : MAIN_LANDING_TEXT.forgotPasswordPage.sendCodeBtn} 
                             {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />}
                         </button>
                     </motion.div>
@@ -162,8 +164,8 @@ const ForgotPassword = () => {
                         <div className="space-y-4">
                             <div className="w-20 h-20 bg-brand/10 text-brand-dark rounded-3xl flex items-center justify-center"><MailCheck className="w-10 h-10" /></div>
                             <div className="space-y-1">
-                                <h3 className="text-3xl font-black text-accent-brown tracking-tight leading-none italic">Verification</h3>
-                                <p className="text-sm text-accent-brown/40 font-medium italic">Sent code to <span className="text-accent-brown font-bold not-italic">{email}</span></p>
+                                <h3 className="text-3xl font-black text-accent-brown tracking-tight leading-none italic">{MAIN_LANDING_TEXT.forgotPasswordPage.step2Title}</h3>
+                                <p className="text-sm text-accent-brown/40 font-medium italic">{MAIN_LANDING_TEXT.forgotPasswordPage.step2Subtitle(sentTo || email)}</p>
                             </div>
                         </div>
                         <div className="flex justify-between gap-3">
@@ -173,10 +175,10 @@ const ForgotPassword = () => {
                         </div>
                         {error && <div className="text-[10px] font-black text-red-500  bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
                         <div className="space-y-6">
-                            <p className="text-xs font-black text-accent-brown/30  ml-6 italic">No code? <button type="button" onClick={handleSendOtp} disabled={countdown > 0} className="text-brand-dark font-black">{countdown > 0 ? `Wait ${countdown}s` : 'Resend'}</button></p>
+                            <p className="text-xs font-black text-accent-brown/30  ml-6 italic">Didn't get a code? <button type="button" onClick={handleSendOtp} disabled={countdown > 0} className="text-brand-dark font-black">{countdown > 0 ? MAIN_LANDING_TEXT.forgotPasswordPage.waitCountdown(countdown) : MAIN_LANDING_TEXT.forgotPasswordPage.resendBtn}</button></p>
                             <div className="flex gap-4">
                                 <button type="button" onClick={prevStep} className="flex-1 px-8 py-5 rounded-full font-black text-xs  text-accent-brown/30 italic">Back</button>
-                                <button type="submit" className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs  transition-all italic">Verify Code</button>
+                                <button type="submit" className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs  transition-all italic">{MAIN_LANDING_TEXT.forgotPasswordPage.continueBtn}</button>
                             </div>
                         </div>
                     </motion.div>
@@ -185,12 +187,12 @@ const ForgotPassword = () => {
                 return (
                     <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
                         <div className="space-y-1">
-                            <h3 className="text-3xl font-black text-accent-brown tracking-tight leading-none">New Credentials</h3>
-                            <p className="text-xs text-accent-brown/40 font-medium italic">Update your security secret.</p>
+                            <h3 className="text-3xl font-black text-accent-brown tracking-tight leading-none">{MAIN_LANDING_TEXT.forgotPasswordPage.step3Title}</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">{MAIN_LANDING_TEXT.forgotPasswordPage.step3Subtitle}</p>
                         </div>
                         <div className="space-y-4">
                             <div className="group space-y-2">
-                                <label className="text-[11px] font-black text-accent-brown/30  pl-6 italic">New Secret <span className="text-brand-dark">*</span></label>
+                                <label className="text-[11px] font-black text-accent-brown/30  pl-6 italic">{MAIN_LANDING_TEXT.forgotPasswordPage.newPasswordLabel} <span className="text-brand-dark">*</span></label>
                                 <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                     <Lock className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark" />
                                     <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full bg-transparent py-5 pl-16 pr-14 text-accent-brown font-bold text-base outline-none" required />
@@ -199,7 +201,7 @@ const ForgotPassword = () => {
                                 {password && <div className="px-6"><PasswordStrength password={password} /></div>}
                             </div>
                             <div className="group space-y-2">
-                                <label className="text-[11px] font-black text-accent-brown/30  pl-6 italic">Confirm Secret <span className="text-brand-dark">*</span></label>
+                                <label className="text-[11px] font-black text-accent-brown/30  pl-6 italic">{MAIN_LANDING_TEXT.forgotPasswordPage.confirmPasswordLabel} <span className="text-brand-dark">*</span></label>
                                 <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                     <ShieldCheck className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark" />
                                     <input type={showConfirmPassword ? "text" : "password"} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••" className="w-full bg-transparent py-5 pl-16 pr-14 text-accent-brown font-bold text-base outline-none" required />
@@ -208,7 +210,7 @@ const ForgotPassword = () => {
                             </div>
                         </div>
                         {error && <div className="text-[10px] font-black text-red-500  bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
-                        <button type="submit" disabled={loading} className="bg-brand-dark text-white w-full py-6 rounded-full font-black text-xs  transition-all hover:shadow-2xl shadow-xl italic">{loading ? 'Updating...' : 'Update Secret'}</button>
+                        <button type="submit" disabled={loading} className="bg-brand-dark text-white w-full py-6 rounded-full font-black text-xs  transition-all hover:shadow-2xl shadow-xl italic">{loading ? MAIN_LANDING_TEXT.forgotPasswordPage.savingBtn : MAIN_LANDING_TEXT.forgotPasswordPage.resetPasswordBtn}</button>
                     </motion.div>
                 );
             default: return null;
@@ -223,7 +225,7 @@ const ForgotPassword = () => {
             {/* Left Column: Full Screen Hero */}
             <div className="hidden lg:block w-1/2 h-full relative overflow-hidden group">
                 <div className="absolute inset-0 z-0">
-                    <img src={loginHero} alt="Recovery" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
+                    <img src={loginHero} alt="Reset Password" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
                     <div className="absolute inset-0 bg-gradient-to-t from-accent-brown via-accent-brown/40 to-transparent opacity-90 transition-opacity" />
                     <div className="absolute inset-0 bg-black/20" />
                 </div>
@@ -236,13 +238,13 @@ const ForgotPassword = () => {
                             <span className="text-3xl font-black text-white tracking-tight">Hi-Vet</span>
                         </Link>
                         <div className="space-y-8 max-w-lg">
-                            <div className="inline-flex items-center gap-3 text-white/60  text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Account Security</div>
-                            <h1 className="text-7xl font-black text-white leading-tight tracking-tight">Account <br /><span className="text-brand-dark italic font-outfit">Recovery.</span></h1>
-                            <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Let's get you back into your Hi-Vet account securely and efficiently.</p>
+                            <div className="inline-flex items-center gap-3 text-white/60  text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />{MAIN_LANDING_TEXT.forgotPasswordPage.heroTag}</div>
+                            <h1 className="text-7xl font-black text-white leading-tight tracking-tight">Reset <br /><span className="text-brand-dark italic font-outfit">Password.</span></h1>
+                            <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">{MAIN_LANDING_TEXT.forgotPasswordPage.heroSubtitle}</p>
                         </div>
                     </div>
                     <div className="bg-white/10 backdrop-blur-xl px-10 py-5 rounded-full border border-white/10 w-fit">
-                        <p className="text-[11px] font-black text-white  italic">Security Stage {step} / 3</p>
+                        <p className="text-[11px] font-black text-white  italic">{MAIN_LANDING_TEXT.forgotPasswordPage.heroStepBadge(step)}</p>
                     </div>
                 </div>
             </div>
@@ -255,7 +257,7 @@ const ForgotPassword = () => {
                         <div className="flex gap-4">
                             {[1, 2, 3].map(i => <div key={i} className={`h-1.5 rounded-full transition-all duration-700 ${step >= i ? 'w-16 bg-brand-dark shadow-[0_0_20px_rgba(242,107,33,0.4)]' : 'w-4 bg-accent-brown/10'}`} />)}
                         </div>
-                        <Link to={loginPath} className="text-sm font-black text-brand-dark  border-b-4 border-brand-dark/10 pb-1 italic hover:text-accent-brown transition-all">Recall Credentials?</Link>
+                        <Link to={loginPath} className="text-sm font-black text-brand-dark  border-b-4 border-brand-dark/10 pb-1 italic hover:text-accent-brown transition-all">{MAIN_LANDING_TEXT.forgotPasswordPage.rememberPassword}</Link>
                     </div>
 
                     <form onSubmit={handleSubmit} className="overflow-y-visible"><AnimatePresence mode="wait">{renderStep()}</AnimatePresence></form>
@@ -263,7 +265,7 @@ const ForgotPassword = () => {
                     <div className="mt-12 text-center pt-8 border-t border-accent-brown/5">
                         <Link to={loginPath} className="inline-flex items-center gap-4 text-sm font-black  text-accent-brown/30 hover:text-brand-dark transition-all group italic">
                             <ChevronLeft className="w-5 h-5 group-hover:-translate-x-2 transition-transform" />
-                            Cancel Recovery
+                            {MAIN_LANDING_TEXT.forgotPasswordPage.backToLogin}
                         </Link>
                     </div>
                 </div>

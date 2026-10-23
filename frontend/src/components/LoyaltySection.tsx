@@ -1,27 +1,28 @@
 import { motion } from 'framer-motion';
 import { Award, ShoppingBag, Calendar, Users, Gift, Star, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { MAIN_LANDING_TEXT } from '../constants/mainLandingWording';
 
 const tiers = [
     { name: 'Bronze', range: '0 – 999 PTS', color: 'from-orange-700 to-orange-500', bg: 'bg-orange-50/50' },
-    { name: 'Silver', range: '1,000 – 1,999', color: 'from-slate-400 to-slate-200', bg: 'bg-slate-50/50' },
-    { name: 'Gold', range: '2,000 – 2,999', color: 'from-yellow-500 to-yellow-300', bg: 'bg-yellow-50/50' },
+    { name: 'Silver', range: '1,000 – 1,999 PTS', color: 'from-slate-400 to-slate-200', bg: 'bg-slate-50/50' },
+    { name: 'Gold', range: '2,000 – 2,999 PTS', color: 'from-yellow-500 to-yellow-300', bg: 'bg-yellow-50/50' },
     { name: 'Platinum', range: '3,000+ PTS', color: 'from-cyan-500 to-indigo-500', bg: 'bg-cyan-50/50' },
 ];
 
-const rewards = [
-    { icon: Gift, title: 'Free Grooming Add-on', cost: 500 },
-    { icon: Star, title: '15% Off Premium Foods', cost: 800 },
-    { icon: Award, title: 'Complimentary Vet Consult', cost: 2000 },
-    { icon: Gift, title: '₱10 Store Credit', cost: 1000 },
-];
+const REWARD_ICONS = [Gift, Star, Award, Gift];
+const EARNING_ICONS = [ShoppingBag, Calendar, Users];
 
 export function LoyaltySection() {
-    const earning = [
-        { icon: ShoppingBag, label: 'Shop the Store', pts: 'Variable' },
-        { icon: Calendar, label: 'Book Reservations', pts: 'Variable' },
-        { icon: Users, label: 'Refer a Friend', pts: '500 PTS Bonus' },
-    ];
+    const rewards = MAIN_LANDING_TEXT.rewardsSection.rewardsList.map((r, idx) => ({
+        ...r,
+        icon: REWARD_ICONS[idx],
+    }));
+
+    const earning = MAIN_LANDING_TEXT.rewardsSection.earningMethods.map((e, idx) => ({
+        ...e,
+        icon: EARNING_ICONS[idx],
+    }));
 
     return (
         <section id="loyalty" className="py-24 sm:py-32 bg-white relative overflow-hidden">
@@ -36,20 +37,20 @@ export function LoyaltySection() {
                     >
                         <div className="inline-flex items-center gap-3 text-brand-dark uppercase tracking-[0.5em] text-[10px] font-black">
                             <div className="w-8 h-[2px] bg-brand-dark" />
-                            Elite Ecosystem
+                            {MAIN_LANDING_TEXT.rewardsSection.tag}
                         </div>
                         <h2 className="text-5xl sm:text-6xl md:text-7xl font-black text-accent-brown tracking-tighter leading-[0.9] uppercase">
-                            Redefining <br />
-                            <span className="text-brand-dark italic font-outfit">Pet Loyalty.</span>
+                            {MAIN_LANDING_TEXT.rewardsSection.titlePrefix} <br />
+                            <span className="text-brand-dark italic font-outfit">{MAIN_LANDING_TEXT.rewardsSection.titleHighlight}</span>
                         </h2>
                     </motion.div>
                     
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
                         <p className="text-lg text-accent-brown/50 font-medium max-w-xs leading-relaxed">
-                            A tiered participation model designed to reward long-term health and professional commitment.
+                            {MAIN_LANDING_TEXT.rewardsSection.subtitle}
                         </p>
                         <Link to="/register" className="group flex items-center gap-4 bg-accent-brown text-white px-10 py-5 rounded-full font-black text-[11px] uppercase tracking-widest shadow-2xl hover:bg-brand-dark transition-all">
-                            Join the Program
+                            {MAIN_LANDING_TEXT.rewardsSection.startEarningBtn}
                             <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
                         </Link>
                     </div>
@@ -86,7 +87,7 @@ export function LoyaltySection() {
                         transition={{ duration: 0.8 }}
                         className="lg:col-span-12 xl:col-span-5 bg-accent-brown p-12 lg:p-16 rounded-[4rem] text-white shadow-2xl relative overflow-hidden"
                     >
-                        <h3 className="text-3xl font-black mb-10 tracking-tight">Accrual Methods</h3>
+                        <h3 className="text-3xl font-black mb-10 tracking-tight">{MAIN_LANDING_TEXT.rewardsSection.earningTitle}</h3>
                         <div className="space-y-8 relative z-10">
                             {earning.map((e) => (
                                 <div key={e.label} className="flex items-center justify-between group">
@@ -113,7 +114,7 @@ export function LoyaltySection() {
                         transition={{ duration: 0.8 }}
                         className="lg:col-span-12 xl:col-span-7 bg-[#F7F6F2] p-12 lg:p-16 rounded-[4rem] border border-accent-brown/5 shadow-inner"
                     >
-                        <h3 className="text-3xl font-black text-accent-brown mb-10 tracking-tight">Exclusive Redemptions</h3>
+                        <h3 className="text-3xl font-black text-accent-brown mb-10 tracking-tight">{MAIN_LANDING_TEXT.rewardsSection.rewardsTitle}</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                             {rewards.map((r) => (
                                 <div key={r.title} className="bg-white p-6 rounded-[2.5rem] flex items-center gap-6 shadow-sm hover:shadow-xl transition-all duration-500 border border-transparent hover:border-brand/10 group">
@@ -124,7 +125,7 @@ export function LoyaltySection() {
                                         <p className="font-black text-accent-brown text-base font-bold leading-tight tracking-tight">{r.title}</p>
                                         <div className="flex items-center gap-2">
                                             <Star className="w-3 h-3 text-brand-dark fill-brand-dark" />
-                                            <span className="text-xs font-bold text-brand-dark">{r.cost} pts required</span>
+                                            <span className="text-xs font-bold text-brand-dark">{r.cost} points</span>
                                         </div>
                                     </div>
                                 </div>

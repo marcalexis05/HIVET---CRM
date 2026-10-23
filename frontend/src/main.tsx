@@ -3,6 +3,10 @@ import { createRoot } from 'react-dom/client'
 import { APIProvider } from '@vis.gl/react-google-maps'
 import './index.css'
 import App from './App.tsx'
+import { registerServiceWorker } from './utils/pwaManager'
+
+// Initialize PWA Service Worker for Offline Caching and Homescreen Installation
+registerServiceWorker()
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 

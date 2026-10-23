@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     ArrowRight, ArrowLeft, ChevronLeft, ShieldCheck, MailCheck, Bike, Eye, EyeOff, User,
-    FileText, CheckCircle, Lock, Phone as PhoneIcon, Mail as MailIcon, MapPin, Upload, X, Clock, CheckCircle2
+    FileText, CheckCircle, Lock, Phone as PhoneIcon, Mail as MailIcon, MapPin, Upload, X, Clock, CheckCircle2,
+    AlertCircle
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PasswordStrength } from '../components/PasswordStrength';
@@ -10,6 +11,10 @@ import { CustomDropdown } from '../components/CustomDropdown';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { useAuth } from '../context/AuthContext';
 import { CustomDatePicker } from '../components/CustomDatePicker';
+import { calculateAgeFullYears, validateBirthday } from '../utils/dateValidation';
+import { checkContactAvailability, isValidPhMobile, isValidEmail } from '../utils/contactValidation';
+import { CONTACT_VALIDATION_MESSAGES } from '../constants/contactValidationWording';
+import { RIDER_LANDING_TEXT } from '../constants/riderLandingWording';
 import loginHero from '../assets/login_hero_landscape.png';
 
 const FileUploadField = ({ label, icon: Icon, onUpload, value, docType }: any) => {
@@ -48,8 +53,8 @@ const FileUploadField = ({ label, icon: Icon, onUpload, value, docType }: any) =
                 <div className="flex items-center gap-4 bg-green-50 border border-green-100 rounded-[2rem] px-6 py-4 shadow-sm">
                     <CheckCircle2 className="w-6 h-6 text-green-500 shrink-0" />
                     <div className="flex-1 min-w-0">
-                        <p className="text-xs font-black text-green-700 truncate italic">Document Verified</p>
-                        <p className="text-[9px] text-green-500 font-bold uppercase tracking-widest leading-none">Security Gate Passed</p>
+                        <p className="text-xs font-black text-green-700 truncate italic">{RIDER_LANDING_TEXT.registerPage.upload.verifiedTitle}</p>
+                        <p className="text-[9px] text-green-500 font-bold uppercase tracking-widest leading-none">{RIDER_LANDING_TEXT.registerPage.upload.verifiedSubtitle}</p>
                     </div>
                     <button type="button" onClick={() => onUpload('')} className="w-8 h-8 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-200 transition-colors shrink-0">
                         <X className="w-4 h-4" />
@@ -65,8 +70,8 @@ const FileUploadField = ({ label, icon: Icon, onUpload, value, docType }: any) =
                         {uploading ? <div className="w-6 h-6 border-4 border-brand-dark/30 border-t-brand-dark rounded-full animate-spin" /> : <Upload className="w-6 h-6 text-accent-brown/20 group-hover:text-brand-dark transition-colors" />}
                     </div>
                     <div className="text-center">
-                        <span className="block text-[10px] font-black text-accent-brown uppercase tracking-[0.3em] group-hover:text-brand-dark transition-colors italic">{uploading ? 'Processing Data' : 'Initialize Upload'}</span>
-                        <span className="block text-[9px] text-accent-brown/30 font-bold uppercase tracking-widest mt-1 italic">PDF, JPG, or PNG · Max 5MB</span>
+                        <span className="block text-[10px] font-black text-accent-brown uppercase tracking-[0.3em] group-hover:text-brand-dark transition-colors italic">{uploading ? RIDER_LANDING_TEXT.registerPage.upload.uploading : RIDER_LANDING_TEXT.registerPage.upload.uploadPrompt}</span>
+                        <span className="block text-[9px] text-accent-brown/30 font-bold uppercase tracking-widest mt-1 italic">{RIDER_LANDING_TEXT.registerPage.upload.acceptedTypes}</span>
                     </div>
                     <input ref={ref} type="file" onChange={handleFileChange} className="hidden" accept=".pdf,.jpg,.jpeg,.png" />
                 </button>
@@ -86,11 +91,12 @@ const RequirementCheckbox = ({ label, checked, onChange }: any) => (
         <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="hidden" />
     </label>
 );
-const PendingApproval = ({ email, vehicleType }: { email: string; vehicleType: string }) => (
+
+const PendingApproval = ({ email, vehicleType }: { email: string; vehicleType: string }) => (
     <div className="h-screen bg-white flex font-brand select-none overflow-hidden">
         <div className="hidden lg:block w-1/2 h-full relative overflow-hidden group">
             <div className="absolute inset-0 z-0">
-                <img src={loginHero} alt="Rider Operations" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
+                <img src={loginHero} alt={RIDER_LANDING_TEXT.registerPage.heroImageAlt} className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
                 <div className="absolute inset-0 bg-gradient-to-t from-accent-brown via-accent-brown/40 to-transparent opacity-90 transition-opacity" />
                 <div className="absolute inset-0 bg-black/20" />
             </div>
@@ -103,9 +109,9 @@ const RequirementCheckbox = ({ label, checked, onChange }: any) => (
                         <span className="text-3xl font-black text-white tracking-widest uppercase italic">Hi-Vet Riders</span>
                     </Link>
                     <div className="space-y-8 max-w-lg">
-                        <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Fleet Command</div>
-                        <h1 className="text-7xl font-black text-white leading-[0.8] tracking-tighter uppercase">Rider <br /><span className="text-brand-dark italic font-outfit">Operations.</span></h1>
-                        <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Access your delivery logistics, real-time earnings, and route optimization dashboard.</p>
+                        <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />{RIDER_LANDING_TEXT.registerPage.heroTag}</div>
+                        <h1 className="text-7xl font-black text-white leading-[0.8] tracking-tighter uppercase">{RIDER_LANDING_TEXT.registerPage.heroTitlePrefix} <br /><span className="text-brand-dark italic font-outfit">{RIDER_LANDING_TEXT.registerPage.heroTitleHighlight}</span></h1>
+                        <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">{RIDER_LANDING_TEXT.registerPage.heroSubtitle}</p>
                     </div>
                 </div>
             </div>
@@ -117,20 +123,20 @@ const RequirementCheckbox = ({ label, checked, onChange }: any) => (
                     <Clock className="w-12 h-12 animate-pulse" />
                 </div>
                 <div className="space-y-3">
-                    <h2 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Under Review</h2>
-                    <p className="text-sm text-accent-brown/50 font-medium italic">Application submitted for <span className="text-accent-brown font-bold not-italic font-outfit">{email}</span></p>
+                    <h2 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">{RIDER_LANDING_TEXT.registerPage.pending.title}</h2>
+                    <p className="text-sm text-accent-brown/50 font-medium italic">{RIDER_LANDING_TEXT.registerPage.pending.submittedFor(email)}</p>
                 </div>
                 <div className="bg-accent-peach/10 p-8 rounded-[2.5rem] border border-accent-brown/5 text-left space-y-6">
                     <div className="flex gap-4">
                         <div className="w-6 h-6 rounded-full bg-brand-dark text-white flex items-center justify-center text-[10px] font-black shrink-0">1</div>
-                        <p className="text-xs text-accent-brown/70 italic leading-relaxed">Our compliance team will verify your <span className="font-bold text-accent-brown">NBI Clearance</span> and <span className="font-bold text-accent-brown">Driver License</span> within 24-48 business hours.</p>
+                        <p className="text-xs text-accent-brown/70 italic leading-relaxed">{RIDER_LANDING_TEXT.registerPage.pending.step1Text}</p>
                     </div>
                     <div className="flex gap-4 opacity-50">
                         <div className="w-6 h-6 rounded-full bg-brand-dark/20 text-accent-brown/40 flex items-center justify-center text-[10px] font-black shrink-0">2</div>
-                        <p className="text-xs text-accent-brown/40 italic leading-relaxed">Once approved, you will receive an activation email with your rider portal access link.</p>
+                        <p className="text-xs text-accent-brown/40 italic leading-relaxed">{RIDER_LANDING_TEXT.registerPage.pending.step2Text}</p>
                     </div>
                 </div>
-                <button onClick={() => window.location.href = '/for-riders'} className="bg-brand-dark text-white w-full py-5 rounded-full font-black text-[10px] uppercase tracking-[0.5em] shadow-xl shadow-brand-dark/20 hover:shadow-brand-dark/40 transition-all italic">Return to Landing</button>
+                <button onClick={() => window.location.href = '/for-riders'} className="bg-brand-dark text-white w-full py-5 rounded-full font-black text-[10px] uppercase tracking-[0.5em] shadow-xl shadow-brand-dark/20 hover:shadow-brand-dark/40 transition-all italic">{RIDER_LANDING_TEXT.registerPage.pending.returnBtn}</button>
             </motion.div>
         </div>
     </div>
@@ -152,6 +158,79 @@ const RiderRegister = () => {
     const [suffix, setSuffix] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
+
+    const [phoneError, setPhoneError] = useState<string | null>(null);
+    const [emailError, setEmailError] = useState<string | null>(null);
+    const [phoneChecking, setPhoneChecking] = useState(false);
+    const [emailChecking, setEmailChecking] = useState(false);
+
+    // Debounced Phone Validation
+    useEffect(() => {
+        if (!phone) {
+            setPhoneError(null);
+            return;
+        }
+        if (phone.length === 10 && !phone.startsWith('9')) {
+            setPhoneError(CONTACT_VALIDATION_MESSAGES.invalidNumber);
+            return;
+        }
+        if (phone.length < 10) {
+            setPhoneError(null);
+            return;
+        }
+        if (phone.length === 10 && phone.startsWith('9')) {
+            const timer = setTimeout(async () => {
+                setPhoneChecking(true);
+                const res = await checkContactAvailability('phone', phone);
+                setPhoneChecking(false);
+                setPhoneError(res.error);
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [phone]);
+
+    // Debounced Email Validation
+    useEffect(() => {
+        if (!email) {
+            setEmailError(null);
+            return;
+        }
+        if (!isValidEmail(email)) {
+            setEmailError(null);
+            return;
+        }
+        const timer = setTimeout(async () => {
+            setEmailChecking(true);
+            const res = await checkContactAvailability('email', email);
+            setEmailChecking(false);
+            setEmailError(res.error);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [email]);
+
+    const handlePhoneBlur = async () => {
+        if (!phone) return;
+        if (!isValidPhMobile(phone)) {
+            setPhoneError(CONTACT_VALIDATION_MESSAGES.invalidNumber);
+            return;
+        }
+        setPhoneChecking(true);
+        const res = await checkContactAvailability('phone', phone);
+        setPhoneChecking(false);
+        setPhoneError(res.error);
+    };
+
+    const handleEmailBlur = async () => {
+        if (!email) return;
+        if (!isValidEmail(email)) {
+            setEmailError(CONTACT_VALIDATION_MESSAGES.invalidEmail);
+            return;
+        }
+        setEmailChecking(true);
+        const res = await checkContactAvailability('email', email);
+        setEmailChecking(false);
+        setEmailError(res.error);
+    };
     const [homeHouseNumber, setHomeHouseNumber] = useState('');
     const [homeBlockNumber, setHomeBlockNumber] = useState('');
     const [homeStreet, setHomeStreet] = useState('');
@@ -192,14 +271,8 @@ const RiderRegister = () => {
     
     const calculateAge = (bday: string) => {
         if (!bday) return 0;
-        const birthDate = new Date(bday);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const month = today.getMonth() - birthDate.getMonth();
-        if (month < 0 || (month === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-        }
-        return age;
+        const age = calculateAgeFullYears(bday);
+        return age !== null && age >= 0 ? age : 0;
     };
 
     useEffect(() => {
@@ -247,10 +320,10 @@ const RiderRegister = () => {
 
     const handleSendOtp = async () => {
         if (!email || !password || password !== confirmPassword) {
-            return setError('Please check your email and passwords');
+            return setError(RIDER_LANDING_TEXT.registerPage.errors.checkEmailPasswords);
         }
         if (password.length < 8) {
-            return setError('Password must be at least 8 characters');
+            return setError(RIDER_LANDING_TEXT.registerPage.errors.passwordLength);
         }
 
         setLoading(true);
@@ -259,69 +332,91 @@ const RiderRegister = () => {
             const res = await fetch('http://localhost:8000/api/auth/send-otp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
+                body: JSON.stringify({ email, phone, role: 'rider' })
             });
             const data = await res.json();
             if (res.ok) {
                 setStep(4);
                 setCountdown(60);
             } else {
-                setError(data.detail || 'Failed to send verification email');
+                setError(data.detail || RIDER_LANDING_TEXT.registerPage.errors.sendCodeFailed);
             }
         } catch (err) {
-            setError('An error occurred while sending the email.');
+            setError(RIDER_LANDING_TEXT.registerPage.errors.networkError);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (step === 4) {
             handleRegister();
         } else {
-            nextStep();
+            await nextStep();
         }
     };
 
-    const nextStep = () => {
+    const nextStep = async () => {
         setError('');
         if (step === 1) {
             if (!firstName || !lastName || !phone || !homeCity || !birthday || !gender) {
-                return setError('First & Last Name, Phone, Birthdate, Sex, and Verified Address are required');
+                return setError(RIDER_LANDING_TEXT.registerPage.errors.requiredFields);
             }
-            if (phone.length !== 10 || !phone.startsWith('9')) {
-                return setError('Please enter a valid 10-digit PH mobile number starting with 9.');
+            if (phoneError) {
+                return setError(phoneError);
             }
-            const age = calculateAge(birthday);
-            if (age < 18) {
-                return setError('Rider eligibility requires a minimum age of 18.');
+            if (!isValidPhMobile(phone)) {
+                setPhoneError(CONTACT_VALIDATION_MESSAGES.invalidNumber);
+                return setError(CONTACT_VALIDATION_MESSAGES.invalidNumber);
             }
-            if (age > 100) {
-                return setError('Invalid age detected. Please verify your birthdate.');
+            setPhoneChecking(true);
+            const pCheck = await checkContactAvailability('phone', phone);
+            setPhoneChecking(false);
+            if (!pCheck.available) {
+                setPhoneError(pCheck.error);
+                return setError(pCheck.error || CONTACT_VALIDATION_MESSAGES.numberUsed);
+            }
+            const bVal = validateBirthday(birthday, 'person birthday');
+            if (!bVal.isValid) {
+                return setError(bVal.error || 'Please choose a valid birthdate.');
             }
             setStep(2);
         } else if (step === 2) {
             if (vehicleType !== 'Bicycle') {
                 if (!driverLicense) {
-                    return setError('Driver\'s License number is required');
+                    return setError(RIDER_LANDING_TEXT.registerPage.errors.licenseRequired);
                 }
                 if (!licenseUrl || !vehicleCrUrl || !vehicleOrUrl) {
-                    return setError('All vehicle documents are required');
+                    return setError(RIDER_LANDING_TEXT.registerPage.errors.vehicleDocsRequired);
                 }
             }
             setStep(3);
         } else if (step === 3) {
             if (!nbiClearanceUrl) {
-                return setError('Clearance document is required');
+                return setError(RIDER_LANDING_TEXT.registerPage.errors.nbiRequired);
             }
             if (!is18Above || !hasAndroid6) {
-                return setError('You must meet all requirements to proceed');
+                return setError(RIDER_LANDING_TEXT.registerPage.errors.mustMeetRequirements);
+            }
+            if (emailError) {
+                return setError(emailError);
+            }
+            if (!isValidEmail(email)) {
+                setEmailError(CONTACT_VALIDATION_MESSAGES.invalidEmail);
+                return setError(CONTACT_VALIDATION_MESSAGES.invalidEmail);
+            }
+            setEmailChecking(true);
+            const eCheck = await checkContactAvailability('email', email);
+            setEmailChecking(false);
+            if (!eCheck.available) {
+                setEmailError(eCheck.error);
+                return setError(eCheck.error || CONTACT_VALIDATION_MESSAGES.emailUsed);
             }
             if (!email || password !== confirmPassword || password.length < 8) {
-                return setError('Please check your account details');
+                return setError(RIDER_LANDING_TEXT.registerPage.errors.checkEmailPasswords);
             }
-            handleSendOtp();
+            await handleSendOtp();
         }
     };
 
@@ -329,7 +424,7 @@ const RiderRegister = () => {
 
     const handleRegister = async () => {
         const otpCode = otp.join('');
-        if (otpCode.length !== 6) return setError('Please enter the full 6-digit code');
+        if (otpCode.length !== 6) return setError(RIDER_LANDING_TEXT.registerPage.errors.codeIncomplete);
         setLoading(true);
         setError('');
         const isBicycle = vehicleType === 'Bicycle';
@@ -380,11 +475,11 @@ const RiderRegister = () => {
                 loginWithToken(data.token);
                 navigate('/dashboard/rider');
             } else {
-                setError(data.detail || 'Courier registration failed');
+                setError(data.detail || RIDER_LANDING_TEXT.registerPage.errors.regFailed);
             }
         } catch (err) {
             console.error(err);
-            setError('An error occurred during rider registration.');
+            setError(RIDER_LANDING_TEXT.registerPage.errors.networkError);
         } finally {
             setLoading(false);
         }
@@ -397,22 +492,22 @@ const RiderRegister = () => {
                 return (
                     <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
                         <div className="space-y-1">
-                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Rider Identity</h3>
-                            <p className="text-xs text-accent-brown/40 font-medium italic">Identify yourself to join the fleet.</p>
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">{RIDER_LANDING_TEXT.registerPage.step1Title}</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">{RIDER_LANDING_TEXT.registerPage.step1Subtitle}</p>
                         </div>
                         {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center text-sm">{error}</div>}
                         
                         <div className="space-y-4 max-h-[50vh] overflow-y-auto px-1 custom-scrollbar pb-2">
                              <div className="grid grid-cols-2 gap-4">
                                 <div className="group space-y-2">
-                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">First Name <span className="text-brand-dark">*</span></label>
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">{RIDER_LANDING_TEXT.registerPage.firstName} <span className="text-brand-dark">*</span></label>
                                     <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                         <User className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
                                         <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Juan" className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" />
                                     </div>
                                 </div>
                                 <div className="group space-y-2">
-                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Last Name <span className="text-brand-dark">*</span></label>
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">{RIDER_LANDING_TEXT.registerPage.lastName} <span className="text-brand-dark">*</span></label>
                                     <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                         <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Dela Cruz" className="w-full bg-transparent py-5 px-8 text-accent-brown font-bold text-base outline-none" />
                                     </div>
@@ -421,13 +516,13 @@ const RiderRegister = () => {
 
                              <div className="grid grid-cols-2 gap-4">
                                 <div className="group space-y-2">
-                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Middle Name <span className="text-[11px] lowercase opacity-50 font-bold italic not-uppercase tracking-normal">(Optional)</span></label>
+                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">{RIDER_LANDING_TEXT.registerPage.middleName} <span className="text-[11px] lowercase opacity-50 font-bold italic not-uppercase tracking-normal">(Optional)</span></label>
                                     <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                         <input type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} placeholder="Optional" className="w-full bg-transparent py-5 px-8 text-accent-brown font-bold text-base outline-none" />
                                     </div>
                                 </div>
                                 <CustomDropdown
-                                    label="Suffix"
+                                    label={`${RIDER_LANDING_TEXT.registerPage.suffix}`}
                                     isOptional={true}
                                     value={suffix}
                                     onChange={setSuffix}
@@ -444,19 +539,20 @@ const RiderRegister = () => {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <CustomDatePicker
-                                    label="Birthdate *"
+                                    mode="person birthday"
+                                    label={`${RIDER_LANDING_TEXT.registerPage.birthdate} *`}
                                     value={birthday}
                                     onChange={setBirthday}
                                 />
                                 <div className="group space-y-2">
-                                    <label className="text-[11px] font-black uppercase tracking-widest text-accent-brown/40 block ml-1 italic">Age</label>
+                                    <label className="text-[11px] font-black uppercase tracking-widest text-accent-brown/40 block ml-1 italic">{RIDER_LANDING_TEXT.registerPage.age}</label>
                                     <div className="w-full bg-[#F7F6F2] py-5 px-8 rounded-3xl text-accent-brown font-black text-xl italic opacity-50 ring-1 ring-brand-dark/5">{birthday ? `${calculateAge(birthday)}` : '--'}</div>
                                 </div>
                             </div>
 
                              <div>
                                 <CustomDropdown
-                                    label="Sex / Gender *"
+                                    label={`${RIDER_LANDING_TEXT.registerPage.gender} *`}
                                     value={gender}
                                     onChange={setGender}
                                     options={[
@@ -470,10 +566,11 @@ const RiderRegister = () => {
                             </div>
 
                             <div className="group space-y-2">
-                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Mobile Phone <span className="text-brand-dark">*</span></label>
-                                <div className="relative flex items-center bg-[#F7F6F2] ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl overflow-hidden transition-all shadow-inner">
+                                <label htmlFor="rider-phone" className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">{RIDER_LANDING_TEXT.registerPage.phone} <span className="text-brand-dark">*</span></label>
+                                <div className={`relative flex items-center bg-[#F7F6F2] ring-1 ${phoneError ? 'ring-red-400' : 'ring-brand-dark/5 focus-within:ring-brand-dark/30'} rounded-3xl overflow-hidden transition-all shadow-inner`}>
                                     <div className="pl-6 pr-4 py-5 text-accent-brown font-black border-r border-accent-brown/10 text-sm opacity-20 transition-opacity group-focus-within:opacity-100">+63</div>
                                     <input 
+                                        id="rider-phone"
                                         type="tel" 
                                         value={phone} 
                                         maxLength={10}
@@ -482,15 +579,25 @@ const RiderRegister = () => {
                                             if (val.startsWith('0')) val = val.substring(1);
                                             if (val.length > 0 && !val.startsWith('9')) val = '';
                                             setPhone(val.slice(0, 10));
+                                            if (phoneError) setPhoneError(null);
                                         }} 
+                                        onBlur={handlePhoneBlur}
+                                        aria-invalid={!!phoneError}
+                                        aria-describedby={phoneError ? "rider-phone-error" : undefined}
                                         placeholder="9XX XXX XXXX" 
                                         className="flex-1 bg-transparent py-5 px-6 text-accent-brown font-bold text-base outline-none" 
                                     />
                                 </div>
+                                {phoneError && (
+                                    <p id="rider-phone-error" role="alert" aria-live="polite" className="text-xs font-bold text-red-500 flex items-center gap-1.5 pl-6 mt-1.5">
+                                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                        {phoneError}
+                                    </p>
+                                )}
                             </div>
 
                             <div className="group space-y-2">
-                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Residential Address <span className="text-brand-dark">*</span></label>
+                                <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">{RIDER_LANDING_TEXT.registerPage.address} <span className="text-brand-dark">*</span></label>
                                 <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                     <MapPin className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark z-10 transition-colors" />
                                     <AddressAutocomplete 
@@ -529,7 +636,7 @@ const RiderRegister = () => {
                                             zip: homeZip,
                                             region: homeRegion
                                         }}
-                                        placeholder="123 Rizal St., Quezon City"
+                                        placeholder={RIDER_LANDING_TEXT.registerPage.addressPlaceholder}
                                         className="!pl-16 !bg-transparent !border-0 !shadow-none !rounded-3xl !py-5 text-base font-bold text-accent-brown"
                                     />
                                 </div>
@@ -537,18 +644,18 @@ const RiderRegister = () => {
 
                             <div className="p-8 bg-accent-peach/5 rounded-[2.5rem] border border-accent-peach/10 space-y-3 relative overflow-hidden group/addr">
                                 <div className="absolute top-0 right-0 p-6 opacity-5 group-hover/addr:opacity-20 transition-opacity"><User className="w-16 h-16" /></div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">Validated Residence</p>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-accent-brown/30">{RIDER_LANDING_TEXT.registerPage.validatedAddressLabel}</p>
                                 <div className="space-y-2 relative z-10">
                                     <p className="text-lg font-black text-accent-brown leading-tight capitalize">
                                         {[homeHouseNumber, homeBlockNumber, homeStreet, homeSubdivision, homeSitio, homeBarangay, homeCity, homeProvince, homeZip].filter(Boolean).join(' ')}
                                     </p>
-                                    {!homeCity && <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-50 text-red-500 rounded-full text-[9px] font-black uppercase tracking-widest italic border border-red-100">Location Incomplete</div>}
+                                    {!homeCity && <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-50 text-red-500 rounded-full text-[9px] font-black uppercase tracking-widest italic border border-red-100">{RIDER_LANDING_TEXT.registerPage.locationIncomplete}</div>}
                                 </div>
                             </div>
                         </div>
 
                         <button type="submit" className="bg-brand-dark text-white w-full py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4">
-                            Initialize Application <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
+                            {RIDER_LANDING_TEXT.registerPage.nextBtn} <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
                         </button>
                     </motion.div>
                 );
@@ -556,14 +663,14 @@ const RiderRegister = () => {
                 return (
                     <motion.div key="s2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                         <div className="space-y-1">
-                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Vehicle</h3>
-                            <p className="text-xs text-accent-brown/40 font-medium italic">Requirement vary based on vehicle type.</p>
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">{RIDER_LANDING_TEXT.registerPage.step2Title}</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">{RIDER_LANDING_TEXT.registerPage.step2Subtitle}</p>
                         </div>
                         {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center text-sm">{error}</div>}
                         
                         <div className="space-y-6 max-h-[50vh] overflow-y-auto px-1 custom-scrollbar pb-2">
                              <CustomDropdown
-                                label="Fleet Category"
+                                label={RIDER_LANDING_TEXT.registerPage.vehicleTypeLabel}
                                 value={vehicleType}
                                 onChange={setVehicleType}
                                 options={[
@@ -579,23 +686,23 @@ const RiderRegister = () => {
                                         <Bike className="w-6 h-6 text-green-600" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-black text-green-700 uppercase tracking-tighter">Bicycle Rider Protocol</p>
-                                        <p className="text-[11px] text-green-600/80 font-bold uppercase tracking-widest leading-relaxed mt-2 italic">No Driver's License or CR/OR required for cycling partners. Skip to professional clearance.</p>
+                                        <p className="text-sm font-black text-green-700 uppercase tracking-tighter">{RIDER_LANDING_TEXT.registerPage.bicycleNoticeTitle}</p>
+                                        <p className="text-[11px] text-green-600/80 font-bold uppercase tracking-widest leading-relaxed mt-2 italic">{RIDER_LANDING_TEXT.registerPage.bicycleNoticeDesc}</p>
                                     </div>
                                 </div>
                             ) : (
                                 <div className="space-y-6">
                                     <div className="group space-y-2">
-                                        <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">License Number <span className="text-brand-dark">*</span></label>
+                                        <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">{RIDER_LANDING_TEXT.registerPage.licenseNumberLabel} <span className="text-brand-dark">*</span></label>
                                         <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                             <ShieldCheck className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
                                             <input type="text" value={driverLicense} onChange={e => setDriverLicense(e.target.value)} placeholder="AXX-XX-XXXXXX" className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" />
                                         </div>
                                     </div>
-                                    <FileUploadField label="Driver's License (Class A)" icon={ShieldCheck} docType="driver_license" value={licenseUrl} onUpload={setLicenseUrl} />
+                                    <FileUploadField label={RIDER_LANDING_TEXT.registerPage.licenseUploadLabel} icon={ShieldCheck} docType="driver_license" value={licenseUrl} onUpload={setLicenseUrl} />
                                     <div className="grid grid-cols-2 gap-4">
-                                        <FileUploadField label="Certificate of Reg. (CR)" icon={FileText} docType="vehicle_cr" value={vehicleCrUrl} onUpload={setVehicleCrUrl} />
-                                        <FileUploadField label="Official Receipt (OR)" icon={FileText} docType="vehicle_or" value={vehicleOrUrl} onUpload={setVehicleOrUrl} />
+                                        <FileUploadField label={RIDER_LANDING_TEXT.registerPage.crUploadLabel} icon={FileText} docType="vehicle_cr" value={vehicleCrUrl} onUpload={setVehicleCrUrl} />
+                                        <FileUploadField label={RIDER_LANDING_TEXT.registerPage.orUploadLabel} icon={FileText} docType="vehicle_or" value={vehicleOrUrl} onUpload={setVehicleOrUrl} />
                                     </div>
                                 </div>
                             )}
@@ -606,7 +713,7 @@ const RiderRegister = () => {
                                 <ChevronLeft className="w-5 h-5 group-hover:-translate-x-2 transition-transform" />
                                 Back
                             </button>
-                            <button type="submit" className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4">Next Stage <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" /></button>
+                            <button type="submit" className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4">{RIDER_LANDING_TEXT.registerPage.nextBtn} <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" /></button>
                         </div>
                     </motion.div>
                 );
@@ -614,13 +721,13 @@ const RiderRegister = () => {
                 return (
                     <motion.div key="s3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                         <div className="space-y-1">
-                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">Gatekeeping</h3>
-                            <p className="text-xs text-accent-brown/40 font-medium italic">Compliance and account initialization.</p>
+                            <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none">{RIDER_LANDING_TEXT.registerPage.step3Title}</h3>
+                            <p className="text-xs text-accent-brown/40 font-medium italic">{RIDER_LANDING_TEXT.registerPage.step3Subtitle}</p>
                         </div>
                         {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center text-sm">{error}</div>}
                         
                         <div className="space-y-6 max-h-[50vh] overflow-y-auto px-1 custom-scrollbar pb-2">
-                             <FileUploadField label="NBI / Police Clearance" icon={ShieldCheck} docType="nbi_clearance" value={nbiClearanceUrl} onUpload={setNbiClearanceUrl} />
+                             <FileUploadField label={RIDER_LANDING_TEXT.registerPage.nbiUploadLabel} icon={ShieldCheck} docType="nbi_clearance" value={nbiClearanceUrl} onUpload={setNbiClearanceUrl} />
                              
                              <div className="space-y-4">
                                 <div className="flex items-center gap-6 p-6 rounded-[2rem] bg-green-50/50 border border-green-100">
@@ -628,24 +735,43 @@ const RiderRegister = () => {
                                         <CheckCircle2 className="w-6 h-6 text-green-500" />
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-green-700">Maturity Verified</p>
-                                        <p className="text-[11px] font-bold text-green-600/70 italic uppercase tracking-widest">18+ Age Requirement Passed</p>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-green-700">{RIDER_LANDING_TEXT.registerPage.ageVerifiedTitle}</p>
+                                        <p className="text-[11px] font-bold text-green-600/70 italic uppercase tracking-widest">{RIDER_LANDING_TEXT.registerPage.ageVerifiedDesc}</p>
                                     </div>
                                 </div>
-                                <RequirementCheckbox label="Hardware: Android 6.0+ Host" checked={hasAndroid6} onChange={setHasAndroid6} />
+                                <RequirementCheckbox label={RIDER_LANDING_TEXT.registerPage.hardwareRequirement} checked={hasAndroid6} onChange={setHasAndroid6} />
                              </div>
 
                              <div className="space-y-6 border-t border-accent-brown/5 pt-6">
                                 <div className="group space-y-2">
-                                    <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Account Identity <span className="text-brand-dark">*</span></label>
-                                    <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
+                                    <label htmlFor="rider-email" className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">{RIDER_LANDING_TEXT.registerPage.emailLabel} <span className="text-brand-dark">*</span></label>
+                                    <div className={`relative ring-1 ${emailError ? 'ring-red-400' : 'ring-brand-dark/5 focus-within:ring-brand-dark/30'} rounded-3xl transition-all shadow-inner bg-[#F7F6F2]`}>
                                         <MailIcon className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
-                                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="rider@hi-vet.com" className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" />
+                                        <input 
+                                            id="rider-email"
+                                            type="email" 
+                                            value={email} 
+                                            onChange={e => {
+                                                setEmail(e.target.value);
+                                                if (emailError) setEmailError(null);
+                                            }} 
+                                            onBlur={handleEmailBlur}
+                                            aria-invalid={!!emailError}
+                                            aria-describedby={emailError ? "rider-email-error" : undefined}
+                                            placeholder={RIDER_LANDING_TEXT.registerPage.emailPlaceholder} 
+                                            className="w-full bg-transparent py-5 pl-16 pr-8 text-accent-brown font-bold text-base outline-none" 
+                                        />
                                     </div>
+                                    {emailError && (
+                                        <p id="rider-email-error" role="alert" aria-live="polite" className="text-xs font-bold text-red-500 flex items-center gap-1.5 pl-6 mt-1.5">
+                                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                            {emailError}
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="group space-y-2">
-                                        <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Secret <span className="text-brand-dark">*</span></label>
+                                        <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">{RIDER_LANDING_TEXT.registerPage.passwordLabel} <span className="text-brand-dark">*</span></label>
                                         <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                             <Lock className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
                                             <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full bg-transparent py-5 pl-16 pr-12 text-accent-brown font-bold text-base outline-none" />
@@ -655,7 +781,7 @@ const RiderRegister = () => {
                                         </div>
                                     </div>
                                     <div className="group space-y-2">
-                                        <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">Confirm <span className="text-brand-dark">*</span></label>
+                                        <label className="text-[11px] font-black text-accent-brown/30 uppercase tracking-[0.2em] pl-6 italic">{RIDER_LANDING_TEXT.registerPage.confirmPasswordLabel} <span className="text-brand-dark">*</span></label>
                                         <div className="relative ring-1 ring-brand-dark/5 focus-within:ring-brand-dark/30 rounded-3xl transition-all shadow-inner bg-[#F7F6F2]">
                                             <Lock className="absolute left-7 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-brown/20 group-focus-within:text-brand-dark transition-colors" />
                                             <input type={showConfirmPassword ? "text" : "password"} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••" className="w-full bg-transparent py-5 pl-16 pr-12 text-accent-brown font-bold text-base outline-none" />
@@ -675,7 +801,7 @@ const RiderRegister = () => {
                                 Back
                             </button>
                             <button type="submit" disabled={loading} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all hover:shadow-2xl shadow-xl italic flex items-center justify-center gap-4 disabled:opacity-50">
-                                {loading ? 'Analyzing Data...' : 'Verify Email'} <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
+                                {loading ? RIDER_LANDING_TEXT.registerPage.sendingCodeBtn : RIDER_LANDING_TEXT.registerPage.sendCodeBtn} <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
                             </button>
                         </div>
                     </motion.div>
@@ -686,8 +812,8 @@ const RiderRegister = () => {
                         <div className="space-y-4">
                             <div className="w-20 h-20 bg-brand/10 text-brand-dark rounded-[2.5rem] flex items-center justify-center"><MailCheck className="w-10 h-10" /></div>
                             <div className="space-y-2">
-                                <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none italic">Verification</h3>
-                                <p className="text-sm text-accent-brown/40 font-medium italic leading-relaxed">Sent 6-digit gate code to <span className="text-accent-brown font-bold not-italic">{email}</span></p>
+                                <h3 className="text-4xl font-black text-accent-brown tracking-tighter uppercase leading-none italic">{RIDER_LANDING_TEXT.registerPage.step4Title}</h3>
+                                <p className="text-sm text-accent-brown/40 font-medium italic leading-relaxed">{RIDER_LANDING_TEXT.registerPage.step4Subtitle(email)}</p>
                             </div>
                         </div>
 
@@ -700,11 +826,11 @@ const RiderRegister = () => {
                         {error && <div className="text-[10px] font-black text-red-500 uppercase tracking-[0.2em] bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center mb-4">{error}</div>}
 
                         <div className="space-y-8">
-                             <p className="text-xs font-black text-accent-brown/30 uppercase tracking-[0.2em] ml-6 italic">No code? <button type="button" onClick={handleSendOtp} disabled={countdown > 0} className="text-brand-dark font-black hover:text-accent-brown">{countdown > 0 ? `Wait ${countdown}s` : 'Resend'}</button></p>
+                             <p className="text-xs font-black text-accent-brown/30 uppercase tracking-[0.2em] ml-6 italic">{RIDER_LANDING_TEXT.registerPage.noCodeText} <button type="button" onClick={handleSendOtp} disabled={countdown > 0} className="text-brand-dark font-black hover:text-accent-brown">{countdown > 0 ? RIDER_LANDING_TEXT.registerPage.waitCountdown(countdown) : RIDER_LANDING_TEXT.registerPage.resendBtn}</button></p>
                              <div className="flex gap-4">
-                                <button type="button" onClick={prevStep} className="flex-1 px-8 py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] text-accent-brown/30 italic">Review</button>
+                                <button type="button" onClick={prevStep} className="flex-1 px-8 py-5 rounded-full font-black text-xs uppercase tracking-[0.4em] text-accent-brown/30 italic">{RIDER_LANDING_TEXT.registerPage.reviewBtn}</button>
                                 <button type="button" onClick={handleRegister} disabled={loading} className="bg-brand-dark text-white flex-[2] py-6 rounded-full font-black text-xs uppercase tracking-[0.4em] transition-all italic flex items-center justify-center gap-4 group">
-                                    {loading ? 'Finalizing...' : 'Join Fleet'}
+                                    {loading ? RIDER_LANDING_TEXT.registerPage.creatingAccountBtn : RIDER_LANDING_TEXT.registerPage.completeSignUpBtn}
                                     {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />}
                                 </button>
                              </div>
@@ -716,10 +842,10 @@ const RiderRegister = () => {
     };
 
     const stepLabels = [
-        'Personal Identity',
-        'Vehicle Assets',
-        'Compliance Gate',
-        'Authorization',
+        'Personal Info',
+        'Vehicle Details',
+        'Required Documents',
+        'Account Verification',
     ];
 
     if (isPending) return <PendingApproval email={email} vehicleType={vehicleType} />;
@@ -729,7 +855,7 @@ const RiderRegister = () => {
             {/* Left Column: Full Screen Hero */}
             <div className="hidden lg:block w-1/2 h-full relative overflow-hidden group">
                 <div className="absolute inset-0 z-0">
-                    <img src={loginHero} alt="Rider Operations" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
+                    <img src={loginHero} alt={RIDER_LANDING_TEXT.registerPage.heroImageAlt} className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
                     <div className="absolute inset-0 bg-gradient-to-t from-accent-brown via-accent-brown/40 to-transparent opacity-90 transition-opacity" />
                     <div className="absolute inset-0 bg-black/20" />
                 </div>
@@ -742,14 +868,14 @@ const RiderRegister = () => {
                             <span className="text-3xl font-black text-white tracking-widest uppercase italic">Hi-Vet Riders</span>
                         </Link>
                         <div className="space-y-8 max-w-lg">
-                            <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Fleet Command</div>
-                            <h1 className="text-7xl font-black text-white leading-[0.8] tracking-tighter uppercase">Rider <br /><span className="text-brand-dark italic font-outfit">Operations.</span></h1>
-                            <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Join the elite courier network delivering professional veterinary care across the region.</p>
+                            <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />{RIDER_LANDING_TEXT.registerPage.heroTag}</div>
+                            <h1 className="text-7xl font-black text-white leading-[0.8] tracking-tighter uppercase">{RIDER_LANDING_TEXT.registerPage.heroTitlePrefix} <br /><span className="text-brand-dark italic font-outfit">{RIDER_LANDING_TEXT.registerPage.heroTitleHighlight}</span></h1>
+                            <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">{RIDER_LANDING_TEXT.registerPage.heroSubtitle}</p>
                         </div>
                     </div>
                     
                     <div className="bg-white/10 backdrop-blur-xl px-10 py-5 rounded-full border border-white/10 w-fit">
-                        <p className="text-[11px] font-black text-white uppercase tracking-[0.5em] italic">Rider Registration Stage {step} / 4</p>
+                        <p className="text-[11px] font-black text-white uppercase tracking-[0.5em] italic">{RIDER_LANDING_TEXT.registerPage.heroStepBadge(step)}</p>
                     </div>
                 </div>
             </div>
@@ -764,7 +890,7 @@ const RiderRegister = () => {
                                     <div key={i} className={`h-1.5 rounded-full transition-all duration-700 ${step >= i ? 'w-10 bg-brand-dark shadow-[0_0_20px_rgba(242,107,33,0.4)]' : 'w-3 bg-accent-brown/10'}`} />
                                 ))}
                             </div>
-                            <Link to="/login/rider" className="text-[10px] font-black text-brand-dark uppercase tracking-[0.3em] border-b-4 border-brand-dark/10 pb-1 italic hover:text-accent-brown transition-all">Rider Login Instead</Link>
+                            <Link to="/login/rider" className="text-[10px] font-black text-brand-dark uppercase tracking-[0.3em] border-b-4 border-brand-dark/10 pb-1 italic hover:text-accent-brown transition-all">{RIDER_LANDING_TEXT.registerPage.logInInstead}</Link>
                         </div>
 
                         <form onSubmit={handleSubmit}>
@@ -778,7 +904,7 @@ const RiderRegister = () => {
                 <div className="p-12 border-t border-accent-brown/5 flex justify-center">
                     <Link to="/for-riders" className="inline-flex items-center gap-4 text-[10px] font-black uppercase tracking-[0.4em] text-accent-brown/30 hover:text-brand-dark transition-all group italic">
                         <ChevronLeft className="w-4 h-4 group-hover:-translate-x-2 transition-transform" />
-                        Back to Landing
+                        {RIDER_LANDING_TEXT.registerPage.backToLanding}
                     </Link>
                 </div>
             </div>

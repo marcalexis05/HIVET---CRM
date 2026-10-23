@@ -4,6 +4,7 @@ import { Mail, Lock, ArrowRight, Eye, EyeOff, ChevronLeft, User } from 'lucide-r
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { useAuth } from '../context/AuthContext';
+import { MAIN_LANDING_TEXT } from '../constants/mainLandingWording';
 import loginHero from '../assets/login_hero_landscape.png';
 
 const Login = () => {
@@ -19,7 +20,7 @@ const Login = () => {
 
     useEffect(() => {
         if (searchParams.get('error') === 'google_auth_failed') {
-            setError('Google sign-in failed. Please try again.');
+            setError(MAIN_LANDING_TEXT.loginPage.errors.googleFailed);
         }
     }, [searchParams]);
 
@@ -48,11 +49,11 @@ const Login = () => {
                 else if (role === 'rider') navigate('/dashboard/rider');
                 else navigate('/dashboard/customer');
             } else {
-                setError('Authentication failed. Check your credentials.');
+                setError(MAIN_LANDING_TEXT.loginPage.errors.authFailed);
             }
         } catch (err) {
             console.error(err);
-            setError('Global network error. Please verify connection.');
+            setError(MAIN_LANDING_TEXT.loginPage.errors.networkError);
         } finally {
             setLoading(false);
         }
@@ -76,13 +77,13 @@ const Login = () => {
                             <span className="text-3xl font-black text-white tracking-tight">Hi-Vet</span>
                         </Link>
                         <div className="space-y-8 max-w-lg">
-                            <div className="inline-flex items-center gap-3 text-white/60  text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Secure Access</div>
-                            <h1 className="text-7xl font-black text-white leading-tight tracking-tight">Continue your <br /><span className="text-brand-dark italic font-outfit">Mission.</span></h1>
-                            <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Securely access your Hi-Vet portal to manage your pet's health and wellness.</p>
+                            <div className="inline-flex items-center gap-3 text-white/60  text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />{MAIN_LANDING_TEXT.loginPage.heroTag}</div>
+                            <h1 className="text-7xl font-black text-white leading-tight tracking-tight">{MAIN_LANDING_TEXT.loginPage.heroTitle}</h1>
+                            <p className="text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">{MAIN_LANDING_TEXT.loginPage.heroSubtitle}</p>
                         </div>
                     </div>
                     <div className="bg-white/10 backdrop-blur-xl px-10 py-5 rounded-full border border-white/10 w-fit">
-                        <p className="text-[11px] font-black text-white  italic">Authentication Portal</p>
+                        <p className="text-[11px] font-black text-white  italic">{MAIN_LANDING_TEXT.loginPage.heroBadge}</p>
                     </div>
                 </div>
             </div>
@@ -101,20 +102,20 @@ const Login = () => {
                             <div className="h-1.5 w-16 bg-brand-dark rounded-full shadow-[0_0_20px_rgba(242,107,33,0.4)]" />
                             <div className="h-1.5 w-4 bg-accent-brown/10 rounded-full" />
                         </div>
-                        <Link to="/register" className="text-sm font-black text-brand-dark  border-b-4 border-brand-dark/10 pb-1 italic hover:text-accent-brown transition-all">Register Instead</Link>
+                        <Link to="/register" className="text-sm font-black text-brand-dark  border-b-4 border-brand-dark/10 pb-1 italic hover:text-accent-brown transition-all">{MAIN_LANDING_TEXT.loginPage.signUpInstead}</Link>
                     </div>
 
                     <form onSubmit={handleLogin} className="space-y-8">
                         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                             <div className="space-y-1">
-                                <h3 className="text-5xl font-black text-accent-brown tracking-tight leading-none">Login</h3>
-                                <p className="text-xs text-accent-brown/40 font-medium italic">Enter your credentials to proceed.</p>
+                                <h3 className="text-5xl font-black text-accent-brown tracking-tight leading-none">{MAIN_LANDING_TEXT.loginPage.title}</h3>
+                                <p className="text-xs text-accent-brown/40 font-medium italic">{MAIN_LANDING_TEXT.loginPage.subtitle}</p>
                             </div>
 
                             {searchParams.get('msg') === 'check_email' && (
                                 <div className="bg-[#F7F6F2] text-brand-dark p-6 rounded-[2rem] text-xs font-black border border-brand/10  italic flex flex-col gap-3 shadow-inner">
-                                    <span className="flex items-center gap-3"><Mail className="w-5 h-5" />Check Inbox</span>
-                                    <span className="opacity-50 font-medium normal-case leading-relaxed">Verification link sent. Please verify to access your portal.</span>
+                                    <span className="flex items-center gap-3"><Mail className="w-5 h-5" />{MAIN_LANDING_TEXT.loginPage.messages.checkEmailTitle}</span>
+                                    <span className="opacity-50 font-medium normal-case leading-relaxed">{MAIN_LANDING_TEXT.loginPage.messages.checkEmailDesc}</span>
                                 </div>
                             )}
 
@@ -122,9 +123,9 @@ const Login = () => {
                                 <div className="bg-brand-dark/5 text-brand-dark p-6 rounded-[2rem] text-xs font-black border border-brand/20  italic flex flex-col gap-3 shadow-[0_0_30px_rgba(242,107,33,0.05)] ring-1 ring-brand-dark/5">
                                     <span className="flex items-center gap-3 text-brand-dark">
                                         <div className="w-8 h-8 bg-brand-dark text-white rounded-xl flex items-center justify-center shadow-lg"><User className="w-4 h-4" /></div>
-                                        Registration Complete
+                                        {MAIN_LANDING_TEXT.loginPage.messages.regSuccessTitle}
                                     </span>
-                                    <span className="text-[10px] opacity-70 font-bold normal-case leading-relaxed">Mission initialized successfully. Please enter your credentials to access the ecosystem.</span>
+                                    <span className="text-[10px] opacity-70 font-bold normal-case leading-relaxed">{MAIN_LANDING_TEXT.loginPage.messages.regSuccessDesc}</span>
                                 </div>
                             )}
 
@@ -169,7 +170,7 @@ const Login = () => {
                             {error && <div className="text-[10px] font-black text-red-500  bg-red-50 py-3 px-6 rounded-2xl border border-red-100 italic text-center">{error}</div>}
 
                             <button type="submit" disabled={loading} className="bg-brand-dark text-white w-full py-5 rounded-full font-black text-xs  flex items-center justify-center gap-4 hover:shadow-2xl transition-all group shadow-xl">
-                                {loading ? 'Authorizing...' : 'Enter Portal'} 
+                                {loading ? MAIN_LANDING_TEXT.loginPage.loggingInBtn : MAIN_LANDING_TEXT.loginPage.loginBtn} 
                                 {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />}
                             </button>
                         </motion.div>
@@ -178,7 +179,7 @@ const Login = () => {
                     <div className="mt-10 space-y-8">
                         <div className="flex items-center gap-8">
                             <div className="flex-1 h-[1px] bg-accent-brown/10" />
-                            <span className="text-[10px] font-black text-accent-brown/20 ">Quick Link</span>
+                            <span className="text-[10px] font-black text-accent-brown/20 ">{MAIN_LANDING_TEXT.loginPage.orDivider}</span>
                             <div className="flex-1 h-[1px] bg-accent-brown/10" />
                         </div>
                         
@@ -195,7 +196,7 @@ const Login = () => {
                         <div className="text-center pt-4 border-t border-accent-brown/5">
                             <Link to="/" className="inline-flex items-center gap-4 text-sm font-black  text-accent-brown/30 hover:text-brand-dark transition-all group italic">
                                 <ChevronLeft className="w-5 h-5 group-hover:-translate-x-2 transition-transform" />
-                                Return
+                                {MAIN_LANDING_TEXT.loginPage.backToHome}
                             </Link>
                         </div>
                     </div>

@@ -1,16 +1,18 @@
 import { motion } from 'framer-motion';
-import { ShoppingCart, PawPrint, ArrowRight, ExternalLink } from 'lucide-react';
+import { PawPrint, ArrowRight, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { MAIN_LANDING_TEXT } from '../constants/mainLandingWording';
 import foodImg from '../assets/food_bag.png';
 import accessoriesImg from '../assets/cat_accessories.png';
 import vitaminsImg from '../assets/dog_vitamins.png';
 
+const CATEGORY_IMAGES = [foodImg, accessoriesImg, vitaminsImg];
+
 export const CatalogPreview = () => {
-    const categories = [
-        { name: 'Gourmet Nutrition', count: '120+ ESSENTIALS', image: foodImg, tag: 'Vitality' },
-        { name: 'Elite Accessories', count: '85+ PREMIUM', image: accessoriesImg, tag: 'Lifestyle' },
-        { name: 'Clinical Vitamins', count: '45+ RECOVERY', image: vitaminsImg, tag: 'Wellness' },
-    ];
+    const categories = MAIN_LANDING_TEXT.storePreview.categories.map((c, i) => ({
+        ...c,
+        image: CATEGORY_IMAGES[i],
+    }));
 
     return (
         <section className="py-24 sm:py-32 bg-white relative overflow-hidden" id="catalog">
@@ -19,15 +21,15 @@ export const CatalogPreview = () => {
                     <div className="max-w-3xl space-y-6">
                         <div className="inline-flex items-center gap-3 text-brand-dark text-xs font-bold">
                             <div className="w-8 h-[2px] bg-brand-dark" />
-                            Curated Selection
+                            {MAIN_LANDING_TEXT.storePreview.tag}
                         </div>
                         <h2 className="text-5xl sm:text-6xl md:text-7xl font-black text-accent-brown leading-tight tracking-tight">
-                            Clinical Grade <br />
-                            <span className="text-brand-dark italic font-outfit">Supreme Provisions.</span>
+                            {MAIN_LANDING_TEXT.storePreview.titlePrefix} <br />
+                            <span className="text-brand-dark italic font-outfit">{MAIN_LANDING_TEXT.storePreview.titleHighlight}</span>
                         </h2>
                     </div>
                     <p className="text-xl text-accent-brown/50 font-medium max-w-sm leading-relaxed">
-                        Every product in our inventory undergoes rigorous verification to meet the high standards of veterinary excellence and pet comfort.
+                        {MAIN_LANDING_TEXT.storePreview.subtitle}
                     </p>
                 </div>
 
@@ -52,9 +54,9 @@ export const CatalogPreview = () => {
                                     <div className="translate-y-8 group-hover:translate-y-0 transition-transform duration-500 space-y-4 text-white">
                                         <div className="inline-flex items-center gap-2 text-brand-dark font-black text-xs font-bold">
                                             <ExternalLink className="w-3 h-3" />
-                                            Live Store
+                                            {MAIN_LANDING_TEXT.storePreview.shopNow}
                                         </div>
-                                        <p className="text-white/70 font-medium italic">Discover professional {c.name.toLowerCase()} curated for performance.</p>
+                                        <p className="text-white/70 font-medium italic">{c.desc}</p>
                                     </div>
                                 </div>
                                 
@@ -80,7 +82,7 @@ export const CatalogPreview = () => {
 
                 <div className="mt-20 flex justify-center">
                     <Link to="/catalog" className="group flex items-center gap-6 bg-accent-brown text-white pl-10 pr-4 py-4 rounded-full font-bold text-xs shadow-2xl hover:bg-brand-dark transition-all transform hover:-translate-y-1">
-                        Explore Full Inventory
+                        {MAIN_LANDING_TEXT.storePreview.visitStoreBtn}
                         <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center group-hover:translate-x-1 transition-transform">
                             <ArrowRight className="w-5 h-5" />
                         </div>

@@ -5,6 +5,7 @@ import { ShoppingCart, Tag, Star, Search, ArrowLeft, ArrowRight, Heart, Filter a
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { products } from '../data/products';
 import { useCart } from '../context/CartContext';
+import { MAIN_LANDING_TEXT } from '../constants/mainLandingWording';
 
 const Catalog = () => {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -48,22 +49,22 @@ const Catalog = () => {
             <div className="container mx-auto px-6 xs:px-12 relative z-10 pt-32 pb-16">
                 <Link to="/" className="inline-flex items-center gap-2 text-brand-dark/60 hover:text-brand-dark transition-all font-bold text-xs mb-12 group">
                     <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                    Return Home
+                    {MAIN_LANDING_TEXT.catalogPage.backToHome}
                 </Link>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 lg:items-end gap-12">
                     <div className="space-y-6">
                         <div className="inline-flex items-center gap-2 text-brand-dark text-xs font-bold">
                             <div className="w-8 h-[2px] bg-brand-dark" />
-                            Premium Inventory
+                            {MAIN_LANDING_TEXT.catalogPage.tag}
                         </div>
                         <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black text-accent-brown tracking-tight leading-[0.95]">
-                            Our <br />
-                            <span className="text-brand-dark italic font-outfit">Collections.</span>
+                            {MAIN_LANDING_TEXT.catalogPage.titlePrefix} <br />
+                            <span className="text-brand-dark italic font-outfit">{MAIN_LANDING_TEXT.catalogPage.titleHighlight}</span>
                         </h1>
                     </div>
                     <p className="text-xl text-accent-brown/50 font-medium max-w-xl leading-relaxed italic">
-                        "Curating {products.length} surgical-grade solutions for the elite pet owner. Every item in our database is verified through the Hi-Vet safety protocol."
+                        "{MAIN_LANDING_TEXT.catalogPage.subtitle}"
                     </p>
                 </div>
             </div>
@@ -76,7 +77,7 @@ const Catalog = () => {
                         <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/30 group-focus-within:text-brand-dark transition-colors" />
                         <input
                             type="text"
-                            placeholder="Search our database..."
+                            placeholder={MAIN_LANDING_TEXT.catalogPage.searchPlaceholder}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full pl-14 pr-8 py-5 bg-[#F7F6F2] rounded-full border border-transparent focus:bg-white focus:border-brand-dark/20 outline-none transition-all font-medium text-accent-brown text-sm"
@@ -128,11 +129,11 @@ const Catalog = () => {
 
                 <div className="mt-8 flex items-center justify-between px-6">
                     <p className="text-xs font-medium text-slate-500">
-                        Protocol Scan: <span className="text-accent-brown">{filteredProducts.length} Results</span> Active
+                        Showing <span className="text-accent-brown">{MAIN_LANDING_TEXT.catalogPage.resultsCount(filteredProducts.length)}</span>
                     </p>
                     {(petFilter !== 'All' || typeFilter !== 'All' || searchQuery !== '') && (
                         <button onClick={resetFilters} className="text-xs font-bold text-brand-dark hover:text-accent-brown transition-colors">
-                            Reset Search Parameter
+                            {MAIN_LANDING_TEXT.catalogPage.clearFilters}
                         </button>
                     )}
                 </div>
@@ -192,7 +193,7 @@ const Catalog = () => {
                                             className="bg-white text-accent-brown w-full py-3.5 rounded-full font-bold text-xs flex items-center justify-center gap-2 transform translate-y-8 group-hover:translate-y-0 transition-transform duration-500 delay-100"
                                         >
                                             <ShoppingCart className="w-4 h-4" />
-                                            Direct Procurement
+                                            {MAIN_LANDING_TEXT.catalogPage.addToCart}
                                         </button>
                                     </div>
                                 </div>
@@ -216,7 +217,7 @@ const Catalog = () => {
 
                                     <div className="pt-6 mt-auto border-t border-accent-brown/5 flex items-center justify-between gap-3">
                                         <div className="flex flex-col">
-                                            <span className="text-xs font-medium text-slate-400">Pricing</span>
+                                            <span className="text-xs font-medium text-slate-400">{MAIN_LANDING_TEXT.catalogPage.priceLabel}</span>
                                             <p className="text-3xl font-black text-accent-brown/80 tracking-tighter leading-none">₱{p.price}</p>
                                         </div>
                                         <button
@@ -256,13 +257,13 @@ const Catalog = () => {
                         <div className="w-32 h-32 bg-white rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-accent-brown/5 text-4xl">
                             <FilterIcon className="w-10 h-10 text-accent-brown/10" />
                         </div>
-                        <h2 className="text-2xl font-bold text-accent-brown tracking-tight mb-3">No Results Found</h2>
-                        <p className="text-accent-brown/40 font-medium max-w-sm mx-auto">Our logistics protocol returned zero items for this specific search parameter.</p>
+                        <h2 className="text-2xl font-bold text-accent-brown tracking-tight mb-3">{MAIN_LANDING_TEXT.catalogPage.noResultsTitle}</h2>
+                        <p className="text-accent-brown/40 font-medium max-w-sm mx-auto">{MAIN_LANDING_TEXT.catalogPage.noResultsDesc}</p>
                         <button
                             onClick={resetFilters}
                             className="mt-8 bg-brand-dark text-white px-8 py-3.5 rounded-full font-bold text-xs hover:shadow-xl transition-all"
                         >
-                            Execute Master Reset
+                            {MAIN_LANDING_TEXT.catalogPage.clearFilters}
                         </button>
                     </motion.div>
                 )}

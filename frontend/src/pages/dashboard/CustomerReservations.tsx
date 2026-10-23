@@ -10,7 +10,7 @@ import { CustomDropdown } from '../../components/CustomDropdown';
 import QrCodeModal from '../../components/QrCodeModal';
 import Pagination from '../../components/Pagination';
 import { useAuth } from '../../context/AuthContext';
-import { toTitleCase, toSentenceCase, formatName } from '../../utils/textFormatters';
+import { toTitleCase, toSentenceCase, formatName, formatReviewId, getReviewIdAriaLabel } from '../../utils/textFormatters';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -79,11 +79,11 @@ const STATUS_STYLES: Record<string, string> = {
     'Cancelled': 'bg-red-100 text-red-500',
 };
 
-// Format reservation number display without HV-2026- prefix
+// Format reservation / review number display in standard short format: e.g. #RV-2026-9907
 export const formatReservationNumber = (id: string | number | undefined | null) => {
     if (!id) return '';
-    const str = String(id).trim();
-    return str.replace(/^HV-2026-/i, '').replace(/^HV-/i, '');
+    const cleaned = String(id).trim().replace(/^HV-2026-/i, '').replace(/^HV-/i, '');
+    return formatReviewId(cleaned);
 };
 
 const CustomerReservations = () => {
@@ -311,8 +311,8 @@ const CustomerReservations = () => {
     const handleCancel = async (id: number) => {
         setModal({
             isOpen: true,
-            title: 'De-authorize Protocol',
-            message: 'Are you sure you want to nullify this clinical reservation? This action is irreversible.',
+            title: 'Cancel Visit',
+            message: 'Are you sure you want to cancel this visit? This cannot be undone.',
             type: 'danger',
             onConfirm: async () => {
                 setCancellingId(id);
@@ -324,10 +324,10 @@ const CustomerReservations = () => {
                     if (res.ok) {
                         const data = await res.json();
                         setReservations(prev => prev.map(r => r.db_id === id ? { ...r, ...data.reservation } : r));
-                        showToast('Protocol nullified successfully.');
+                        showToast('Visit cancelled successfully.');
                         fetchData();
                     } else {
-                        showToast('De-authorization failed.', 'error');
+                        showToast('Failed to cancel visit.', 'error');
                     }
                 } catch {
                     showToast('Connection error.', 'error');
@@ -390,60 +390,50 @@ const CustomerReservations = () => {
                     )}
                 </AnimatePresence>
 
-                {/* HI-VET ARCHITECTURE NOIR: CINEMATIC HEADER */}
+                {/* Visually hidden heading for a11y */}
+                <h1 className="sr-only">Pet Reservations</h1>
+
+                {/* CINEMATIC HEADER CONTROLS */}
                 <div className="relative">
-                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 sm:gap-6 md:gap-8 mb-6 sm:mb-8">
-                        <div className="relative z-10">
-                            <motion.h1
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.1 }}
-                                className="text-3xl sm:text-4xl lg:text-5xl font-black text-accent-brown tracking-tighter leading-tight"
-                            >
-                                Pet <span className="text-brand">Reservations</span>
-                            </motion.h1>
+                    <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-4 relative z-10 mb-6 sm:mb-8">
+                        {/* 3 Counters in 1 row on screens >= 340px */}
+                        <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full md:w-auto">
+                            {[
+                                { label: 'Active', count: activeCount, color: 'text-brand', icon: Activity },
+                                { label: 'Settling', count: pendingPaymentCount, color: 'text-blue-500', icon: CreditCard },
+                                { label: 'Done', count: completedCount, color: 'text-emerald-500', icon: Trophy }
+                            ].map((stat, i) => (
+                                <motion.div
+                                    key={stat.label}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.2 + (i * 0.1) }}
+                                    className="bg-white p-2.5 sm:p-3.5 md:px-5 md:py-3.5 rounded-2xl md:rounded-[1.75rem] shadow-md shadow-accent-brown/5 border border-accent-brown/5 flex items-center gap-2 sm:gap-3 justify-center md:justify-start"
+                                >
+                                    <div className={`p-1.5 sm:p-2 rounded-xl bg-slate-50 ${stat.color} shrink-0 hidden min-[380px]:flex`}>
+                                        <stat.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold text-black leading-none mb-1 truncate">{stat.label}</p>
+                                        <p className="text-lg sm:text-xl font-black text-accent-brown leading-none">{stat.count}</p>
+                                    </div>
+                                </motion.div>
+                            ))}
                         </div>
 
-                        <div className="flex flex-col sm:flex-col md:flex-row items-stretch md:items-center gap-3 sm:gap-4 relative z-10 w-full md:w-auto">
-                            {/* 3 Counters in 1 row on screens >= 340px */}
-                            <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full md:w-auto">
-                                {[
-                                    { label: 'Active', count: activeCount, color: 'text-brand', icon: Activity },
-                                    { label: 'Settling', count: pendingPaymentCount, color: 'text-blue-500', icon: CreditCard },
-                                    { label: 'Done', count: completedCount, color: 'text-emerald-500', icon: Trophy }
-                                ].map((stat, i) => (
-                                    <motion.div
-                                        key={stat.label}
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: 0.2 + (i * 0.1) }}
-                                        className="bg-white p-2.5 sm:p-3.5 md:px-5 md:py-3.5 rounded-2xl md:rounded-[1.75rem] shadow-md shadow-accent-brown/5 border border-accent-brown/5 flex items-center gap-2 sm:gap-3 justify-center md:justify-start"
-                                    >
-                                        <div className={`p-1.5 sm:p-2 rounded-xl bg-slate-50 ${stat.color} shrink-0 hidden min-[380px]:flex`}>
-                                            <stat.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-xs font-bold text-black leading-none mb-1 truncate">{stat.label}</p>
-                                            <p className="text-lg sm:text-xl font-black text-accent-brown leading-none">{stat.count}</p>
-                                        </div>
-                                    </motion.div>
-                                ))}
-                            </div>
-
-                            <motion.button
-                                whileHover={{ scale: 1.03, backgroundColor: '#000' }}
-                                whileTap={{ scale: 0.97 }}
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: 0.4 }}
-                                onClick={() => {
-                                    navigate('/dashboard/customer/reservations/checkout');
-                                }}
-                                className="bg-brand-dark text-white min-h-[48px] h-[50px] md:h-[54px] px-6 rounded-2xl md:rounded-[1.75rem] font-bold text-xs flex items-center justify-center gap-2.5 shadow-xl shadow-brand-dark/20 cursor-pointer w-full md:w-auto"
-                            >
-                                <Plus className="w-4 h-4 sm:w-5 sm:h-5" /> New Appointment
-                            </motion.button>
-                        </div>
+                        <motion.button
+                            whileHover={{ scale: 1.03, backgroundColor: '#000' }}
+                            whileTap={{ scale: 0.97 }}
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.4 }}
+                            onClick={() => {
+                                navigate('/dashboard/customer/reservations/checkout');
+                            }}
+                            className="bg-brand-dark text-white min-h-[48px] h-[50px] md:h-[54px] px-6 rounded-2xl md:rounded-[1.75rem] font-bold text-xs flex items-center justify-center gap-2.5 shadow-xl shadow-brand-dark/20 cursor-pointer w-full md:w-auto"
+                        >
+                            <Plus className="w-4 h-4 sm:w-5 sm:h-5" /> New Appointment
+                        </motion.button>
                     </div>
 
                     {/* Background Decorative Element */}
@@ -560,7 +550,10 @@ const CustomerReservations = () => {
                                             {/* Reservation ID on its own line */}
                                             <div className="mt-3 mb-2 flex items-center gap-1.5 relative z-10">
                                                 <span className="text-[10px] font-bold text-black/50">ID:</span>
-                                                <span className="text-xs font-black text-brand tracking-wider break-all">
+                                                <span
+                                                    className="text-xs font-black text-brand tracking-wider break-all select-all"
+                                                    aria-label={getReviewIdAriaLabel(res.id)}
+                                                >
                                                     {formatReservationNumber(res.id)}
                                                 </span>
                                             </div>
@@ -710,7 +703,11 @@ const CustomerReservations = () => {
                                         <h3 id="receipt-summary-title" className="text-2xl sm:text-3xl font-black italic tracking-tight text-brand-dark leading-tight break-words">
                                             Receipt Summary
                                         </h3>
-                                        <span id="receipt-summary-res-number" className="text-xs font-bold text-brand block mt-1 tracking-normal">
+                                        <span
+                                            id="receipt-summary-res-number"
+                                            className="text-xs font-bold text-brand block mt-1 tracking-normal select-all"
+                                            aria-label={getReviewIdAriaLabel(selectedDetail.tracking_id || selectedDetail.id)}
+                                        >
                                             {formatReservationNumber(selectedDetail.tracking_id || selectedDetail.id)}
                                         </span>
                                     </div>
@@ -856,7 +853,7 @@ const CustomerReservations = () => {
 
                                     {/* Total Settlement */}
                                     <div className="border-t border-slate-100 pt-5">
-                                        <p className="text-xs font-bold text-slate-500 mb-2">Total settlement</p>
+                                        <p className="text-xs font-bold text-slate-500 mb-2">Total Price</p>
                                         <div className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
                                             <h2
                                                 className="text-3xl xs:text-4xl sm:text-5xl font-black italic tracking-tight text-brand-dark leading-none tabular-nums"
@@ -864,7 +861,7 @@ const CustomerReservations = () => {
                                             >
                                                 ₱{selectedDetail.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                             </h2>
-                                            <div className="flex items-center gap-1.5 shrink-0" aria-label={selectedDetail.payment_status === 'paid' ? 'Payment secured and paid' : 'Payment pending settlement'}>
+                                            <div className="flex items-center gap-1.5 shrink-0" aria-label={selectedDetail.payment_status === 'paid' ? 'Payment secured and paid' : 'Payment pending'}>
                                                 {selectedDetail.payment_status === 'paid' ? (
                                                     <>
                                                         <ShieldCheck className="w-8 h-8 sm:w-10 sm:h-10 text-emerald-500 shrink-0" aria-hidden="true" />
@@ -873,7 +870,7 @@ const CustomerReservations = () => {
                                                 ) : (
                                                     <>
                                                         <ShieldCheck className="w-8 h-8 sm:w-10 sm:h-10 text-brand/35 shrink-0" aria-hidden="true" />
-                                                        <span className="sr-only">Payment pending settlement</span>
+                                                        <span className="sr-only">Payment Pending</span>
                                                     </>
                                                 )}
                                             </div>

@@ -10,6 +10,7 @@ import {
 import { Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import DashboardLayout from '../../components/DashboardLayout';
 import ModernModal from '../../components/ModernModal';
+import ProductCard from '../../components/ProductCard';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { toTitleCase, toSentenceCase, formatName } from '../../utils/textFormatters';
@@ -431,6 +432,7 @@ const ProductDetail = () => {
             id: product.id,
             business_id: product.business_id,
             name: product.name,
+            description: product.description,
             price: String(finalPrice),
             image: finalImage,
             quantity: quantity,
@@ -448,6 +450,7 @@ const ProductDetail = () => {
             id: product.id,
             business_id: product.business_id,
             name: product.name,
+            description: product.description,
             price: String(finalPrice),
             image: finalImage,
             quantity: quantity,
@@ -691,8 +694,8 @@ const ProductDetail = () => {
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                             <div className="space-y-6">
                                 <div className="space-y-1">
-                                    <h2 className="text-2xl font-black text-accent-brown tracking-tight leading-none">Branch Logistics</h2>
-                                    <p className="text-xs font-medium text-black/60">Physical verification points</p>
+                                    <h2 className="text-2xl font-black text-accent-brown tracking-tight leading-none">Available Branches</h2>
+                                    <p className="text-xs font-medium text-black/60">Pick up or visit in person</p>
                                 </div>
                                 <div className="grid grid-cols-1 gap-3">
                                     {(branchAvailability || []).map((branch: any) => (
@@ -807,47 +810,24 @@ const ProductDetail = () => {
                     </div>
 
                     {/* Related Products Syndicate (The Randomizer) */}
-                    <div className="mt-20 pt-10 border-t border-gray-100">
-                        <div className="text-center mb-10 space-y-3">
-                            <h2 className="text-4xl font-black text-accent-brown tracking-tight leading-none">Discover More</h2>
-                            <div className="w-12 h-0.5 bg-brand mx-auto shadow-md shadow-brand/20" />
-                            <p className="text-xs font-medium text-black/60 pt-2">Handpicked for you</p>
+                    <div className="mt-16 sm:mt-20 pt-8 sm:pt-10 border-t border-accent-brown/10 pb-28 sm:pb-32 pb-[calc(7rem+env(safe-area-inset-bottom,0px))]">
+                        <div className="text-center mb-8 sm:mb-10 space-y-2 sm:space-y-3 px-4">
+                            <h2 className="text-2xl xs:text-3xl sm:text-4xl lg:text-4xl font-black text-accent-brown tracking-tight leading-none">
+                                Discover More
+                            </h2>
+                            <div className="w-12 h-1 bg-brand mx-auto rounded-full shadow-md shadow-brand/20" aria-hidden="true" />
+                            <p className="text-sm font-semibold text-black/70 pt-1">
+                                Picked for You
+                            </p>
                         </div>
                         
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                            {relatedProducts.map((p) => (
-                                <motion.div 
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 px-4 sm:px-6 max-w-7xl mx-auto">
+                            {relatedProducts.map((p, idx) => (
+                                <ProductCard 
                                     key={p.id} 
-                                    whileHover={{ y: -5 }}
-                                    onClick={() => {
-                                        navigate(`/dashboard/customer/catalog/${p.id}`);
-                                        window.scrollTo(0, 0);
-                                    }}
-                                    className="group cursor-pointer"
-                                >
-                                    <div className="aspect-[4/5] bg-gray-50 rounded-[2rem] mb-4 relative overflow-hidden flex items-center justify-center p-8 border-2 border-transparent group-hover:border-brand/40 group-hover:bg-white group-hover:shadow-xl transition-all duration-700">
-                                        <img src={p.image} className="w-full h-full object-contain mix-blend-multiply transition-transform duration-1000 group-hover:scale-105" alt={p.name} />
-                                        {p.tag && (
-                                            <div className="absolute top-2.5 left-2.5 bg-brand text-white px-2 py-0.5 text-[8px] font-bold rounded-full shadow-sm leading-none">
-                                                {toTitleCase(p.tag)}
-                                            </div>
-                                        )}
-                                        <div className="absolute bottom-4 right-4 w-8 h-8 bg-white rounded-lg flex items-center justify-center text-accent-brown shadow-md opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all">
-                                            <ShoppingCart className="w-3 h-3" />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1.5 px-1">
-                                        <p className="text-xs font-bold text-black/50">{toTitleCase(p.category)}</p>
-                                        <h4 className="text-sm font-black text-brand transition-colors truncate tracking-tight leading-none">{formatName(p.name)}</h4>
-                                        <div className="flex items-center justify-between pt-0.5">
-                                            <p className="text-lg font-black text-accent-brown tracking-tighter tabular-nums">₱{Number(p.price).toLocaleString()}</p>
-                                            <div className="flex items-center gap-1.5 grayscale group-hover:grayscale-0 transition-all">
-                                                <Star className="w-2.5 h-2.5 text-brand fill-brand" />
-                                                <span className="text-[9px] font-black text-black">{(p.avg_rating || 0).toFixed(1)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </motion.div>
+                                    product={p} 
+                                    index={idx}
+                                />
                             ))}
                         </div>
                     </div>

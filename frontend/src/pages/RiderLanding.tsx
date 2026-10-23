@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, Wallet, HeartHandshake, Car, Smartphone, CheckCircle2, ChevronRight, ChevronLeft, ArrowRight, ShieldCheck, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Footer } from '../components/Footer';
+import { RIDER_LANDING_TEXT } from '../constants/riderLandingWording';
 
 // Cinematic Rider Images
 import riderCat1 from '../assets/rider_cat_1.png';
@@ -11,33 +12,38 @@ import riderCat2 from '../assets/rider_cat_2.png';
 
 const SLIDES = [
     {
-        tag: "Active Logistics",
-        title: "Deliver Care, Earn Flexibly",
-        subtitle: "Join the elite Hi-Vet delivery network. Connect pet parents with essential medications on your own schedule with premium earnings.",
+        title: RIDER_LANDING_TEXT.slides[0].title,
+        subtitle: RIDER_LANDING_TEXT.slides[0].subtitle,
         image: riderCat1,
-        witty: "Real-Time Response, Real-Time Pay.",
-        icon: <Clock className="w-5 h-5" />
+        imageAlt: RIDER_LANDING_TEXT.slides[0].imageAlt,
+        witty: RIDER_LANDING_TEXT.slides[0].witty,
     },
     {
-        tag: "Urban Freedom",
-        title: "Your City, Your Schedule",
-        subtitle: "Complete control over your hours. Whether you're on a bike or in a car, our tech optimizes your route for maximum efficiency.",
+        title: RIDER_LANDING_TEXT.slides[1].title,
+        subtitle: RIDER_LANDING_TEXT.slides[1].subtitle,
         image: riderDog1,
-        witty: "Navigate with Purpose.",
-        icon: <MapPin className="w-5 h-5" />
+        imageAlt: RIDER_LANDING_TEXT.slides[1].imageAlt,
+        witty: RIDER_LANDING_TEXT.slides[1].witty,
     },
     {
-        tag: "Logistics Hero",
-        title: "Become a Protocol Partner",
-        subtitle: "You're the backbone of pet healthcare logistics. High-performance tools for high-performance riders.",
+        title: RIDER_LANDING_TEXT.slides[2].title,
+        subtitle: RIDER_LANDING_TEXT.slides[2].subtitle,
         image: riderCat2,
-        witty: "Elite Gear for Elite Riders.",
-        icon: <ShieldCheck className="w-5 h-5" />
+        imageAlt: RIDER_LANDING_TEXT.slides[2].imageAlt,
+        witty: RIDER_LANDING_TEXT.slides[2].witty,
     }
 ];
 
 export default function RiderLanding() {
     const [current, setCurrent] = useState(0);
+
+    useEffect(() => {
+        document.title = 'Hi-Vet';
+        const metaDesc = document.querySelector('meta[name="description"]');
+        if (metaDesc) {
+            metaDesc.setAttribute('content', RIDER_LANDING_TEXT.meta.metaDescription);
+        }
+    }, []);
 
     useEffect(() => {
         const timer = setInterval(() => {
@@ -66,7 +72,7 @@ export default function RiderLanding() {
                         >
                             <img 
                                 src={SLIDES[current].image} 
-                                alt="Rider Hero" 
+                                alt={SLIDES[current].imageAlt} 
                                 className="w-full h-full object-cover object-center sm:object-right md:object-[75%_center]" 
                             />
                             {/* High-Contrast Professional Mask */}
@@ -88,11 +94,6 @@ export default function RiderLanding() {
                                 transition={{ duration: 0.8 }}
                                 className="space-y-6 sm:space-y-8"
                             >
-                                <div className="inline-flex items-center gap-3 bg-brand-dark text-white px-6 py-2 rounded-full text-[12px] font-black uppercase tracking-[0.3em] shadow-lg">
-                                    {SLIDES[current].icon}
-                                    {SLIDES[current].tag}
-                                </div>
-
                                 <div className="space-y-4">
                                     <h1 className="text-white text-5xl sm:text-7xl xl:text-8xl font-black leading-[0.9] tracking-tighter uppercase drop-shadow-2xl">
                                         {SLIDES[current].title}
@@ -111,14 +112,14 @@ export default function RiderLanding() {
                                         to="/register/rider" 
                                         className="btn-primary group !px-10 !py-5 !text-sm flex items-center justify-center gap-4"
                                     >
-                                        Apply to Drive
+                                        Become a Rider
                                         <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
                                     </Link>
                                     <a 
                                         href="#perks" 
                                         className="bg-white/10 backdrop-blur-md text-white border-2 border-white/20 px-10 py-5 rounded-full font-black flex items-center justify-center gap-4 text-sm uppercase tracking-[0.15em] hover:bg-white/20 transition-all shadow-xl"
                                     >
-                                        View Perks
+                                        {RIDER_LANDING_TEXT.slides[current].secondaryBtn}
                                     </a>
                                 </div>
                             </motion.div>
@@ -133,16 +134,25 @@ export default function RiderLanding() {
                             <button
                                 key={i}
                                 onClick={() => setCurrent(i)}
+                                aria-label={RIDER_LANDING_TEXT.controls.slideIndicatorAria(i, SLIDES.length)}
                                 className={`h-1.5 rounded-full transition-all duration-500 ${current === i ? 'w-16 bg-brand-dark' : 'w-4 bg-white/30 hover:bg-white/50'}`}
                             />
                         ))}
                     </div>
 
                     <div className="flex gap-4">
-                        <button onClick={prevSlide} className="w-14 h-14 rounded-full border-2 border-white/20 bg-black/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-brand-dark hover:border-brand-dark transition-all group">
+                        <button 
+                            onClick={prevSlide} 
+                            aria-label={RIDER_LANDING_TEXT.controls.prevSlideAria}
+                            className="w-14 h-14 rounded-full border-2 border-white/20 bg-black/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-brand-dark hover:border-brand-dark transition-all group"
+                        >
                             <ChevronLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
                         </button>
-                        <button onClick={nextSlide} className="w-14 h-14 rounded-full border-2 border-white/20 bg-black/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-brand-dark hover:border-brand-dark transition-all group">
+                        <button 
+                            onClick={nextSlide} 
+                            aria-label={RIDER_LANDING_TEXT.controls.nextSlideAria}
+                            className="w-14 h-14 rounded-full border-2 border-white/20 bg-black/20 backdrop-blur-md text-white flex items-center justify-center hover:bg-brand-dark hover:border-brand-dark transition-all group"
+                        >
                             <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                         </button>
                     </div>
@@ -156,14 +166,14 @@ export default function RiderLanding() {
                         <div className="max-w-2xl space-y-4">
                             <div className="inline-flex items-center gap-2 text-brand-dark uppercase tracking-[0.4em] text-[10px] font-black">
                                 <div className="w-8 h-[2px] bg-brand-dark" />
-                                Fleet Standard
+                                {RIDER_LANDING_TEXT.perks.tag}
                             </div>
                             <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-accent-brown tracking-tighter leading-[0.95] uppercase">
-                                Driven by <span className="text-brand-dark italic font-outfit">Excellence.</span>
+                                {RIDER_LANDING_TEXT.perks.headingPrefix} <span className="text-brand-dark italic font-outfit">{RIDER_LANDING_TEXT.perks.headingHighlight}</span>
                             </h2>
                         </div>
                         <p className="text-lg text-accent-brown/50 font-medium max-w-sm leading-relaxed">
-                            Elite benefits designed for high-performance logistics professionals.
+                            {RIDER_LANDING_TEXT.perks.description}
                         </p>
                     </div>
 
@@ -171,24 +181,24 @@ export default function RiderLanding() {
                         {[
                             {
                                 icon: Clock,
-                                title: "Your Schedule",
-                                desc: "Absolute autonomy over your operational hours. Drive whenever the city calls, with complete control over your availability.",
+                                title: RIDER_LANDING_TEXT.perks.cards[0].title,
+                                desc: RIDER_LANDING_TEXT.perks.cards[0].desc,
                                 color: "bg-white",
-                                accent: "Operational Freedom"
+                                accent: RIDER_LANDING_TEXT.perks.cards[0].accent
                             },
                             {
                                 icon: Wallet,
-                                title: "Great Earnings",
-                                desc: "Competitive base pay with 100% tip retention. Rapid payouts and transparent financial tracking for your high-performance fleet profile.",
+                                title: RIDER_LANDING_TEXT.perks.cards[1].title,
+                                desc: RIDER_LANDING_TEXT.perks.cards[1].desc,
                                 color: "bg-accent-brown text-white",
-                                accent: "Financial Peak"
+                                accent: RIDER_LANDING_TEXT.perks.cards[1].accent
                             },
                             {
                                 icon: HeartHandshake,
-                                title: "Impactful Work",
-                                desc: "Every drop-off is a lifeline. You're delivering critical healthcare supplies to pets in need across the city network.",
+                                title: RIDER_LANDING_TEXT.perks.cards[2].title,
+                                desc: RIDER_LANDING_TEXT.perks.cards[2].desc,
                                 color: "bg-white",
-                                accent: "Mission Logic"
+                                accent: RIDER_LANDING_TEXT.perks.cards[2].accent
                             }
                         ].map((f, i) => (
                             <motion.div
@@ -230,19 +240,19 @@ export default function RiderLanding() {
                 <div className="container mx-auto px-6">
                     <div className="max-w-4xl mx-auto text-center space-y-8 mb-20">
                         <h2 className="text-4xl sm:text-6xl font-black text-accent-brown tracking-tighter uppercase leading-[0.9]">
-                            Protocol <span className="text-brand-dark italic font-outfit">Prerequisites.</span>
+                            {RIDER_LANDING_TEXT.requirements.headingPrefix} <span className="text-brand-dark italic font-outfit">{RIDER_LANDING_TEXT.requirements.headingHighlight}</span>
                         </h2>
                         <p className="text-xl text-accent-brown/50 font-medium max-w-2xl mx-auto italic">
-                            "Operating with precision requires the right tools. Join our fleet with the necessary technical and logistical foundations."
+                            {RIDER_LANDING_TEXT.requirements.quote}
                         </p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                         {[
-                            { icon: CheckCircle2, title: "Maturity 18+", desc: "Verified legal age for operational compliance." },
-                            { icon: Car, title: "Fleet Vehicle", desc: "Insured car, scooter, or motorcycle specialized for transit." },
-                            { icon: Smartphone, title: "Digital Hub", desc: "Modern Android device for real-time dispatch." },
-                            { icon: ShieldCheck, title: "Vetted Profile", desc: "Clear background and logistical verification status." }
+                            { icon: CheckCircle2, title: RIDER_LANDING_TEXT.requirements.items[0].title, desc: RIDER_LANDING_TEXT.requirements.items[0].desc },
+                            { icon: Car, title: RIDER_LANDING_TEXT.requirements.items[1].title, desc: RIDER_LANDING_TEXT.requirements.items[1].desc },
+                            { icon: Smartphone, title: RIDER_LANDING_TEXT.requirements.items[2].title, desc: RIDER_LANDING_TEXT.requirements.items[2].desc },
+                            { icon: ShieldCheck, title: RIDER_LANDING_TEXT.requirements.items[3].title, desc: RIDER_LANDING_TEXT.requirements.items[3].desc }
                         ].map((item, i) => (
                             <motion.div
                                 key={i}
@@ -262,11 +272,11 @@ export default function RiderLanding() {
 
                     <div className="mt-20 pt-20 border-t border-accent-brown/5 flex flex-col items-center gap-10">
                         <div className="text-center space-y-2">
-                            <p className="text-sm font-black uppercase tracking-[0.3em] text-accent-brown/30">Ready to Hit the Road?</p>
-                            <h3 className="text-3xl font-black text-accent-brown uppercase tracking-tighter">Secure Your Spot in the Rider Network</h3>
+                            <p className="text-sm font-black uppercase tracking-[0.3em] text-accent-brown/30">{RIDER_LANDING_TEXT.requirements.ctaTag}</p>
+                            <h3 className="text-3xl font-black text-accent-brown uppercase tracking-tighter">{RIDER_LANDING_TEXT.requirements.ctaHeading}</h3>
                         </div>
                         <Link to="/register/rider" className="btn-primary">
-                            Apply to Drive
+                            {RIDER_LANDING_TEXT.requirements.ctaBtn}
                         </Link>
                     </div>
                 </div>

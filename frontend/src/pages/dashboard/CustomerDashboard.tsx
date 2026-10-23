@@ -132,9 +132,20 @@ const DashboardProductCard = ({ p, navigate, triggerFlyAnimation, addToCart }: {
                     <div className="w-1.5 h-1.5 rounded-full bg-accent-brown/10" />
                     <span className="text-xs font-bold text-black/50">{toTitleCase(p.type || 'Food')}</span>
                 </div>
-                <h4 className="text-xl font-black text-brand tracking-tight leading-tight group-hover:scale-[1.02] origin-left transition-transform line-clamp-2 italic">
+                <h4 
+                    onClick={() => navigate(`/dashboard/customer/catalog/${p.id}`)}
+                    className="text-xl font-black text-brand tracking-tight leading-tight group-hover:scale-[1.02] origin-left transition-transform line-clamp-2 italic cursor-pointer"
+                >
                     {p.name}
                 </h4>
+                {p.description && (
+                    <p 
+                        onClick={() => navigate(`/dashboard/customer/catalog/${p.id}`)}
+                        className="mt-2 text-xs text-black/60 font-medium leading-relaxed line-clamp-2 cursor-pointer hover:text-black transition-colors"
+                    >
+                        {p.description}
+                    </p>
+                )}
             </div>
 
             {/* Footer Section */}
@@ -179,7 +190,8 @@ const DashboardProductCard = ({ p, navigate, triggerFlyAnimation, addToCart }: {
                                     quantity: qty,
                                     variant: 'Standard',
                                     size: 'Medium',
-                                    stock: p.stock || 0
+                                    stock: p.stock || 0,
+                                    description: p.description
                                 });
                                 setQty(1); // Reset after adding
                             }
@@ -347,7 +359,7 @@ const CustomerDashboard = () => {
                                     <span className="text-2xl sm:text-3xl font-black text-accent-brown tabular-nums leading-none">
                                         {stats?.loyalty?.points || 0}
                                     </span>
-                                    <span className="text-xs font-bold text-black/50 ml-0.5">pts</span>
+                                    <span className="text-xs font-bold text-black/50 ml-0.5">Points</span>
                                 </div>
                             </div>
 
@@ -360,7 +372,7 @@ const CustomerDashboard = () => {
                                     </span>
                                 </h1>
                                 <p className="text-xs font-bold text-black/50 mt-1.5">
-                                    Personal dashboard
+                                    Your Summary
                                 </p>
                             </div>
                         </div>
@@ -391,7 +403,7 @@ const CustomerDashboard = () => {
                                             <div className="min-w-0 flex-1">
                                                 <p className="text-sm font-black text-accent-brown line-clamp-2 leading-tight break-words">{pet.name}</p>
                                                 <p className="text-xs font-bold text-black/50 line-clamp-2 leading-tight break-words mt-0.5">
-                                                    Next: {pet.next !== 'None' ? formatDateReadable(pet.next) : 'None'}
+                                                    {pet.next && pet.next !== 'None' ? `Next: ${formatDateReadable(pet.next)}` : 'No Visit Booked'}
                                                 </p>
                                             </div>
                                         </div>
@@ -422,14 +434,14 @@ const CustomerDashboard = () => {
                                     <div className="w-10 h-10 bg-orange-50 rounded-2xl flex items-center justify-center text-brand shrink-0">
                                         <Truck className="w-5 h-5" />
                                     </div>
-                                    <h2 className="text-lg font-black text-accent-brown tracking-tight">Order Status</h2>
+                                    <h2 className="text-lg font-black text-accent-brown tracking-tight">Your Order</h2>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => navigate('/dashboard/customer/orders')}
                                     className="min-h-[44px] min-w-[44px] px-3 py-2 -mr-2 rounded-xl flex items-center justify-center text-xs font-bold text-brand hover:underline"
                                 >
-                                    Details
+                                    View Details
                                 </button>
                             </div>
 
@@ -511,7 +523,7 @@ const CustomerDashboard = () => {
                                 </div>
                                 <div>
                                     <h2 className="text-lg sm:text-xl font-black text-accent-brown tracking-tight">Checkup</h2>
-                                    <p className="text-xs font-semibold text-slate-500">Pet Schedule</p>
+                                    <p className="text-xs font-semibold text-slate-500">Your Pet's Visits</p>
                                 </div>
                             </div>
                             <button
@@ -519,7 +531,7 @@ const CustomerDashboard = () => {
                                 onClick={() => navigate('/dashboard/customer/reservations')}
                                 className="min-h-[44px] px-5 py-2.5 bg-accent-peach/10 hover:bg-brand hover:text-white rounded-2xl text-xs font-bold text-accent-brown transition-all flex items-center justify-center gap-2.5 shadow-sm border border-accent-brown/5 active:scale-95"
                             >
-                                Schedule Visit <Plus className="w-4 h-4" />
+                                Book a Visit <Plus className="w-4 h-4" />
                             </button>
                         </div>
 
@@ -624,7 +636,7 @@ const CustomerDashboard = () => {
                                     <div className="w-10 h-10 bg-orange-50 rounded-2xl flex items-center justify-center text-brand shrink-0">
                                         <Bell className="w-5 h-5 text-brand" />
                                     </div>
-                                    <h2 className="text-lg font-black text-accent-brown tracking-tight">Alerts</h2>
+                                    <h2 className="text-lg font-black text-accent-brown tracking-tight">Notifications</h2>
                                 </div>
                                 <span className="px-3 py-1 bg-black text-white text-xs font-black rounded-full leading-none">
                                     {stats?.unread_count || 0}

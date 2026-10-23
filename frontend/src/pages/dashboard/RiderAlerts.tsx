@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Gift, Info, Bell, CheckCircle2, Trash2, BellOff, ArrowLeft, Loader2 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { useNavigate } from 'react-router-dom';
+import { RIDER_TEXT } from '../../constants/riderWording';
 
 const RiderAlerts = () => {
     const [notifications, setNotifications] = useState<any[]>([]);
@@ -99,15 +100,18 @@ const RiderAlerts = () => {
     };
 
     return (
-        <DashboardLayout title="System Alerts">
+        <DashboardLayout title={RIDER_TEXT.alerts.pageTitle}>
             <div className="max-w-4xl mx-auto space-y-8 pb-20">
 
                 {/* Header Context - Simplified Navigation */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-2">
                     <div>
                         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-brand-dark transition-colors group">
-                            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" /> Back to Dashboard
+                            <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" /> {RIDER_TEXT.alerts.backHomeBtn}
                         </button>
+                        <h1 className="text-2xl min-[360px]:text-[28px] sm:text-3xl font-black text-accent-brown tracking-tight leading-tight mt-2">
+                            {RIDER_TEXT.alerts.pageTitle}
+                        </h1>
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -119,10 +123,10 @@ const RiderAlerts = () => {
                                     className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
                                         filter === f
                                             ? 'bg-brand text-white shadow-lg shadow-brand/20'
-                                            : 'text-accent-brown/40 hover:text-accent-brown'
+                                             : 'text-accent-brown/40 hover:text-accent-brown'
                                     }`}
                                 >
-                                    {f === 'all' ? `All Alerts (${notifications.length})` : `Unread (${unreadCount})`}
+                                    {f === 'all' ? `${RIDER_TEXT.alerts.allTab} (${notifications.length})` : `${RIDER_TEXT.alerts.unreadTab} (${unreadCount})`}
                                 </button>
                             ))}
                         </div>
@@ -136,14 +140,14 @@ const RiderAlerts = () => {
                             onClick={markAllAsRead}
                             className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 hover:text-brand-dark transition-colors flex items-center gap-2 cursor-pointer"
                         >
-                            <CheckCircle2 className="w-4 h-4" /> Clear All Unread
+                            <CheckCircle2 className="w-4 h-4" /> {RIDER_TEXT.alerts.markAllReadBtn}
                         </button>
                         <div className="w-px h-4 bg-accent-brown/10" />
                         <button
                             onClick={deleteAllNotifications}
                             className="text-[10px] font-black uppercase tracking-widest text-red-400 hover:text-red-500 transition-colors flex items-center gap-2 cursor-pointer"
                         >
-                            <Trash2 className="w-4 h-4" /> Delete All Alerts
+                            <Trash2 className="w-4 h-4" /> {RIDER_TEXT.alerts.deleteAllBtn}
                         </button>
                     </div>
                 )}
@@ -153,7 +157,7 @@ const RiderAlerts = () => {
                     {isLoading ? (
                         <div className="py-24 flex flex-col items-center gap-4">
                             <Loader2 className="w-10 h-10 text-brand animate-spin" />
-                            <p className="text-[10px] font-black text-accent-brown/20 uppercase tracking-widest">Retrieving Alerts...</p>
+                            <p className="text-[10px] font-black text-accent-brown/20 uppercase tracking-widest">{RIDER_TEXT.alerts.loading}</p>
                         </div>
                     ) : (
                         <AnimatePresence mode="popLayout">
@@ -167,8 +171,8 @@ const RiderAlerts = () => {
                                     <div className="w-20 h-20 bg-accent-brown/5 rounded-[2rem] flex items-center justify-center mb-6">
                                         <Bell className="w-10 h-10 text-accent-brown/10" />
                                     </div>
-                                    <h3 className="text-xl font-black text-accent-brown tracking-tight lowercase">no alerts to display</h3>
-                                    <p className="text-[10px] font-black text-brand-dark/20 uppercase tracking-[0.2em] mt-2">{filter === 'unread' ? 'You have no unread notifications' : 'Your alert center is clean'}</p>
+                                    <h3 className="text-xl font-black text-accent-brown tracking-tight lowercase">{RIDER_TEXT.alerts.emptyTitle}</h3>
+                                    <p className="text-[10px] font-black text-brand-dark/20 uppercase tracking-[0.2em] mt-2">{filter === 'unread' ? RIDER_TEXT.alerts.emptyUnread : RIDER_TEXT.alerts.emptyAll}</p>
                                 </motion.div>
                             ) : (
                                 filteredAlerts.map((alert, i) => {
@@ -236,7 +240,7 @@ const RiderAlerts = () => {
                                                     whileTap={{ scale: 0.9 }}
                                                     onClick={(e) => { e.stopPropagation(); deleteNotification(alert.id); }}
                                                     className="w-10 h-10 rounded-xl bg-accent-brown/5 flex items-center justify-center text-accent-brown/20 transition-all opacity-0 group-hover:opacity-100"
-                                                    title="Remove alert"
+                                                    title={RIDER_TEXT.alerts.deleteTooltip}
                                                 >
                                                     <Trash2 className="w-4 h-4" />
                                                 </motion.button>

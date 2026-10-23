@@ -21,7 +21,7 @@ export const PWA_PORTALS: Record<PwaRole, PwaPortalConfig> = {
     description: 'Book vet visits, buy pet food and supplies, and get reminders right on your phone.',
     path: '/?pwa=customer',
     manifest: '/manifest-customer.json',
-    themeColor: '#FAF9F6',
+    themeColor: '#000000',
     accentClass: 'text-brand'
   },
   business: {
@@ -31,7 +31,7 @@ export const PWA_PORTALS: Record<PwaRole, PwaPortalConfig> = {
     description: 'Manage appointments, pet patient records, and clinic orders in one place.',
     path: '/login/business?pwa=business',
     manifest: '/manifest-business.json',
-    themeColor: '#FAF9F6',
+    themeColor: '#FFFFFF',
     accentClass: 'text-accent-brown'
   },
   rider: {
@@ -41,7 +41,7 @@ export const PWA_PORTALS: Record<PwaRole, PwaPortalConfig> = {
     description: 'Pick up pet packages, deliver to homes, and track your daily pay.',
     path: '/login/rider?pwa=rider',
     manifest: '/manifest-rider.json',
-    themeColor: '#FAF9F6',
+    themeColor: '#FFFFFF',
     accentClass: 'text-brand'
   }
 };

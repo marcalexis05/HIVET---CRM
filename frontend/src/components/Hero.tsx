@@ -36,7 +36,7 @@ export const Hero = () => {
     const prevSlide = () => setCurrent((prev) => (prev === 0 ? SLIDES.length - 1 : prev - 1));
 
     return (
-        <section className="relative min-h-[680px] h-screen w-full flex items-center justify-center overflow-hidden bg-black font-brand">
+        <section className="relative min-h-[680px] h-[100dvh] w-full flex items-center justify-center overflow-hidden bg-black font-brand">
             {/* Background Slideshow */}
             <div className="absolute inset-0 z-0">
                 <AnimatePresence mode="wait">

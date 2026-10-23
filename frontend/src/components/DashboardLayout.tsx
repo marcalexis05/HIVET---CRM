@@ -919,7 +919,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
 
             {/* Customer Mobile Bottom Navigation Bar */}
             {isCustomer && !hideFooter && (
-                <nav className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 ${isMoreMenuOpen ? 'bg-white' : 'bg-white/95 backdrop-blur-xl'} border-t border-accent-brown/10 shadow-[0_-10px_25px_rgba(0,0,0,0.06)] h-16 px-2`}>
+                <nav className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 ${isMoreMenuOpen ? 'bg-white' : 'bg-white/95 backdrop-blur-xl'} border-t border-accent-brown/10 shadow-[0_-10px_25px_rgba(0,0,0,0.06)] h-[calc(4rem+env(safe-area-inset-bottom,0px))] pb-[env(safe-area-inset-bottom,0px)] px-2`}>
                     <div className="flex items-center justify-around h-full max-w-lg mx-auto">
                         {[
                             { name: 'Home', path: '/dashboard/customer', icon: Home },

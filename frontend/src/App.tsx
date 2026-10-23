@@ -203,8 +203,8 @@ function Navigation() {
   };
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${isTransparent ? 'py-4' : 'py-0'}`}>
-      <div className={`w-full transition-all duration-500 flex items-center justify-between px-6 sm:px-12 h-16 sm:h-20 ${navBackground}`}>
+    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 pt-[env(safe-area-inset-top,0px)] ${isTransparent ? 'bg-transparent pb-3 sm:pb-4' : 'bg-white border-b border-accent-brown/5 shadow-[0_20px_50px_rgba(45,34,27,0.1)] rounded-b-[2rem] sm:rounded-b-[2.5rem]'}`}>
+      <div className="w-full transition-all duration-500 flex items-center justify-between px-6 sm:px-12 h-16 sm:h-20">
         <div className="flex-1 flex justify-start">
           <Link to="/" className="flex items-center gap-2 xs:gap-3 group" onClick={handleHomeClick}>
             <div className={`w-10 h-10 xs:w-12 xs:h-12 flex items-center justify-center -ml-1 group-hover:scale-110 transition-transform ${isTransparent ? 'brightness-0 invert' : ''}`}>
@@ -312,7 +312,7 @@ function Navigation() {
               exit={{ opacity: 0 }}
               transition={{ duration: shouldReduceMotion ? 0.1 : 0.2 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 top-16 sm:top-20 bg-black/[0.08] z-40 lg:hidden"
+              className="fixed inset-0 top-[calc(4rem+env(safe-area-inset-top,0px))] sm:top-[calc(5rem+env(safe-area-inset-top,0px))] bg-black/[0.08] z-40 lg:hidden"
               aria-hidden="true"
             />
 
@@ -483,6 +483,75 @@ function Landing() {
   );
 }
 
+
+function StatusBarManager() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const isDarkHeroPage = ['/', '/for-clinics', '/for-riders'].includes(location.pathname);
+
+    const updateStatus = () => {
+      let targetColor = '#FFFFFF';
+      let docBg = '#FAF9F6';
+
+      if (isDarkHeroPage) {
+        const isScrolledPastHero = window.scrollY > 50;
+        if (!isScrolledPastHero) {
+          targetColor = '#000000';
+          docBg = '#000000';
+        } else {
+          targetColor = '#FFFFFF';
+          docBg = '#FAF9F6';
+        }
+      } else if (location.pathname === '/catalog') {
+        targetColor = '#FAF9F6';
+        docBg = '#FAF9F6';
+      } else if (
+        location.pathname.startsWith('/login') ||
+        location.pathname.startsWith('/register') ||
+        location.pathname === '/forgot-password'
+      ) {
+        targetColor = '#FFFFFF';
+        docBg = '#FFFFFF';
+      } else if (location.pathname.startsWith('/dashboard')) {
+        targetColor = '#FFFFFF';
+        docBg = '#FAF9F6';
+      } else {
+        targetColor = '#FAF9F6';
+        docBg = '#FAF9F6';
+      }
+
+      // 1. Update meta theme-color immediately
+      let meta = document.querySelector('meta[name="theme-color"]');
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute('name', 'theme-color');
+        document.head.appendChild(meta);
+      }
+      if (meta.getAttribute('content') !== targetColor) {
+        meta.setAttribute('content', targetColor);
+      }
+
+      // 2. Update html and body backgrounds to prevent overscroll flash
+      if (document.documentElement.style.backgroundColor !== docBg) {
+        document.documentElement.style.backgroundColor = docBg;
+      }
+      if (document.body.style.backgroundColor !== docBg) {
+        document.body.style.backgroundColor = docBg;
+      }
+    };
+
+    updateStatus();
+
+    if (isDarkHeroPage) {
+      window.addEventListener('scroll', updateStatus, { passive: true });
+      return () => window.removeEventListener('scroll', updateStatus);
+    }
+  }, [location.pathname]);
+
+  return null;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -490,7 +559,8 @@ function App() {
         <CartProvider>
           <Router>
             <ScrollToTop />
-            <div className="min-h-screen bg-white font-brand selection:bg-brand/30 selection:text-accent-brown overflow-x-hidden">
+            <StatusBarManager />
+            <div className="min-h-screen bg-transparent font-brand selection:bg-brand/30 selection:text-accent-brown overflow-x-hidden">
               <Navigation />
 
               <main>

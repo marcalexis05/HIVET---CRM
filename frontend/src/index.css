@@ -28,6 +28,7 @@
 html {
   scroll-behavior: smooth;
   scroll-padding-top: 100px;
+  background-color: #000000;
 }
 
 /* Hi-Vet Global Scrollbar Hiding */
@@ -41,7 +42,8 @@ html {
 }
 
 body {
-  @apply font-brand bg-accent-peach text-accent-brown selection:bg-brand/30 overflow-x-hidden;
+  @apply font-brand text-accent-brown selection:bg-brand/30 overflow-x-hidden;
+  background-color: #000000;
 }
 
 @layer utilities {

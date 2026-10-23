@@ -40,7 +40,7 @@ export default function BusinessLanding() {
     return (
         <div className="min-h-screen bg-white">
             {/* Cinematic Clinic Hero Slideshow */}
-            <section id="features" className="relative h-screen w-full flex items-center justify-center overflow-hidden bg-black font-brand">
+            <section id="features" className="relative min-h-[680px] h-[100dvh] w-full flex items-center justify-center overflow-hidden bg-black font-brand">
                 {/* Background Slideshow */}
                 <div className="absolute inset-0 z-0">
                     <AnimatePresence mode="wait">

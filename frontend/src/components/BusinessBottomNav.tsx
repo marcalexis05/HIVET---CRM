@@ -156,7 +156,7 @@ const BusinessBottomNav: React.FC<BusinessBottomNavProps> = ({ onOpenLogout }) =
             {/* Fixed Bottom Navigation Bar on Phones (hidden on >= 768px) */}
             <nav
                 aria-label="Clinic Navigation"
-                className={`md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-accent-brown/10 shadow-[0_-10px_25px_rgba(0,0,0,0.06)] h-16 px-2 pb-[env(safe-area-inset-bottom,0px)] select-none transition-transform duration-200 ${
+                className={`md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-accent-brown/10 shadow-[0_-10px_25px_rgba(0,0,0,0.06)] h-[calc(4rem+env(safe-area-inset-bottom,0px))] px-2 pb-[env(safe-area-inset-bottom,0px)] select-none transition-transform duration-200 ${
                     isInputFocused ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
                 }`}
             >

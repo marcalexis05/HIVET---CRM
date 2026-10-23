@@ -56,6 +56,13 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 SECRET_KEY           = os.getenv("SECRET_KEY", "fallback-secret")
 FRONTEND_URL         = os.getenv("FRONTEND_URL", "http://localhost:3000")
 DATABASE_URL         = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    print("[ERROR] DATABASE_URL environment variable is missing!")
+    print("Please add DATABASE_URL in Render -> Environment tab with your Supabase connection string.")
+    raise ValueError("DATABASE_URL is not set. Please configure it in your environment variables.")
+
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 REDIRECT_URI         = "http://localhost:8000/auth/google/callback"
 ALGORITHM            = "HS256"
 TOKEN_EXPIRE_DAYS    = 30

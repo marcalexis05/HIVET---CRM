@@ -586,7 +586,7 @@ const CustomerReservations = () => {
                                             <div className="border-t border-accent-brown/5 pt-4 flex items-center justify-between gap-3 mt-auto relative z-10">
                                                 <div>
                                                     <p className="text-[10px] font-bold text-black mb-1 leading-none">Total value</p>
-                                                    <p className="text-lg sm:text-xl font-black italic text-accent-brown tracking-tight leading-none">â‚±{res.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                                                    <p className="text-lg sm:text-xl font-black italic text-accent-brown tracking-tight leading-none">₱{res.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
                                                 </div>
 
                                                 <div className="flex items-center gap-2 shrink-0">
@@ -810,7 +810,7 @@ const CustomerReservations = () => {
                                                                 className="font-black text-base sm:text-lg tabular-nums text-accent-brown shrink-0 whitespace-nowrap ml-3"
                                                                 aria-label={`${selectedDetail.total.toFixed(2)} pesos`}
                                                             >
-                                                                â‚±{selectedDetail.total.toFixed(2)}
+                                                                ₱{selectedDetail.total.toFixed(2)}
                                                             </span>
                                                         )}
                                                     </div>
@@ -824,7 +824,7 @@ const CustomerReservations = () => {
                                                         className="font-black text-base sm:text-lg tabular-nums text-accent-brown shrink-0 whitespace-nowrap ml-3"
                                                         aria-label={`${selectedDetail.total.toFixed(2)} pesos`}
                                                     >
-                                                        â‚±{selectedDetail.total.toFixed(2)}
+                                                        ₱{selectedDetail.total.toFixed(2)}
                                                     </span>
                                                 </div>
                                             )}
@@ -859,7 +859,7 @@ const CustomerReservations = () => {
                                                 className="text-3xl xs:text-4xl sm:text-5xl font-black italic tracking-tight text-brand-dark leading-none tabular-nums"
                                                 aria-label={`${selectedDetail.total.toLocaleString('en-US', { minimumFractionDigits: 2 })} pesos`}
                                             >
-                                                â‚±{selectedDetail.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                ₱{selectedDetail.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                             </h2>
                                             <div className="flex items-center gap-1.5 shrink-0" aria-label={selectedDetail.payment_status === 'paid' ? 'Payment secured and paid' : 'Payment pending'}>
                                                 {selectedDetail.payment_status === 'paid' ? (

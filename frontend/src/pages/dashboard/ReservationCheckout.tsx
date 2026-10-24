@@ -864,7 +864,7 @@ const ReservationCheckout = () => {
                                                                 <div>
                                                                     <h4 className="text-base font-black text-accent-brown italic">{selectedService.name}</h4>
                                                                     <div className="flex items-center gap-3 mt-0.5">
-                                                                        <span className="text-base font-black text-brand italic">â‚±{selectedService.price.toLocaleString()}</span>
+                                                                        <span className="text-base font-black text-brand italic">₱{selectedService.price.toLocaleString()}</span>
                                                                         {selectedService.loyalty_points > 0 && (
                                                                             <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                                                                                 +{selectedService.loyalty_points} Points
@@ -980,7 +980,7 @@ const ReservationCheckout = () => {
                                                                                             </div>
                                                                                             <div className="flex items-end justify-between gap-2 mt-2">
                                                                                                 <div className="flex items-center gap-2">
-                                                                                                    <span className="text-lg font-black text-brand italic">â‚±{pkg.price.toLocaleString()}</span>
+                                                                                                    <span className="text-lg font-black text-brand italic">₱{pkg.price.toLocaleString()}</span>
                                                                                                     {pkg.loyalty_points > 0 && (
                                                                                                         <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                                                                                                             +{pkg.loyalty_points} Points
@@ -1041,7 +1041,7 @@ const ReservationCheckout = () => {
                                                                                             </div>
                                                                                             <div className="flex items-center justify-between gap-2 mt-2 w-full">
                                                                                                 <div className="flex items-center gap-2">
-                                                                                                    <span className="text-lg font-black text-brand italic">â‚±{svc.price.toLocaleString()}</span>
+                                                                                                    <span className="text-lg font-black text-brand italic">₱{svc.price.toLocaleString()}</span>
                                                                                                     {svc.loyalty_points > 0 && (
                                                                                                         <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                                                                                                             +{svc.loyalty_points} Points
@@ -1491,7 +1491,7 @@ const ReservationCheckout = () => {
                                                                 ) : null}
                                                             </div>
                                                         </div>
-                                                        <p className="text-base font-black text-brand italic shrink-0">â‚±{selectedService?.price.toLocaleString()}</p>
+                                                        <p className="text-base font-black text-brand italic shrink-0">₱{selectedService?.price.toLocaleString()}</p>
                                                     </div>
                                                 </div>
 
@@ -1550,7 +1550,7 @@ const ReservationCheckout = () => {
                                             <div className="p-4 sm:p-5 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                                 <div>
                                                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total Amount</span>
-                                                    <span className="text-3xl font-black text-brand-dark italic">â‚±{estimatedTotal.toLocaleString()}</span>
+                                                    <span className="text-3xl font-black text-brand-dark italic">₱{estimatedTotal.toLocaleString()}</span>
                                                 </div>
                                                 <button
                                                     type="button"
@@ -1611,20 +1611,20 @@ const ReservationCheckout = () => {
                                             <span className="font-bold text-slate-400 block mb-0.5">Service</span>
                                             <div className="flex justify-between items-center">
                                                 <p className="font-black text-accent-brown">{selectedService?.name || 'â€”'}</p>
-                                                <span className="font-black text-brand">â‚±{selectedService?.price.toLocaleString() || '0'}</span>
+                                                <span className="font-black text-brand">₱{selectedService?.price.toLocaleString() || '0'}</span>
                                             </div>
                                         </div>
 
                                         {appliedVoucher && (
                                             <div className="pt-2 border-t border-slate-100 flex justify-between text-emerald-600">
                                                 <span>Reward Applied</span>
-                                                <span>-â‚±{baseTotal.toLocaleString()}</span>
+                                                <span>-₱{baseTotal.toLocaleString()}</span>
                                             </div>
                                         )}
 
                                         <div className="pt-3 border-t border-slate-100 flex justify-between items-baseline">
                                             <span className="font-bold text-slate-600">Total Price</span>
-                                            <span className="text-xl font-black text-brand-dark italic">â‚±{estimatedTotal.toLocaleString()}</span>
+                                            <span className="text-xl font-black text-brand-dark italic">₱{estimatedTotal.toLocaleString()}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1723,7 +1723,7 @@ const ReservationCheckout = () => {
                                             </div>
                                             <div>
                                                 <p className="text-[10px] font-black text-accent-brown/30 uppercase tracking-widest leading-none mb-1 text-xs">Total Price</p>
-                                                <p className="text-xs font-black text-accent-brown uppercase italic leading-none">â‚±{estimatedTotal.toLocaleString()}</p>
+                                                <p className="text-xs font-black text-accent-brown uppercase italic leading-none">₱{estimatedTotal.toLocaleString()}</p>
                                             </div>
                                         </div>
                                     </div>

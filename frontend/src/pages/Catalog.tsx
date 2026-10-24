@@ -1,7 +1,7 @@
 import { toTitleCase } from '../utils/textFormatters';
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Tag, Star, Search, ArrowLeft, ArrowRight, Heart, Filter as FilterIcon } from 'lucide-react';
+import { ShoppingCart, Tag, Star, Search, ArrowLeft, ArrowRight, Heart, Filter as FilterIcon, X } from 'lucide-react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { products } from '../data/products';
 import { useCart } from '../context/CartContext';
@@ -46,93 +46,109 @@ const Catalog = () => {
     return (
         <div className="min-h-screen bg-[#FAF9F6] pb-24 relative font-brand">
             {/* Header / Intro Section */}
-            <div className="container mx-auto px-6 xs:px-12 relative z-10 pt-32 pb-16">
-                <Link to="/" className="inline-flex items-center gap-2 text-brand-dark/60 hover:text-brand-dark transition-all font-bold text-xs mb-12 group">
+            <div className="container mx-auto px-4 xs:px-6 sm:px-10 lg:px-12 relative z-10 pt-20 sm:pt-28 lg:pt-32 pb-8 sm:pb-12 lg:pb-16">
+                <Link to="/" className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-dark transition-all font-bold text-sm mb-6 sm:mb-8 group">
                     <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                    {MAIN_LANDING_TEXT.catalogPage.backToHome}
+                    <span>{MAIN_LANDING_TEXT.catalogPage.backToHome}</span>
                 </Link>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 lg:items-end gap-12">
-                    <div className="space-y-6">
-                        <div className="inline-flex items-center gap-2 text-brand-dark text-xs font-bold">
+                <div className="grid grid-cols-1 lg:grid-cols-2 lg:items-end gap-6 sm:gap-10">
+                    <div className="space-y-4">
+                        <div className="inline-flex items-center gap-2 text-brand-dark text-xs sm:text-sm font-bold uppercase tracking-wider">
                             <div className="w-8 h-[2px] bg-brand-dark" />
                             {MAIN_LANDING_TEXT.catalogPage.tag}
                         </div>
-                        <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black text-accent-brown tracking-tight leading-[0.95]">
+                        <h1 className="text-3xl xs:text-4xl sm:text-5xl lg:text-6xl font-black text-accent-brown tracking-tight leading-[0.95]">
                             {MAIN_LANDING_TEXT.catalogPage.titlePrefix} <br />
                             <span className="text-brand-dark italic font-outfit">{MAIN_LANDING_TEXT.catalogPage.titleHighlight}</span>
                         </h1>
                     </div>
-                    <p className="text-xl text-accent-brown/50 font-medium max-w-xl leading-relaxed italic">
+                    <p className="text-sm sm:text-base lg:text-lg text-slate-600 font-normal max-w-xl leading-relaxed italic">
                         "{MAIN_LANDING_TEXT.catalogPage.subtitle}"
                     </p>
                 </div>
             </div>
 
             {/* Filter Architecture */}
-            <div className="container mx-auto px-6 mb-16">
-                <div className="bg-white rounded-[3.5rem] p-3 sm:p-4 shadow-[0_20px_50px_rgba(45,34,27,0.05)] border border-accent-brown/5 flex flex-col lg:flex-row gap-4 items-center">
+            <div className="container mx-auto px-4 xs:px-6 sm:px-10 lg:px-12 mb-10 sm:mb-14">
+                <div className="bg-white rounded-3xl sm:rounded-[2.5rem] p-4 sm:p-6 shadow-sm border border-accent-brown/10 flex flex-col gap-4">
                     {/* Search Field */}
-                    <div className="relative group w-full lg:w-1/3">
-                        <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-accent-brown/30 group-focus-within:text-brand-dark transition-colors" />
+                    <div className="relative flex items-center min-h-[48px] sm:min-h-[52px] bg-[#F7F6F2] border border-accent-brown/15 focus-within:border-brand-dark focus-within:ring-2 focus-within:ring-brand-dark/20 rounded-2xl overflow-hidden transition-all w-full">
+                        <Search className="w-5 h-5 text-accent-brown/40 group-focus-within:text-brand-dark ml-4 mr-3 shrink-0 transition-colors" />
                         <input
                             type="text"
                             placeholder={MAIN_LANDING_TEXT.catalogPage.searchPlaceholder}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-14 pr-8 py-5 bg-[#F7F6F2] rounded-full border border-transparent focus:bg-white focus:border-brand-dark/20 outline-none transition-all font-medium text-accent-brown text-sm"
+                            className="w-full bg-transparent py-3 pr-4 text-accent-brown font-bold text-sm sm:text-base placeholder:text-slate-500 outline-none leading-normal"
                         />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery('')}
+                                className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-200 flex items-center justify-center text-slate-500 mr-2 shrink-0 cursor-pointer"
+                                aria-label="Clear search"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
 
-                    <div className="hidden lg:block w-[1px] h-10 bg-accent-brown/10 mx-2" />
-
-                    {/* Filter Tabs */}
-                    <div className="flex flex-col sm:flex-row gap-6 w-full lg:w-auto items-center overflow-x-auto no-scrollbar py-2 lg:py-0">
-                        <div className="flex items-center gap-4">
-                            {['All', 'Cats', 'Dogs'].map((cat) => (
+                    {/* Filter Strips */}
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-3 sm:gap-4 w-full pt-1">
+                        {/* Pet Filter Strip */}
+                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 shrink-0">
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1 shrink-0">Pet:</span>
+                            {(['All', 'Cats', 'Dogs'] as const).map((pet) => (
                                 <button
-                                    key={cat}
-                                    onClick={() => setPetFilter(cat as any)}
-                                    className={`px-6 py-2 rounded-full text-xs font-bold transition-all duration-300 whitespace-nowrap ${
-                                        petFilter === cat
-                                        ? 'bg-brand-dark text-white shadow-xl shadow-brand-dark/20'
-                                        : 'text-accent-brown/40 hover:text-brand-dark'
+                                    key={pet}
+                                    onClick={() => setPetFilter(pet)}
+                                    className={`min-h-[40px] px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+                                        petFilter === pet
+                                            ? 'bg-brand-dark text-white shadow-md shadow-brand-dark/20'
+                                            : 'bg-[#F7F6F2] hover:bg-slate-200/60 text-slate-700 border border-accent-brown/10'
                                     }`}
                                 >
-                                    {cat}
+                                    {pet === 'All' ? 'All Pets' : pet}
                                 </button>
                             ))}
                         </div>
 
-                        <div className="hidden sm:block w-[1px] h-6 bg-accent-brown/10" />
+                        <div className="hidden lg:block w-[1px] h-6 bg-accent-brown/15 shrink-0" />
 
-                        <div className="flex items-center gap-4">
-                            {['All', 'Food', 'Accessories', 'Vitamins'].map((type) => (
+                        {/* Category Filter Strip */}
+                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1 shrink-0">Category:</span>
+                            {(['All', 'Food', 'Accessories', 'Vitamins'] as const).map((type) => (
                                 <button
                                     key={type}
                                     onClick={() => {
-                                        setTypeFilter(type as any);
+                                        setTypeFilter(type);
                                         setSearchParams(type === 'All' ? {} : { type });
                                     }}
-                                    className={`px-6 py-2 rounded-full text-xs font-bold transition-all duration-300 whitespace-nowrap ${
+                                    className={`min-h-[40px] px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
                                         typeFilter === type
-                                        ? 'bg-brand-dark text-white shadow-xl shadow-brand-dark/20'
-                                        : 'text-accent-brown/40 hover:text-brand-dark'
+                                            ? 'bg-brand-dark text-white shadow-md shadow-brand-dark/20'
+                                            : 'bg-[#F7F6F2] hover:bg-slate-200/60 text-slate-700 border border-accent-brown/10'
                                     }`}
                                 >
-                                    {type}
+                                    {type === 'All' ? 'All Categories' : type}
                                 </button>
                             ))}
                         </div>
                     </div>
                 </div>
 
-                <div className="mt-8 flex items-center justify-between px-6">
-                    <p className="text-xs font-medium text-slate-500">
-                        Showing <span className="text-accent-brown">{MAIN_LANDING_TEXT.catalogPage.resultsCount(filteredProducts.length)}</span>
+                {/* Results Count & Clear Button */}
+                <div className="mt-4 sm:mt-6 flex items-center justify-between px-2 sm:px-4 flex-wrap gap-2">
+                    <p className="text-xs sm:text-sm font-medium text-slate-600">
+                        Showing <span className="font-bold text-accent-brown">{MAIN_LANDING_TEXT.catalogPage.resultsCount(filteredProducts.length)}</span>
                     </p>
                     {(petFilter !== 'All' || typeFilter !== 'All' || searchQuery !== '') && (
-                        <button onClick={resetFilters} className="text-xs font-bold text-brand-dark hover:text-accent-brown transition-colors">
+                        <button
+                            onClick={resetFilters}
+                            className="text-xs sm:text-sm font-bold text-brand-dark hover:text-accent-brown hover:underline transition-colors cursor-pointer"
+                        >
                             {MAIN_LANDING_TEXT.catalogPage.clearFilters}
                         </button>
                     )}
@@ -140,8 +156,8 @@ const Catalog = () => {
             </div>
 
             {/* Grid Architecture */}
-            <div className="container mx-auto px-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-10">
+            <div className="container mx-auto px-4 xs:px-6 sm:px-10 lg:px-12">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
                     <AnimatePresence mode="popLayout">
                         {filteredProducts.map((p) => (
                             <motion.div
@@ -150,30 +166,34 @@ const Catalog = () => {
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.95 }}
-                                transition={{ duration: 0.5 }}
-                                className="group flex flex-col bg-white rounded-[3.5rem] p-7 shadow-[0_10px_40px_rgba(45,34,27,0.03)] border border-accent-brown/5 hover:border-brand-dark/20 transition-all hover:shadow-2xl hover:shadow-brand-dark/10 relative overflow-hidden h-full"
+                                transition={{ duration: 0.4 }}
+                                className="group flex flex-col bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-accent-brown/10 hover:border-brand-dark/30 transition-all hover:shadow-xl hover:shadow-brand-dark/5 relative overflow-hidden h-full"
                             >
                                 {/* Item Tag */}
-                                <div className="absolute top-5 left-5 z-20">
-                                    <div className="bg-brand-dark text-white px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1.5">
-                                        <Tag className="w-2.5 h-2.5" />
+                                <div className="absolute top-4 left-4 z-20">
+                                    <div className="bg-brand-dark text-white px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5">
+                                        <Tag className="w-3 h-3" />
                                         <span className="text-[11px] font-bold leading-none">{toTitleCase(p.tag)}</span>
                                     </div>
                                 </div>
 
-                                <button className="absolute top-8 right-8 z-20 w-12 h-12 bg-white/90 backdrop-blur rounded-full shadow-sm flex items-center justify-center hover:scale-110 transition-all text-accent-brown/10 hover:text-brand-dark">
-                                    <Heart className="w-5 h-5" />
+                                <button
+                                    type="button"
+                                    aria-label="Add to favorites"
+                                    className="absolute top-4 right-4 z-20 w-10 h-10 bg-white/90 backdrop-blur rounded-full shadow-xs flex items-center justify-center hover:scale-110 active:scale-95 transition-all text-slate-400 hover:text-brand-dark cursor-pointer"
+                                >
+                                    <Heart className="w-4 h-4" />
                                 </button>
 
                                 {/* Visual Panel */}
-                                <div className="aspect-[4/5] rounded-[2.5rem] mb-8 bg-[#F7F6F2] relative overflow-hidden">
+                                <div className="aspect-square sm:aspect-[4/5] rounded-2xl mb-5 bg-[#F7F6F2] relative overflow-hidden">
                                     <img
                                         src={p.image}
                                         alt={p.name}
-                                        className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-1000 ease-out"
+                                        className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700 ease-out"
                                     />
                                     {/* Action Reveal Overlay */}
-                                    <div className="absolute inset-0 bg-accent-brown/60 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[2px] flex items-center justify-center p-8">
+                                    <div className="absolute inset-0 bg-accent-brown/60 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[2px] flex items-center justify-center p-6">
                                         <button 
                                             onClick={(e) => {
                                                 triggerFlyAnimation(e, p.image);
@@ -181,7 +201,7 @@ const Catalog = () => {
                                                     id: p.id,
                                                     business_id: 1,
                                                     name: p.name,
-                                                    price: p.price,
+                                                    price: String(p.price),
                                                     image: p.image,
                                                     quantity: 1,
                                                     variant: 'Standard',
@@ -190,44 +210,46 @@ const Catalog = () => {
                                                 });
                                                 setTimeout(() => navigate('/login'), 400);
                                             }}
-                                            className="bg-white text-accent-brown w-full py-3.5 rounded-full font-bold text-xs flex items-center justify-center gap-2 transform translate-y-8 group-hover:translate-y-0 transition-transform duration-500 delay-100"
+                                            className="bg-white text-accent-brown w-full py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:bg-brand-dark hover:text-white transition-all cursor-pointer"
                                         >
                                             <ShoppingCart className="w-4 h-4" />
-                                            {MAIN_LANDING_TEXT.catalogPage.addToCart}
+                                            <span>{MAIN_LANDING_TEXT.catalogPage.addToCart}</span>
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="flex-1 flex flex-col space-y-4 px-2">
-                                    <div className="space-y-1.5">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <p className="text-[10px] font-black text-brand-dark/40 uppercase tracking-[0.25em]">{p.type} • {p.category}</p>
+                                <div className="flex-1 flex flex-col space-y-3">
+                                    <div className="space-y-1">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{p.type} • {p.category}</p>
                                             <div className="flex gap-0.5">
                                                 {[...Array(5)].map((_, i) => (
-                                                    <Star key={i} className={`w-3 h-3 ${i < p.stars ? 'text-brand-dark fill-brand-dark' : 'text-accent-brown/10'}`} />
+                                                    <Star key={i} className={`w-3 h-3 ${i < p.stars ? 'text-brand-dark fill-brand-dark' : 'text-slate-200 fill-slate-200'}`} />
                                                 ))}
                                             </div>
                                         </div>
-                                        <h3 className="text-2xl font-black text-accent-brown leading-none tracking-tighter group-hover:text-brand-dark transition-colors">{p.name}</h3>
+                                        <h3 className="text-lg sm:text-xl font-bold text-accent-brown leading-snug group-hover:text-brand-dark transition-colors">{p.name}</h3>
                                     </div>
 
-                                    <p className="text-sm text-accent-brown/40 font-medium leading-relaxed line-clamp-2 italic">
+                                    <p className="text-xs sm:text-sm text-slate-600 font-normal leading-relaxed line-clamp-2">
                                         {p.description}
                                     </p>
 
-                                    <div className="pt-6 mt-auto border-t border-accent-brown/5 flex items-center justify-between gap-3">
+                                    <div className="pt-4 mt-auto border-t border-accent-brown/10 flex items-center justify-between gap-3">
                                         <div className="flex flex-col">
-                                            <span className="text-xs font-medium text-slate-400">{MAIN_LANDING_TEXT.catalogPage.priceLabel}</span>
-                                            <p className="text-3xl font-black text-accent-brown/80 tracking-tighter leading-none">₱{p.price}</p>
+                                            <span className="text-[11px] font-medium text-slate-400">{MAIN_LANDING_TEXT.catalogPage.priceLabel}</span>
+                                            <p className="text-xl sm:text-2xl font-black text-accent-brown tracking-tight">₱{parseFloat(p.price as string).toFixed(2)}</p>
                                         </div>
                                         <button
+                                            type="button"
+                                            aria-label={`Buy ${p.name}`}
                                             onClick={(e) => {
                                                 triggerFlyAnimation(e, p.image);
                                                 addToCart({
                                                     id: p.id,
                                                     business_id: 1,
                                                     name: p.name,
-                                                    price: p.price,
+                                                    price: String(p.price),
                                                     image: p.image,
                                                     quantity: 1,
                                                     variant: 'Standard',
@@ -236,7 +258,7 @@ const Catalog = () => {
                                                 });
                                                 setTimeout(() => navigate('/login'), 400);
                                             }}
-                                            className="bg-brand-dark text-white p-4 rounded-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl shadow-brand-dark/20"
+                                            className="w-11 h-11 bg-brand-dark hover:bg-brand text-white rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-md shadow-brand-dark/20 cursor-pointer shrink-0"
                                         >
                                             <ArrowRight className="w-5 h-5" />
                                         </button>
@@ -252,16 +274,16 @@ const Catalog = () => {
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        className="py-32 text-center"
+                        className="py-24 text-center"
                     >
-                        <div className="w-32 h-32 bg-white rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-accent-brown/5 text-4xl">
-                            <FilterIcon className="w-10 h-10 text-accent-brown/10" />
+                        <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-accent-brown/10 text-slate-400">
+                            <FilterIcon className="w-8 h-8 text-accent-brown/30" />
                         </div>
-                        <h2 className="text-2xl font-bold text-accent-brown tracking-tight mb-3">{MAIN_LANDING_TEXT.catalogPage.noResultsTitle}</h2>
-                        <p className="text-accent-brown/40 font-medium max-w-sm mx-auto">{MAIN_LANDING_TEXT.catalogPage.noResultsDesc}</p>
+                        <h2 className="text-xl sm:text-2xl font-extrabold text-accent-brown tracking-normal mb-2">{MAIN_LANDING_TEXT.catalogPage.noResultsTitle}</h2>
+                        <p className="text-sm text-slate-600 font-normal max-w-sm mx-auto">{MAIN_LANDING_TEXT.catalogPage.noResultsDesc}</p>
                         <button
                             onClick={resetFilters}
-                            className="mt-8 bg-brand-dark text-white px-8 py-3.5 rounded-full font-bold text-xs hover:shadow-xl transition-all"
+                            className="mt-6 bg-brand-dark hover:bg-brand text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-md shadow-brand-dark/20 transition-all cursor-pointer"
                         >
                             {MAIN_LANDING_TEXT.catalogPage.clearFilters}
                         </button>

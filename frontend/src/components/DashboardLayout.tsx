@@ -24,6 +24,7 @@ import { CLINIC_TEXT } from '../constants/clinicWording';
 import BusinessBottomNav from './BusinessBottomNav';
 import ClinicAvatarBlock from './ClinicAvatarBlock';
 import RiderAvatarBlock from './RiderAvatarBlock';
+import AppTopHeader from './AppTopHeader';
 import {
     calculateSideTabDimensions,
     runStandardScreenOverlapChecks
@@ -526,10 +527,12 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                 <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isCollapsed ? 'lg:ml-24' : 'lg:ml-72'}`}>
                     {!hideHeader && (
                         user?.role === 'business' ? (
-                        /* Clinic Business Unified Responsive Header */
-                        <header
+                        /* Clinic Business Unified Responsive Header (shared transparent-on-top shell) */
+                        <AppTopHeader
                             role="banner"
-                            className="h-18 sm:h-20 bg-white border-b border-accent-brown/5 shadow-xs sticky top-0 z-40 px-4 sm:px-6 lg:px-8 flex items-center justify-between pt-[env(safe-area-inset-top,0px)]"
+                            position="sticky"
+                            surface="portal"
+                            className="h-18 sm:h-20 px-4 sm:px-6 lg:px-8 flex items-center justify-between pt-[env(safe-area-inset-top,0px)]"
                         >
                             {/* Mobile / Tablet (< 1024px): Clinic Avatar Block on the Left */}
                             <div className="flex lg:hidden items-center min-w-0 flex-1 mr-2">
@@ -601,12 +604,14 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
 
                                 {branchAction && <div className="hidden xl:block">{branchAction}</div>}
                             </div>
-                        </header>
+                        </AppTopHeader>
                     ) : user?.role === 'rider' ? (
-                        /* Rider Unified Responsive Header */
-                        <header
+                        /* Rider Unified Responsive Header (shared transparent-on-top shell) */
+                        <AppTopHeader
                             role="banner"
-                            className="h-18 sm:h-20 bg-white border-b border-accent-brown/5 shadow-xs sticky top-0 z-40 px-4 sm:px-6 lg:px-8 flex items-center justify-between pt-[env(safe-area-inset-top,0px)]"
+                            position="sticky"
+                            surface="portal"
+                            className="h-18 sm:h-20 px-4 sm:px-6 lg:px-8 flex items-center justify-between pt-[env(safe-area-inset-top,0px)]"
                         >
                             {/* Left: Rider Avatar Block */}
                             <div className="flex items-center min-w-0 flex-1 mr-3">
@@ -633,7 +638,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                 </button>
                                 {branchAction && <div className="hidden xl:block">{branchAction}</div>}
                             </div>
-                        </header>
+                        </AppTopHeader>
                     ) : (
                         /* Original Header for Admins */
                         <header className="h-20 bg-white/80 backdrop-blur-xl border-b border-accent-brown/5 sticky top-0 z-40 px-4 sm:px-8 lg:px-10 flex items-center justify-between pt-[env(safe-area-inset-top,0px)]">
@@ -785,7 +790,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
         <div className={`min-h-screen flex flex-col ${user?.role === 'rider' ? 'bg-[#FAF9F6]' : 'bg-accent-peach/20'}`}>
             {/* Top Navigation Bar */}
             {!hideHeader && (
-                <nav className="bg-white border-b border-accent-brown/5 shadow-xl shadow-accent-brown/5 fixed top-0 left-0 right-0 z-50 h-18 sm:h-22">
+                <AppTopHeader as="nav" position="fixed" surface="customer" className="h-18 sm:h-22">
                     <div className="max-w-[1920px] mx-auto px-4 sm:px-8 h-full flex items-center justify-between gap-6">
                         {/* Profile Avatar & User Info (or Brand for non-customers) */}
                         {isCustomer ? (
@@ -893,7 +898,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                             </div>
                         </div>
                     </div>
-                </nav>
+                </AppTopHeader>
             )}
 
             <main className={`flex-1 flex flex-col w-full px-2 sm:px-4 lg:px-6 ${hideHeader ? 'pt-6' : 'pt-24 sm:pt-28 lg:pt-30'} pb-24 lg:pb-16`}>

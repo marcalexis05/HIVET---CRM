@@ -504,13 +504,13 @@ function StatusBarManager() {
       let docBg = '#FAF9F6';
 
       if (isDarkHeroPage) {
-        // Hero is 100dvh. Keep status bar #000000 so the dark background image seamlessly flows
-        // edge-to-edge behind the status bar without an artificial solid block.
+        // Hero is 100dvh. Use deep warm-dark so the hero image flows edge-to-edge behind the
+        // status bar. Avoid pure #000 to prevent jarring black PWA splash / overscroll bounce.
         const heroCutoff = Math.max(window.innerHeight - 90, 300);
         const isScrolledPastHero = window.scrollY > heroCutoff;
         if (!isScrolledPastHero) {
-          targetColor = '#000000';
-          docBg = '#000000';
+          targetColor = '#1a0e08';
+          docBg = '#1a0e08';
         } else {
           targetColor = '#FFFFFF';
           docBg = '#FAF9F6';

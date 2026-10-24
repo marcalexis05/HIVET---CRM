@@ -46,18 +46,14 @@ const Catalog = () => {
     return (
         <div className="min-h-screen bg-[#FAF9F6] pb-24 relative font-brand">
             {/* Header / Intro Section */}
-            <div className="container mx-auto px-4 xs:px-6 sm:px-10 lg:px-12 relative z-10 pt-20 sm:pt-28 lg:pt-32 pb-8 sm:pb-12 lg:pb-16">
-                <Link to="/" className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-dark transition-all font-bold text-sm mb-6 sm:mb-8 group">
+            <div className="container mx-auto px-4 xs:px-6 sm:px-10 lg:px-12 relative z-10 pt-6 sm:pt-10 lg:pt-14 pb-4 sm:pb-6">
+                <Link to="/" className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-dark transition-all font-bold text-sm mb-3 sm:mb-4 group">
                     <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                     <span>{MAIN_LANDING_TEXT.catalogPage.backToHome}</span>
                 </Link>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 lg:items-end gap-6 sm:gap-10">
-                    <div className="space-y-4">
-                        <div className="inline-flex items-center gap-2 text-brand-dark text-xs sm:text-sm font-bold uppercase tracking-wider">
-                            <div className="w-8 h-[2px] bg-brand-dark" />
-                            {MAIN_LANDING_TEXT.catalogPage.tag}
-                        </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 lg:items-end gap-3 sm:gap-6">
+                    <div className="space-y-1">
                         <h1 className="text-3xl xs:text-4xl sm:text-5xl lg:text-6xl font-black text-accent-brown tracking-tight leading-[0.95]">
                             {MAIN_LANDING_TEXT.catalogPage.titlePrefix} <br />
                             <span className="text-brand-dark italic font-outfit">{MAIN_LANDING_TEXT.catalogPage.titleHighlight}</span>
@@ -69,73 +65,67 @@ const Catalog = () => {
                 </div>
             </div>
 
-            {/* Filter Architecture */}
-            <div className="container mx-auto px-4 xs:px-6 sm:px-10 lg:px-12 mb-10 sm:mb-14">
-                <div className="bg-white rounded-3xl sm:rounded-[2.5rem] p-4 sm:p-6 shadow-sm border border-accent-brown/10 flex flex-col gap-4">
-                    {/* Search Field */}
-                    <div className="relative flex items-center min-h-[48px] sm:min-h-[52px] bg-[#F7F6F2] border border-accent-brown/15 focus-within:border-brand-dark focus-within:ring-2 focus-within:ring-brand-dark/20 rounded-2xl overflow-hidden transition-all w-full">
-                        <Search className="w-5 h-5 text-accent-brown/40 group-focus-within:text-brand-dark ml-4 mr-3 shrink-0 transition-colors" />
+            {/* Filter Architecture - Strictly 2 Rows */}
+            <div className="container mx-auto px-4 xs:px-6 sm:px-10 lg:px-12 mb-6 sm:mb-8">
+                <div className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 shadow-sm border border-accent-brown/10 flex flex-col gap-3">
+                    {/* Row 1: Search Field */}
+                    <div className="relative flex items-center min-h-[46px] sm:min-h-[50px] bg-[#F7F6F2] border border-accent-brown/15 focus-within:border-brand-dark focus-within:ring-2 focus-within:ring-brand-dark/20 rounded-xl overflow-hidden transition-all w-full">
+                        <Search className="w-5 h-5 text-accent-brown/40 group-focus-within:text-brand-dark ml-3.5 mr-2.5 shrink-0 transition-colors" />
                         <input
                             type="text"
                             placeholder={MAIN_LANDING_TEXT.catalogPage.searchPlaceholder}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-transparent py-3 pr-4 text-accent-brown font-bold text-sm sm:text-base placeholder:text-slate-500 outline-none leading-normal"
+                            className="w-full bg-transparent py-2.5 pr-3 text-accent-brown font-bold text-sm sm:text-base placeholder:text-slate-500 outline-none leading-normal"
                         />
                         {searchQuery && (
                             <button
                                 type="button"
                                 onClick={() => setSearchQuery('')}
-                                className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-200 flex items-center justify-center text-slate-500 mr-2 shrink-0 cursor-pointer"
+                                className="w-7 h-7 rounded-full bg-slate-200/60 hover:bg-slate-200 flex items-center justify-center text-slate-500 mr-2 shrink-0 cursor-pointer"
                                 aria-label="Clear search"
                             >
-                                <X className="w-4 h-4" />
+                                <X className="w-3.5 h-3.5" />
                             </button>
                         )}
                     </div>
 
-                    {/* Filter Strips */}
-                    <div className="flex flex-col lg:flex-row lg:items-center gap-3 sm:gap-4 w-full pt-1">
-                        {/* Pet Filter Strip */}
-                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 shrink-0">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1 shrink-0">Pet:</span>
-                            {(['All', 'Cats', 'Dogs'] as const).map((pet) => (
-                                <button
-                                    key={pet}
-                                    onClick={() => setPetFilter(pet)}
-                                    className={`min-h-[40px] px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
-                                        petFilter === pet
-                                            ? 'bg-brand-dark text-white shadow-md shadow-brand-dark/20'
-                                            : 'bg-[#F7F6F2] hover:bg-slate-200/60 text-slate-700 border border-accent-brown/10'
-                                    }`}
-                                >
-                                    {pet === 'All' ? 'All Pets' : pet}
-                                </button>
-                            ))}
-                        </div>
+                    {/* Row 2: Filter Strips (Single scrolling row) */}
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 w-full">
+                        <span className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0">Pet:</span>
+                        {(['All', 'Cats', 'Dogs'] as const).map((pet) => (
+                            <button
+                                key={pet}
+                                onClick={() => setPetFilter(pet)}
+                                className={`min-h-[36px] px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+                                    petFilter === pet
+                                        ? 'bg-brand-dark text-white shadow-sm shadow-brand-dark/20'
+                                        : 'bg-[#F7F6F2] hover:bg-slate-200/60 text-slate-700 border border-accent-brown/10'
+                                }`}
+                            >
+                                {pet === 'All' ? 'All Pets' : pet}
+                            </button>
+                        ))}
 
-                        <div className="hidden lg:block w-[1px] h-6 bg-accent-brown/15 shrink-0" />
+                        <div className="w-[1px] h-5 bg-accent-brown/15 shrink-0 mx-1" />
 
-                        {/* Category Filter Strip */}
-                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1 shrink-0">Category:</span>
-                            {(['All', 'Food', 'Accessories', 'Vitamins'] as const).map((type) => (
-                                <button
-                                    key={type}
-                                    onClick={() => {
-                                        setTypeFilter(type);
-                                        setSearchParams(type === 'All' ? {} : { type });
-                                    }}
-                                    className={`min-h-[40px] px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
-                                        typeFilter === type
-                                            ? 'bg-brand-dark text-white shadow-md shadow-brand-dark/20'
-                                            : 'bg-[#F7F6F2] hover:bg-slate-200/60 text-slate-700 border border-accent-brown/10'
-                                    }`}
-                                >
-                                    {type === 'All' ? 'All Categories' : type}
-                                </button>
-                            ))}
-                        </div>
+                        <span className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0">Category:</span>
+                        {(['All', 'Food', 'Accessories', 'Vitamins'] as const).map((type) => (
+                            <button
+                                key={type}
+                                onClick={() => {
+                                    setTypeFilter(type);
+                                    setSearchParams(type === 'All' ? {} : { type });
+                                }}
+                                className={`min-h-[36px] px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all shrink-0 cursor-pointer ${
+                                    typeFilter === type
+                                        ? 'bg-brand-dark text-white shadow-sm shadow-brand-dark/20'
+                                        : 'bg-[#F7F6F2] hover:bg-slate-200/60 text-slate-700 border border-accent-brown/10'
+                                }`}
+                            >
+                                {type === 'All' ? 'All Categories' : type}
+                            </button>
+                        ))}
                     </div>
                 </div>
 

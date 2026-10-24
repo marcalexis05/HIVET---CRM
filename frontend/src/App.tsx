@@ -212,12 +212,12 @@ function Navigation() {
   };
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 pt-[env(safe-area-inset-top,0px)] ${isTransparent ? 'bg-transparent pb-3 sm:pb-4' : 'bg-white border-b border-accent-brown/5 shadow-[0_20px_50px_rgba(45,34,27,0.1)] rounded-b-[2rem] sm:rounded-b-[2.5rem]'}`}>
+    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 pt-[env(safe-area-inset-top,0px)] ${isTransparent ? 'bg-gradient-to-b from-black/60 via-black/25 to-transparent pb-3 sm:pb-4' : 'bg-white border-b border-accent-brown/5 shadow-[0_20px_50px_rgba(45,34,27,0.1)] rounded-b-[2rem] sm:rounded-b-[2.5rem]'}`}>
       <div className="w-full transition-all duration-500 flex items-center justify-between px-6 sm:px-12 h-16 sm:h-20">
         <div className="flex-1 flex justify-start">
-          <Link to="/" className="flex items-center gap-2 xs:gap-3 group" onClick={handleHomeClick}>
-            <div className={`w-10 h-10 xs:w-12 xs:h-12 flex items-center justify-center -ml-1 group-hover:scale-110 transition-transform ${isTransparent ? 'brightness-0 invert' : ''}`}>
-              <Logo className="w-full h-full drop-shadow-sm" />
+          <Link to="/" className="flex items-center gap-2.5 xs:gap-3.5 group" onClick={handleHomeClick}>
+            <div className="w-10 h-10 xs:w-11 xs:h-11 bg-white rounded-2xl shadow-md shadow-black/15 flex items-center justify-center p-1.5 border border-accent-brown/10 group-hover:scale-105 transition-transform shrink-0">
+              <Logo className="w-full h-full" />
             </div>
             <span className={`text-lg xs:text-xl font-black tracking-tighter transition-colors ${textColor}`}>Hi-Vet</span>
           </Link>
@@ -504,13 +504,13 @@ function StatusBarManager() {
       let docBg = '#FAF9F6';
 
       if (isDarkHeroPage) {
-        // Hero is 100dvh. Use deep warm-dark so the hero image flows edge-to-edge behind the
-        // status bar. Avoid pure #000 to prevent jarring black PWA splash / overscroll bounce.
+        // Hero is 100dvh. Allow the hero image to flow seamlessly edge-to-edge behind the status bar.
+        // Do not force an opaque theme-color on the hero so the status bar remains transparent/translucent.
         const heroCutoff = Math.max(window.innerHeight - 90, 300);
         const isScrolledPastHero = window.scrollY > heroCutoff;
         if (!isScrolledPastHero) {
-          targetColor = '#1a0e08';
-          docBg = '#1a0e08';
+          targetColor = '';
+          docBg = '#000000';
         } else {
           targetColor = '#FFFFFF';
           docBg = '#FAF9F6';
@@ -543,13 +543,20 @@ function StatusBarManager() {
 
       // Update meta theme-color immediately
       let meta = document.querySelector('meta[name="theme-color"]');
-      if (!meta) {
-        meta = document.createElement('meta');
-        meta.setAttribute('name', 'theme-color');
-        document.head.appendChild(meta);
-      }
-      if (meta.getAttribute('content') !== targetColor) {
-        meta.setAttribute('content', targetColor);
+      if (!targetColor) {
+        // On landing hero, remove meta theme-color to keep status bar transparent/translucent
+        if (meta) {
+          meta.remove();
+        }
+      } else {
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.setAttribute('name', 'theme-color');
+          document.head.appendChild(meta);
+        }
+        if (meta.getAttribute('content') !== targetColor) {
+          meta.setAttribute('content', targetColor);
+        }
       }
 
       // Update html and body backgrounds to match so overscroll / pull-to-refresh is seamless

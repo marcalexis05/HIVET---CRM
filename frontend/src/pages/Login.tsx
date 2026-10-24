@@ -92,13 +92,13 @@ const Login = () => {
 
             {/* Right Column: Full Screen Form */}
             <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center bg-white p-6 sm:p-10 relative overflow-hidden">
-                <div className="lg:hidden absolute top-8 left-8 sm:left-12">
+                <div className="lg:hidden absolute top-[max(1.5rem,calc(env(safe-area-inset-top,0px)+0.75rem))] left-8 sm:left-12">
                     <Link to="/" className="inline-flex items-center gap-2.5 hover:opacity-80 transition-opacity">
                         <Logo className="w-10 h-10 sm:w-11 sm:h-11" />
                         <span className="text-2xl sm:text-3xl font-black text-accent-brown tracking-tight">Hi-Vet</span>
                     </Link>
                 </div>
-                <div className="w-full max-w-lg flex flex-col justify-center">
+                <div className="w-full max-w-lg flex flex-col justify-center pt-16 sm:pt-0">
                     <div className="mb-8 flex items-center justify-between">
                         <div className="flex gap-4">
                             <div className="h-1.5 w-16 bg-brand-dark rounded-full shadow-[0_0_20px_rgba(242,107,33,0.4)]" />

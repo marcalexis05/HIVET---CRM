@@ -253,8 +253,8 @@ const ForgotPassword = () => {
 
             {/* Right Column: Full Screen Flow */}
             <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center bg-white p-6 sm:p-10 relative overflow-hidden">
-                <div className="lg:hidden absolute top-8 left-12"><Logo className="w-12 h-12" /></div>
-                <div className="w-full max-w-lg flex flex-col justify-center">
+                <div className="lg:hidden absolute top-[max(1.5rem,calc(env(safe-area-inset-top,0px)+0.75rem))] left-8 sm:left-12"><Logo className="w-12 h-12" /></div>
+                <div className="w-full max-w-lg flex flex-col justify-center pt-16 sm:pt-0">
                     <div className="mb-10 flex items-center justify-between">
                         <div className="flex gap-4">
                             {[1, 2, 3].map(i => <div key={i} className={`h-1.5 rounded-full transition-all duration-700 ${step >= i ? 'w-16 bg-brand-dark shadow-[0_0_20px_rgba(242,107,33,0.4)]' : 'w-4 bg-accent-brown/10'}`} />)}

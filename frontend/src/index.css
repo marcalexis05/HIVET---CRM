@@ -55,12 +55,6 @@ body,
   margin: 0;
 }
 
-/* Pages with no top bar of their own (login, sign up, store): keep content below the
-   status bar while the page background still continues behind it. */
-body.edge-safe-top #root {
-  padding-top: env(safe-area-inset-top, 0px);
-}
-
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar {
     display: none;

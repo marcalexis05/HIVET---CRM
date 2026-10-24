@@ -74,11 +74,20 @@ function Navigation() {
 
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50);
+      const isDarkHeroPage = ['/', '/for-clinics', '/for-riders'].includes(location.pathname);
+      // Stay transparent while anywhere inside the full-screen cinematic hero (100dvh).
+      // Only transition to solid white once the hero scrolls out of view.
+      const threshold = isDarkHeroPage ? Math.max(window.innerHeight - 90, 300) : 30;
+      setIsScrolled(window.scrollY > threshold);
     };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [location.pathname]);
 
   // Back button, Escape, Resize, and Body Scroll Lock
   useEffect(() => {
@@ -495,7 +504,10 @@ function StatusBarManager() {
       let docBg = '#FAF9F6';
 
       if (isDarkHeroPage) {
-        const isScrolledPastHero = window.scrollY > 50;
+        // Hero is 100dvh. Keep status bar #000000 so the dark background image seamlessly flows
+        // edge-to-edge behind the status bar without an artificial solid block.
+        const heroCutoff = Math.max(window.innerHeight - 90, 300);
+        const isScrolledPastHero = window.scrollY > heroCutoff;
         if (!isScrolledPastHero) {
           targetColor = '#000000';
           docBg = '#000000';
@@ -517,12 +529,11 @@ function StatusBarManager() {
         targetColor = '#FFFFFF';
         docBg = '#FAF9F6';
       } else if (location.pathname.startsWith('/dashboard/customer')) {
-        // Edge-to-edge: status bar uses the exact rendered Customer page color
-        // (bg-accent-peach/20 over #FAF9F6 = #FBF7EF), so the page flows behind it.
+        // Customer page background is bg-accent-peach/20 over #FAF9F6 = #FBF7EF
         targetColor = '#FBF7EF';
         docBg = '#FAF9F6';
       } else if (location.pathname.startsWith('/dashboard')) {
-        // Edge-to-edge: Clinic Business and Rider pages are #FAF9F6 behind the transparent header.
+        // Clinic Business and Rider page background is #FAF9F6
         targetColor = '#FAF9F6';
         docBg = '#FAF9F6';
       } else {
@@ -530,16 +541,7 @@ function StatusBarManager() {
         docBg = '#FAF9F6';
       }
 
-      // 0. Pages without their own top bar get a safe top padding, so the clock and
-      //    battery never sit on top of text while the page color still runs behind them.
-      const needsSafeTop =
-        location.pathname === '/catalog' ||
-        location.pathname.startsWith('/login') ||
-        location.pathname.startsWith('/register') ||
-        location.pathname === '/forgot-password';
-      document.body.classList.toggle('edge-safe-top', needsSafeTop);
-
-      // 1. Update meta theme-color immediately
+      // Update meta theme-color immediately
       let meta = document.querySelector('meta[name="theme-color"]');
       if (!meta) {
         meta = document.createElement('meta');
@@ -550,7 +552,7 @@ function StatusBarManager() {
         meta.setAttribute('content', targetColor);
       }
 
-      // 2. Update html and body backgrounds to prevent overscroll flash
+      // Update html and body backgrounds to match so overscroll / pull-to-refresh is seamless
       if (document.documentElement.style.backgroundColor !== docBg) {
         document.documentElement.style.backgroundColor = docBg;
       }
@@ -561,10 +563,12 @@ function StatusBarManager() {
 
     updateStatus();
 
-    if (isDarkHeroPage) {
-      window.addEventListener('scroll', updateStatus, { passive: true });
-      return () => window.removeEventListener('scroll', updateStatus);
-    }
+    window.addEventListener('scroll', updateStatus, { passive: true });
+    window.addEventListener('resize', updateStatus);
+    return () => {
+      window.removeEventListener('scroll', updateStatus);
+      window.removeEventListener('resize', updateStatus);
+    };
   }, [location.pathname]);
 
   return null;

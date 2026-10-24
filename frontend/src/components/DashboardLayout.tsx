@@ -587,15 +587,6 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                     <QrCode className="w-5 h-5" />
                                 </button>
 
-                                {/* Install App & QR Code */}
-                                <button
-                                    onClick={() => setShowPwaModal(true)}
-                                    title="Install App & Scan QR Code"
-                                    aria-label="Install App / Scan QR Code"
-                                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-brand/10 hover:bg-brand/20 text-brand flex items-center justify-center transition-all cursor-pointer shrink-0"
-                                >
-                                    <QrCode className="w-5 h-5" />
-                                </button>
 
                                 {/* Desktop Clinic Avatar Block (Next to Bell) */}
                                 <div className="hidden lg:flex items-center border-l border-accent-brown/10 pl-3 xl:pl-4">

@@ -589,7 +589,7 @@ const Register = () => {
 
             {/* Right Column: Full Screen Form */}
             <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center bg-white px-6 py-4 sm:px-10 sm:py-6 relative overflow-y-auto no-scrollbar">
-                <div className="lg:hidden absolute top-4 left-6">
+                <div className="lg:hidden absolute top-[max(1rem,calc(env(safe-area-inset-top,0px)+0.5rem))] left-6 sm:left-10">
                     <Link to="/" className="inline-flex items-center gap-2.5 hover:opacity-80 transition-opacity">
                         <Logo className="w-9 h-9 sm:w-10 sm:h-10" />
                         <span className="text-xl sm:text-2xl font-black text-accent-brown tracking-tight">Hi-Vet</span>

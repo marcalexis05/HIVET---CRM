@@ -46,6 +46,21 @@ body {
   background-color: #000000;
 }
 
+/* Edge-to-edge: the document always fills the whole glass (behind the status bar and
+   gesture bar, with viewport-fit=cover) so page colors run continuously to every edge. */
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+/* Pages with no top bar of their own (login, sign up, store): keep content below the
+   status bar while the page background still continues behind it. */
+body.edge-safe-top #root {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar {
     display: none;

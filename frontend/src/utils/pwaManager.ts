@@ -115,11 +115,9 @@ export function setPwaManifestForRole(role: PwaRole) {
     link.setAttribute('href', config.manifest);
   }
 
-  // Update theme-color meta tag
-  let metaTheme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  if (metaTheme) {
-    metaTheme.setAttribute('content', config.themeColor);
-  }
+  // NOTE: theme-color (the Android status bar color) is owned by StatusBarManager in App.tsx,
+  // which matches it to the exact top color of the current screen for an edge-to-edge look.
+  // It is intentionally not changed here so the two never fight each other.
 
   // Ensure title is strictly "Hi-Vet" in standalone window or when ?pwa= is active
   if (typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || window.location.search.includes('pwa'))) {

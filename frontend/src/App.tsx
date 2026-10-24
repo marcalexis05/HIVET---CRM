@@ -513,13 +513,31 @@ function StatusBarManager() {
       ) {
         targetColor = '#FFFFFF';
         docBg = '#FFFFFF';
-      } else if (location.pathname.startsWith('/dashboard')) {
+      } else if (location.pathname.startsWith('/dashboard/admin')) {
         targetColor = '#FFFFFF';
+        docBg = '#FAF9F6';
+      } else if (location.pathname.startsWith('/dashboard/customer')) {
+        // Edge-to-edge: status bar uses the exact rendered Customer page color
+        // (bg-accent-peach/20 over #FAF9F6 = #FBF7EF), so the page flows behind it.
+        targetColor = '#FBF7EF';
+        docBg = '#FAF9F6';
+      } else if (location.pathname.startsWith('/dashboard')) {
+        // Edge-to-edge: Clinic Business and Rider pages are #FAF9F6 behind the transparent header.
+        targetColor = '#FAF9F6';
         docBg = '#FAF9F6';
       } else {
         targetColor = '#FAF9F6';
         docBg = '#FAF9F6';
       }
+
+      // 0. Pages without their own top bar get a safe top padding, so the clock and
+      //    battery never sit on top of text while the page color still runs behind them.
+      const needsSafeTop =
+        location.pathname === '/catalog' ||
+        location.pathname.startsWith('/login') ||
+        location.pathname.startsWith('/register') ||
+        location.pathname === '/forgot-password';
+      document.body.classList.toggle('edge-safe-top', needsSafeTop);
 
       // 1. Update meta theme-color immediately
       let meta = document.querySelector('meta[name="theme-color"]');

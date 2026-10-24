@@ -532,7 +532,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                             role="banner"
                             position="sticky"
                             surface="portal"
-                            className="h-18 sm:h-20 px-4 sm:px-6 lg:px-8 flex items-center justify-between pt-[env(safe-area-inset-top,0px)]"
+                            className="h-[calc(4.5rem+env(safe-area-inset-top,0px))] sm:h-[calc(5rem+env(safe-area-inset-top,0px))] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] sm:pl-[max(1.5rem,env(safe-area-inset-left,0px))] sm:pr-[max(1.5rem,env(safe-area-inset-right,0px))] lg:pl-8 lg:pr-8 flex items-center justify-between pt-[env(safe-area-inset-top,0px)]"
                         >
                             {/* Mobile / Tablet (< 1024px): Clinic Avatar Block on the Left */}
                             <div className="flex lg:hidden items-center min-w-0 flex-1 mr-2">
@@ -611,7 +611,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                             role="banner"
                             position="sticky"
                             surface="portal"
-                            className="h-18 sm:h-20 px-4 sm:px-6 lg:px-8 flex items-center justify-between pt-[env(safe-area-inset-top,0px)]"
+                            className="h-[calc(4.5rem+env(safe-area-inset-top,0px))] sm:h-[calc(5rem+env(safe-area-inset-top,0px))] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] sm:pl-[max(1.5rem,env(safe-area-inset-left,0px))] sm:pr-[max(1.5rem,env(safe-area-inset-right,0px))] lg:pl-8 lg:pr-8 flex items-center justify-between pt-[env(safe-area-inset-top,0px)]"
                         >
                             {/* Left: Rider Avatar Block */}
                             <div className="flex items-center min-w-0 flex-1 mr-3">
@@ -692,7 +692,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                             </div>
                         </header>
                     ))}
-                    <main className={`flex-1 p-4 sm:p-6 lg:p-10 w-full overflow-x-hidden ${user?.role === 'business' ? 'pb-28 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px)+1.5rem)] md:pb-6 lg:pb-10' : ''}`}>
+                    <main className={`flex-1 p-4 sm:p-6 lg:p-10 w-full overflow-x-hidden ${hideHeader ? 'pt-[calc(1rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] lg:pt-10' : ''} ${user?.role === 'business' ? 'pb-28 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px)+1.5rem)] md:pb-6 lg:pb-10' : ''}`}>
                         <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="w-full">
                             {children}
                         </motion.div>
@@ -790,7 +790,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
         <div className={`min-h-screen flex flex-col ${user?.role === 'rider' ? 'bg-[#FAF9F6]' : 'bg-accent-peach/20'}`}>
             {/* Top Navigation Bar */}
             {!hideHeader && (
-                <AppTopHeader as="nav" position="fixed" surface="customer" className="h-18 sm:h-22">
+                <AppTopHeader as="nav" position="fixed" surface="customer" className="h-[calc(4.5rem+env(safe-area-inset-top,0px))] sm:h-[calc(5.5rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)]">
                     <div className="max-w-[1920px] mx-auto px-4 sm:px-8 h-full flex items-center justify-between gap-6">
                         {/* Profile Avatar & User Info (or Brand for non-customers) */}
                         {isCustomer ? (
@@ -901,7 +901,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                 </AppTopHeader>
             )}
 
-            <main className={`flex-1 flex flex-col w-full px-2 sm:px-4 lg:px-6 ${hideHeader ? 'pt-6' : 'pt-24 sm:pt-28 lg:pt-30'} pb-24 lg:pb-16`}>
+            <main className={`flex-1 flex flex-col w-full px-2 sm:px-4 lg:px-6 ${hideHeader ? 'pt-[calc(1.5rem+env(safe-area-inset-top,0px))]' : 'pt-[calc(6rem+env(safe-area-inset-top,0px))] sm:pt-[calc(7rem+env(safe-area-inset-top,0px))] lg:pt-30'} pb-24 lg:pb-16`}>
                 {title && (
                     <div className="mb-8 sm:mb-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                         <div className="flex flex-col gap-1">

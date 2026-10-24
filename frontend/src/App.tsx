@@ -504,12 +504,12 @@ function StatusBarManager() {
       let docBg = '#FAF9F6';
 
       if (isDarkHeroPage) {
-        // Hero is 100dvh. Allow the hero image to flow seamlessly edge-to-edge behind the status bar.
-        // Do not force an opaque theme-color on the hero so the status bar remains transparent/translucent.
+        // Hero is 100dvh. Compliment the dark background color with #000000 on hero,
+        // and transition to #FFFFFF to compliment the white sticky navbar once scrolled.
         const heroCutoff = Math.max(window.innerHeight - 90, 300);
         const isScrolledPastHero = window.scrollY > heroCutoff;
         if (!isScrolledPastHero) {
-          targetColor = '';
+          targetColor = '#000000';
           docBg = '#000000';
         } else {
           targetColor = '#FFFFFF';

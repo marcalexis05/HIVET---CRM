@@ -1,0 +1,91 @@
+.admin-shell {
+  background: #f6f7f9;
+}
+
+.admin-sidebar {
+  box-shadow: none;
+  border-color: #e5e7eb;
+}
+
+.admin-main {
+  padding: 24px;
+}
+
+.admin-sidebar .admin-nav-item {
+  min-height: 46px;
+  padding-block: 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.admin-sidebar .admin-nav-item[aria-current="page"] {
+  margin-left: 0;
+  background: #fff1e6;
+  color: #c4510b;
+  box-shadow: none;
+}
+
+.admin-sidebar .admin-nav-item[aria-current="page"] svg {
+  color: #e85d04;
+}
+
+.admin-chart-card {
+  min-width: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fff;
+  padding: 20px;
+}
+
+.admin-chart-card h3 {
+  color: #1e293b;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.admin-chart-description {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.admin-stat-icon {
+  display: inline-flex;
+  height: 40px;
+  width: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.admin-stat-icon-orange { background: #fff2e8; color: #e85d04; }
+.admin-stat-icon-teal { background: #e9f7f4; color: #0f857b; }
+.admin-stat-icon-violet { background: #f1efff; color: #7561d1; }
+.admin-stat-icon-slate { background: #f1f5f9; color: #64748b; }
+
+.admin-accounts-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: calc(100% - 32px);
+  max-width: 720px;
+  max-height: 85dvh;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 0;
+  background: #fff;
+  color: #1e293b;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 15%);
+}
+
+.admin-accounts-dialog::backdrop {
+  background: rgb(15 23 42 / 40%);
+}
+
+@media (max-width: 639px) {
+  .admin-main { padding: 16px; }
+  .admin-chart-card { padding: 16px; }
+}

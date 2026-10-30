@@ -36,7 +36,7 @@ from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from dotenv import load_dotenv
 from sms_service import send_sms, mask_phone
 from sms_templates import format_customer_forgot_password_sms, format_customer_registration_sms
@@ -44,9 +44,10 @@ from email_templates import send_forgot_password_email
 from jose import JWTError, jwt
 from passlib.hash import pbkdf2_sha256
 
-from sqlalchemy import create_engine, Column, String, Text, DateTime, text, Integer, Boolean, Float, ForeignKey, func, inspect, or_, and_
+from sqlalchemy import create_engine, Column, String, Text, DateTime, text, Integer, Boolean, Float, ForeignKey, UniqueConstraint, func, inspect, or_, and_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from account_ids import create_id_registry, install_id_assignment, backfill_account_ids, read_account_id
 from dateutil.relativedelta import relativedelta
 
 from fastapi.responses import JSONResponse
@@ -556,6 +557,18 @@ class UserVoucher(Base):
     is_used     = Column(Boolean, default=False)
     redeemed_at = Column(DateTime, default=datetime.utcnow)
 
+class PetProfile(Base):
+    __tablename__ = "pet_profiles"
+    __table_args__ = (UniqueConstraint("customer_id", "name_key", name="uq_pet_profile_customer_name"),)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(Integer, ForeignKey("customer.id"), nullable=False, index=True)
+    name = Column(String(80), nullable=False)
+    name_key = Column(String(160), nullable=False)
+    pet_type = Column(String(30), nullable=False)
+    breed = Column(String(100), nullable=False, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class Reservation(Base):
     __tablename__ = "reservations"
     id                  = Column(Integer, primary_key=True, autoincrement=True)
@@ -671,8 +684,18 @@ class ReturnRequest(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+# Assign public IDs separately so database keys and existing links stay stable.
+public_id_registry = create_id_registry(Base.metadata)
+install_id_assignment(BusinessProfile, public_id_registry, 'CL')
+install_id_assignment(RiderProfile, public_id_registry, 'RD')
+
 # Recreate the schema
 Base.metadata.create_all(bind=engine)
+backfill_account_ids(engine, public_id_registry, [(BusinessProfile.__table__, 'CL'), (RiderProfile.__table__, 'RD')])
+
+
+def account_public_id(db, prefix, account_id):
+    return read_account_id(db, public_id_registry, prefix, account_id)
 
 # Auto-migrate orders table for PostgreSQL
 inspector = inspect(engine)
@@ -5890,6 +5913,7 @@ async def get_compliance_list(
     for p in profiles:
         result.append({
             "id": p.id,
+            "public_id": account_public_id(db, "CL", p.id),
             "clinic_name": p.clinic_name or "Unknown",
             "owner_name": p.owner_full_name or "Unknown",
             "email": p.email or "",
@@ -6305,6 +6329,7 @@ async def get_riders_compliance(
             created_at = (c.created_at.isoformat() if c and c.created_at else "") or ""
         result.append({
             "id": prof.id,
+            "public_id": account_public_id(db, "RD", prof.id),
             "name": display_name,
             "email": email,
             "phone": phone,
@@ -7119,10 +7144,10 @@ async def get_customer_dashboard_stats(request: Request, db: Session = Depends(g
     else:
         insight_msg = "Start shopping to earn loyalty points and unlock exclusive member-only promos."
 
-    # Pets Data (Unique pet names and their next reservation)
+    # Include saved profiles even before their first appointment.
     pets_data = []
-    unique_pets = db.query(Reservation.pet_name).filter(Reservation.customer_id == customer_id).distinct().all()
-    for (pname,) in unique_pets:
+    for pet in customer_pet_profiles(db, customer_id):
+        pname = pet["name"]
         next_res = db.query(Reservation.date).filter(
             Reservation.customer_id == customer_id,
             Reservation.pet_name == pname,
@@ -7133,13 +7158,11 @@ async def get_customer_dashboard_stats(request: Request, db: Session = Depends(g
         pets_data.append({
             "name": pname,
             "next": next_res[0] if next_res else "None",
-            "icon": "🐶" if "dog" in pname.lower() else "🐱" if "cat" in pname.lower() else "🐾"
+            "icon": "🐶" if pet["type"].lower() == "dog" else "🐱" if pet["type"].lower() == "cat" else "🐾"
         })
 
     # Sort pets by next reservation date (move "None" to end)
     pets_data.sort(key=lambda x: (x['next'] == "None", x['next']))
-    # Only return top 3
-    pets_data = pets_data[:3]
 
     return {
         "loyalty": {
@@ -7169,21 +7192,72 @@ async def get_customer_dashboard_stats(request: Request, db: Session = Depends(g
         }
     }
     
+class PetProfileCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    type: str = Field(min_length=1, max_length=30)
+    breed: str = Field(default="", max_length=100)
+
+    @field_validator("name", "type", "breed", mode="before")
+    @classmethod
+    def strip_text(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, value):
+        allowed = {name.lower(): name for name in ("Dog", "Cat", "Bird", "Rabbit", "Other")}
+        if value.lower() not in allowed:
+            raise ValueError("Choose a valid pet type.")
+        return allowed[value.lower()]
+
+
+def customer_pet_profiles(db: Session, customer_id: int):
+    pets = {}
+    for pet in db.query(PetProfile).filter(PetProfile.customer_id == customer_id).order_by(PetProfile.id).all():
+        pets[pet.name_key] = {"name": pet.name, "type": pet.pet_type, "breed": pet.breed}
+    historical = db.query(Reservation.pet_name, Reservation.pet_type, Reservation.pet_breed).filter(
+        Reservation.customer_id == customer_id
+    ).distinct().all()
+    for name, pet_type, breed in historical:
+        name = (name or "").strip()
+        if name:
+            pets.setdefault(name.casefold(), {"name": name, "type": pet_type or "Dog", "breed": breed or ""})
+    return list(pets.values())
+
+
+def pet_profile_customer_id(db: Session, current_user: dict):
+    if current_user.get("role") not in ("customer", "user"):
+        raise HTTPException(status_code=403, detail="Pet profiles are available to pet owners.")
+    try:
+        customer_id = int(current_user["sub"])
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if not db.query(Customer).filter(Customer.id == customer_id, Customer.is_deleted == False).first():
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return customer_id
+
+
 @app.get("/api/customers/me/pets")
 async def get_my_pets(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    customer_id = int(current_user["sub"])
-    unique_pets = db.query(Reservation.pet_name, Reservation.pet_type, Reservation.pet_breed)\
-        .filter(Reservation.customer_id == customer_id)\
-        .distinct().all()
-    
-    pets = []
-    for pname, ptype, pbreed in unique_pets:
-        pets.append({
-            "name": pname,
-            "type": ptype or "Dog",
-            "breed": pbreed or ""
-        })
-    return {"pets": pets}
+    return {"pets": customer_pet_profiles(db, pet_profile_customer_id(db, current_user))}
+
+
+@app.post("/api/customers/me/pets", status_code=201)
+async def create_my_pet(body: PetProfileCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    customer_id = pet_profile_customer_id(db, current_user)
+    if contains_profanity(body.name) or contains_profanity(body.breed):
+        raise HTTPException(status_code=422, detail="Please use an appropriate pet name and breed.")
+    if any(pet["name"].casefold() == body.name.casefold() for pet in customer_pet_profiles(db, customer_id)):
+        raise HTTPException(status_code=409, detail="A pet with this name is already in your family.")
+    pet = PetProfile(customer_id=customer_id, name=body.name, name_key=body.name.casefold(), pet_type=body.type, breed=body.breed)
+    try:
+        db.add(pet)
+        db.commit()
+        db.refresh(pet)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="A pet with this name is already in your family.")
+    return {"pet": {"name": pet.name, "type": pet.pet_type, "breed": pet.breed}}
 
 class PasswordUpdate(BaseModel):
     current_password: Optional[str] = None
@@ -9413,6 +9487,7 @@ async def get_admin_users(request: Request, db: Session = Depends(get_db)):
             
         results.append({
             "id": f"RD-{r.id:04d}",
+            "public_id": account_public_id(db, "RD", r.id),
             "name": r.name or r.first_name or r.email.split('@')[0],
             "email": r.email,
             "role": "Rider",
@@ -9433,6 +9508,7 @@ async def get_admin_users(request: Request, db: Session = Depends(get_db)):
             last_active_str = "Just now" if (datetime.utcnow() - last_active_dt).total_seconds() < 3600 else f"{int((datetime.utcnow() - last_active_dt).total_seconds() // 3600)}h ago"
         results.append({
             "id": f"CL-{b.id:04d}",
+            "public_id": account_public_id(db, "CL", b.id),
             "name": b.owner_full_name or b.clinic_name or b.email.split('@')[0],
             "email": b.email,
             "role": "Partner",
@@ -9492,6 +9568,7 @@ async def get_admin_riders(request: Request, db: Session = Depends(get_db)):
     for r in riders:
         results.append({
             "id": r.id,
+            "public_id": account_public_id(db, "RD", r.id),
             "name": r.name or r.first_name or "Rider",
             "email": r.email,
             "phone": r.phone,
@@ -9649,7 +9726,7 @@ async def get_dashboard_stats(request: Request, db: Session = Depends(get_db)):
         # Updated prefix for customers to CST for accuracy
         prefix = "CL" if hasattr(u, 'clinic_name') else "RD" if hasattr(u, 'vehicle_type') else "CST"
         return {
-            "id": f"{prefix}-{u.id:04d}",
+            "id": account_public_id(db, prefix, u.id) if prefix in ("CL", "RD") else f"{prefix}-{u.id:04d}",
             "name": name,
             "email": u.email,
             "joined": u.created_at.strftime("%b %d, %Y")
@@ -9807,6 +9884,7 @@ async def get_admin_businesses(
     for b in businesses:
         results.append({
             "id": f"CL-{b.id:04d}",
+            "public_id": account_public_id(db, "CL", b.id),
             "db_id": b.id,
             "name": b.clinic_name or b.email.split("@")[0],
             "owner": b.owner_full_name or "N/A",

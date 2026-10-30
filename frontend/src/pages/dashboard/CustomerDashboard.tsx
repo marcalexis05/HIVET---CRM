@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import LoyaltyAnimation from '../../components/LoyaltyAnimation';
+import { AddPetDialog } from '../../components/AddPetDialog';
 import { toTitleCase, toSentenceCase, formatName } from '../../utils/textFormatters';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -218,6 +219,7 @@ const CustomerDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [productsLoading, setProductsLoading] = useState(true);
     const [currentSlide, setCurrentSlide] = useState(0);
+    const [showAddPet, setShowAddPet] = useState(false);
 
     const firstName = user?.name?.split(' ')[0] ?? 'Partner';
 
@@ -412,6 +414,7 @@ const CustomerDashboard = () => {
                                 <button 
                                     type="button"
                                     aria-label="Add new pet"
+                                    onClick={() => setShowAddPet(true)}
                                     className="shrink-0 snap-start min-h-[64px] w-12 md:w-full border-2 border-dashed border-accent-brown/10 rounded-2xl flex items-center justify-center text-accent-brown/40 hover:text-brand hover:border-brand transition-all hover:bg-brand/5 focus:outline-none focus:ring-2 focus:ring-brand/30"
                                 >
                                     <Plus className="w-5 h-5" />
@@ -754,6 +757,19 @@ const CustomerDashboard = () => {
                 </motion.div>
 
             </div>
+            <AddPetDialog
+                open={showAddPet}
+                token={user?.token}
+                onClose={() => setShowAddPet(false)}
+                onAdded={pet => setStats(current => current ? {
+                    ...current,
+                    pets: [...current.pets, {
+                        name: pet.name,
+                        next: 'None',
+                        icon: pet.type === 'Dog' ? '🐶' : pet.type === 'Cat' ? '🐱' : '🐾'
+                    }]
+                } : current)}
+            />
         </DashboardLayout>
     );
 };

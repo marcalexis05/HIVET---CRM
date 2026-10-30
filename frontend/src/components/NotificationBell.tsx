@@ -130,7 +130,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
             <AnimatePresence>
                 {isOpen && (
                     <>
-                        {/* Backdrop: Plain light dim, <= 40% dark, with NO blur */}
+                        {/* Transparent click-away area keeps the page bright. */}
                         <motion.div
                             initial={shouldReduceMotion ? false : { opacity: 0 }}
                             animate={{ opacity: 1 }}
@@ -140,7 +140,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
                                 setIsOpen(false);
                                 bellButtonRef.current?.focus();
                             }}
-                            className="fixed inset-0 bg-black/40 z-[9990] cursor-pointer"
+                            className="fixed inset-0 bg-transparent z-[9990] cursor-pointer"
                             aria-hidden="true"
                         />
 

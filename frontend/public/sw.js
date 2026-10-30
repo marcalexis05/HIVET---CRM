@@ -1,9 +1,16 @@
 // Hi-Vet Multi-Portal Progressive Web App Service Worker
-const CACHE_NAME = 'hivet-pwa-v4';
+const CACHE_NAME = 'hivet-pwa-v5-orange-brand';
 const PRECACHE_URLS = [
   '/',
-  '/favicon.png',
-  '/favicon.svg',
+  '/branding/hivet-logo.png',
+  '/branding/favicon-16.png',
+  '/branding/favicon-32.png',
+  '/branding/icon-192.png',
+  '/branding/icon-512.png',
+  '/branding/icon-maskable-192.png',
+  '/branding/icon-maskable-512.png',
+  '/branding/apple-touch-icon.png',
+  '/manifest.json',
   '/manifest-customer.json',
   '/manifest-business.json',
   '/manifest-rider.json'

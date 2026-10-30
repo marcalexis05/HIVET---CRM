@@ -6,13 +6,14 @@ import {
     Truck, RefreshCw, RotateCw
 } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
+import { normalizeComplianceStatus, type ComplianceStatus } from '../../utils/complianceStatus';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-type ComplianceStatus = 'pending' | 'verified' | 'non_compliant';
 
 interface RiderRecord {
     id: number;
+    public_id: string;
     name: string;
     email: string;
     phone: string;
@@ -26,9 +27,9 @@ interface RiderRecord {
 }
 
 const statusConfig: Record<ComplianceStatus, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
-    pending: { label: 'Pending', color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200', icon: <Clock className="w-3 h-3" /> },
-    verified: { label: 'Verified', color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200', icon: <CheckCircle2 className="w-3 h-3" /> },
-    non_compliant: { label: 'Non-Compliant', color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', icon: <XCircle className="w-3 h-3" /> },
+    pending: { label: 'Needs review', color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200', icon: <Clock className="w-3 h-3" /> },
+    verified: { label: 'Approved', color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200', icon: <CheckCircle2 className="w-3 h-3" /> },
+    non_compliant: { label: 'Not approved', color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', icon: <XCircle className="w-3 h-3" /> },
 };
 
 const DocLink = ({ url, label, onClick }: { url?: string; label: string; onClick?: () => void }) =>
@@ -49,7 +50,7 @@ const DocLink = ({ url, label, onClick }: { url?: string; label: string; onClick
     );
 
 const StatusBadge = ({ status }: { status: ComplianceStatus }) => {
-    const sc = statusConfig[status];
+    const sc = statusConfig[normalizeComplianceStatus(status)];
     return (
         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${sc.bg} ${sc.color} ${sc.border}`}>
             {sc.icon} {sc.label}
@@ -70,6 +71,15 @@ const AdminRiderCompliance = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 5;
 
+    useEffect(() => {
+        if (!viewingDoc) return;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setViewingDoc(null); };
+        window.addEventListener('keydown', closeOnEscape);
+        return () => { document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', closeOnEscape); };
+    }, [viewingDoc]);
+
     const token = localStorage.getItem('hivet_token');
 
     const fetchData = useCallback(async () => {
@@ -78,7 +88,10 @@ const AdminRiderCompliance = () => {
             const res = await fetch(`${API}/api/admin/riders`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            if (res.ok) setRiders(await res.json());
+            if (res.ok) {
+                const records: RiderRecord[] = await res.json();
+                setRiders(records.map(record => ({ ...record, compliance_status: normalizeComplianceStatus(record.compliance_status) })));
+            }
         } catch { /* silent */ }
         setLoading(false);
     }, [token]);
@@ -89,7 +102,7 @@ const AdminRiderCompliance = () => {
         const matchStatus = filterStatus === 'all' || r.compliance_status === filterStatus;
         const matchSearch = r.name?.toLowerCase().includes(search.toLowerCase()) ||
             r.email?.toLowerCase().includes(search.toLowerCase()) ||
-            String(r.id).includes(search);
+            (r.public_id || String(r.id)).toLowerCase().includes(search.toLowerCase());
         return matchStatus && matchSearch;
     });
 
@@ -130,15 +143,15 @@ const AdminRiderCompliance = () => {
     };
 
     return (
-        <DashboardLayout title="Rider Compliance" hideHeader={!!viewingDoc}>
+        <DashboardLayout title="Rider reviews" hideHeader={!!viewingDoc}>
             <div className="space-y-6">
                 {/* Overview Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {[
-                        { label: 'Total Fleet', value: counts.all, icon: <Truck className="w-5 h-5" />, color: 'text-brand-dark', bg: 'bg-brand/10' },
-                        { label: 'Applications', value: counts.pending, icon: <Clock className="w-5 h-5" />, color: 'text-orange-600', bg: 'bg-orange-100' },
-                        { label: 'Active Riders', value: counts.verified, icon: <ShieldCheck className="w-5 h-5" />, color: 'text-green-600', bg: 'bg-green-100' },
-                        { label: 'Declined', value: counts.non_compliant, icon: <XCircle className="w-5 h-5" />, color: 'text-red-600', bg: 'bg-red-100' },
+                        { label: 'All riders', value: counts.all, icon: <Truck className="w-5 h-5" />, color: 'text-brand-dark', bg: 'bg-brand/10' },
+                        { label: 'Needs review', value: counts.pending, icon: <Clock className="w-5 h-5" />, color: 'text-orange-600', bg: 'bg-orange-100' },
+                        { label: 'Approved riders', value: counts.verified, icon: <ShieldCheck className="w-5 h-5" />, color: 'text-green-600', bg: 'bg-green-100' },
+                        { label: 'Not approved', value: counts.non_compliant, icon: <XCircle className="w-5 h-5" />, color: 'text-red-600', bg: 'bg-red-100' },
                     ].map((c, i) => (
                         <motion.div key={i} whileHover={{ y: -2 }} className="bg-white rounded-2xl border border-accent-brown/5 p-5 flex items-center gap-4 shadow-sm">
                             <div className={`w-10 h-10 ${c.bg} rounded-xl flex items-center justify-center ${c.color} shrink-0`}>{c.icon}</div>
@@ -162,7 +175,7 @@ const AdminRiderCompliance = () => {
                         {(['all', 'pending', 'verified', 'non_compliant'] as const).map(s => (
                             <button key={s} onClick={() => { setFilterStatus(s); setCurrentPage(1); }}
                                 className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filterStatus === s ? 'bg-brand text-white shadow-md shadow-brand/20' : 'text-accent-brown/50 hover:bg-accent-peach/30'}`}>
-                                {s === 'all' ? `All (${counts.all})` : s === 'non_compliant' ? `Rejected (${counts.non_compliant})` : `${s} (${counts[s]})`}
+                                {s === 'all' ? `All (${counts.all})` : `${statusConfig[s].label} (${counts[s]})`}
                             </button>
                         ))}
                     </div>
@@ -208,7 +221,7 @@ const AdminRiderCompliance = () => {
                                                 </div>
                                                 <div>
                                                     <p className="font-bold text-accent-brown text-base group-hover:text-brand-dark transition-colors">{r.name}</p>
-                                                    <p className="text-sm font-bold text-black/70">{r.email} · RD-{String(r.id).padStart(4, '0')}</p>
+                                                    <p className="text-sm font-bold text-black/70">{r.email} · {r.public_id || 'Assigning ID…'}</p>
                                                 </div>
                                             </div>
                                         </td>
@@ -245,6 +258,7 @@ const AdminRiderCompliance = () => {
                                         <div>
                                             <p className="font-black text-accent-brown text-sm">{r.name}</p>
                                             <p className="text-[10px] text-accent-brown/40 font-bold">{r.email}</p>
+                                            <p className="mt-1 text-xs font-bold text-accent-brown/60">{r.public_id}</p>
                                         </div>
                                     </div>
                                     <StatusBadge status={r.compliance_status} />
@@ -285,7 +299,7 @@ const AdminRiderCompliance = () => {
                                     <div className="w-12 h-12 rounded-2xl bg-brand/10 flex items-center justify-center text-brand-dark"><Truck className="w-6 h-6" /></div>
                                     <div>
                                         <h2 className="text-xl font-black text-accent-brown">Rider Verification</h2>
-                                        <p className="text-[10px] text-accent-brown/40 font-black uppercase tracking-widest">Profile ID RD-{String(selected.id).padStart(4, '0')}</p>
+                                        <p className="text-[10px] text-accent-brown/40 font-black uppercase tracking-widest">Profile ID {selected.public_id || 'Assigning ID…'}</p>
                                     </div>
                                 </div>
                                 <button onClick={() => { setSelected(null); setConfirmAction(null); }}
@@ -385,10 +399,10 @@ const AdminRiderCompliance = () => {
                         <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
                             className="relative w-full max-w-6xl h-full flex flex-col items-center justify-center z-10">
                             <div className="absolute top-6 right-6 flex gap-4">
-                                <button onClick={() => setViewingDoc(p => p ? { ...p, rotation: (p.rotation + 90) % 360 } : null)} className="w-12 h-12 rounded-2xl bg-white/10 text-white flex items-center justify-center hover:bg-white/20"><RotateCw className="w-5 h-5" /></button>
-                                <button onClick={() => setViewingDoc(null)} className="w-12 h-12 rounded-2xl bg-red-500 text-white flex items-center justify-center hover:bg-red-600"><X className="w-5 h-5" /></button>
+                                <button aria-label="Rotate document" onClick={() => setViewingDoc(p => p ? { ...p, rotation: (p.rotation + 90) % 360 } : null)} className="w-12 h-12 rounded-2xl bg-white/10 text-white flex items-center justify-center hover:bg-white/20"><RotateCw className="w-5 h-5" /></button>
+                                <button aria-label="Close document preview" onClick={() => setViewingDoc(null)} className="w-12 h-12 rounded-2xl bg-red-500 text-white flex items-center justify-center hover:bg-red-600"><X className="w-5 h-5" /></button>
                             </div>
-                            <img src={viewingDoc.url} style={{ rotate: `${viewingDoc.rotation}deg` }} className="max-w-full max-h-[80vh] object-contain shadow-2xl rounded-lg" alt="Doc" />
+                            <img src={viewingDoc.url} style={{ rotate: `${viewingDoc.rotation}deg` }} className="max-w-full max-h-[80vh] object-contain shadow-2xl rounded-lg" alt={viewingDoc.name} />
                         </motion.div>
                     </div>
                 )}

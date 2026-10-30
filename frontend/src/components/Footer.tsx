@@ -74,10 +74,8 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
                     {/* Prestigious Branding */}
                     <div className="md:col-span-5 space-y-3 sm:space-y-4">
                         <Link to="/" className="flex items-center gap-3 group w-fit">
-                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center p-2 group-hover:rotate-6 transition-transform shadow-lg">
-                                <Logo className="w-full h-full text-brand-dark" />
-                            </div>
-                            <span className="text-xl sm:text-2xl font-black tracking-tight whitespace-nowrap">{brandName}</span>
+                            <Logo className="w-20 h-20 shrink-0 group-hover:scale-105 transition-transform" />
+                            {(isBusiness || isRider) && <span className="text-lg font-bold">{isBusiness ? 'for Clinics' : 'for Riders'}</span>}
                         </Link>
                         <p className="text-white/40 text-xs sm:text-sm font-medium leading-relaxed max-w-sm italic">
                             "{description}"

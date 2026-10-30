@@ -1,383 +1,169 @@
-﻿import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowUpRight, Bike, Loader2, RefreshCw, Store, Users, X } from 'lucide-react';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import DashboardLayout from '../../components/DashboardLayout';
-import { motion } from 'framer-motion';
-import { Store, Users, Bike, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { X, Mail, Calendar, Hash, TrendingUp, PieChart as PieIcon, Activity } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const SERIES = [
+    { key: 'Partners', label: 'Clinics', color: '#F97316' },
+    { key: 'Riders', label: 'Riders', color: '#0F9B8E' },
+    { key: 'Customers', label: 'Customers', color: '#7C6AE6' }
+] as const;
+const tooltipStyle = { borderRadius: 12, border: '1px solid #E5E7EB', boxShadow: '0 4px 16px rgb(0 0 0 / 6%)', fontSize: 13 };
+const axisStyle = { fill: '#64748B', fontSize: 11 };
 
+interface Account { id: string; name: string; email: string; joined: string }
+type AccountGroup = 'partners' | 'riders' | 'customers' | 'end_users';
+interface DashboardStats {
+    partners: number; partners_trend: string;
+    riders: number; riders_trend: string;
+    customers: number; customers_trend: string;
+    end_users: number; end_users_trend: string;
+    details: Record<AccountGroup, Account[]>;
+}
+interface Analytics {
+    growth: { name: string; Partners: number; Riders: number; Customers: number }[];
+    distribution: { name: string; value: number; color: string }[];
+    velocity: { date: string; new: number }[];
+}
 
-const AdminDashboard = () => {
-    const { user, isLoading: authLoading } = useAuth();
-    const [stats, setStats] = useState({ 
-        partners: 0, 
-        partners_trend: '+0',
-        riders: 0, 
-        riders_trend: '+0',
-        customers: 0,
-        customers_trend: '+0',
-        end_users: 0,
-        end_users_trend: '+0',
-        details: {
-            partners: [] as any[],
-            riders: [] as any[],
-            customers: [] as any[],
-            end_users: [] as any[]
-        }
-    });
-    const [selectedStat, setSelectedStat] = useState<any>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [analytics, setAnalytics] = useState<{
-        growth: any[];
-        distribution: any[];
-        velocity: any[];
-    }>({ growth: [], distribution: [], velocity: [] });
-    const [loading, setLoading] = useState(true);
-
-
+function AccountList({ title, accounts, onClose }: { title: string; accounts: Account[]; onClose: () => void }) {
+    const dialogRef = useRef<HTMLDialogElement>(null);
     useEffect(() => {
-        const fetchData = async () => {
-            if (authLoading) return;
-            const token = user?.token || localStorage.getItem('hivet_token');
-            if (!token) return;
-
-            try {
-                const [statsRes, analyticsRes] = await Promise.all([
-                    fetch(`${API}/api/admin/dashboard-stats`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    }),
-                    fetch(`${API}/api/admin/analytics`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    })
-                ]);
-
-                if (statsRes.ok && analyticsRes.ok) {
-                    const statsData = await statsRes.json();
-                    const analyticsData = await analyticsRes.json();
-                    setStats(statsData);
-                    setAnalytics(analyticsData);
-                }
-            } catch (err) {
-                console.error('Dashboard fetch error:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, [authLoading, user?.token]);
-
-    const statCards = [
-        { 
-            title: 'Active Partners', 
-            value: (stats.partners || 0).toLocaleString(), 
-            icon: Store, 
-            trend: stats.partners_trend,
-            data: stats.details.partners,
-            color: 'bg-accent-peach/20'
-        },
-        { 
-            title: 'Registered Riders', 
-            value: (stats.riders || 0).toLocaleString(), 
-            icon: Bike, 
-            trend: stats.riders_trend,
-            data: stats.details.riders,
-            color: 'bg-brand/10'
-        },
-        { 
-            title: 'Active Customers', 
-            value: (stats.customers || 0).toLocaleString(), 
-            icon: Users, 
-            trend: stats.customers_trend,
-            data: stats.details.customers,
-            color: 'bg-blue-50/50'
-        },
-        { 
-            title: 'Overall Population', 
-            value: (stats.end_users || 0).toLocaleString(), 
-            icon: Activity, 
-            trend: stats.end_users_trend,
-            data: stats.details.end_users,
-            color: 'bg-white'
-        },
-    ];
-
-    const StatModal = ({ isOpen, onClose, stat }: { isOpen: boolean, onClose: () => void, stat: any }) => {
-        if (!isOpen || !stat) return null;
-
-        return (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-accent-brown/20 backdrop-blur-sm pt-20">
-                <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="bg-white rounded-[2.5rem] w-full max-w-2xl shadow-2xl border border-white overflow-hidden flex flex-col max-h-[80vh]"
-                >
-                    <div className="p-8 border-b border-accent-brown/5 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className={`w-12 h-12 ${stat.color} rounded-2xl flex items-center justify-center text-brand-dark`}>
-                                <stat.icon className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <h2 className="text-2xl font-black text-accent-brown tracking-tighter">{stat.title}</h2>
-                                <p className="text-xs font-bold text-accent-brown/40 uppercase tracking-widest mt-0.5">Complete Platform Data</p>
-                            </div>
-                        </div>
-                        <button onClick={onClose} className="w-10 h-10 rounded-full bg-accent-brown/5 flex items-center justify-center text-accent-brown hover:bg-brand hover:text-white transition-all">
-                            <X className="w-5 h-5" />
-                        </button>
-                    </div>
-
-                    <div className="p-8 overflow-y-auto">
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-4 gap-4 pb-4 border-b border-accent-brown/5 px-4 text-[10px] font-black uppercase tracking-widest text-accent-brown/30">
-                                <div className="flex items-center gap-2"><Hash className="w-3 h-3" /> ID</div>
-                                <div className="flex items-center gap-2">Name</div>
-                                <div className="flex items-center gap-2"><Mail className="w-3 h-3" /> Email</div>
-                                <div className="flex items-center gap-2 sm:justify-end text-right"><Calendar className="w-3 h-3" /> Joined</div>
-                            </div>
-
-                            {stat.data.length > 0 ? stat.data.map((item: any, i: number) => (
-                                <motion.div 
-                                    key={i}
-                                    initial={{ opacity: 0, x: -10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: i * 0.05 }}
-                                    className="grid grid-cols-4 gap-4 p-4 rounded-2xl hover:bg-accent-peach/10 transition-colors group"
-                                >
-                                    <div className="font-bold text-xs text-accent-brown/40">{item.id}</div>
-                                    <div className="font-bold text-xs text-accent-brown truncate">{item.name}</div>
-                                    <div className="font-medium text-xs text-accent-brown/60 truncate">{item.email}</div>
-                                    <div className="text-xs text-accent-brown/40 font-medium sm:text-right">{item.joined}</div>
-                                </motion.div>
-                            )) : (
-                                <div className="py-20 flex flex-col items-center justify-center opacity-30 grayscale saturate-0">
-                                    <stat.icon className="w-12 h-12 mb-4" />
-                                    <p className="text-sm font-black uppercase tracking-widest">No detailed data found</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="p-8 border-t border-accent-brown/5 bg-accent-peach/5 flex justify-end">
-                        <button onClick={onClose} className="px-8 py-3 bg-brand-dark text-white rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-brand transition-colors">
-                            Close Analysis
-                        </button>
-                    </div>
-                </motion.div>
-            </div>
-        );
-    };
-
-
-    if (loading && !authLoading) {
-        return (
-            <DashboardLayout title="Platform Overview">
-                <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
-                    <Loader2 className="w-10 h-10 text-brand animate-spin" />
-                    <p className="text-[10px] font-black text-accent-brown/40 uppercase tracking-widest">Crunching platform data...</p>
-                </div>
-            </DashboardLayout>
-        );
-    }
+        const dialog = dialogRef.current;
+        dialog?.showModal();
+        const overflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { dialog?.close(); document.body.style.overflow = overflow; };
+    }, []);
 
     return (
-        <DashboardLayout title="Platform Overview">
-            <div className="space-y-8">
-                {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {statCards.map((stat, index) => (
-                        <motion.div
-                            key={index}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.1 }}
-                            onClick={() => {
-                                setSelectedStat(stat);
-                                setIsModalOpen(true);
-                            }}
-                            className={`bg-white text-accent-brown p-6 rounded-[2rem] shadow-xl shadow-accent-brown/5 border border-white hover:border-brand/20 transition-all cursor-pointer group hover:scale-[1.02] active:scale-[0.98]`}
-                        >
-                            <div className="flex items-start justify-between mb-4">
-                                <div className={`w-12 h-12 ${(stat.color || 'bg-accent-peach/20') + ' text-brand-dark'} rounded-2xl flex items-center justify-center group-hover:bg-brand group-hover:text-white transition-colors`}>
-                                    <stat.icon className="w-6 h-6" />
-                                </div>
-                                <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${(stat.trend.startsWith('+') && stat.trend !== '+0' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}`}>
-                                    {stat.trend}
-                                </span>
-                            </div>
-                            <h3 className={`text-3xl font-black tracking-tighter text-accent-brown group-hover:text-brand transition-colors`}>{stat.value}</h3>
-                            <p className={`text-xs font-bold uppercase tracking-widest mt-1 text-accent-brown/40 group-hover:text-brand-dark/60 transition-colors`}>{stat.title}</p>
-                        </motion.div>
-                    ))}
+        <dialog ref={dialogRef} aria-labelledby="admin-accounts-title" onCancel={event => { event.preventDefault(); onClose(); }} className="admin-accounts-dialog">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5 sm:p-6">
+                <div>
+                    <h2 id="admin-accounts-title" className="text-xl font-semibold text-slate-900">{title}</h2>
+                    <p className="mt-1 text-sm text-slate-500">Latest accounts and contact details.</p>
                 </div>
-
-                {/* Main Content Area - Analytics Charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    {/* Platform Growth Chart */}
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.4 }}
-                        className="lg:col-span-8 bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white"
-                    >
-                        <div className="flex items-center justify-between mb-8">
-                            <div>
-                                <h2 className="text-xl font-black text-accent-brown flex items-center gap-2">
-                                    <TrendingUp className="w-5 h-5 text-brand" /> Platform Growth
-                                </h2>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 mt-1">6-Month Cumulative Projection</p>
-                            </div>
-                        </div>
-
-                        <div className="h-[300px] w-full mt-4">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={analytics.growth}>
-                                    <defs>
-                                        <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#FB8500" stopOpacity={0.1}/>
-                                            <stop offset="95%" stopColor="#FB8500" stopOpacity={0}/>
-                                        </linearGradient>
-                                        <linearGradient id="colorPartners" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#219EBC" stopOpacity={0.1}/>
-                                            <stop offset="95%" stopColor="#219EBC" stopOpacity={0}/>
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAE0D5" opacity={0.5} />
-                                    <XAxis 
-                                        dataKey="name" 
-                                        axisLine={false} 
-                                        tickLine={false} 
-                                        tick={{ fill: '#8D6E63', fontSize: 10, fontWeight: 800 }} 
-                                        dy={10} 
-                                    />
-                                    <YAxis hide />
-                                    <Tooltip 
-                                        content={({ active, payload, label }) => {
-                                            if (active && payload && payload.length) {
-                                                return (
-                                                    <div className="bg-white p-4 rounded-2xl shadow-2xl border border-accent-brown/5">
-                                                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/40 mb-2">{label}</p>
-                                                        {payload.map((entry: any, index: number) => (
-                                                            <div key={index} className="flex items-center justify-between gap-4 mb-1">
-                                                                <span className="text-[10px] font-black uppercase text-accent-brown/60">{entry.name}:</span>
-                                                                <span className="text-sm font-black text-accent-brown">{entry.value}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                );
-                                            }
-                                            return null;
-                                        }}
-                                    />
-                                    <Area type="monotone" dataKey="Customers" stroke="#FB8500" strokeWidth={3} fillOpacity={1} fill="url(#colorUsers)" />
-                                    <Area type="monotone" dataKey="Partners" stroke="#219EBC" strokeWidth={3} fillOpacity={1} fill="url(#colorPartners)" />
-                                    <Area type="monotone" dataKey="Riders" stroke="#8D6E63" strokeWidth={3} fillOpacity={0} />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </motion.div>
-
-                    {/* User Segmentation (Pie Chart) */}
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.5 }}
-                        className="lg:col-span-4 bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white flex flex-col"
-                    >
-                        <h2 className="text-xl font-black text-accent-brown mb-2 flex items-center gap-2">
-                             <PieIcon className="w-5 h-5 text-brand" /> User Split
-                        </h2>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 mb-8">Current Role Distribution</p>
-                        
-                        <div className="flex-1 min-h-[220px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={analytics.distribution}
-                                        innerRadius={60}
-                                        outerRadius={80}
-                                        paddingAngle={8}
-                                        dataKey="value"
-                                        animationDuration={1500}
-                                    >
-                                        {analytics.distribution.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        </div>
-
-                        <div className="space-y-3 mt-4">
-                            {analytics.distribution.map((item, i) => (
-                                <div key={i} className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                                        <span className="text-[10px] font-black uppercase text-accent-brown/60">{item.name}</span>
-                                    </div>
-                                    <span className="text-xs font-black text-accent-brown">{item.value}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </motion.div>
-
-                    {/* Daily Onboarding Velocity (Bar Chart) */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.6 }}
-                        className="lg:col-span-12 bg-white rounded-[2rem] p-8 shadow-xl shadow-accent-brown/5 border border-white"
-                    >
-                        <div className="flex items-end justify-between mb-8">
-                            <div>
-                                <h2 className="text-xl font-black text-accent-brown flex items-center gap-2">
-                                    <Activity className="w-5 h-5 text-brand" /> Onboarding Velocity
-                                </h2>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-accent-brown/30 mt-1">Daily Registrations (Last 14 Days)</p>
-                            </div>
-                        </div>
-
-                        <div className="h-[200px] w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={analytics.velocity}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAE0D5" opacity={0.3} />
-                                    <XAxis 
-                                        dataKey="date" 
-                                        axisLine={false} 
-                                        tickLine={false} 
-                                        tick={{ fill: '#8D6E63', fontSize: 9, fontWeight: 700 }} 
-                                    />
-                                    <YAxis hide />
-                                    <Tooltip 
-                                        cursor={{ fill: '#FB8500', opacity: 0.05 }}
-                                        content={({ active, payload }) => {
-                                            if (active && payload && payload.length) {
-                                                return (
-                                                    <div className="bg-brand-dark px-4 py-2 rounded-xl shadow-lg">
-                                                        <p className="text-[10px] font-black text-white uppercase tracking-widest">{payload[0].value} New Sign-ups</p>
-                                                    </div>
-                                                );
-                                            }
-                                            return null;
-                                        }}
-                                    />
-                                    <Bar dataKey="new" fill="#FB8500" radius={[6, 6, 0, 0]} barSize={24} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </motion.div>
-                </div>
+                <button type="button" aria-label="Close account list" onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
             </div>
+            <div className="max-h-[60dvh] overflow-auto p-5 sm:p-6">
+                {accounts.length ? (
+                    <table className="w-full min-w-[440px] text-left text-sm">
+                        <thead><tr className="border-b border-slate-200 text-xs text-slate-500"><th scope="col" className="pb-3 pr-4 font-medium">Name</th><th scope="col" className="pb-3 pr-4 font-medium">Email</th><th scope="col" className="pb-3 font-medium">Joined</th></tr></thead>
+                        <tbody>{accounts.map(account => <tr key={account.id} className="border-b border-slate-100 last:border-0"><td className="py-3 pr-4"><span className="block font-medium text-slate-800">{account.name}</span><span className="text-xs text-slate-400">{account.id}</span></td><td className="py-3 pr-4 text-slate-600 break-all">{account.email}</td><td className="whitespace-nowrap py-3 text-slate-500">{account.joined}</td></tr>)}</tbody>
+                    </table>
+                ) : <p className="py-10 text-center text-sm text-slate-500">No accounts yet.</p>}
+            </div>
+        </dialog>
+    );
+}
 
-            <StatModal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
-                stat={selectedStat} 
-            />
+export default function AdminDashboard() {
+    const { user, isLoading: authLoading } = useAuth();
+    const [stats, setStats] = useState<DashboardStats | null>(null);
+    const [analytics, setAnalytics] = useState<Analytics | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [selectedGroup, setSelectedGroup] = useState<AccountGroup | null>(null);
+
+    const loadDashboard = useCallback(async () => {
+        if (authLoading || !user?.token) return;
+        setLoading(true);
+        setError('');
+        try {
+            const headers = { Authorization: `Bearer ${user.token}` };
+            const [statsResponse, analyticsResponse] = await Promise.all([
+                fetch(`${API}/api/admin/dashboard-stats`, { headers }),
+                fetch(`${API}/api/admin/analytics`, { headers })
+            ]);
+            if (!statsResponse.ok || !analyticsResponse.ok) throw new Error('Could not load your dashboard. Please try again.');
+            const [nextStats, nextAnalytics] = await Promise.all([statsResponse.json(), analyticsResponse.json()]);
+            setStats(nextStats);
+            setAnalytics(nextAnalytics);
+        } catch {
+            setError('Could not load your dashboard. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    }, [authLoading, user?.token]);
+
+    useEffect(() => { void loadDashboard(); }, [loadDashboard]);
+
+    const cards = stats ? [
+        { key: 'partners' as const, label: 'Clinics', note: 'Approved clinics', value: stats.partners, added: stats.partners_trend, icon: Store, color: 'orange' },
+        { key: 'riders' as const, label: 'Riders', note: 'Approved riders', value: stats.riders, added: stats.riders_trend, icon: Bike, color: 'teal' },
+        { key: 'customers' as const, label: 'Customers', note: 'Pet owner accounts', value: stats.customers, added: stats.customers_trend, icon: Users, color: 'violet' },
+        { key: 'end_users' as const, label: 'Total accounts', note: 'The three groups combined', value: stats.end_users, added: stats.end_users_trend, icon: Users, color: 'slate' }
+    ] : [];
+    const currentCounts = { Partners: stats?.partners ?? 0, Riders: stats?.riders ?? 0, Customers: stats?.customers ?? 0 };
+    const distribution = SERIES.map(series => ({ ...series, value: currentCounts[series.key] }));
+    const accountTotal = distribution.reduce((total, item) => total + item.value, 0);
+    const newSignups = analytics?.velocity.reduce((total, day) => total + day.new, 0) ?? 0;
+
+    return (
+        <DashboardLayout title="Dashboard">
+            <div className="admin-overview mx-auto w-full max-w-[1440px] space-y-5 sm:space-y-6">
+                <div className="flex items-start justify-between gap-4">
+                    <div><h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">Overview</h2><p className="mt-1 text-sm text-slate-500">Your clinics, riders, and customers at a glance.</p></div>
+                    <button type="button" onClick={() => void loadDashboard()} disabled={loading} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" /><span className="hidden sm:inline">Refresh</span><span className="sr-only sm:hidden">Refresh dashboard</span></button>
+                </div>
+
+                {error && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-900"><p>{error}</p><button type="button" onClick={() => void loadDashboard()} className="font-semibold underline">Try again</button></div>}
+                {loading && !stats && <div role="status" className="flex min-h-[40vh] items-center justify-center gap-3 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin text-brand" />Loading your dashboard…</div>}
+
+                {stats && analytics && <>
+                    <section aria-label="Account totals" className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+                        {cards.map(card => <button type="button" key={card.key} onClick={() => setSelectedGroup(card.key)} aria-label={`View ${card.label.toLowerCase()}: ${card.value}`} className="admin-summary-card group rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 text-left transition-colors hover:border-orange-300 focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-4">
+                            <div className="flex items-center justify-between gap-2"><span className={`admin-stat-icon admin-stat-icon-${card.color}`}><card.icon className="h-5 w-5" aria-hidden="true" /></span><ArrowUpRight className="h-4 w-4 text-slate-300 group-hover:text-brand" aria-hidden="true" /></div>
+                            <p className="mt-4 text-sm font-medium text-slate-500">{card.label}</p>
+                            <p className="mt-1 text-3xl font-semibold tabular-nums tracking-tight text-slate-900">{card.value.toLocaleString()}</p>
+                            <p className="mt-1 text-xs text-slate-500">{card.note}</p>
+                            <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500"><span className="font-semibold text-slate-700">{card.added}</span> in the last 30 days</p>
+                        </button>)}
+                    </section>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-5">
+                        <section className="admin-chart-card xl:col-span-2" aria-labelledby="account-growth-title">
+                            <h3 id="account-growth-title">Accounts over time</h3><p className="admin-chart-description">Monthly totals for all accounts over the last 6 months.</p>
+                            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-600">{SERIES.map(series => <span key={series.key} className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: series.color }} />{series.label}</span>)}</div>
+                            <div className="mt-5 h-[230px] sm:h-[250px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={analytics.growth} margin={{ top: 8, right: 6, left: -16, bottom: 0 }}>
+                                        <defs>{SERIES.map(series => <linearGradient key={series.key} id={`admin-${series.key}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={series.color} stopOpacity={0.12} /><stop offset="100%" stopColor={series.color} stopOpacity={0} /></linearGradient>)}</defs>
+                                        <CartesianGrid strokeDasharray="3 4" vertical={false} stroke="#E8EDF2" />
+                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={axisStyle} tickMargin={10} />
+                                        <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={axisStyle} width={42} />
+                                        <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: '#334155', fontWeight: 600 }} />
+                                        {SERIES.map(series => <Area key={series.key} name={series.label} dataKey={series.key} type="monotone" stroke={series.color} strokeWidth={2.5} fill={`url(#admin-${series.key})`} isAnimationActive={false} />)}
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </section>
+
+                        <section className="admin-chart-card" aria-labelledby="account-types-title">
+                            <h3 id="account-types-title">Account types</h3><p className="admin-chart-description">The accounts shown above.</p>
+                            {accountTotal ? <div className="relative h-[220px]">
+                                <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={distribution} nameKey="label" dataKey="value" innerRadius={63} outerRadius={82} paddingAngle={3} stroke="none" isAnimationActive={false}>{distribution.map(item => <Cell key={item.key} fill={item.color} />)}</Pie><Tooltip contentStyle={tooltipStyle} /></PieChart></ResponsiveContainer>
+                                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><span className="text-3xl font-semibold text-slate-900">{accountTotal.toLocaleString()}</span><span className="mt-1 text-xs text-slate-500">Accounts</span></div>
+                            </div> : <div className="flex h-[220px] items-center justify-center text-sm text-slate-400">No accounts yet.</div>}
+                            <ul className="space-y-3">{distribution.map(item => <li key={item.key} className="flex items-center justify-between text-sm"><span className="inline-flex items-center gap-2 text-slate-600"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />{item.label}</span><span className="font-semibold tabular-nums text-slate-800">{item.value.toLocaleString()}</span></li>)}</ul>
+                        </section>
+                    </div>
+
+                    <section className="admin-chart-card" aria-labelledby="signups-title">
+                        <div className="flex items-start justify-between gap-4"><div><h3 id="signups-title">New sign-ups</h3><p className="admin-chart-description">Daily sign-ups over the last 14 days.</p></div><span className="rounded-lg bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-700">{newSignups.toLocaleString()} joined</span></div>
+                        <div className="mt-5 h-[180px] sm:h-[200px] w-full"><ResponsiveContainer width="100%" height="100%"><BarChart data={analytics.velocity} margin={{ top: 5, right: 4, left: -16, bottom: 0 }}>
+                            <CartesianGrid vertical={false} strokeDasharray="3 4" stroke="#E8EDF2" />
+                            <XAxis dataKey="date" tick={axisStyle} axisLine={false} tickLine={false} tickMargin={10} minTickGap={20} />
+                            <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={axisStyle} width={42} />
+                            <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#FFF7ED' }} />
+                            <Bar dataKey="new" name="New sign-ups" fill="#F97316" radius={[5, 5, 0, 0]} maxBarSize={30} isAnimationActive={false} />
+                        </BarChart></ResponsiveContainer></div>
+                    </section>
+                </>}
+            </div>
+            {selectedGroup && stats && <AccountList title={cards.find(card => card.key === selectedGroup)?.label ?? 'Accounts'} accounts={stats.details[selectedGroup] ?? []} onClose={() => setSelectedGroup(null)} />}
         </DashboardLayout>
     );
-};
-
-export default AdminDashboard;
+}

@@ -216,10 +216,7 @@ function Navigation() {
       <div className="w-full transition-all duration-500 flex items-center justify-between px-6 sm:px-12 h-16 sm:h-20">
         <div className="flex-1 flex justify-start">
           <Link to="/" className="flex items-center gap-2.5 xs:gap-3.5 group" onClick={handleHomeClick}>
-            <div className="w-10 h-10 xs:w-11 xs:h-11 bg-white rounded-2xl shadow-md shadow-black/15 flex items-center justify-center p-1.5 border border-accent-brown/10 group-hover:scale-105 transition-transform shrink-0">
-              <Logo className="w-full h-full" />
-            </div>
-            <span className={`text-lg xs:text-xl font-black tracking-tighter transition-colors ${textColor}`}>Hi-Vet</span>
+            <Logo className="w-14 h-14 sm:w-[4.5rem] sm:h-[4.5rem] shrink-0 group-hover:scale-105 transition-transform" />
           </Link>
         </div>
 

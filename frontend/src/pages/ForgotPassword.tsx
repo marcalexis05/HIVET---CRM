@@ -237,7 +237,7 @@ const ForgotPassword = () => {
                             <div className="w-14 h-14 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20 group-hover/back:bg-brand-dark transition-all text-white">
                                 <ShieldCheck className="w-8 h-8" />
                             </div>
-                            <span className="text-3xl font-black text-white tracking-tight">Hi-Vet</span>
+                            <Logo className="w-24 h-24 shrink-0" />
                         </Link>
                         <div className="space-y-8 max-w-lg">
                             <div className="inline-flex items-center gap-3 text-white/60  text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />{MAIN_LANDING_TEXT.forgotPasswordPage.heroTag}</div>

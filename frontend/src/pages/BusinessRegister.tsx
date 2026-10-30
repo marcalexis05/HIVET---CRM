@@ -1,3 +1,4 @@
+import { Logo } from '../components/Logo';
 ﻿import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -1081,7 +1082,7 @@ const BusinessRegister = () => {
     // ─── Pending Approval Screen ─────────────────────────────────────────────────
     if (pendingApproval) {
         return (
-            <div className="min-h-[100dvh] w-full bg-white flex font-brand overflow-x-hidden">
+            <div className="auth-page min-h-[100dvh] w-full bg-white flex font-brand overflow-x-hidden">
                 <div className="hidden lg:block w-1/2 min-h-[100dvh] relative overflow-hidden group shrink-0">
                     <div className="absolute inset-0 z-0">
                         <img src={loginHero} alt="Veterinary clinic" className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-[4s]" />
@@ -1090,14 +1091,7 @@ const BusinessRegister = () => {
                     </div>
                     <div className="relative z-10 flex flex-col h-full justify-between p-12 xl:p-16 2xl:p-24">
                         <div className="space-y-12">
-                            <Link to="/" className="inline-flex items-center gap-4 group/back">
-                                <div className="w-14 h-14 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20 group-hover/back:bg-brand-dark transition-all text-white">
-                                    <Building2 className="w-8 h-8" />
-                                </div>
-                                <span className="text-3xl font-black text-white tracking-widest uppercase italic">Hi-Vet for Clinics</span>
-                            </Link>
                             <div className="space-y-8 max-w-lg">
-                                <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Clinic Hub</div>
                                 <h1 className="text-6xl xl:text-7xl font-black text-white leading-[0.85] tracking-tighter uppercase">Run Your Clinic <br /><span className="text-brand-dark italic font-outfit">Easily.</span></h1>
                                 <p className="text-lg xl:text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Sign up to manage bookings, track stock, and see your clinic reports.</p>
                             </div>
@@ -1132,7 +1126,7 @@ const BusinessRegister = () => {
     }
 
     return (
-        <div className="min-h-[100dvh] w-full bg-white flex font-brand overflow-x-hidden">
+        <div className="auth-page min-h-[100dvh] w-full bg-white flex font-brand overflow-x-hidden">
             {/* Left Column: Full Screen Hero */}
             <div className="hidden lg:block w-1/2 min-h-[100dvh] relative overflow-hidden group shrink-0">
                 <div className="absolute inset-0 z-0">
@@ -1142,36 +1136,26 @@ const BusinessRegister = () => {
                 </div>
                 <div className="relative z-10 flex flex-col h-full justify-between p-12 xl:p-16 2xl:p-24">
                     <div className="space-y-12">
-                        <Link to="/for-clinics" className="inline-flex items-center gap-4 group/back">
-                            <div className="w-14 h-14 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20 group-hover/back:bg-brand-dark transition-all text-white">
-                                <Building2 className="w-8 h-8" />
-                            </div>
-                            <span className="text-3xl font-black text-white tracking-widest uppercase italic">Hi-Vet for Clinics</span>
-                        </Link>
                         <div className="space-y-8 max-w-lg">
-                            <div className="inline-flex items-center gap-3 text-white/60 uppercase tracking-[0.6em] text-[10px] font-black"><div className="w-10 h-[2px] bg-brand-dark" />Clinic Hub</div>
                             <h1 className="text-6xl xl:text-7xl font-black text-white leading-[0.85] tracking-tighter uppercase">Run Your Clinic <br /><span className="text-brand-dark italic font-outfit">Easily.</span></h1>
                             <p className="text-lg xl:text-xl text-white/70 font-medium leading-relaxed italic max-w-sm">Sign up to manage bookings, track stock, and see your clinic reports.</p>
                         </div>
-                    </div>
-                    <div className="bg-white/10 backdrop-blur-xl px-8 py-4 rounded-full border border-white/10 w-fit">
-                        <p className="text-xs font-black text-white uppercase tracking-widest italic">Step {step} of 6</p>
                     </div>
                 </div>
             </div>
 
             {/* Right Column: Shared Page Shell (Phone, Tablet, Desktop) */}
-            <div className="w-full lg:w-1/2 min-h-[100dvh] flex flex-col justify-between py-6 sm:py-10 px-5 xs:px-6 sm:px-10 lg:px-12 bg-white overflow-y-auto">
-                <div className="w-full max-w-[540px] mx-auto flex-1 flex flex-col justify-center my-auto py-2">
-                    {/* Top Row: Icon Tile on Left, Login Link on Right */}
-                    <div className="flex items-center justify-between gap-4 mb-6 sm:mb-8 flex-wrap">
+            <div className="auth-panel w-full lg:w-1/2 min-h-[100dvh] flex flex-col justify-between py-6 sm:py-10 px-5 xs:px-6 sm:px-10 lg:px-12 bg-white">
+                <div className="auth-content w-full max-w-[540px] mx-auto flex-1 flex flex-col justify-center my-auto py-2">
+                    {/* Top Row: Hi-Vet logo on Left, Login Link on Right */}
+                    <div className="auth-header flex items-center justify-between gap-4 mb-4">
                         <Link 
                             to="/for-clinics" 
                             title="Back to Hi-Vet for Clinics" 
                             aria-label="Back to Hi-Vet for Clinics" 
-                            className="w-12 h-12 sm:w-14 sm:h-14 bg-brand-dark rounded-2xl flex items-center justify-center text-white shadow-md shadow-brand-dark/20 shrink-0 hover:scale-105 active:scale-95 transition-transform"
+                            className="shrink-0 hover:scale-105 active:scale-95 transition-transform"
                         >
-                            <Building2 className="w-6 h-6 sm:w-7 sm:h-7" aria-hidden="true" />
+                            <Logo className="auth-logo w-16 h-16" />
                         </Link>
                         <Link 
                             to="/login/business" 
@@ -1210,7 +1194,7 @@ const BusinessRegister = () => {
                     </form>
 
                     {/* Back Link Row */}
-                    <div className="mt-8 text-center pt-5 border-t border-accent-brown/10">
+                    <div className="auth-footer mt-8 text-center pt-5 border-t border-accent-brown/10">
                         <Link 
                             to="/for-clinics" 
                             className="min-h-[44px] inline-flex items-center justify-center gap-2 text-sm sm:text-base font-bold text-slate-600 hover:text-brand-dark transition-colors tracking-normal not-italic"

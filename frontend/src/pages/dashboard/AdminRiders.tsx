@@ -9,6 +9,7 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 interface RiderRecord {
     id: number;
+    public_id: string;
     name: string;
     email: string;
     phone: string;
@@ -200,7 +201,7 @@ const AdminRiders = () => {
                                         className="border-b border-accent-brown/5 hover:bg-accent-peach/5 xl:hover:scale-[1.01] transition-all origin-left group cursor-pointer"
                                     >
                                         <td className="px-6 py-4">
-                                            <span className="font-bold text-accent-brown text-xs">RD-{String(rider.id).padStart(4, '0')}</span>
+                                            <span className="font-bold text-accent-brown text-xs">{rider.public_id || 'Assigning ID…'}</span>
                                             <span className="block text-[10px] text-accent-brown/40 mt-0.5">Joined {new Date(rider.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
                                         </td>
                                         <td className="px-6 py-4">
@@ -304,7 +305,7 @@ const AdminRiders = () => {
                                         </span>
                                     </div>
                                     <div className="space-y-1 col-span-2 border-t border-accent-brown/5 pt-3">
-                                        <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest text-[#CB975A]">Reference ID: RD-{String(rider.id).padStart(4, '0')}</p>
+                                        <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest text-[#CB975A]">Reference ID: {rider.public_id || 'Assigning ID…'}</p>
                                         <p className="text-[9px] font-bold text-accent-brown/40 uppercase tracking-widest">Joined {new Date(rider.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</p>
                                     </div>
                                 </div>

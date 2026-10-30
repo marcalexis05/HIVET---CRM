@@ -11,6 +11,7 @@ const PAGE_SIZE = 5;
 
 interface Business {
     id: string;
+    public_id: string;
     db_id: number;
     name: string;
     owner: string;
@@ -231,7 +232,7 @@ const AdminBusinesses = () => {
                                                 className="border-b border-accent-brown/5 hover:bg-accent-peach/5 xl:hover:scale-[1.01] transition-all origin-left group cursor-pointer"
                                             >
                                                 <td className="px-6 py-4">
-                                                    <span className="font-bold text-accent-brown text-xs">{biz.id}</span>
+                                                    <span className="font-bold text-accent-brown text-xs">{biz.public_id || biz.id}</span>
                                                     <span className="block text-[10px] text-accent-brown/40 mt-0.5">Joined {biz.joined}</span>
                                                 </td>
                                                 <td className="px-6 py-4">
@@ -347,7 +348,7 @@ const AdminBusinesses = () => {
                                     <div className="grid grid-cols-2 gap-4 pt-2">
                                         <div className="space-y-1">
                                             <p className="text-[9px] font-black text-accent-brown/30 uppercase tracking-widest">Business ID</p>
-                                            <p className="text-xs font-bold text-accent-brown">{biz.id}</p>
+                                            <p className="text-xs font-bold text-accent-brown">{biz.public_id || biz.id}</p>
                                             <p className="text-[8px] text-accent-brown/40 font-bold uppercase tracking-[0.1em]">Joined {biz.joined}</p>
                                         </div>
                                         <div className="space-y-1">

@@ -9,14 +9,13 @@ import {
     Calendar, Award, ShoppingCart, X, Plus, Minus, Wallet,
     BarChart2, UserCircle, Menu, Store, Truck, Check, MapPin,
     ChevronRight, ChevronLeft, Search, Zap, HelpCircle, Clock, Package, Shield,
-    MessageCircle, Home, QrCode
+    MessageCircle, Home
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { AdminFooter } from './AdminFooter';
 import SupportBot from './SupportBot';
 import ConfirmLogoutModal from './ConfirmLogoutModal';
 import NotificationBell from './NotificationBell';
-import PwaInstallModal from './PwaInstallModal';
 import { setPwaManifestForRole } from '../utils/pwaManager';
 import { formatName } from '../utils/textFormatters';
 import { RIDER_TEXT } from '../constants/riderWording';
@@ -43,6 +42,7 @@ interface DashboardLayoutProps {
 
 const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = false, branchContext, branchAction }: DashboardLayoutProps) => {
     const { user, logout } = useAuth();
+    const isAdmin = user?.role === 'super_admin' || user?.role === 'system_admin';
     const { items, totalItems, removeFromCart, updateQuantity } = useCart();
     const navigate = useNavigate();
     const location = useLocation();
@@ -51,7 +51,6 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
     const [isShortScreen, setIsShortScreen] = useState(() => typeof window !== 'undefined' && window.innerHeight < 520);
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-    const [showPwaModal, setShowPwaModal] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem('hivet_sidebar_collapsed') === 'true');
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [notifications, setNotifications] = useState<any[]>([]);
@@ -350,19 +349,19 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
 
     const superAdminLinks = [
         { name: 'Dashboard', path: '/dashboard/admin', icon: LayoutDashboard },
-        { name: 'Clinic Compliance', path: '/dashboard/admin/compliance/clinics', icon: Store },
-        { name: 'Rider Compliance', path: '/dashboard/admin/compliance/riders', icon: Truck },
-        { name: 'Customer Records', path: '/dashboard/admin/customer-records', icon: Users },
-        { name: 'Global Directory', path: '/dashboard/admin/users', icon: Shield },
-        { name: 'System Alerts', path: '/dashboard/admin/alerts', icon: Bell },
+        { name: 'Clinic reviews', path: '/dashboard/admin/compliance/clinics', icon: Store },
+        { name: 'Rider reviews', path: '/dashboard/admin/compliance/riders', icon: Truck },
+        { name: 'Customers', path: '/dashboard/admin/customer-records', icon: Users },
+        { name: 'All accounts', path: '/dashboard/admin/users', icon: Shield },
+        { name: 'Notifications', path: '/dashboard/admin/alerts', icon: Bell },
     ];
 
     const systemAdminLinks = [
         { name: 'Dashboard', path: '/dashboard/admin', icon: LayoutDashboard },
-        { name: 'Clinic Compliance', path: '/dashboard/admin/compliance/clinics', icon: Store },
-        { name: 'Rider Compliance', path: '/dashboard/admin/compliance/riders', icon: Truck },
-        { name: 'Customer Records', path: '/dashboard/admin/customer-records', icon: Users },
-        { name: 'System Alerts', path: '/dashboard/admin/alerts', icon: Bell },
+        { name: 'Clinic reviews', path: '/dashboard/admin/compliance/clinics', icon: Store },
+        { name: 'Rider reviews', path: '/dashboard/admin/compliance/riders', icon: Truck },
+        { name: 'Customers', path: '/dashboard/admin/customer-records', icon: Users },
+        { name: 'Notifications', path: '/dashboard/admin/alerts', icon: Bell },
     ];
 
     const riderLinks = [
@@ -382,16 +381,17 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     const basePath = ['super_admin', 'system_admin'].includes(user?.role || '') ? 'admin' : user?.role;
     const hasStockError = items.some(item => item.stock !== undefined && item.quantity > item.stock);
     const currentPathName = links.find(l => location.pathname === l.path)?.name || title;
-    const hubLabel = user?.role === 'business' ? CLINIC_TEXT.nav.hub : (user?.role === 'rider' ? RIDER_TEXT.nav.home : 'Hub');
-    const isHome = !currentPathName || currentPathName.trim().toLowerCase() === 'home' || currentPathName.trim().toLowerCase() === hubLabel.trim().toLowerCase();
+    const hubLabel = isAdmin ? 'Dashboard' : user?.role === 'business' ? CLINIC_TEXT.nav.hub : (user?.role === 'rider' ? RIDER_TEXT.nav.home : 'Home');
+    const isHome = !currentPathName || currentPathName.trim().toLowerCase() === 'home' || currentPathName.trim().toLowerCase() === hubLabel.trim().toLowerCase() || (isAdmin && location.pathname === '/dashboard/admin');
 
     // --- RENDER SIDEBAR LAYOUT (For Business/Admin/Rider) ---
     if (!isCustomer && user) {
         return (
-            <div className="min-h-screen min-h-[100dvh] w-full bg-[#FAF9F6] flex transition-all duration-300 overflow-x-hidden">
-                <aside className={`hidden lg:flex flex-col bg-white border-r border-accent-brown/5 fixed inset-y-0 left-0 z-50 overflow-hidden shadow-2xl shadow-accent-brown/5 transition-all duration-300 ${isCollapsed ? 'w-24' : 'w-72'}`}>
+            <div className={`min-h-screen min-h-[100dvh] w-full bg-[#FAF9F6] flex transition-all duration-300 overflow-x-hidden ${isAdmin ? 'admin-shell' : ''}`}>
+                <aside className={`hidden lg:flex flex-col bg-white border-r border-accent-brown/5 fixed inset-y-0 left-0 z-50 overflow-hidden shadow-2xl shadow-accent-brown/5 transition-all duration-300 ${isCollapsed ? 'w-24' : 'w-72'} ${isAdmin ? 'admin-sidebar' : ''}`}>
                     {/* Collapse Toggle */}
                     <button 
+                        aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                         onClick={() => setIsCollapsed(!isCollapsed)}
                         className="absolute right-[-12px] top-12 w-8 h-8 bg-white border border-accent-brown/10 rounded-full flex items-center justify-center shadow-lg z-[60] text-black hover:bg-brand hover:text-white transition-all group"
                     >
@@ -402,15 +402,13 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
 
                     <div className={`p-8 pb-10 transition-all ${isCollapsed ? 'px-4' : 'px-8'}`}>
                         <div className={`flex items-center group ${isCollapsed ? 'justify-center' : 'gap-3.5'}`}>
-                            <div className="w-12 h-12 bg-white rounded-2xl shadow-xl shadow-brand/10 flex items-center justify-center p-2 border border-brand/5 group-hover:scale-105 transition-transform shrink-0">
+                            <div className="w-16 h-16 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
                                 <Logo className="w-full h-full" />
                             </div>
                             {!isCollapsed && (
                                 <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col overflow-hidden">
-                                    <h2 className="text-2xl font-black text-accent-brown tracking-tighter leading-none mb-1 whitespace-nowrap">Hi-Vet</h2>
                                     <p className="text-xs font-bold text-brand-dark transition-all opacity-70 leading-none whitespace-nowrap">
-                                        {user?.role === 'super_admin' ? 'Super Admin' :
-                                            user?.role === 'system_admin' ? 'System Admin' :
+                                        {isAdmin ? 'Admin' :
                                                 user?.role === 'business' ? CLINIC_TEXT.nav.partnerPortal :
                                                     'Rider Portal'}
                                     </p>
@@ -437,7 +435,8 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                             }
                                         }}
                                         end={link.name === 'Dashboard'}
-                                        className={() => `flex items-center rounded-2xl font-bold text-xs transition-all group relative ${isCollapsed ? 'justify-center p-4' : 'gap-3 px-4 py-4'} ${isParentActive ? 'bg-brand text-white shadow-lg shadow-brand/20 ml-2' : 'text-accent-brown hover:text-brand hover:bg-brand/5'}`}
+                                        aria-label={isCollapsed ? link.name : undefined}
+                                        className={() => `flex items-center rounded-2xl font-bold text-xs transition-all group relative ${isCollapsed ? 'justify-center p-4' : 'gap-3 px-4 py-4'} ${isParentActive ? 'bg-brand text-white shadow-lg shadow-brand/20 ml-2' : 'text-accent-brown hover:text-brand hover:bg-brand/5'} ${isAdmin ? 'admin-nav-item' : ''}`}
                                     >
                                         {() => (
                                             <>
@@ -445,7 +444,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                                 {!isCollapsed && (
                                                     <motion.span initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} className="whitespace-nowrap">{link.name}</motion.span>
                                                 )}
-                                                {isParentActive && !isCollapsed && <motion.div layoutId="active-nav" className="absolute left-[-12px] top-1/2 -translate-y-1/2 w-1.5 h-8 bg-brand-dark rounded-r-full" />}
+                                                {isParentActive && !isCollapsed && !isAdmin && <motion.div layoutId="active-nav" className="absolute left-[-12px] top-1/2 -translate-y-1/2 w-1.5 h-8 bg-brand-dark rounded-r-full" />}
                                                 {hasSubmenus && !isCollapsed && (
                                                     <ChevronRight className={`w-4 h-4 ml-auto transition-transform ${isParentActive ? 'rotate-90 text-white/50' : 'text-accent-brown/30'}`} />
                                                 )}
@@ -578,14 +577,6 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                     deleteNotification={deleteNotification}
                                     variant="portal"
                                 />
-                                <button
-                                    onClick={() => setShowPwaModal(true)}
-                                    title="Install App & Scan QR Code"
-                                    aria-label="Install App / Scan QR Code"
-                                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-brand/10 hover:bg-brand/20 text-brand flex items-center justify-center transition-all cursor-pointer shrink-0"
-                                >
-                                    <QrCode className="w-5 h-5" />
-                                </button>
 
 
                                 {/* Desktop Clinic Avatar Block (Next to Bell) */}
@@ -619,14 +610,6 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                     deleteNotification={deleteNotification}
                                     variant="portal"
                                 />
-                                <button
-                                    onClick={() => setShowPwaModal(true)}
-                                    title="Install App & Scan QR Code"
-                                    aria-label="Install App / Scan QR Code"
-                                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-brand/10 hover:bg-brand/20 text-brand flex items-center justify-center transition-all cursor-pointer shrink-0"
-                                >
-                                    <QrCode className="w-5 h-5" />
-                                </button>
                                 {branchAction && <div className="hidden xl:block">{branchAction}</div>}
                             </div>
                         </AppTopHeader>
@@ -659,10 +642,10 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                 </div>
                             </div>
                             <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-                                <div className="hidden sm:flex items-center gap-3 bg-accent-peach/5 border border-accent-brown/5 px-4 py-2.5 rounded-2xl w-64 group focus-within:border-brand/40 transition-all">
+                                {!isAdmin && <div className="hidden sm:flex items-center gap-3 bg-accent-peach/5 border border-accent-brown/5 px-4 py-2.5 rounded-2xl w-64 group focus-within:border-brand/40 transition-all">
                                     <Search className="w-4 h-4 text-accent-brown/30" />
                                     <input type="text" placeholder="Search..." className="bg-transparent border-none outline-none text-xs font-bold text-accent-brown placeholder:text-accent-brown/20 w-full" />
-                                </div>
+                                </div>}
                                 <NotificationBell
                                     notifications={notifications}
                                     unreadCount={unreadCount}
@@ -671,19 +654,11 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                     deleteNotification={deleteNotification}
                                     variant="portal"
                                 />
-                                <button
-                                    onClick={() => setShowPwaModal(true)}
-                                    title="Install App & Scan QR Code"
-                                    aria-label="Install App / Scan QR Code"
-                                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-brand/10 hover:bg-brand/20 text-brand flex items-center justify-center transition-all cursor-pointer shrink-0"
-                                >
-                                    <QrCode className="w-5 h-5" />
-                                </button>
                                 {branchAction && <div className="hidden xl:block">{branchAction}</div>}
                             </div>
                         </header>
                     ))}
-                    <main className={`flex-1 p-4 sm:p-6 lg:p-10 w-full overflow-x-hidden ${hideHeader ? 'pt-[calc(1rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] lg:pt-10' : ''} ${user?.role === 'business' ? 'pb-28 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px)+1.5rem)] md:pb-6 lg:pb-10' : ''}`}>
+                    <main className={`flex-1 p-4 sm:p-6 lg:p-10 w-full overflow-x-hidden ${isAdmin ? 'admin-main' : ''} ${hideHeader ? 'pt-[calc(1rem+env(safe-area-inset-top,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))] lg:pt-10' : ''} ${user?.role === 'business' ? 'pb-28 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px)+1.5rem)] md:pb-6 lg:pb-10' : ''}`}>
                         <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="w-full">
                             {children}
                         </motion.div>
@@ -808,7 +783,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                             </Link>
                         ) : (
                             <div className="flex items-center gap-2.5 sm:gap-3.5 shrink-0 transition-opacity">
-                                <div className="w-9 h-9 sm:w-11 sm:h-11 bg-white rounded-xl shadow-md shadow-brand/10 flex items-center justify-center p-1.5 shrink-0 border border-brand/5">
+                                <div className="w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center shrink-0">
                                     <Logo className="w-full h-full" />
                                 </div>
                                 <div className="flex flex-col min-w-0">
@@ -867,15 +842,6 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                 deleteNotification={deleteNotification}
                                 variant="customer"
                             />
-
-                            <button
-                                onClick={() => setShowPwaModal(true)}
-                                title="Install App & Scan QR Code"
-                                aria-label="Install App / Scan QR Code"
-                                className="min-w-[44px] min-h-[44px] w-11 h-11 sm:w-12 sm:h-12 bg-brand/10 hover:bg-brand/20 text-brand rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer shrink-0"
-                            >
-                                <QrCode className="w-5 h-5" />
-                            </button>
 
                             <div className="hidden lg:flex items-center">
                                 <motion.button
@@ -1156,11 +1122,6 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                 isOpen={isLogoutModalOpen}
                 onClose={() => setIsLogoutModalOpen(false)}
                 onConfirm={handleLogout}
-            />
-            <PwaInstallModal
-                isOpen={showPwaModal}
-                onClose={() => setShowPwaModal(false)}
-                initialRole={user?.role === 'business' ? 'business' : user?.role === 'rider' ? 'rider' : 'customer'}
             />
         </div>
     );

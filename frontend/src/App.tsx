@@ -501,8 +501,8 @@ function StatusBarManager() {
       let docBg = '#FAF9F6';
 
       if (isDarkHeroPage) {
-        // Hero is 100dvh. Compliment the dark background color with #000000 on hero,
-        // and transition to #FFFFFF to compliment the white sticky navbar once scrolled.
+        // Opaque browser/OS fallback only: theme-color cannot put the hero image
+        // behind a status bar that Chrome reserves outside the web viewport.
         const heroCutoff = Math.max(window.innerHeight - 90, 300);
         const isScrolledPastHero = window.scrollY > heroCutoff;
         if (!isScrolledPastHero) {
@@ -541,7 +541,8 @@ function StatusBarManager() {
       // Update meta theme-color immediately
       let meta = document.querySelector('meta[name="theme-color"]');
       if (!targetColor) {
-        // On landing hero, remove meta theme-color to keep status bar transparent/translucent
+        // Omitting a hint leaves system-bar rendering to the browser; it does not
+        // request or guarantee a transparent Android status bar.
         if (meta) {
           meta.remove();
         }

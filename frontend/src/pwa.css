@@ -1,0 +1,25 @@
+/* Installed app presentation only. Browser dialogs keep their existing layout. */
+@media (display-mode: standalone) {
+  .pwa-dialog-overlay {
+    align-items: flex-end;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .pwa-dialog-panel {
+    margin: 0;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 16px);
+    border-radius: 2rem 2rem 0 0;
+    border-bottom: 0;
+  }
+
+  .pwa-info-panel {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .pwa-install-panel {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}

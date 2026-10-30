@@ -1,4 +1,5 @@
 // PWA Manager for Hi-Vet Multi-Portal Application
+import { buildPwaInstallUrl } from './pwaInstallUrl';
 
 export type PwaRole = 'customer' | 'business' | 'rider';
 
@@ -149,8 +150,6 @@ export function canPromptNativeInstall(): boolean {
  * Generates the absolute URL for the QR code for a given role.
  */
 export function getPwaInstallUrl(role: PwaRole): string {
-  if (typeof window === 'undefined') return '';
-  const origin = window.location.origin;
   const config = PWA_PORTALS[role];
-  return `${origin}${config.path}`;
+  return buildPwaInstallUrl(config.path, import.meta.env.VITE_APP_URL);
 }

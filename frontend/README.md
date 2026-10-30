@@ -1,5 +1,7 @@
 # React + TypeScript + Vite
 
+Hi-Vet app install QR codes and copied links use `https://hivet-crm.vercel.app`, including during local development. Set `VITE_APP_URL` to a different public HTTPS origin when the deployment domain changes. The customer, clinic, and rider links keep their own portal paths. See `.env.example`.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

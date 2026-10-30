@@ -168,10 +168,10 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
             {/* Information Modal */}
             <AnimatePresence>
                 {activeSection && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+                    <div role="dialog" aria-modal="true" aria-labelledby="footer-info-title" className="pwa-dialog-overlay fixed inset-0 z-[100] flex items-center justify-center p-6">
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setActiveSection(null)} className="absolute inset-0 bg-black/95 backdrop-blur-3xl" />
-                        <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} className="relative w-full max-w-2xl bg-[#111] rounded-[2rem] sm:rounded-[3rem] p-6 sm:p-10 lg:p-16 border border-white/10 shadow-2xl overflow-hidden" >
-                            <button onClick={() => setActiveSection(null)} className="absolute top-5 right-5 sm:top-8 sm:right-8 w-10 h-10 sm:w-12 sm:h-12 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-white hover:bg-brand hover:text-accent-brown transition-all" >
+                        <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} className="pwa-dialog-panel pwa-info-panel relative w-full max-w-2xl bg-[#111] rounded-[2rem] sm:rounded-[3rem] p-6 sm:p-10 lg:p-16 border border-white/10 shadow-2xl overflow-hidden" >
+                            <button aria-label="Close information" onClick={() => setActiveSection(null)} className="absolute top-5 right-5 sm:top-8 sm:right-8 w-10 h-10 sm:w-12 sm:h-12 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-white hover:bg-brand hover:text-accent-brown transition-all" >
                                 <X className="w-6 h-6" />
                             </button>
                             <div className="space-y-10">
@@ -184,7 +184,7 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
                                     </div>
                                     <div className="space-y-2">
                                         <p className="text-xs font-bold text-brand">Help & Information</p>
-                                        <h3 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight">{legalContent[activeSection].title}</h3>
+                                        <h3 id="footer-info-title" className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight">{legalContent[activeSection].title}</h3>
                                     </div>
                                 </div>
                                 <p className="text-base sm:text-lg text-white/60 leading-relaxed italic font-medium">"{legalContent[activeSection].content}"</p>

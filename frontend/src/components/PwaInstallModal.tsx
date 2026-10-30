@@ -116,7 +116,7 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
   return (
     <AnimatePresence>
       <div
-        className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs overflow-y-auto"
+        className="pwa-dialog-overlay fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs overflow-y-auto"
         onClick={onClose}
         role="dialog"
         aria-modal="true"
@@ -127,7 +127,7 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
           transition={{ duration: 0.2 }}
-          className="bg-white rounded-3xl sm:rounded-[2rem] w-full max-w-[680px] overflow-hidden shadow-2xl border border-accent-brown/10 relative flex flex-col my-auto max-h-[92vh]"
+          className="pwa-dialog-panel pwa-install-panel bg-white rounded-3xl sm:rounded-[2rem] w-full max-w-[680px] overflow-hidden shadow-2xl border border-accent-brown/10 relative flex flex-col my-auto max-h-[92vh]"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Top Header Bar */}
@@ -205,7 +205,7 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
 
               <div className="mt-2.5 flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>Safe direct link</span>
+                <span>{new URL(getPwaInstallUrl(activeRole)).hostname}</span>
               </div>
             </div>
 

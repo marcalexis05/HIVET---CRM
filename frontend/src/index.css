@@ -3,6 +3,7 @@
 @import "tailwindcss";
 @import "./auth.css";
 @import "./admin.css";
+@import "./pwa.css";
 
 @theme {
   --color-brand: #ff6b00;
@@ -48,8 +49,8 @@ body {
   background-color: #000000;
 }
 
-/* Edge-to-edge: the document always fills the whole glass (behind the status bar and
-   gesture bar, with viewport-fit=cover) so page colors run continuously to every edge. */
+/* Fill the viewport Chrome makes available. viewport-fit=cover opts in to exposed
+   safe areas; CSS cannot make Android's system bars transparent by itself. */
 html,
 body,
 #root {

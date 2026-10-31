@@ -14,6 +14,7 @@ import MapPickerModal from '../../components/MapPickerModal';
 import ModernModal from '../../components/ModernModal';
 import QrCodeModal from '../../components/QrCodeModal';
 import { formatOrderReference } from '../../utils/textFormatters';
+import { loadPickupClinics } from '../../utils/checkoutBranches';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -272,6 +273,9 @@ const Checkout = () => {
     });
 
     const [clinics, setClinics] = useState<any[]>([]);
+    const [loadingBranches, setLoadingBranches] = useState(true);
+    const [branchError, setBranchError] = useState('');
+    const [branchRetry, setBranchRetry] = useState(0);
     const [shippingFee, setShippingFee] = useState(0);
     const [selectedBranch, setSelectedBranch] = useState<any>(null);
     const [selectedClinic, setSelectedClinic] = useState<any>(null);
@@ -404,19 +408,46 @@ const Checkout = () => {
         setShowAddrModal(false);
     };
 
-    // Fetch addresses & clinics on mount
+    const checkoutProductsKey = JSON.stringify(items.map(item => ({ id: item.product_id || item.id, business_id: item.business_id || item.clinic_id })));
+    useEffect(() => {
+        const controller = new AbortController();
+        let cancelled = false;
+        const timer = setTimeout(() => controller.abort(), 15000);
+        setLoadingBranches(true);
+        setBranchError('');
+        void loadPickupClinics(items, payingOrder, controller.signal).then(result => {
+            if (cancelled) return;
+            setClinics(result);
+            if (selectedBranch && !result.some(clinic => clinic.branches.some((branch: any) => branch.id === Number(selectedBranch.id)))) {
+                setSelectedBranch(null);
+                setSelectedClinic(null);
+            }
+            setDeliveryInfo(previous => {
+                if (!previous.branch_id || result.some(clinic => clinic.id === Number(previous.clinic_id) && clinic.branches.some((branch: any) => branch.id === Number(previous.branch_id)))) return previous;
+                return { ...previous, clinic_id: null, branch_id: null };
+            });
+        }).catch(error => {
+            if (!cancelled) {
+                setClinics([]);
+                setBranchError(error instanceof Error && error.name !== 'AbortError' ? error.message : 'Clinic branches took too long to load. Please try again.');
+            }
+        }).finally(() => {
+            clearTimeout(timer);
+            if (!cancelled) setLoadingBranches(false);
+        });
+        return () => { cancelled = true; clearTimeout(timer); controller.abort(); };
+    }, [checkoutProductsKey, payingOrder?.clinic_id, payingOrder?.business_id, payingOrder?.branch_id, branchRetry]);
+
+    // Fetch addresses separately so an address failure cannot hide pickup branches.
     useEffect(() => {
         const fetchData = async () => {
             if (!user) return;
             setLoadingData(true);
             try {
                 const token = localStorage.getItem('hivet_token');
-                const [addrRes, clinicsRes] = await Promise.all([
-                    fetch(`${API}/api/customer/addresses`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    }),
-                    fetch(`${API}/api/clinics`)
-                ]);
+                const addrRes = await fetch(`${API}/api/customer/addresses`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
 
                 if (addrRes.ok) {
                     const data = await addrRes.json();
@@ -449,10 +480,6 @@ const Checkout = () => {
                     }));
                 }
 
-                if (clinicsRes.ok) {
-                    const d = await clinicsRes.json();
-                    setClinics(d.clinics || []);
-                }
             } catch (err) {
                 console.error('Error fetching checkout data:', err);
                 setDeliveryInfo(prev => ({
@@ -1022,22 +1049,12 @@ const Checkout = () => {
                                                 <div className="space-y-2">
                                                     <label className="text-xs font-semibold text-slate-700">Clinic Branch</label>
                                                     <div className="grid grid-cols-1 gap-2">
-                                                        {clinics
-                                                            .filter(c => {
-                                                                if (payingOrder) {
-                                                                    // Primary: Match by clinic/business ID
-                                                                    if (payingOrder.clinic_id || payingOrder.business_id) {
-                                                                        return Number(payingOrder.clinic_id || payingOrder.business_id) === c.id;
-                                                                    }
-                                                                    // Fallback: Match by branch if the parent ID is missing (robustness for existing orders)
-                                                                    if (payingOrder.branch_id) {
-                                                                        return (c.branches || []).some((b: any) => Number(b.id) === Number(payingOrder.branch_id));
-                                                                    }
-                                                                }
-                                                                return items.some(item => (Number(item.business_id) === c.id || Number(item.clinic_id) === c.id));
-                                                            })
+                                                        {loadingBranches && <p role="status" className="flex items-center gap-2 py-4 text-sm text-slate-500"><Loader2 size={16} className="animate-spin" />Loading clinic branches...</p>}
+                                                        {!loadingBranches && branchError && <div role="alert" className="rounded-2xl border border-orange-100 bg-orange-50 p-4 text-sm text-accent-brown"><p>{branchError}</p><button type="button" onClick={() => setBranchRetry(value => value + 1)} className="mt-2 font-bold text-brand">Try again</button></div>}
+                                                        {!loadingBranches && !branchError && !clinics.some(clinic => clinic.branches.length > 0) && <p role="status" className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">No pickup branches are available for these items. Please choose delivery or contact the selling clinic.</p>}
+                                                        {!loadingBranches && !branchError && clinics
                                                             .flatMap(c => (c.branches || []).map((b: any) => {
-                                                                const isSelected = deliveryInfo.clinic_id === c.id && deliveryInfo.branch_id === b.id;
+                                                                const isSelected = Number(deliveryInfo.clinic_id) === Number(c.id) && Number(deliveryInfo.branch_id) === Number(b.id);
                                                                 return (
                                                                     <button
                                                                         key={`${c.id}-${b.id}`}
@@ -1045,9 +1062,9 @@ const Checkout = () => {
                                                                         onClick={() => {
                                                                             setDeliveryInfo(prev => ({
                                                                                 ...prev,
-                                                                                clinic_id: c.id,
-                                                                                branch_id: b.id,
-                                                                                address: `${b.address_line1}, ${b.address_line2}`,
+                                                                                clinic_id: Number(c.id),
+                                                                                branch_id: Number(b.id),
+                                                                                address: [b.address_line1, b.address_line2].filter(Boolean).join(', '),
                                                                                 phone: b.phone || c.phone || prev.phone
                                                                             }));
                                                                             setSelectedBranch(b);
@@ -1056,19 +1073,20 @@ const Checkout = () => {
                                                                             setBranchActiveMarker(null);
                                                                             branchSvRef.current = null;
                                                                         }}
-                                                                        className={`w-full text-left p-6 rounded-3xl border-2 transition-all flex items-center gap-5 ${isSelected ? 'border-brand bg-brand/5 shadow-xl shadow-brand/10' : 'border-gray-100 bg-white hover:border-brand/30 hover:shadow-lg'}`}
+                                                                        className={`w-full text-left p-4 sm:p-6 rounded-3xl border-2 transition-all flex items-center gap-3 sm:gap-5 ${isSelected ? 'border-brand bg-brand/5 shadow-xl shadow-brand/10' : 'border-gray-100 bg-white hover:border-brand/30 hover:shadow-lg'}`}
                                                                     >
                                                                         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border-2 transition-all ${isSelected ? 'bg-brand text-white border-brand' : 'bg-gray-50 text-black border-gray-100'}`}>
                                                                             <MapPin className="w-6 h-6" />
                                                                         </div>
                                                                         <div className="flex-1 min-w-0">
-                                                                            <div className="flex items-center gap-2 mb-1">
-                                                                                <span className="text-sm font-bold text-accent-brown leading-none">{c.name}</span>
+                                                                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                                                                                <span className="text-sm font-bold text-accent-brown leading-snug">{c.name}</span>
                                                                                 {b.is_main && (
                                                                                     <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-accent-brown text-white">Main Branch</span>
                                                                                 )}
                                                                             </div>
-                                                                            <p className="text-xs font-medium text-slate-600 truncate">{b.address_line1}</p>
+                                                                            <p className="text-xs font-semibold text-accent-brown">{b.name || 'Clinic branch'}</p>
+                                                                            <p className="text-xs font-medium text-slate-600 break-words">{[b.address_line1, b.address_line2].filter(Boolean).join(', ')}</p>
                                                                             <p className="text-xs font-medium text-brand mt-1 opacity-75">Available Branch</p>
                                                                         </div>
                                                                         <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-brand border-brand' : 'border-gray-100'}`}>

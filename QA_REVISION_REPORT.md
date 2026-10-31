@@ -104,6 +104,14 @@ Local startup verification: the API was blocked by an old unconditional ALTER TA
 - Clinic/customer address popups are compact and retain address, phone, Directions and close actions. The GPS Connected badge is removed. Both map pin captions explicitly use white text. Street View pins are enlarged to 64 by 80 pixels with a thicker white outline, larger bold white labels and bordered orange captions. Opening a stop uses a wide panorama facing that address, tilted slightly toward its ground pin. Regular-map keyboard shortcuts are disabled through the supported option; required Google attribution and legal links remain visible.
 - TypeScript/Vite build, existing 16 frontend tests and source whitespace checks pass. Browser interaction remains disabled in Work settings, so final Street View imagery, coverage, pin placement and mobile touch behavior need live verification. Street View availability depends on provider coverage at each saved address. No delivery status, saved coordinates or API settings were changed for this map work.
 
+## Checkout pickup branch follow-up
+
+- Checkout uses one targeted /api/checkout/pickup-branches request for its product IDs instead of serial full-directory and product requests. The endpoint returns real seller/branch details in three batched reads, omits archived products, validates IDs, and does not change clinic approvals or expose account credentials. Existing public product details already expose these seller branches. An older-backend fallback remains for rolling deployments.
+- Address loading is separate from branch loading. Branch loading, failure/retry and genuinely empty states are visible. Branch cards show both clinic and branch names with full addresses, avoid duplicate branch IDs, preserve selected IDs in the order payload, and clear a selection that no longer belongs to the checkout seller.
+- The local API also experienced connection-pool timeouts and blocking dashboard polls. Ten read-only handlers for catalog/products, clinics, customer orders, notifications and the rider home/order polling path now run in FastAPI's worker pool. Their queries, responses and authorization are unchanged. The available-tasks alias awaits the worker call. Reference: https://fastapi.tiangolo.com/async/ . The development API was restarted with python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload, avoiding duplicate application imports from python main.py.
+- Live verification after restart: /api/checkout/pickup-branches?product_ids=2 returned HTTP 200 in 6.89 seconds with Hi-Vet Main Hospital Branch (1), Main Branch (3), and Hi-Vet (11). The local API completed startup successfully.
+- Verification: all 38 backend tests, 22 frontend tests, the TypeScript/Vite build and source whitespace checks pass. Tests cover scoped batched branch results, invalid IDs, archived products, approval preservation, cart and resumed-order handling, older-server fallback and the single-request path. Earlier read-only inspection confirmed product 1 belongs to clinic 1 and its product data contains three real branches omitted from the approved-clinic directory. No live purchase was submitted. This follow-up requires both frontend and backend deployment to appear on Vercel/Render.
+
 ## Modified source files
 
 - `.gitignore`
@@ -171,3 +179,5 @@ Local startup verification: the API was blocked by an old unconditional ALTER TA
 - `frontend/tests/orderReferences.test.mjs`
 - `frontend/tests/sessionCheck.test.mjs`
 - `frontend/src/components/RiderMapControls.tsx`
+- `frontend/src/utils/checkoutBranches.ts`
+- `frontend/tests/checkoutBranches.test.mjs`

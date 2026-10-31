@@ -3405,7 +3405,7 @@ async def upload_product_image(
 # ─── Product Catalog Endpoints ───────────────────────────────────────────────
 
 @app.get("/api/catalog", response_model=List[ProductSchema])
-async def get_public_catalog(db: Session = Depends(get_db)):
+def get_public_catalog(db: Session = Depends(get_db)):
     """Fetch all products across all clinics for the user marketplace."""
     results = db.query(Product, BusinessProfile.clinic_name)\
         .join(BusinessProfile, Product.business_id == BusinessProfile.id)\
@@ -3421,7 +3421,7 @@ async def get_public_catalog(db: Session = Depends(get_db)):
     return catalog
 
 @app.get("/api/catalog/{product_id}", response_model=ProductSchema)
-async def get_product_detail(product_id: int, branch_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+def get_product_detail(product_id: int, branch_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
     """Fetch a single product's details by ID, computing real stars and review count."""
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
@@ -5171,8 +5171,37 @@ async def set_default_branch(
 
 # ─── Public Clinic / Services Endpoints (for customer booking) ────────────────
 
+@app.get("/api/checkout/pickup-branches")
+def get_checkout_pickup_branches(product_ids: str = Query(...), db: Session = Depends(get_db)):
+    """Return only public seller/branch details for the checkout's catalog items."""
+    try:
+        ids = {int(value) for value in product_ids.split(",")}
+        if not ids or len(ids) > 100 or any(value <= 0 for value in ids):
+            raise ValueError()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Choose valid checkout products")
+    products = db.query(Product.id, Product.business_id).filter(Product.id.in_(ids), Product.is_archived.is_not(True)).all()
+    seller_ids = {product.business_id for product in products if product.business_id}
+    if not seller_ids:
+        return {"clinics": []}
+    businesses = db.query(BusinessProfile).filter(BusinessProfile.id.in_(seller_ids)).all()
+    branches = db.query(BusinessBranch).filter(BusinessBranch.business_id.in_(seller_ids)).order_by(BusinessBranch.is_main.desc(), BusinessBranch.id).all()
+    by_seller = {business.id: [] for business in businesses}
+    for branch in branches:
+        if branch.business_id not in by_seller:
+            continue
+        address = ", ".join(part.strip() for part in [branch.house_number, branch.block_number, branch.street, branch.subdivision, branch.sitio, branch.barangay, branch.city, branch.province] if part and part.strip())
+        by_seller[branch.business_id].append({
+            "id": branch.id, "name": branch.name, "is_main": branch.is_main,
+            "phone": branch.phone, "address_line1": address or branch.address_line1 or "",
+            "address_line2": "" if address else branch.address_line2 or "",
+            "lat": branch.lat, "lng": branch.lng
+        })
+    return {"clinics": [{"id": business.id, "name": business.clinic_name or "Clinic", "phone": business.clinic_phone,
+                         "branches": by_seller[business.id]} for business in businesses]}
+
 @app.get("/api/clinics")
-async def get_clinics(db: Session = Depends(get_db)):
+def get_clinics(db: Session = Depends(get_db)):
     """Public: fetch all approved clinics with their active services and hours."""
     businesses = db.query(BusinessProfile).filter(BusinessProfile.compliance_status == "verified").all()
     result = []
@@ -9018,7 +9047,7 @@ async def confirm_paymongo_payment(order_id: int, request: Request, db: Session 
     return {"message": "Payment confirmed", "status": order.status}
 
 @app.get("/api/orders")
-async def get_orders(request: Request, db: Session = Depends(get_db)):
+def get_orders(request: Request, db: Session = Depends(get_db)):
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -9230,7 +9259,7 @@ async def delete_order(order_id: int, request: Request, db: Session = Depends(ge
 # ---------------------------------------------------------------------------
 
 @app.get("/api/notifications")
-async def get_notifications(request: Request, db: Session = Depends(get_db)):
+def get_notifications(request: Request, db: Session = Depends(get_db)):
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -10439,7 +10468,7 @@ async def handle_return_request(order_id: int, body: dict, db: Session = Depends
 # ─── Rider Specific Endpoints ───────────────────────────────────────────────
 
 @app.get("/api/rider/profile")
-async def get_rider_role_profile(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+def get_rider_role_profile(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Fetch rider-specific profile data including online status."""
     if current_user.get("role") != "rider":
         raise HTTPException(status_code=403, detail="Rider access required")
@@ -10493,7 +10522,7 @@ async def update_rider_gps_location(body: dict, db: Session = Depends(get_db), c
     return {"status": "success"}
 
 @app.get("/api/rider/earnings")
-async def get_rider_earnings_summary(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+def get_rider_earnings_summary(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Fetch earnings summary: today, total completed orders, and accumulated earnings."""
     if current_user.get("role") != "rider":
         raise HTTPException(status_code=403, detail="Rider access required")
@@ -10674,7 +10703,7 @@ async def get_rider_orders_analytics(db: Session = Depends(get_db), current_user
     }
 
 @app.get("/api/rider/orders/all")
-async def get_rider_orders_all(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+def get_rider_orders_all(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Fetch all orders (available, active, and history) for the rider's archive."""
     if current_user.get("role") != "rider":
         raise HTTPException(status_code=403, detail="Rider access required")
@@ -10743,7 +10772,7 @@ async def get_rider_orders_all(db: Session = Depends(get_db), current_user: dict
     return {"orders": all_orders}
 
 @app.get("/api/rider/available-orders")
-async def get_available_jobs(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+def get_available_jobs(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Pull list of orders requiring delivery (Status = 'Processing' and no rider assigned).
     Filters by distance if rider location is known."""
     if current_user.get("role") != "rider":
@@ -10865,10 +10894,10 @@ async def get_available_jobs(db: Session = Depends(get_db), current_user: dict =
 @app.get("/api/rider/available-tasks")
 async def get_available_tasks_alias(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Alias for available-orders to match frontend."""
-    return await get_available_jobs(db, current_user)
+    return await run_in_threadpool(get_available_jobs, db, current_user)
 
 @app.get("/api/rider/active-order")
-async def get_ongoing_job(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+def get_ongoing_job(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Check if the current rider has an active delivery in progress."""
     if current_user.get("role") != "rider":
         raise HTTPException(status_code=403, detail="Rider access required")

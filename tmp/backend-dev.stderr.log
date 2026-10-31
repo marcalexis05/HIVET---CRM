@@ -1,0 +1,19 @@
+INFO:     Will watch for changes in these directories: ['C:\\Apache24\\htdocs\\HIVET - CRM\\backend']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [36148] using WatchFiles
+C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\google\api_core\_python_version_support.py:275: FutureWarning: You are using a Python version (3.11.9) which Google will stop supporting in new releases of google.api_core once it reaches its end of life (2027-10-24). Please upgrade to the latest Python version, or at least Python 3.12, to continue receiving updates for google.api_core past that date.
+  warnings.warn(message, FutureWarning)
+C:\Users\Gene\AppData\Roaming\Python\Python311\site-packages\google\auth\transport\grpc.py:43: FutureWarning: grpcio < 1.83.0 does not support Post-Quantum Cryptography (PQC). Support for non-PQC environments is deprecated. In April 2027, google-auth will raise its minimum requirements to enforce grpcio >= 1.83.0. For more details on Google Cloud's post-quantum security migration, visit: https://cloud.google.com/security/resources/post-quantum-cryptography
+  warnings.warn(
+C:\Apache24\htdocs\HIVET - CRM\backend\main.py:65: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+INFO:     Started server process [23840]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

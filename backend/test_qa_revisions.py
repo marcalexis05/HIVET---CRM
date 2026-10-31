@@ -27,7 +27,7 @@ from types import SimpleNamespace
 import sqlalchemy as sa
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from sqlalchemy.pool import StaticPool
-from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks, UploadFile, File, Form, Query
 from fastapi.responses import JSONResponse, FileResponse
 from starlette.concurrency import run_in_threadpool
 from fastapi.testclient import TestClient
@@ -66,7 +66,7 @@ class QaRevisionTests(unittest.TestCase):
         }
         tree = ast.parse(Path(__file__).with_name('main.py').read_text(encoding='utf-8'))
         names = {'create_access_token', 'decode_token', 'get_current_user', 'validate_portal_session',
-                 'get_public_catalog', 'ProductSchema', 'BranchStockSchema', 'order_product_points', 'previous_order_points', 'order_receipt_details', 'confirm_order_received',
+                 'get_checkout_pickup_branches', 'get_public_catalog', 'ProductSchema', 'BranchStockSchema', 'order_product_points', 'previous_order_points', 'order_receipt_details', 'confirm_order_received',
                  'OrderReturnRequest', 'request_order_return', 'upload_refund_photo', 'view_refund_photo',
                  'assigned_delivery', 'upload_delivery_proof', 'view_delivery_proof',
                  'DeliveryStepUpdate', 'BusinessOrderStatusUpdate', 'update_delivery_status', 'update_delivery_status_alias',
@@ -590,6 +590,29 @@ class QaRevisionTests(unittest.TestCase):
             for day in range(7):
                 db.add(self.scope['BusinessOperatingHours'](business_id=1, day_of_week=day, is_open=True, open_time='09:00 AM', close_time='05:00 PM'))
             db.commit()
+
+    def test_checkout_branches_load_only_product_sellers_without_full_clinic_directory(self):
+        self.seed_catalog()
+        with self.factory() as db:
+            db.get(self.models['business'], 1).compliance_status = 'pending'
+            db.get(self.models['business'], 1).clinic_name = 'Product Seller'
+            db.add(self.scope['BusinessBranch'](id=1, business_id=1, name='Pickup Branch', phone='09171234567', street='Ruby Street', city='Caloocan', is_main=True))
+            db.add(self.models['business'](id=2, email='other@example.test', password_hash='not-used', clinic_name='Unrelated Seller'))
+            db.add(self.scope['BusinessBranch'](id=2, business_id=2, name='Unrelated Branch', phone='09171234568'))
+            db.commit()
+        response = self.client.get('/api/checkout/pickup-branches?product_ids=1,1')
+        self.assertEqual(response.status_code, 200, response.text)
+        clinics = response.json()['clinics']
+        self.assertEqual([clinic['id'] for clinic in clinics], [1])
+        self.assertEqual(clinics[0]['branches'][0]['name'], 'Pickup Branch')
+        self.assertEqual(clinics[0]['branches'][0]['address_line1'], 'Ruby Street, Caloocan')
+        with self.factory() as db:
+            self.assertEqual(db.get(self.models['business'], 1).compliance_status, 'pending')
+            db.get(self.scope['Product'], 1).is_archived = True
+            db.commit()
+        self.assertEqual(self.client.get('/api/checkout/pickup-branches?product_ids=1').json()['clinics'], [])
+        self.assertEqual(self.client.get('/api/checkout/pickup-branches?product_ids=bad').status_code, 400)
+        self.assertEqual(self.client.get('/api/checkout/pickup-branches?product_ids=-1').status_code, 400)
 
     def test_cash_order_sms_sent_once_after_saved_order(self):
         self.seed_catalog()

@@ -1,0 +1,18 @@
+DEBUG: GEMINI_API_KEY loaded: True
+INFO:     127.0.0.1:54729 - "OPTIONS /api/rider/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55325 - "OPTIONS /api/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49275 - "OPTIONS /api/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51907 - "OPTIONS /api/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63178 - "OPTIONS /api/rider/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56232 - "OPTIONS /api/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58536 - "OPTIONS /api/rider/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59385 - "GET /api/catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55325 - "GET /api/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55104 - "GET /api/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51867 - "GET /api/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53374 - "GET /api/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61820 - "GET /api/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55325 - "GET /api/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55104 - "GET /api/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51867 - "GET /api/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53374 - "GET /api/notifications HTTP/1.1" 200 OK

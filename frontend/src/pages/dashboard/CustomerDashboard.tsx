@@ -572,7 +572,7 @@ const CustomerDashboard = () => {
 
                             {/* Rapid Insights Grid */}
                             <div className="grid grid-cols-2 md:grid-cols-1 gap-3 sm:gap-4">
-                                <div className="p-4 sm:p-5 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col justify-center">
+                                <button type="button" onClick={() => navigate('/dashboard/customer/reservations?status=All')} className="text-left hover:border-brand transition-colors p-4 sm:p-5 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col justify-center">
                                     <span className="text-xs font-bold text-black/50 mb-1">Total appointments</span>
                                     <div className="flex items-baseline gap-1">
                                         <span className="text-xl sm:text-2xl font-black text-accent-brown tracking-tight">
@@ -580,8 +580,8 @@ const CustomerDashboard = () => {
                                         </span>
                                         <span className="text-[10px] font-bold text-black/40">Total</span>
                                     </div>
-                                </div>
-                                <div className="p-4 sm:p-5 bg-brand/5 border border-brand/5 rounded-2xl flex flex-col justify-center">
+                                </button>
+                                <button type="button" onClick={() => navigate('/dashboard/customer/reservations?status=Completed')} className="text-left hover:border-brand transition-colors p-4 sm:p-5 bg-brand/5 border border-brand/5 rounded-2xl flex flex-col justify-center">
                                     <span className="text-xs font-bold text-brand mb-1">Successful visits</span>
                                     <div className="flex items-baseline gap-1">
                                         <span className="text-xl sm:text-2xl font-black text-brand tracking-tight">
@@ -589,7 +589,7 @@ const CustomerDashboard = () => {
                                         </span>
                                         <span className="text-[10px] font-bold text-brand/40">Done</span>
                                     </div>
-                                </div>
+                                </button>
                             </div>
                         </div>
                     </motion.div>

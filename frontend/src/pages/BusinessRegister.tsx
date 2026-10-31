@@ -1,10 +1,11 @@
+import { registrationNameError, validName, nameInputAllowed, NAME_ERROR } from '../utils/nameValidation';
 import { Logo } from '../components/Logo';
 ﻿import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Mail, AlertCircle, Lock, ArrowRight, ChevronLeft,
     ShieldCheck, MailCheck, Building2, Eye, EyeOff,
-    FileCheck, Landmark, User, MapPin, Upload, X, CheckCircle2, Clock
+    FileCheck, Landmark, MapPin, Upload, X, CheckCircle2, Clock
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PasswordStrength } from '../components/PasswordStrength';
@@ -259,6 +260,8 @@ const BusinessRegister = () => {
             }
             setStep(2);
         } else if (step === 2) {
+            const nameError = registrationNameError(ownerFirstName, ownerMiddleName, ownerLastName);
+            if (nameError) return setError(nameError);
             if (!ownerFirstName || !ownerLastName || !ownerBirthday || !ownerGender) return setError('Please enter your name, birthdate, and sex.');
             const bVal = validateBirthday(ownerBirthday, 'person birthday');
             if (!bVal.isValid) return setError(bVal.error || 'Please choose a valid birthdate.');
@@ -369,9 +372,9 @@ const BusinessRegister = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     email, password, otp: otpCode,
-                    first_name: ownerFirstName,
-                    middle_name: ownerMiddleName,
-                    last_name: ownerLastName,
+                    first_name: ownerFirstName.trim(),
+                    middle_name: ownerMiddleName.trim(),
+                    last_name: ownerLastName.trim(),
                     suffix: ownerSuffix,
                     phone: ownerPhone,
                     birthday: ownerBirthday,
@@ -600,8 +603,7 @@ const BusinessRegister = () => {
                                         First Name <span className="text-brand-dark">*<span className="sr-only"> (required)</span></span>
                                     </label>
                                     <div className="relative flex items-center min-h-[52px] sm:min-h-[56px] border border-accent-brown/15 focus-within:border-brand-dark focus-within:ring-2 focus-within:ring-brand-dark/20 rounded-2xl transition-all bg-[#F7F6F2] overflow-hidden">
-                                        <User className="w-5 h-5 text-accent-brown/40 group-focus-within:text-brand-dark transition-colors shrink-0 ml-4 mr-3" aria-hidden="true" />
-                                        <input id="biz-owner-first-name" type="text" value={ownerFirstName} onChange={e => setOwnerFirstName(e.target.value)} placeholder="Juan" className="w-full bg-transparent py-3.5 pr-4 text-accent-brown font-bold text-base placeholder:text-slate-500 outline-none" />
+                                        <input id="biz-owner-first-name" type="text" value={ownerFirstName} onBlur={() => { if (!validName(ownerFirstName, true)) setError(NAME_ERROR); }} pattern="[\p{L}\p{M} ]+" title={NAME_ERROR} onChange={e => { if (!nameInputAllowed(e.target.value)) { setError(NAME_ERROR); return; } setOwnerFirstName(e.target.value); setError(current => current === NAME_ERROR ? '' : current); }} placeholder="Juan" className="w-full bg-transparent py-3.5 px-4 text-accent-brown font-bold text-base placeholder:text-slate-500 outline-none" />
                                     </div>
                                 </div>
                                 <div className="group space-y-1.5">
@@ -609,7 +611,7 @@ const BusinessRegister = () => {
                                         Last Name <span className="text-brand-dark">*<span className="sr-only"> (required)</span></span>
                                     </label>
                                     <div className="relative flex items-center min-h-[52px] sm:min-h-[56px] border border-accent-brown/15 focus-within:border-brand-dark focus-within:ring-2 focus-within:ring-brand-dark/20 rounded-2xl transition-all bg-[#F7F6F2] overflow-hidden">
-                                        <input id="biz-owner-last-name" type="text" value={ownerLastName} onChange={e => setOwnerLastName(e.target.value)} placeholder="Dela Cruz" className="w-full bg-transparent py-3.5 px-4 text-accent-brown font-bold text-base placeholder:text-slate-500 outline-none" />
+                                        <input id="biz-owner-last-name" type="text" value={ownerLastName} onBlur={() => { if (!validName(ownerLastName, true)) setError(NAME_ERROR); }} pattern="[\p{L}\p{M} ]+" title={NAME_ERROR} onChange={e => { if (!nameInputAllowed(e.target.value)) { setError(NAME_ERROR); return; } setOwnerLastName(e.target.value); setError(current => current === NAME_ERROR ? '' : current); }} placeholder="Dela Cruz" className="w-full bg-transparent py-3.5 px-4 text-accent-brown font-bold text-base placeholder:text-slate-500 outline-none" />
                                     </div>
                                 </div>
                             </div>
@@ -621,7 +623,7 @@ const BusinessRegister = () => {
                                         <span className="text-xs font-normal text-slate-500">Optional</span>
                                     </label>
                                     <div className="relative flex items-center min-h-[52px] sm:min-h-[56px] border border-accent-brown/15 focus-within:border-brand-dark focus-within:ring-2 focus-within:ring-brand-dark/20 rounded-2xl transition-all bg-[#F7F6F2] overflow-hidden">
-                                        <input id="biz-owner-middle-name" type="text" value={ownerMiddleName} onChange={e => setOwnerMiddleName(e.target.value)} placeholder="Optional" className="w-full bg-transparent py-3.5 px-4 text-accent-brown font-bold text-base placeholder:text-slate-500 outline-none" />
+                                        <input id="biz-owner-middle-name" type="text" value={ownerMiddleName} onBlur={() => { if (!validName(ownerMiddleName, false)) setError(NAME_ERROR); }} pattern="[\p{L}\p{M} ]+" title={NAME_ERROR} onChange={e => { if (!nameInputAllowed(e.target.value)) { setError(NAME_ERROR); return; } setOwnerMiddleName(e.target.value); setError(current => current === NAME_ERROR ? '' : current); }} placeholder="Optional" className="w-full bg-transparent py-3.5 px-4 text-accent-brown font-bold text-base placeholder:text-slate-500 outline-none" />
                                     </div>
                                 </div>
                                 <CustomDropdown
@@ -1157,12 +1159,6 @@ const BusinessRegister = () => {
                         >
                             <Logo className="auth-logo w-16 h-16" />
                         </Link>
-                        <Link 
-                            to="/login/business" 
-                            className="min-h-[44px] inline-flex items-center text-sm sm:text-base font-bold text-brand-dark hover:text-accent-brown transition-colors underline underline-offset-4 tracking-normal not-italic"
-                        >
-                            Clinic Log In Instead
-                        </Link>
                     </div>
 
                     {/* Progress Bar (6 Equal Steps) */}
@@ -1192,6 +1188,15 @@ const BusinessRegister = () => {
                             {renderStep()}
                         </AnimatePresence>
                     </form>
+
+                    <div className="text-center mt-4">
+                        <Link
+                            to="/login/business"
+                            className="min-h-[44px] inline-flex items-center text-sm sm:text-base font-bold text-brand-dark hover:text-accent-brown transition-colors underline underline-offset-4 tracking-normal not-italic"
+                        >
+                            Clinic Log In Instead
+                        </Link>
+                    </div>
 
                     {/* Back Link Row */}
                     <div className="auth-footer mt-8 text-center pt-5 border-t border-accent-brown/10">

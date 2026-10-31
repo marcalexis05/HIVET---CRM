@@ -3,9 +3,10 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { 
     X, Package, Truck, Store, Clock, Users, MapPin, 
     Navigation, ShieldAlert, Loader2, CheckCircle, XCircle, 
-    Banknote, ShieldCheck, ExternalLink, Eye 
+    Banknote, ShieldCheck, Eye
 } from 'lucide-react';
 import { Map, AdvancedMarker } from '@vis.gl/react-google-maps';
+import DeliveryProof, { EvidencePhoto } from './DeliveryProof';
 import { CustomDropdown } from './CustomDropdown';
 
 interface BusinessOrderDetailsModalProps {
@@ -278,20 +279,7 @@ const BusinessOrderDetailsModal: React.FC<BusinessOrderDetailsModalProps> = ({
                                                     <div className="space-y-1.5">
                                                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Attached Proof Photos</p>
                                                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                                                            {photos.map((url: string, pi: number) => (
-                                                                <a
-                                                                    key={pi}
-                                                                    href={url}
-                                                                    target="_blank"
-                                                                    rel="noreferrer"
-                                                                    className="aspect-square rounded-xl overflow-hidden border border-accent-peach/20 hover:border-brand transition-all relative group block"
-                                                                >
-                                                                    <img src={url} alt="Proof" className="w-full h-full object-cover" />
-                                                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                                                                        <ExternalLink size={16} />
-                                                                    </div>
-                                                                </a>
-                                                            ))}
+                                                            {photos.map((url: string, pi: number) => <div key={pi} className="rounded-xl border border-accent-brown/10 p-1"><EvidencePhoto url={url} alt={`Supply refund photo ${pi + 1}`} /></div>)}
                                                         </div>
                                                     </div>
                                                 );
@@ -323,6 +311,8 @@ const BusinessOrderDetailsModal: React.FC<BusinessOrderDetailsModalProps> = ({
                                     </div>
                                 )}
 
+                                <DeliveryProof url={order.proof_of_delivery_url} />
+
                                 {/* Management Actions Grid */}
                                 <div className="p-4 sm:p-5 bg-white rounded-2xl border border-accent-brown/10 space-y-4">
                                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Order Management</h4>
@@ -340,7 +330,7 @@ const BusinessOrderDetailsModal: React.FC<BusinessOrderDetailsModalProps> = ({
                                                     value: s,
                                                     icon: statusIcons[s]
                                                 }))}
-                                                className="!py-2.5 !rounded-xl !text-xs font-bold"
+                                                className="min-w-0"
                                             />
                                         </div>
 
@@ -349,7 +339,7 @@ const BusinessOrderDetailsModal: React.FC<BusinessOrderDetailsModalProps> = ({
                                                 <button
                                                     type="button"
                                                     onClick={onOpenStreetView}
-                                                    className="w-full min-h-[44px] h-11 bg-accent-brown text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-black transition-all flex items-center justify-center gap-2 shadow-sm active:scale-98 cursor-pointer"
+                                                    className="w-full min-h-[52px] h-[52px] sm:h-14 bg-accent-brown text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-black transition-all flex items-center justify-center gap-2 shadow-sm active:scale-98 cursor-pointer"
                                                 >
                                                     <Navigation className="w-4 h-4 text-orange-400" />
                                                     <span>Tracking HUD</span>

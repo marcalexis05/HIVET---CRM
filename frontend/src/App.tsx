@@ -8,18 +8,17 @@ import { ReservationsSection } from './components/ReservationsSection';
 import { LoyaltySection } from './components/LoyaltySection';
 import { AboutSection } from './components/AboutSection';
 import { Logo } from './components/Logo';
-import { ShoppingCart, Menu, X, Home, ShoppingBag, Package, Award, Info, Zap, LayoutGrid, Shield, Sparkles, FileText, QrCode } from 'lucide-react';
-import { PwaInstallModal } from './components/PwaInstallModal';
-import { setPwaManifestForRole, type PwaRole } from './utils/pwaManager';
+import { ShoppingCart, Menu, X, Home, ShoppingBag, Package, Award, Info, Zap, LayoutGrid, Shield, Sparkles, FileText } from 'lucide-react';
+import { setPwaManifestForRole } from './utils/pwaManager';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import Catalog from './pages/Catalog';
 import ScrollToTop from './components/ScrollToTop';
 import { Footer } from './components/Footer';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
-import { CartProvider } from './context/CartContext';
+import { CartProvider, useCart } from './context/CartContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import AdminDashboard from './pages/dashboard/AdminDashboard';
 import AdminBusinesses from './pages/dashboard/AdminBusinesses';
@@ -64,9 +63,11 @@ import RiderEarnings from './pages/dashboard/RiderEarnings';
 import RiderAlerts from './pages/dashboard/RiderAlerts';
 
 function Navigation() {
+  const { user } = useAuth();
+  const { requestCartAccess } = useCart();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [showPwaModal, setShowPwaModal] = useState(false);
+  const [hasScrolled, setHasScrolled] = useState(false);
   const location = useLocation();
   const shouldReduceMotion = useReducedMotion();
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -79,6 +80,7 @@ function Navigation() {
       // Only transition to solid white once the hero scrolls out of view.
       const threshold = isDarkHeroPage ? Math.max(window.innerHeight - 90, 300) : 30;
       setIsScrolled(window.scrollY > threshold);
+      setHasScrolled(window.scrollY > 12);
     };
     handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -146,14 +148,14 @@ function Navigation() {
   }, [location.pathname]);
 
   // Hide public navbar on auth pages and dashboard portals
-  const shouldShowNavbar = !['/login', '/login/business', '/login/rider', '/register', '/register/business', '/register/rider', '/forgot-password', '/catalog'].includes(location.pathname) && !location.pathname.startsWith('/dashboard');
+  const shouldShowNavbar = !['/login', '/login/business', '/login/rider', '/register', '/register/business', '/register/rider', '/forgot-password', '/catalog'].includes(location.pathname) && !location.pathname.startsWith('/dashboard') && !location.pathname.startsWith('/catalog/') && location.pathname !== '/login/admin';
 
   if (!shouldShowNavbar) return null;
 
   const isBusinessLanding = location.pathname === '/for-clinics';
   const isRiderLanding = location.pathname === '/for-riders';
   const isHome = location.pathname === '/';
-  const currentPwaRole: PwaRole = isBusinessLanding ? 'business' : isRiderLanding ? 'rider' : 'customer';
+  const homeHref = '/';
   
   // Dynamic Styles based on scroll and page
   const isTransparent = (isHome || isBusinessLanding || isRiderLanding) && !isScrolled && !isMenuOpen;
@@ -162,7 +164,12 @@ function Navigation() {
   const linkColor = isTransparent ? 'text-white/70' : 'text-accent-brown/60';
 
   const handleHomeClick = (e: React.MouseEvent) => {
-    if (location.pathname === '/') {
+    const heroId = isBusinessLanding ? 'features' : isRiderLanding ? 'benefits' : null;
+    const hero = heroId ? document.getElementById(heroId) : null;
+    const headerBottom = e.currentTarget.closest('nav')?.getBoundingClientRect().bottom || 0;
+    const sectionOffset = Math.max(headerBottom, parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0);
+    const belowRoleHero = hero !== null && hero.getBoundingClientRect().bottom <= sectionOffset + 1;
+    if (isHome || belowRoleHero) {
       e.preventDefault();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -212,15 +219,17 @@ function Navigation() {
   };
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 pt-[env(safe-area-inset-top,0px)] ${isTransparent ? 'bg-gradient-to-b from-black/60 via-black/25 to-transparent pb-3 sm:pb-4' : 'bg-white border-b border-accent-brown/5 shadow-[0_20px_50px_rgba(45,34,27,0.1)] rounded-b-[2rem] sm:rounded-b-[2.5rem]'}`}>
-      <div className="w-full transition-all duration-500 flex items-center justify-between px-6 sm:px-12 h-16 sm:h-20">
-        <div className="flex-1 flex justify-start">
-          <Link to="/" className="flex items-center gap-2.5 xs:gap-3.5 group" onClick={handleHomeClick}>
+    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 pt-[env(safe-area-inset-top,0px)] ${isTransparent ? 'bg-gradient-to-b from-black/60 via-black/25 to-transparent pb-3 sm:pb-4' : isMenuOpen ? 'bg-white' : 'bg-white border-b border-accent-brown/5 shadow-[0_20px_50px_rgba(45,34,27,0.1)] rounded-b-[2rem] sm:rounded-b-[2.5rem]'}`}>
+      {/* Blur the backdrop layer without changing the containing block of fixed dialogs. */}
+      <div aria-hidden="true" className={`pointer-events-none absolute inset-0 -z-10 bg-black/25 backdrop-blur-xl transition-opacity duration-300 ${isTransparent && hasScrolled ? 'opacity-100' : 'opacity-0'}`} />
+      <div className="w-full transition-all duration-500 flex items-center justify-between gap-4 lg:gap-6 px-6 sm:px-12 h-16 sm:h-20">
+        <div className="shrink-0 flex justify-start lg:flex-1 min-w-0">
+          <Link to={homeHref} aria-label="Hi-Vet home" className="flex items-center gap-2.5 xs:gap-3.5 group" onClick={handleHomeClick}>
             <Logo className="w-14 h-14 sm:w-[4.5rem] sm:h-[4.5rem] shrink-0 group-hover:scale-105 transition-transform" />
           </Link>
         </div>
 
-        <div className={`hidden lg:flex items-center gap-8 xl:gap-10 font-bold text-xs xl:text-sm uppercase tracking-widest ${linkColor}`}>
+        <div className={`hidden lg:flex shrink-0 justify-center items-center gap-4 xl:gap-7 font-bold text-xs xl:text-sm uppercase tracking-wide whitespace-nowrap ${linkColor}`}>
           {isBusinessLanding ? (
             <>
               <a href="#features" className="hover:text-brand-dark transition-colors">{CLINIC_LANDING_TEXT.nav.features}</a>
@@ -244,43 +253,31 @@ function Navigation() {
           )}
         </div>
 
-        <div className="flex-1 flex items-center justify-end gap-3 xs:gap-6">
-          <button
-            onClick={() => setShowPwaModal(true)}
-            className={`hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all border ${
-              isTransparent
-                ? 'border-white/30 text-white hover:bg-white/15'
-                : 'border-accent-brown/20 text-accent-brown hover:border-brand hover:text-brand hover:bg-brand/5'
-            }`}
-            title="Scan QR Code to install app"
-          >
-            <QrCode className="w-3.5 h-3.5" />
-            <span>Install App</span>
-          </button>
+        <div className="ml-auto lg:ml-0 shrink-0 flex items-center justify-end gap-3 xl:gap-5 whitespace-nowrap lg:flex-1 min-w-max">
           {!isBusinessLanding && !isRiderLanding && (
             <>
-              <button className={`relative p-2 transition-all ${isTransparent ? 'text-white/70 hover:text-white' : 'text-accent-brown/60 hover:text-brand'}`}>
+              <Link to={user?.role === 'customer' ? '/dashboard/customer/checkout' : '/login'} onClick={e => { if (!requestCartAccess()) e.preventDefault(); }} aria-label="Shopping cart" className={`relative p-2 transition-all ${isTransparent ? 'text-white/70 hover:text-white' : 'text-accent-brown/60 hover:text-brand'}`}>
                 <ShoppingCart className="w-5 h-5 xs:w-6 xs:h-6" />
-              </button>
+              </Link>
               <div className={`h-8 w-[1px] mx-2 hidden lg:block ${isTransparent ? 'bg-white/20' : 'bg-accent-brown/10'}`}></div>
             </>
           )}
 
           {isBusinessLanding ? (
-            <div className="hidden sm:flex items-center gap-4 xs:gap-6">
+            <div className="hidden md:flex items-center gap-3 xl:gap-5">
               <Link to="/login/business" className={`text-xs xs:text-sm font-bold transition-colors uppercase tracking-widest ${isTransparent ? 'text-white/80 hover:text-white' : 'text-accent-brown/80 hover:text-brand'}`}>
                 {CLINIC_LANDING_TEXT.nav.loginBtn}
               </Link>
-              <Link to="/register/business" className="bg-brand-dark text-white hover:bg-brand px-6 xs:px-8 py-2.5 xs:py-3 rounded-full text-[10px] xs:text-xs font-bold transition-colors uppercase tracking-widest shadow-md">
+              <Link to="/register/business" className="bg-brand-dark text-white hover:bg-brand px-5 xl:px-7 py-3 rounded-full text-[10px] xs:text-xs font-bold transition-colors uppercase tracking-widest shadow-md">
                 {CLINIC_LANDING_TEXT.nav.registerBtn}
               </Link>
             </div>
           ) : isRiderLanding ? (
-            <div className="hidden sm:flex items-center gap-4 xs:gap-6">
+            <div className="hidden md:flex items-center gap-3 xl:gap-5">
               <Link to="/login/rider" className={`text-xs xs:text-sm font-bold transition-colors uppercase tracking-widest ${isTransparent ? 'text-white/80 hover:text-white' : 'text-accent-brown/80 hover:text-brand'}`}>
                 {RIDER_LANDING_TEXT.nav.loginBtn}
               </Link>
-              <Link to="/register/rider" className="bg-brand-dark text-white hover:bg-brand px-6 xs:px-8 py-2.5 xs:py-3 rounded-full text-[10px] xs:text-xs font-bold transition-colors uppercase tracking-widest shadow-md">
+              <Link to="/register/rider" className="bg-brand-dark text-white hover:bg-brand px-5 xl:px-7 py-3 rounded-full text-[10px] xs:text-xs font-bold transition-colors uppercase tracking-widest shadow-md">
                 {RIDER_LANDING_TEXT.nav.registerBtn}
               </Link>
             </div>
@@ -332,9 +329,9 @@ function Navigation() {
               role="dialog"
               aria-modal="true"
               aria-label="Mobile navigation"
-              className="absolute top-full left-0 right-0 z-50 px-3 sm:px-6 pt-2 pb-4 lg:hidden pointer-events-none"
+              className="absolute top-full left-0 right-0 z-50 lg:hidden pointer-events-none"
             >
-              <div className="w-full max-w-md mx-auto bg-white rounded-b-[20px] sm:rounded-b-[24px] shadow-[0_20px_40px_rgba(45,34,27,0.14)] border-x border-b border-accent-brown/10 overflow-hidden pointer-events-auto flex flex-col max-h-[calc(85vh-5rem)]">
+              <div className="w-full bg-white rounded-b-[2rem] sm:rounded-b-[2.5rem] shadow-[0_20px_40px_rgba(45,34,27,0.14)] border-x border-b border-accent-brown/10 overflow-hidden pointer-events-auto flex flex-col max-h-[calc(85vh-5rem)]">
                 {/* Scrollable links list */}
                 <div className="overflow-y-auto divide-y divide-slate-100 py-1">
                   {menuItems.map((item, idx) => {
@@ -387,25 +384,7 @@ function Navigation() {
                   })}
                 </div>
 
-                {/* Install PWA Prompt */}
-                <div className="px-3.5 pt-2 pb-1 shrink-0">
-                  <button
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      setShowPwaModal(true);
-                    }}
-                    className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-brand/5 border border-brand/20 hover:bg-brand/10 text-brand text-xs font-bold transition-colors"
-                  >
-                    <span className="flex items-center gap-2">
-                      <QrCode className="w-4 h-4" />
-                      <span>Install App (QR Code)</span>
-                    </span>
-                    <span className="text-[10px] bg-brand text-white px-2 py-0.5 rounded-full uppercase tracking-wider font-extrabold">PWA</span>
-                  </button>
-                </div>
-
-                {/* Buttons Area */}
-                <div className="p-3.5 sm:p-4 border-t border-slate-100 bg-slate-50/60 shrink-0">
+                <div className="px-3.5 pt-3 pb-4 border-t border-slate-100 shrink-0">
                   {isBusinessLanding ? (
                     <div className="grid grid-cols-1 xs:grid-cols-2 gap-2.5 sm:gap-3">
                       <Link
@@ -464,11 +443,6 @@ function Navigation() {
           </>
         )}
       </AnimatePresence>
-      <PwaInstallModal
-        isOpen={showPwaModal}
-        onClose={() => setShowPwaModal(false)}
-        initialRole={currentPwaRole}
-      />
     </nav>
   );
 }
@@ -594,6 +568,8 @@ function App() {
                 <Routes>
                   <Route path="/" element={<Landing />} />
                   <Route path="/catalog" element={<Catalog />} />
+                  <Route path="/catalog/:id" element={<ProductDetail />} />
+                  <Route path="/login/admin" element={<Login />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/login/business" element={<BusinessLogin />} />
                   <Route path="/login/rider" element={<RiderLogin />} />

@@ -173,7 +173,7 @@ const AvailableDeliveryDetailsModal: React.FC<AvailableDeliveryDetailsModalProps
                                             {RIDER_TEXT.dashboard.orderCard.payLabel}
                                         </p>
                                         <p className="text-lg sm:text-xl font-black text-accent-brown tracking-tight whitespace-nowrap">
-                                            {formatCurrency(order.total_amount)}
+                                            {formatCurrency(order.delivery_fee ?? order.shipping_fee ?? 0)}
                                         </p>
                                     </div>
 
@@ -191,6 +191,16 @@ const AvailableDeliveryDetailsModal: React.FC<AvailableDeliveryDetailsModalProps
 
                             {/* Scrollable Content Middle */}
                             <div className="overflow-y-auto flex-1 p-4 sm:p-6 space-y-5 sm:space-y-6">
+                                <dl className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <dt className="text-xs font-bold text-slate-500">Order total</dt>
+                                        <dd className="font-black text-accent-brown">{formatCurrency(order.total_amount)}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs font-bold text-slate-500">Shipping fee</dt>
+                                        <dd className="font-black text-accent-brown">{formatCurrency(order.shipping_fee ?? 0)}</dd>
+                                    </div>
+                                </dl>
                                 {/* 1. Package Items */}
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">

@@ -500,7 +500,7 @@ const ReservationCheckout = () => {
         setQrStatus('processing');
         pollingInterval.current = setInterval(async () => {
             try {
-                const res = await fetch(`${API}/api/payments/paymongo/status/${intentId}`);
+                const res = await fetch(`${API}/api/payments/paymongo/status/${intentId}`, { headers: { Authorization: `Bearer ${user?.token}` } });
                 if (res.ok) {
                     const data = await res.json();
                     if (data.status === 'succeeded') {

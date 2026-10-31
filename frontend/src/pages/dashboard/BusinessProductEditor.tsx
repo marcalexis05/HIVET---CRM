@@ -185,7 +185,22 @@ const BusinessProductEditor = () => {
         }
     };
 
+    const weightInvalid = !!form.weight.trim() && !/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(form.weight.trim());
+    const validNumeric = (value: unknown, integer = false) => {
+        const n = Number(value);
+        return Number.isFinite(n) && n >= 0 && (!integer || Number.isInteger(n));
+    };
+    const validOptionalNumeric = (value: unknown, integer = false) => value == null || value === '' || validNumeric(value, integer);
     const handleSave = async () => {
+        if (weightInvalid) { showToast('Weight must be a non-negative number, for example 2.4.'); setActiveTab('details'); return; }
+        const rows = [...form.sizes, ...form.variants.flatMap(v => v.sizes), ...form.variants];
+        const distributions = [form.inventory_distribution, ...rows.map(row => 'branch_stock' in row ? row.branch_stock : {})];
+        if (!validNumeric(form.price) || !validNumeric(form.stock, true) || !validNumeric(form.loyalty_points, true)
+            || rows.some(row => !validNumeric(row.price) || ('stock' in row && !validNumeric(row.stock, true)))
+            || distributions.some(dist => Object.values(dist || {}).some((entry: any) => typeof entry === 'object'
+                ? !validOptionalNumeric(entry.price) || !validOptionalNumeric(entry.stock, true) : !validNumeric(entry, true)))) {
+            showToast('Prices must be non-negative numbers. Stock and loyalty points must be non-negative whole numbers.'); return;
+        }
         const hasSizes = form.sizes.length > 0;
         if (!form.name || (!hasSizes && (!form.price || !form.stock)) || !form.sku) {
             showToast('Please fill in all required fields');
@@ -252,7 +267,8 @@ const BusinessProductEditor = () => {
                 }
                 // If already editing, we just stay here.
             } else {
-                showToast('Error saving product');
+                const error = await resp.json();
+                showToast(typeof error.detail === 'string' ? error.detail : error.detail?.[0]?.msg || 'Error saving product');
             }
         } catch (err) {
             showToast('Network error');
@@ -499,9 +515,10 @@ const BusinessProductEditor = () => {
                                             </div>
 
                                             <div>
-                                                <label className="text-sm uppercase font-black tracking-widest text-accent-brown/40 block mb-2 ml-1">Weight</label>
-                                                <input value={form.weight} onChange={e => setForm(f => ({ ...f, weight: e.target.value }))} placeholder="e.g. 2.4 lbs"
+                                                <label htmlFor="product-weight" className="text-sm uppercase font-black tracking-widest text-accent-brown/40 block mb-2 ml-1">Weight</label>
+                                                <input id="product-weight" inputMode="decimal" aria-invalid={weightInvalid} value={form.weight} onChange={e => setForm(f => ({ ...f, weight: e.target.value }))} placeholder="e.g. 2.4"
                                                     className="w-full bg-accent-peach/20 border-2 border-transparent focus:border-brand/30 rounded-2xl py-4 px-6 text-base font-bold text-accent-brown outline-none transition-all" />
+                                                {weightInvalid && <p role="alert" className="text-sm text-red-600 mt-2">Weight must be a non-negative number, for example 2.4.</p>}
                                             </div>
 
 

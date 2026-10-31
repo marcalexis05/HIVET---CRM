@@ -97,7 +97,7 @@ export const RIDER_TEXT = {
         pickupModal: {
             title: 'Confirm Package Pickup',
             description:
-                'Enter the serial number on the package to confirm you picked it up.',
+                'Ask the clinic for the full package serial number, then enter it to confirm pickup.',
             placeholder: 'HV-SN-...',
             cancelBtn: 'Cancel',
             confirmBtn: 'Confirm Pickup',

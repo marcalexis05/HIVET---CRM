@@ -11,6 +11,10 @@ const AdminCustomerRecords = () => {
     const [customers, setCustomers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const emptyFilters = { status: 'All', activity: 'All', rewards: 'All' };
+    const [filters, setFilters] = useState(emptyFilters);
+    const [draftFilters, setDraftFilters] = useState(emptyFilters);
     const [actionMenu, setActionMenu] = useState<{ id: string | null; x: number; y: number }>({ id: null, x: 0, y: 0 });
     const [confirmModal, setConfirmModal] = useState<{ show: boolean, type: 'delete' | 'suspend', user: any | null }>({ show: false, type: 'delete', user: null });
     const [currentPage, setCurrentPage] = useState(1);
@@ -111,9 +115,14 @@ const AdminCustomerRecords = () => {
     };
 
     const filteredCustomers = customers.filter(u => {
-        return u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                (u.id && u.id.toLowerCase().includes(searchTerm.toLowerCase()));
+        const seenAt = u.last_active_at ? new Date(u.last_active_at).getTime() : NaN;
+        const recent = Number.isFinite(seenAt) && now.getTime() - seenAt <= 86400000;
+        return matchesSearch && (filters.status === 'All' || u.status === filters.status)
+            && (filters.activity === 'All' || (filters.activity === 'Recent' ? recent : !u.last_active_at))
+            && (filters.rewards === 'All' || (filters.rewards === 'With points' ? u.loyalty_points > 0 : !u.loyalty_points));
     });
 
     const totalPages = Math.ceil(filteredCustomers.length / customersPerPage);
@@ -174,7 +183,7 @@ const AdminCustomerRecords = () => {
                         />
                     </div>
                     <div className="flex items-center gap-2">
-                        <button className="px-4 py-2.5 bg-accent-peach/20 rounded-xl text-[10px] font-black uppercase tracking-widest text-accent-brown/60 hover:text-brand-dark transition-all flex items-center gap-2">
+                        <button type="button" aria-expanded={filtersOpen} aria-controls="customer-filters" onClick={() => { setDraftFilters(filters); setFiltersOpen(open => !open); }} className="px-4 py-2.5 bg-accent-peach/20 rounded-xl text-[10px] font-black uppercase tracking-widest text-accent-brown/60 hover:text-brand-dark transition-all flex items-center gap-2">
                             <Filter className="w-3.5 h-3.5" />
                             Filters
                         </button>
@@ -182,6 +191,26 @@ const AdminCustomerRecords = () => {
                 </div>
 
                 {/* Table Container */}
+                {filtersOpen && <form id="customer-filters" onSubmit={event => { event.preventDefault(); setFilters(draftFilters); setCurrentPage(1); setFiltersOpen(false); }} className="bg-white rounded-2xl border border-accent-brown/10 p-4 flex flex-wrap items-end gap-4">
+                    <label className="text-sm font-bold">Status
+                        <select aria-label="Customer status" value={draftFilters.status} onChange={event => setDraftFilters(f => ({ ...f, status: event.target.value }))} className="block mt-2 min-h-11 rounded-xl border border-accent-brown/15 px-3">
+                            {['All', ...new Set(customers.map(c => c.status))].map(status => <option key={status}>{status}</option>)}
+                        </select>
+                    </label>
+                    <label className="text-sm font-bold">Last active
+                        <select aria-label="Customer activity" value={draftFilters.activity} onChange={event => setDraftFilters(f => ({ ...f, activity: event.target.value }))} className="block mt-2 min-h-11 rounded-xl border border-accent-brown/15 px-3">
+                            <option>All</option><option value="Recent">Last 24 hours</option><option value="Never">Never signed in</option>
+                        </select>
+                    </label>
+                    <label className="text-sm font-bold">Loyalty points
+                        <select aria-label="Customer loyalty points" value={draftFilters.rewards} onChange={event => setDraftFilters(f => ({ ...f, rewards: event.target.value }))} className="block mt-2 min-h-11 rounded-xl border border-accent-brown/15 px-3">
+                            <option>All</option><option>With points</option><option>No points</option>
+                        </select>
+                    </label>
+                    <button type="submit" className="min-h-11 px-5 rounded-xl bg-brand text-white font-bold">Apply filters</button>
+                    <button type="button" onClick={() => { setFilters(emptyFilters); setDraftFilters(emptyFilters); setCurrentPage(1); }} className="min-h-11 px-5 rounded-xl border border-accent-brown/15 font-bold">Clear filters</button>
+                </form>}
+                {Object.values(filters).some(value => value !== 'All') && <p className="text-sm text-slate-600">Filters applied: {Object.values(filters).filter(value => value !== 'All').join(', ')}. <button onClick={() => { setFilters(emptyFilters); setDraftFilters(emptyFilters); setCurrentPage(1); }} className="text-brand font-bold">Clear filters</button></p>}
                 <div className="bg-white rounded-[2.5rem] shadow-xl shadow-accent-brown/5 border border-white overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
@@ -243,7 +272,7 @@ const AdminCustomerRecords = () => {
                                             <td className="px-6 py-5">
                                                 <div className="flex items-center gap-2 text-sm font-bold text-black/80">
                                                     <Clock className="w-4 h-4 text-black/40" />
-                                                    {formatRelativeTime(u.lastActive)}
+                                                    {formatRelativeTime(u.last_active_at || u.lastActive)}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-5">
@@ -329,7 +358,7 @@ const AdminCustomerRecords = () => {
                             if (user) setConfirmModal({ show: true, type: 'delete', user });
                             setActionMenu({ id: null, x: 0, y: 0 });
                         }} className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-50 rounded-xl transition-all">
-                            <Trash2 className="w-4 h-4" /> Permanent Delete
+                            <Trash2 className="w-4 h-4" /> Deactivate Account
                         </button>
                     </motion.div>
                 </div>
@@ -344,7 +373,7 @@ const AdminCustomerRecords = () => {
                             {confirmModal.type === 'delete' ? <Trash2 className="w-8 h-8" /> : <ShieldCheck className="w-8 h-8" />}
                         </div>
                         <h3 className="text-xl font-black text-accent-brown leading-tight mb-2 uppercase tracking-tight">
-                            {confirmModal.type === 'delete' ? 'Delete Customer?' : 'Suspend Customer?'}
+                            {confirmModal.type === 'delete' ? 'Deactivate Customer?' : 'Suspend Customer?'}
                         </h3>
                         <p className="text-sm font-medium text-accent-brown/60 mb-8">
                             Are you sure you want to perform this action on <b>{confirmModal.user?.name}</b>? This may affect their ability to access the platform.

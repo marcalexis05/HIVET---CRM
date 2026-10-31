@@ -218,56 +218,32 @@ export function getReviewIdAriaLabel(id: string | number | undefined | null): st
     return `Review ${formatted}`;
 }
 
-/**
- * Formats a Rider Order ID for display.
- * New IDs: "ORD-2026-4827" or "#ORD-2026-4827" -> "#ORD-2026-4827"
- * Legacy IDs: "HY-186" or "#HY-186" -> "#HY-186"
- * Fallback from numeric order object: { id: 186 } -> "#HY-186"
- *
- * Keeps "#" and uppercase format everywhere it is shown.
- */
-export function formatRiderOrderId(orderOrId?: any): string {
-    if (!orderOrId) return '#HY-0000';
-    if (typeof orderOrId === 'string' || typeof orderOrId === 'number') {
-        const str = String(orderOrId).trim();
-        if (!str || str === 'undefined' || str === 'null') return '#HY-0000';
-        if (str.startsWith('#')) return str.toUpperCase();
-        return `#${str.toUpperCase()}`;
+/** Compact display label. Prefer the server label; keep numeric IDs for API calls. */
+export function formatOrderReference(orderOrId?: any): string {
+    if (orderOrId == null) return '';
+    const order = typeof orderOrId === 'object' ? orderOrId : null;
+    const value = order?.order_reference ?? order?.rider_order_id ?? order?.order_id ?? order?.id ?? orderOrId;
+    const raw = String(value).trim().replace(/^#/, '').toUpperCase();
+    const legacy = raw.match(/^HV-(\d{4})-\d+-([0-9]{4})$/);
+    if (legacy) return `HV-${legacy[1]}-${legacy[2]}`;
+    if (/^HV-\d{4}-\d{4}$/.test(raw)) return raw;
+    // Older API responses can still be displayed consistently while deployments roll out.
+    const dateRaw = order?.created_at;
+    const date = dateRaw ? new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(dateRaw) ? dateRaw : `${dateRaw}Z`) : null;
+    if (date && !Number.isNaN(date.getTime())) {
+        const suffix = String(Math.floor(date.getTime() / 1000) % 10000).padStart(4, '0');
+        return `HV-${date.getUTCFullYear()}-${suffix}`;
     }
-
-    // Object passed: check rider_order_id first
-    if (orderOrId.rider_order_id) {
-        const idStr = String(orderOrId.rider_order_id).trim();
-        if (idStr.startsWith('#')) return idStr.toUpperCase();
-        return `#${idStr.toUpperCase()}`;
-    }
-
-    // Legacy fallback from order id
-    const num = orderOrId.order_id ?? orderOrId.id;
-    if (num !== undefined && num !== null) {
-        const numStr = String(num);
-        return `#HY-${numStr}`;
-    }
-
-    return '#HY-0000';
+    return raw;
 }
 
-/**
- * Screen reader accessible announcement for Rider Order ID:
- * e.g. "#ORD-2026-4827" -> "Order O R D, 2026, 4827"
- *      "#HY-186"        -> "Order H Y, 186"
- */
+export function formatRiderOrderId(orderOrId?: any): string {
+    const reference = formatOrderReference(orderOrId);
+    return reference ? `#${reference}` : '';
+}
+
 export function formatRiderOrderIdForAria(orderOrId?: any): string {
-    const formatted = formatRiderOrderId(orderOrId);
-    const clean = formatted.replace(/^#/, '');
-    if (clean.startsWith('ORD-')) {
-        const parts = clean.split('-');
-        return `Order O R D, ${parts[1] || ''}, ${parts[2] || ''}`;
-    }
-    if (clean.startsWith('HY-')) {
-        return `Order H Y, ${clean.slice(3)}`;
-    }
-    return `Order ${clean}`;
+    return `Order ${formatOrderReference(orderOrId).replace(/^HV-/, 'H V, ').replaceAll('-', ', ')}`;
 }
 
 /**
@@ -346,3 +322,8 @@ export function formatTransactionIdForAria(transactionOrId?: any): string {
     return `Transaction ${formatted}`;
 }
 
+
+/** Never reveal pickup-code digits on the rider's screen, including legacy responses. */
+export function maskPickupSerial(value?: string | null): string {
+    return (value || '').replace(/[0-9]/g, '*');
+}

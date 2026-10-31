@@ -1,8 +1,9 @@
+import { registrationNameError, validName, nameInputAllowed, NAME_ERROR } from '../utils/nameValidation';
 import { Logo } from '../components/Logo';
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    ArrowRight, ChevronLeft, ShieldCheck, MailCheck, Bike, Eye, EyeOff, User,
+    ArrowRight, ChevronLeft, ShieldCheck, MailCheck, Bike, Eye, EyeOff,
     FileText, Lock, Mail as MailIcon, MapPin, Upload, X, Clock, CheckCircle2,
     AlertCircle
 } from 'lucide-react';
@@ -416,6 +417,8 @@ const RiderRegister = () => {
     const nextStep = async () => {
         setError('');
         if (step === 1) {
+            const nameError = registrationNameError(firstName, middleName, lastName);
+            if (nameError) return setError(nameError);
             if (!firstName || !lastName || !phone || !homeCity || !birthday || !gender) {
                 return setError(RIDER_LANDING_TEXT.registerPage.errors.requiredFields);
             }
@@ -495,9 +498,9 @@ const RiderRegister = () => {
                     email,
                     password,
                     otp: otpCode,
-                    first_name: firstName,
-                    middle_name: middleName,
-                    last_name: lastName,
+                    first_name: firstName.trim(),
+                    middle_name: middleName.trim(),
+                    last_name: lastName.trim(),
                     suffix,
                     phone,
                     home_address: [homeHouseNumber, homeBlockNumber, homeStreet, homeSubdivision, homeSitio, homeBarangay, homeCity, homeProvince, homeZip].filter(Boolean).join(' '),
@@ -570,15 +573,14 @@ const RiderRegister = () => {
                                         {RIDER_LANDING_TEXT.registerPage.firstName} <span className="text-brand-dark">*<span className="sr-only"> (required)</span></span>
                                     </label>
                                     <div className="relative flex items-center min-h-[52px] sm:min-h-[56px] border border-accent-brown/15 focus-within:border-brand-dark focus-within:ring-2 focus-within:ring-brand-dark/20 rounded-2xl transition-all bg-[#F7F6F2] overflow-hidden">
-                                        <User className="w-5 h-5 text-accent-brown/40 group-focus-within:text-brand-dark transition-colors shrink-0 ml-4 mr-3" aria-hidden="true" />
                                         <input
                                             id="rider-first-name"
                                             type="text"
-                                            value={firstName}
-                                            onChange={e => setFirstName(e.target.value)}
+                                            value={firstName} onBlur={() => { if (!validName(firstName, true)) setError(NAME_ERROR); }} pattern="[\p{L}\p{M} ]+" title={NAME_ERROR}
+                                            onChange={e => { if (!nameInputAllowed(e.target.value)) { setError(NAME_ERROR); return; } setFirstName(e.target.value); setError(current => current === NAME_ERROR ? '' : current); }}
                                             placeholder="Juan"
                                             autoComplete="given-name"
-                                            className="w-full bg-transparent py-3.5 pr-4 text-accent-brown font-bold text-base placeholder:text-slate-500 outline-none leading-normal"
+                                            className="w-full bg-transparent py-3.5 px-4 text-accent-brown font-bold text-base placeholder:text-slate-500 outline-none leading-normal"
                                         />
                                     </div>
                                 </div>
@@ -590,8 +592,8 @@ const RiderRegister = () => {
                                         <input
                                             id="rider-last-name"
                                             type="text"
-                                            value={lastName}
-                                            onChange={e => setLastName(e.target.value)}
+                                            value={lastName} onBlur={() => { if (!validName(lastName, true)) setError(NAME_ERROR); }} pattern="[\p{L}\p{M} ]+" title={NAME_ERROR}
+                                            onChange={e => { if (!nameInputAllowed(e.target.value)) { setError(NAME_ERROR); return; } setLastName(e.target.value); setError(current => current === NAME_ERROR ? '' : current); }}
                                             placeholder="Dela Cruz"
                                             autoComplete="family-name"
                                             className="w-full bg-transparent py-3.5 px-4 text-accent-brown font-bold text-base placeholder:text-slate-500 outline-none leading-normal"
@@ -611,8 +613,8 @@ const RiderRegister = () => {
                                         <input
                                             id="rider-middle-name"
                                             type="text"
-                                            value={middleName}
-                                            onChange={e => setMiddleName(e.target.value)}
+                                            value={middleName} onBlur={() => { if (!validName(middleName, false)) setError(NAME_ERROR); }} pattern="[\p{L}\p{M} ]+" title={NAME_ERROR}
+                                            onChange={e => { if (!nameInputAllowed(e.target.value)) { setError(NAME_ERROR); return; } setMiddleName(e.target.value); setError(current => current === NAME_ERROR ? '' : current); }}
                                             placeholder="Optional"
                                             autoComplete="additional-name"
                                             className="w-full bg-transparent py-3.5 px-4 text-accent-brown font-bold text-base placeholder:text-slate-500 outline-none leading-normal"
@@ -1169,7 +1171,7 @@ const RiderRegister = () => {
             {/* Right Column: Shared Page Shell (Phone, Tablet, Desktop) */}
             <div className="auth-panel w-full lg:w-1/2 min-h-[100dvh] flex flex-col justify-between py-6 sm:py-10 px-5 xs:px-6 sm:px-10 lg:px-12 bg-white">
                 <div className="auth-content w-full max-w-[540px] mx-auto flex-1 flex flex-col justify-center my-auto py-2">
-                    {/* Top Row: Hi-Vet logo on Left, Login Link on Right */}
+                    {/* Hi-Vet logo */}
                     <div className="auth-header flex items-center justify-between gap-4 mb-4">
                         <Link
                             to="/for-riders"
@@ -1179,12 +1181,7 @@ const RiderRegister = () => {
                         >
                             <Logo className="auth-logo w-16 h-16" />
                         </Link>
-                        <Link
-                            to="/login/rider"
-                            className="min-h-[44px] inline-flex items-center text-sm sm:text-base font-bold text-brand-dark hover:text-accent-brown transition-colors underline underline-offset-4 tracking-normal not-italic"
-                        >
-                            {RIDER_LANDING_TEXT.registerPage.logInInstead}
-                        </Link>
+
                     </div>
 
                     {/* Progress Bar (4 Equal Steps) */}
@@ -1214,6 +1211,15 @@ const RiderRegister = () => {
                             {renderStep()}
                         </AnimatePresence>
                     </form>
+
+                    <div className="mt-4 text-center">
+                        <Link
+                            to="/login/rider"
+                            className="min-h-[44px] inline-flex items-center text-sm sm:text-base font-bold text-brand-dark hover:text-accent-brown transition-colors underline underline-offset-4 tracking-normal not-italic"
+                        >
+                            {RIDER_LANDING_TEXT.registerPage.logInInstead}
+                        </Link>
+                    </div>
 
                     {/* Back Link Row */}
                     <div className="auth-footer mt-8 text-center pt-5 border-t border-accent-brown/10">

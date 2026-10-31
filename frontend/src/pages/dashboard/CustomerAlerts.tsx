@@ -1,4 +1,5 @@
-﻿import { useState, useEffect } from 'react';
+import { dismissNotification, markNotificationRead, markAllNotificationsRead, removeAllNotifications } from '../../utils/notifications';
+﻿import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Gift, Info, Bell, CheckCircle2, Trash2, BellOff } from 'lucide-react';
 import DashboardLayout from '../../components/DashboardLayout';
@@ -9,10 +10,15 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const CustomerAlerts = () => {
     const [notifications, setNotifications] = useState<any[]>([]);
+    const [notificationError, setNotificationError] = useState('');
+    const [notificationBusy, setNotificationBusy] = useState(false);
+    const notificationRevision = useRef(0);
+    const dismissedNotifications = useRef(new Set<string>());
     const [filter, setFilter] = useState<'all' | 'unread'>('all');
     const navigate = useNavigate();
 
     const fetchNotifications = async () => {
+        const revision = notificationRevision.current;
         const token = localStorage.getItem('hivet_token');
         if (!token) return;
         try {
@@ -21,7 +27,8 @@ const CustomerAlerts = () => {
             });
             if (res.ok) {
                 const data = await res.json();
-                setNotifications(data.notifications);
+                if (revision !== notificationRevision.current) return;
+                setNotifications((data.notifications || []).filter((n: any) => !dismissedNotifications.current.has(String(n.id))));
             }
         } catch (err) {
             console.error('Failed to fetch notifications:', err);
@@ -31,48 +38,64 @@ const CustomerAlerts = () => {
     useEffect(() => { fetchNotifications(); }, []);
 
     const markAsRead = async (id: number) => {
-        const token = localStorage.getItem('hivet_token');
         try {
-            await fetch(`http://localhost:8000/api/notifications/${id}/read`, {
-                method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-        } catch (err) { console.error(err); }
+            await markNotificationRead(id);
+            setNotifications(prev => prev.map(n => String(n.id) === String(id) ? { ...n, read: true } : n));
+            setNotificationError('');
+        } catch (error) { setNotificationError(error instanceof Error ? error.message : 'Could not mark notification as read.'); }
     };
 
     const markAllAsRead = async () => {
-        const token = localStorage.getItem('hivet_token');
+        if (notificationBusy) return;
+        setNotificationBusy(true); setNotificationError('');
         try {
-            await fetch(`${API}/api/notifications/read-all`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            await markAllNotificationsRead();
             setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-        } catch (err) { console.error(err); }
+        } catch (error) { setNotificationError(error instanceof Error ? error.message : 'Could not mark all notifications as read.'); }
+        finally { setNotificationBusy(false); }
+    };
+
+    useEffect(() => {
+        const refresh = () => { notificationRevision.current += 1; void fetchNotifications(); };
+        window.addEventListener('hivet-notifications-changed', refresh);
+        return () => window.removeEventListener('hivet-notifications-changed', refresh);
+    }, []);
+
+    const deleteAllNotifications = async () => {
+        if (notificationBusy) return;
+        setNotificationBusy(true); setNotificationError('');
+        const previousNotifications = notifications;
+        const ids = notifications.map(n => String(n.id));
+        ids.forEach(id => dismissedNotifications.current.add(id));
+        setNotifications([]);
+        try {
+            await removeAllNotifications();
+        } catch (error) {
+            ids.forEach(id => dismissedNotifications.current.delete(id));
+            setNotifications(prev => [...prev, ...previousNotifications.filter(n => !prev.some(p => String(p.id) === String(n.id)))]);
+            setNotificationError(error instanceof Error ? error.message : 'Could not remove notifications.');
+            await fetchNotifications();
+        } finally { setNotificationBusy(false); }
     };
 
     const deleteNotification = async (id: number) => {
-        const token = localStorage.getItem('hivet_token');
+        const key = String(id);
+        const removedNotification = notifications.find(n => String(n.id) === key);
+        if (dismissedNotifications.current.has(key)) return;
+        dismissedNotifications.current.add(key);
+        setNotificationError('');
+        setNotifications(prev => prev.filter(n => String(n.id) !== key));
         try {
-            const res = await fetch(`http://localhost:8000/api/notifications/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) setNotifications(prev => prev.filter(n => n.id !== id));
-        } catch (err) { console.error(err); }
+            await dismissNotification(id);
+        } catch (error) {
+            dismissedNotifications.current.delete(key);
+            if (removedNotification) setNotifications(prev => prev.some(n => String(n.id) === key) ? prev : [...prev, removedNotification]);
+            setNotificationError(error instanceof Error ? error.message : 'Could not remove this notification.');
+            await fetchNotifications();
+        }
     };
 
-    const deleteAllNotifications = async () => {
-        const token = localStorage.getItem('hivet_token');
-        try {
-            const res = await fetch(`${API}/api/notifications/all`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) setNotifications([]);
-        } catch (err) { console.error(err); }
-    };
+
 
     const filteredAlerts = filter === 'all'
         ? notifications
@@ -100,6 +123,7 @@ const CustomerAlerts = () => {
 
     return (
         <DashboardLayout title="">
+            {notificationError && <p role="alert" className="p-3 text-sm text-red-600 bg-red-50 rounded-xl">{notificationError}</p>}
             <div className="max-w-3xl mx-auto space-y-6">
 
                 {/* Filter + Actions bar */}
@@ -124,14 +148,14 @@ const CustomerAlerts = () => {
                     {/* Actions */}
                     <div className="flex items-center gap-3">
                         <button
-                            onClick={markAllAsRead}
+                            onClick={markAllAsRead} disabled={notificationBusy}
                             className="text-xs font-bold text-black/50 hover:text-black transition-colors flex items-center gap-1.5 cursor-pointer"
                         >
                             <CheckCircle2 className="w-3.5 h-3.5" /> Mark all read
                         </button>
                         <div className="w-px h-4 bg-accent-brown/15" />
                         <button
-                            onClick={deleteAllNotifications}
+                            onClick={deleteAllNotifications} disabled={notificationBusy}
                             className="text-xs font-bold text-red-500 hover:text-red-700 transition-colors flex items-center gap-1.5 cursor-pointer"
                         >
                             <Trash2 className="w-3.5 h-3.5" /> Clear All

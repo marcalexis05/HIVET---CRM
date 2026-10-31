@@ -1,3 +1,4 @@
+import { useAuth } from '../context/AuthContext';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -41,6 +42,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     className = ""
 }) => {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const { addToCart, triggerFlyAnimation } = useCart();
     const [localQty, setLocalQty] = useState(1);
 
@@ -74,7 +76,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     };
 
     const handleNavigate = () => {
-        navigate(`/dashboard/customer/catalog/${product.id}`);
+        navigate(user?.role === 'customer' ? `/dashboard/customer/catalog/${product.id}` : `/catalog/${product.id}`);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 

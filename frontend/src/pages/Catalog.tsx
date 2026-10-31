@@ -1,16 +1,28 @@
 import { toTitleCase } from '../utils/textFormatters';
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Tag, Star, Search, ArrowLeft, ArrowRight, Heart, Filter as FilterIcon, X } from 'lucide-react';
+import { ShoppingCart, Tag, Star, Search, ArrowLeft, Heart, Filter as FilterIcon, X } from 'lucide-react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { products } from '../data/products';
+import { useAuth } from '../context/AuthContext';
+import type { ProductCardData } from '../components/ProductCard';
 import { useCart } from '../context/CartContext';
 import { MAIN_LANDING_TEXT } from '../constants/mainLandingWording';
 
 const Catalog = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { addToCart, triggerFlyAnimation } = useCart();
+    const { addToCart, triggerFlyAnimation, requestCartAccess } = useCart();
+    const { user } = useAuth();
+    const [products, setProducts] = useState<ProductCardData[]>([]);
+    const [catalogError, setCatalogError] = useState('');
+    useEffect(() => {
+        const controller = new AbortController();
+        fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/catalog`, { signal: controller.signal })
+            .then(response => { if (!response.ok) throw new Error(); return response.json(); })
+            .then(setProducts).catch(error => { if (error.name !== 'AbortError') setCatalogError('Could not load products. Please try again.'); });
+        return () => controller.abort();
+    }, []);
+    const viewProduct = (id: number) => navigate(user?.role === 'customer' ? `/dashboard/customer/catalog/${id}` : `/catalog/${id}`);
 
     // Filters
     const [petFilter, setPetFilter] = useState<'All' | 'Cats' | 'Dogs'>('All');
@@ -30,11 +42,11 @@ const Catalog = () => {
             const matchesPet = petFilter === 'All' || p.category === petFilter;
             const matchesType = typeFilter === 'All' || p.type === typeFilter;
             const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                p.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                p.tag.toLowerCase().includes(searchQuery.toLowerCase());
+                (p.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (p.tag || '').toLowerCase().includes(searchQuery.toLowerCase());
             return matchesPet && matchesType && matchesSearch;
         });
-    }, [petFilter, typeFilter, searchQuery]);
+    }, [petFilter, typeFilter, searchQuery, products]);
 
     const resetFilters = () => {
         setPetFilter('All');
@@ -65,6 +77,7 @@ const Catalog = () => {
                 </div>
             </div>
 
+            {catalogError && <p role="alert" className="container mx-auto px-6 text-red-600">{catalogError}</p>}
             {/* Filter Architecture - Strictly 2 Rows */}
             <div className="container mx-auto px-4 xs:px-6 sm:px-10 lg:px-12 mb-6 sm:mb-8">
                 <div className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 shadow-sm border border-accent-brown/10 flex flex-col gap-3">
@@ -167,16 +180,16 @@ const Catalog = () => {
                                     </div>
                                 </div>
 
-                                <button
+                                {user && <button
                                     type="button"
                                     aria-label="Add to favorites"
                                     className="absolute top-4 right-4 z-20 w-10 h-10 bg-white/90 backdrop-blur rounded-full shadow-xs flex items-center justify-center hover:scale-110 active:scale-95 transition-all text-slate-400 hover:text-brand-dark cursor-pointer"
                                 >
                                     <Heart className="w-4 h-4" />
-                                </button>
+                                </button>}
 
                                 {/* Visual Panel */}
-                                <div className="aspect-square sm:aspect-[4/5] rounded-2xl mb-5 bg-[#F7F6F2] relative overflow-hidden">
+                                <div onClick={() => viewProduct(p.id)} className="cursor-pointer aspect-square sm:aspect-[4/5] rounded-2xl mb-5 bg-[#F7F6F2] relative overflow-hidden">
                                     <img
                                         src={p.image}
                                         alt={p.name}
@@ -186,19 +199,21 @@ const Catalog = () => {
                                     <div className="absolute inset-0 bg-accent-brown/60 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[2px] flex items-center justify-center p-6">
                                         <button 
                                             onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (!requestCartAccess()) return;
                                                 triggerFlyAnimation(e, p.image);
                                                 addToCart({
                                                     id: p.id,
-                                                    business_id: 1,
+                                                    business_id: p.business_id || 1,
                                                     name: p.name,
                                                     price: String(p.price),
                                                     image: p.image,
                                                     quantity: 1,
                                                     variant: 'Standard',
                                                     size: 'Medium',
-                                                    stock: 100
+                                                    stock: p.stock || 0
                                                 });
-                                                setTimeout(() => navigate('/login'), 400);
+
                                             }}
                                             className="bg-white text-accent-brown w-full py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:bg-brand-dark hover:text-white transition-all cursor-pointer"
                                         >
@@ -214,11 +229,11 @@ const Catalog = () => {
                                             <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{p.type} • {p.category}</p>
                                             <div className="flex gap-0.5">
                                                 {[...Array(5)].map((_, i) => (
-                                                    <Star key={i} className={`w-3 h-3 ${i < p.stars ? 'text-brand-dark fill-brand-dark' : 'text-slate-200 fill-slate-200'}`} />
+                                                    <Star key={i} className={`w-3 h-3 ${i < (p.stars || 0) ? 'text-brand-dark fill-brand-dark' : 'text-slate-200 fill-slate-200'}`} />
                                                 ))}
                                             </div>
                                         </div>
-                                        <h3 className="text-lg sm:text-xl font-bold text-accent-brown leading-snug group-hover:text-brand-dark transition-colors">{p.name}</h3>
+                                        <h3 className="text-lg sm:text-xl font-bold text-accent-brown leading-snug group-hover:text-brand-dark transition-colors"><button type="button" onClick={() => viewProduct(p.id)} className="text-left">{p.name}</button></h3>
                                     </div>
 
                                     <p className="text-xs sm:text-sm text-slate-600 font-normal leading-relaxed line-clamp-2">
@@ -232,25 +247,27 @@ const Catalog = () => {
                                         </div>
                                         <button
                                             type="button"
-                                            aria-label={`Buy ${p.name}`}
+                                            aria-label={`Add ${p.name} to cart`}
                                             onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (!requestCartAccess()) return;
                                                 triggerFlyAnimation(e, p.image);
                                                 addToCart({
                                                     id: p.id,
-                                                    business_id: 1,
+                                                    business_id: p.business_id || 1,
                                                     name: p.name,
                                                     price: String(p.price),
                                                     image: p.image,
                                                     quantity: 1,
                                                     variant: 'Standard',
                                                     size: 'Medium',
-                                                    stock: 100
+                                                    stock: p.stock || 0
                                                 });
-                                                setTimeout(() => navigate('/login'), 400);
+
                                             }}
                                             className="w-11 h-11 bg-brand-dark hover:bg-brand text-white rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-md shadow-brand-dark/20 cursor-pointer shrink-0"
                                         >
-                                            <ArrowRight className="w-5 h-5" />
+                                            <ShoppingCart className="w-5 h-5" />
                                         </button>
                                     </div>
                                 </div>

@@ -29,7 +29,7 @@ interface RiderRecord {
 const statusConfig: Record<ComplianceStatus, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
     pending: { label: 'Needs review', color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200', icon: <Clock className="w-3 h-3" /> },
     verified: { label: 'Approved', color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200', icon: <CheckCircle2 className="w-3 h-3" /> },
-    non_compliant: { label: 'Not approved', color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', icon: <XCircle className="w-3 h-3" /> },
+    non_compliant: { label: 'Rejected', color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', icon: <XCircle className="w-3 h-3" /> },
 };
 
 const DocLink = ({ url, label, onClick }: { url?: string; label: string; onClick?: () => void }) =>
@@ -151,7 +151,7 @@ const AdminRiderCompliance = () => {
                         { label: 'All riders', value: counts.all, icon: <Truck className="w-5 h-5" />, color: 'text-brand-dark', bg: 'bg-brand/10' },
                         { label: 'Needs review', value: counts.pending, icon: <Clock className="w-5 h-5" />, color: 'text-orange-600', bg: 'bg-orange-100' },
                         { label: 'Approved riders', value: counts.verified, icon: <ShieldCheck className="w-5 h-5" />, color: 'text-green-600', bg: 'bg-green-100' },
-                        { label: 'Not approved', value: counts.non_compliant, icon: <XCircle className="w-5 h-5" />, color: 'text-red-600', bg: 'bg-red-100' },
+                        { label: 'Rejected', value: counts.non_compliant, icon: <XCircle className="w-5 h-5" />, color: 'text-red-600', bg: 'bg-red-100' },
                     ].map((c, i) => (
                         <motion.div key={i} whileHover={{ y: -2 }} className="bg-white rounded-2xl border border-accent-brown/5 p-5 flex items-center gap-4 shadow-sm">
                             <div className={`w-10 h-10 ${c.bg} rounded-xl flex items-center justify-center ${c.color} shrink-0`}>{c.icon}</div>

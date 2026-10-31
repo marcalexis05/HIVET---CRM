@@ -36,7 +36,7 @@ const BusinessLogin = () => {
         setLoading(true);
 
         try {
-            const res = await fetch(`${API}/api/auth/login`, {
+            const res = await fetch(`${API}/api/auth/login/clinic`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
@@ -106,12 +106,6 @@ const BusinessLogin = () => {
                             className="shrink-0 hover:scale-105 active:scale-95 transition-transform"
                         >
                             <Logo className="auth-logo w-16 h-16" />
-                        </Link>
-                        <Link 
-                            to="/register/business" 
-                            className="min-h-[44px] inline-flex items-center text-sm sm:text-base font-bold text-brand-dark hover:text-accent-brown transition-colors underline underline-offset-4 tracking-normal not-italic"
-                        >
-                            {CLINIC_LANDING_TEXT.auth.login.registerPromptLink}
                         </Link>
                     </div>
 
@@ -201,6 +195,15 @@ const BusinessLogin = () => {
                             {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1.5 transition-transform" />}
                         </button>
                     </form>
+
+                    <div className="text-center mt-4">
+                        <Link
+                            to="/register/business"
+                            className="min-h-[44px] inline-flex items-center text-sm sm:text-base font-bold text-brand-dark hover:text-accent-brown transition-colors underline underline-offset-4 tracking-normal not-italic"
+                        >
+                            {CLINIC_LANDING_TEXT.auth.login.registerPromptLink}
+                        </Link>
+                    </div>
 
                     {/* Back Link Row */}
                     <div className="auth-footer mt-8 text-center pt-5 border-t border-accent-brown/10">

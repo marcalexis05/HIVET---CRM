@@ -1,6 +1,8 @@
 /* Installed app presentation only. Browser dialogs keep their existing layout. */
 @media (display-mode: standalone) {
   .pwa-dialog-overlay {
+    background: transparent !important;
+    backdrop-filter: none !important;
     align-items: flex-end;
     padding: 0;
     overflow: hidden;

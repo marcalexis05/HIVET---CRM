@@ -232,13 +232,13 @@ const BusinessOrders = () => {
                     </div>
                 </div>
 
-                {/* 3 Summary Cards */}
-                <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 lg:gap-6 items-stretch">
+                {/* Order Summary Cards */}
+                <div className="grid grid-cols-1 min-[360px]:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4 lg:gap-6 items-stretch">
                     {/* Total Sales Card */}
                     <div
                         role="article"
                         aria-label={`${CLINIC_TEXT.orders.totalSales}: ₱${totalRevenue.toLocaleString()}`}
-                        className="col-span-1 min-[360px]:col-span-2 md:col-span-1 bg-white rounded-[20px] p-3.5 min-[400px]:p-4 sm:p-5 border border-accent-brown/10 shadow-sm flex items-center gap-3.5 sm:gap-4 h-full"
+                        className="col-span-1 bg-white rounded-[20px] p-3.5 min-[400px]:p-4 sm:p-5 border border-accent-brown/10 shadow-sm flex items-center gap-3.5 sm:gap-4 h-full"
                     >
                         <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-brand/10 flex items-center justify-center text-brand shrink-0">
                             <Banknote className="w-5 h-5 sm:w-6 sm:h-6" aria-hidden="true" />
@@ -287,6 +287,25 @@ const BusinessOrders = () => {
                             </span>
                             <span className="text-2xl sm:text-[28px] lg:text-3xl font-black text-accent-brown tracking-tight truncate block leading-tight">
                                 {filtered.filter(o => o.fulfillment_method?.toLowerCase() === 'delivery').length}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Pickup Card */}
+                    <div
+                        role="article"
+                        aria-label={`Pickup: ${filtered.filter(o => o.fulfillment_method?.toLowerCase() === 'pickup').length}`}
+                        className="col-span-1 bg-white rounded-[20px] p-3.5 min-[400px]:p-4 sm:p-5 border border-accent-brown/10 shadow-sm flex items-center gap-3.5 sm:gap-4 h-full"
+                    >
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-accent-peach/20 flex items-center justify-center text-accent-brown shrink-0">
+                            <Store className="w-5 h-5 sm:w-6 sm:h-6" aria-hidden="true" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-600 block mb-0.5 truncate">
+                                Pickup
+                            </span>
+                            <span className="text-2xl sm:text-[28px] lg:text-3xl font-black text-accent-brown tracking-tight truncate block leading-tight">
+                                {filtered.filter(o => o.fulfillment_method?.toLowerCase() === 'pickup').length}
                             </span>
                         </div>
                     </div>

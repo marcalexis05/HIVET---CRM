@@ -184,8 +184,8 @@ const BusinessCatalog = () => {
                 {/* Filter Card */}
                 <div className="bg-white rounded-[20px] p-4 sm:p-5 shadow-sm border border-accent-brown/10 flex flex-col gap-4">
                     {/* Top row: Search, Branch Selector, Add Product */}
-                    <div className="flex flex-col md:flex-row gap-3 sm:gap-4 items-stretch md:items-center justify-between">
-                        <div className="relative group flex-1">
+                    <div className="flex flex-wrap gap-3 sm:gap-4 items-center">
+                        <div className="relative group flex-1 min-w-[min(100%,220px)]">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-brand transition-colors pointer-events-none" />
                             <input
                                 value={search}
@@ -197,7 +197,7 @@ const BusinessCatalog = () => {
                         </div>
 
                         {token && (
-                            <div className="w-full md:w-[260px] lg:w-[300px] shrink-0">
+                            <div className="w-full md:w-[260px] lg:w-[300px] min-w-0 shrink-0 [&>div]:w-full">
                                 <BranchSelector
                                     token={token}
                                     currentBranchId={branchId}

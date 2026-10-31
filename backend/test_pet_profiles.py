@@ -7,6 +7,7 @@ import ast
 from datetime import datetime
 from pathlib import Path
 import unittest
+from starlette.concurrency import run_in_threadpool
 
 import sqlalchemy as sa
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
@@ -35,6 +36,7 @@ class PetProfileTests(unittest.TestCase):
             'BaseModel': BaseModel, 'ConfigDict': ConfigDict, 'Field': Field,
             'field_validator': field_validator, 'app': app, 'Depends': Depends,
             'HTTPException': HTTPException, 'Request': Request, 'get_db': get_db,
+            'run_in_threadpool': run_in_threadpool,
             'IntegrityError': sa.exc.IntegrityError, 'JWTError': JWTError,
             'decode_token': lambda token: jwt.decode(token, 'pet-test-secret', algorithms=['HS256'])
         }

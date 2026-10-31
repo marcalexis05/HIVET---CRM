@@ -69,12 +69,6 @@ export const CatalogPreview = () => {
 
                             <div className="mt-8 space-y-2 group-hover:translate-x-2 transition-transform duration-500">
                                 <h3 className="text-3xl font-black text-accent-brown group-hover:text-brand transition-colors tracking-tight">{c.name}</h3>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-[1px] bg-brand/30" />
-                                    <p className="text-accent-brown/40 text-xs font-medium">
-                                        {c.count}
-                                    </p>
-                                </div>
                             </div>
                         </motion.div>
                     ))}

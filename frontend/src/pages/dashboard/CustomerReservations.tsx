@@ -2,7 +2,7 @@
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Package, MapPin, Calendar, Clock, ChevronRight, Plus, X, AlertCircle, CheckCircle, Loader2, CalendarX, Clock3, CreditCard, Banknote, ShieldCheck, Gift, Sparkles, QrCode, Wallet, Smartphone, Activity, Trophy, Eye, Tag } from 'lucide-react';
 import { APIProvider, useMapsLibrary } from '@vis.gl/react-google-maps';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import ModernModal from '../../components/ModernModal';
 import DashboardLayout from '../../components/DashboardLayout';
 import { CustomDatePicker } from '../../components/CustomDatePicker';
@@ -97,7 +97,9 @@ const CustomerReservations = () => {
     const [error, setError] = useState<string | null>(null);
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
-    const [activeStatus, setActiveStatus] = useState('All');
+    const [searchParams] = useSearchParams();
+    const [activeStatus, setActiveStatus] = useState(() => searchParams.get('status') === 'Completed' ? 'Completed' : 'All');
+    useEffect(() => { setActiveStatus(searchParams.get('status') === 'Completed' ? 'Completed' : 'All'); setCurrentPage(1); }, [searchParams]);
     const filterTabsContainerRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll selected status chip into view
@@ -226,7 +228,7 @@ const CustomerReservations = () => {
         setQrStatus('processing');
         pollingInterval.current = setInterval(async () => {
             try {
-                const res = await fetch(`${API}/api/payments/paymongo/status/${intentId}`);
+                const res = await fetch(`${API}/api/payments/paymongo/status/${intentId}`, { headers: { Authorization: `Bearer ${user?.token}` } });
                 if (res.ok) {
                     const data = await res.json();
                     if (data.status === 'succeeded') {
@@ -735,7 +737,7 @@ const CustomerReservations = () => {
                                             </h4>
                                             <p className="text-sm font-medium text-slate-600 mt-0.5 break-words">
                                                 {toTitleCase(selectedDetail.pet_type)}
-                                                {selectedDetail.pet_breed ? ` â€¢ ${toTitleCase(selectedDetail.pet_breed)}` : ''}
+                                                {selectedDetail.pet_breed ? ` \u2022 ${toTitleCase(selectedDetail.pet_breed)}` : ''}
                                             </p>
                                         </div>
                                     </div>

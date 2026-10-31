@@ -2,7 +2,7 @@ import { Logo } from '../components/Logo';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, Eye, EyeOff, ChevronLeft, User, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { MAIN_LANDING_TEXT } from '../constants/mainLandingWording';
 import loginHero from '../assets/login_hero_landscape.png';
@@ -16,6 +16,8 @@ const Login = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [searchParams] = useSearchParams();
+    const location = useLocation();
+    const adminPortal = location.pathname === '/login/admin' || searchParams.get('role') === 'admin';
 
     const navigate = useNavigate();
     const { loginWithToken } = useAuth();
@@ -36,7 +38,7 @@ const Login = () => {
         setLoading(true);
 
         try {
-            const res = await fetch(`${API}/api/auth/login`, {
+            const res = await fetch(`${API}/api/auth/login/${adminPortal ? 'admin' : 'customer'}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })
@@ -55,7 +57,8 @@ const Login = () => {
                 else if (role === 'rider') navigate('/dashboard/rider');
                 else navigate('/dashboard/customer');
             } else {
-                setError(MAIN_LANDING_TEXT.loginPage.errors.authFailed);
+                const data = await res.json();
+                setError(typeof data.detail === 'string' ? data.detail : 'Invalid username or password for this login portal.');
             }
         } catch (err) {
             console.error(err);
@@ -104,12 +107,6 @@ const Login = () => {
                             className="shrink-0 hover:scale-105 active:scale-95 transition-transform"
                         >
                             <Logo className="auth-logo w-16 h-16" />
-                        </Link>
-                        <Link 
-                            to="/register" 
-                            className="min-h-[44px] inline-flex items-center text-sm sm:text-base font-bold text-brand-dark hover:text-accent-brown transition-colors underline underline-offset-4 tracking-normal not-italic"
-                        >
-                            {MAIN_LANDING_TEXT.loginPage.signUpInstead}
                         </Link>
                     </div>
 
@@ -243,6 +240,15 @@ const Login = () => {
                             </svg>
                             <span>{MAIN_LANDING_TEXT.loginPage.googleBtn}</span>
                         </button>
+                    </div>
+
+                    <div className="text-center mt-4">
+                        <Link
+                            to="/register"
+                            className="min-h-[44px] inline-flex items-center text-sm sm:text-base font-bold text-brand-dark hover:text-accent-brown transition-colors underline underline-offset-4 tracking-normal not-italic"
+                        >
+                            {MAIN_LANDING_TEXT.loginPage.signUpInstead}
+                        </Link>
                     </div>
 
                     {/* Back Link Row */}

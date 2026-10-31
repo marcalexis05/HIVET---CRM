@@ -1,6 +1,7 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
+import { useAuth } from './AuthContext';
 
 export interface CartItem {
     id: number;
@@ -32,11 +33,19 @@ interface CartContextType {
     totalAmount: number;
     flyingItems: FlyingItem[];
     triggerFlyAnimation: (e: React.MouseEvent, image: string) => void;
+    requestCartAccess: () => boolean;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
+    const { user, isLoading } = useAuth();
+    const authDialog = useRef<HTMLDialogElement>(null);
+    const requestCartAccess = useCallback(() => {
+        if (user?.token && user.role === 'customer') return true;
+        if (!authDialog.current?.open) authDialog.current?.showModal();
+        return false;
+    }, [user]);
     const [items, setItems] = useState<CartItem[]>(() => {
         const saved = localStorage.getItem('hivet_cart');
         return saved ? JSON.parse(saved) : [];
@@ -44,10 +53,15 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     const [flyingItems, setFlyingItems] = useState<FlyingItem[]>([]);
 
     useEffect(() => {
+        if (!isLoading && !user) setItems([]);
+    }, [isLoading, user]);
+
+    useEffect(() => {
         localStorage.setItem('hivet_cart', JSON.stringify(items));
     }, [items]);
 
     const addToCart = useCallback((newItem: CartItem) => {
+        if (!requestCartAccess()) return;
         setItems(currentItems => {
             const existingItemIndex = currentItems.findIndex(
                 item => item.id === newItem.id && item.variant === newItem.variant && item.size === newItem.size
@@ -67,7 +81,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
             return [...currentItems, newItem];
         });
-    }, []);
+    }, [requestCartAccess]);
 
     const removeFromCart = useCallback((itemId: number, variant?: string, size?: string) => {
         setItems(currentItems => currentItems.filter(
@@ -98,6 +112,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     const totalAmount = items.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
 
     const triggerFlyAnimation = (e: React.MouseEvent, image: string) => {
+        if (!requestCartAccess()) return;
         const newId = Date.now().toString() + Math.random();
         setFlyingItems(prev => [...prev, { id: newId, startX: e.clientX, startY: e.clientY, image }]);
 
@@ -124,8 +139,18 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
             totalAmount,
             flyingItems,
             triggerFlyAnimation
+            ,requestCartAccess
         }}>
             {children}
+            <dialog ref={authDialog} aria-labelledby="cart-login-title" className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-3xl bg-white p-6 text-accent-brown shadow-2xl backdrop:bg-black/40">
+                <h2 id="cart-login-title" className="text-xl font-bold mb-3">Log in to continue</h2>
+                <p>You need to login or sign up first to add to cart.</p>
+                <div className="flex flex-wrap gap-3 mt-6">
+                    <a href="/login" className="px-5 py-3 rounded-xl bg-brand text-white font-bold">Log In</a>
+                    <a href="/register" className="px-5 py-3 rounded-xl border border-brand text-brand font-bold">Sign Up</a>
+                    <button onClick={() => authDialog.current?.close()} className="px-3 py-3 font-semibold">Close</button>
+                </div>
+            </dialog>
 
             {/* Render Flying Items Globally */}
             {flyingItems.map(item => {

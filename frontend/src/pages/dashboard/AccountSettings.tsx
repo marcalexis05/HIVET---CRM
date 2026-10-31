@@ -795,11 +795,11 @@ const AccountSettings = () => {
     };
 
     const handleDelete = async () => {
-        if (deleteConfirm !== 'DELETE') return;
+        if (deleteConfirm !== 'DEACTIVATE') return;
         setModal({
             isOpen: true,
             title: 'Deactivate Account',
-            message: 'Are you sure you want to deactivate your account? This will permanently archive your products and personal data.',
+            message: 'Are you sure you want to deactivate your account? Your account access will be disabled. Your records and ongoing orders, deliveries, and reservations will be preserved.',
             type: 'danger',
             onConfirm: async () => {
                 try {
@@ -808,7 +808,7 @@ const AccountSettings = () => {
                         headers: { 'Authorization': `Bearer ${user?.token}` }
                     });
                     if (res.ok) {
-                        logout();
+                        await logout();
                         navigate('/');
                     } else {
                         const err = await res.json();
@@ -869,7 +869,7 @@ const AccountSettings = () => {
         {
             id: 'danger' as Section,
             label: 'Danger Zone',
-            sub: 'Irreversible account termination',
+            sub: 'Deactivate access and keep your records',
             icon: Trash2,
             color: 'text-red-500 bg-red-50',
         },
@@ -936,6 +936,7 @@ const AccountSettings = () => {
                             initials
                         )}
                     </div>
+                    {(isBusiness || isRider) && <>
                     {/* 44px hit-target wrapper for the 32px visible edit pencil */}
                     <div className="absolute -bottom-1 -right-1 w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center">
                         <button
@@ -951,6 +952,7 @@ const AccountSettings = () => {
                             <Edit2 className="w-4 h-4 text-brand" />
                         </button>
                     </div>
+                    </>}
                 </div>
 
                 <div className="min-w-0 flex-1 max-w-full">
@@ -1828,23 +1830,23 @@ const AccountSettings = () => {
                         {section === 'danger' && (
                             <div>
                                 <h3 className="text-xl font-black text-red-500 tracking-tight mb-2">Danger Zone</h3>
-                                <p className="text-sm text-black font-medium mb-8">These actions are irreversible. Proceed with caution.</p>
+                                <p className="text-sm text-black font-medium mb-8">Manage access to your account without removing your records.</p>
                                 <div className="border-2 border-red-100 rounded-2xl p-6">
                                     <div className="flex items-start gap-3 mb-6">
                                         <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center shrink-0">
                                             <AlertTriangle className="w-5 h-5 text-red-400" />
                                         </div>
                                         <div>
-                                            <p className="font-black text-accent-brown">Delete Account</p>
-                                            <p className="text-xs text-black font-medium mt-1">All data — orders, loyalty points, and reservations — will be permanently deleted.</p>
+                                            <p className="font-black text-accent-brown">Deactivate Account</p>
+                                            <p className="text-xs text-black font-medium mt-1">Your account will be disabled. Orders, deliveries, transactions, loyalty points, and reservations will stay on record.</p>
                                         </div>
                                     </div>
-                                    <label className="text-xs font-semibold text-red-500 block mb-2 pl-1">Type <span className="text-red-600 font-bold">DELETE</span> to confirm</label>
-                                    <input value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} placeholder="DELETE"
+                                    <label className="text-xs font-semibold text-red-500 block mb-2 pl-1">Type <span className="text-red-600 font-bold">DEACTIVATE</span> to confirm</label>
+                                    <input value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} placeholder="DEACTIVATE"
                                         className="w-full bg-red-50 border-2 border-red-100 focus:border-red-300 rounded-xl py-3 px-4 text-sm font-bold text-red-500 outline-none transition-all placeholder:text-red-200 mb-4" />
-                                    <button onClick={handleDelete} disabled={deleteConfirm !== 'DELETE'}
+                                    <button onClick={handleDelete} disabled={deleteConfirm !== 'DEACTIVATE'}
                                         className="flex items-center gap-2 bg-red-500 text-white px-6 py-3 rounded-xl font-bold text-xs hover:bg-red-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-                                        <Trash2 className="w-4 h-4" /> Delete My Account
+                                        <Trash2 className="w-4 h-4" /> Deactivate My Account
                                     </button>
                                 </div>
                             </div>
@@ -1854,7 +1856,7 @@ const AccountSettings = () => {
 
 
     return (
-        <DashboardLayout title="" hideHeader={true}>
+        <DashboardLayout title="" hideHeader={user?.role !== 'customer'}>
             <div className={`w-full max-w-[1440px] mx-auto space-y-6 sm:space-y-8 pb-28 sm:pb-32 lg:pb-12 px-4 sm:px-6 lg:px-8 ${isAnyModalOpen ? 'opacity-30 blur-2xl pointer-events-none' : 'opacity-100'}`}>
 
                 <AnimatePresence>
@@ -2210,8 +2212,8 @@ const AccountSettings = () => {
             <ConfirmLogoutModal
                 isOpen={isLogoutModalOpen}
                 onClose={() => setIsLogoutModalOpen(false)}
-                onConfirm={() => {
-                    logout();
+                onConfirm={async () => {
+                    await logout();
                     navigate('/');
                 }}
             />

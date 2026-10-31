@@ -551,7 +551,7 @@ const RiderEarnings = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 items-stretch">
                     
                     {/* ── MAIN BALANCE DISPLAY (Left ~60% on desktop) ── */}
-                    <div className="lg:col-span-7 bg-white rounded-3xl p-5 sm:p-7 border border-accent-brown/10 shadow-sm relative overflow-hidden flex flex-col justify-between">
+                    <div className="lg:col-span-7 self-start bg-white rounded-3xl p-5 sm:p-6 border border-accent-brown/10 shadow-sm relative overflow-hidden flex flex-col justify-between">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-accent-peach/5 rounded-full -mr-32 -mt-32 blur-3xl pointer-events-none" aria-hidden="true" />
                         
                         <div className="relative z-10 space-y-3">
@@ -571,7 +571,7 @@ const RiderEarnings = () => {
                             </p>
                         </div>
                         
-                        <div className="relative z-10 flex flex-col sm:flex-row gap-3 pt-6 sm:pt-8 items-stretch">
+                        <div className="relative z-10 flex flex-col sm:flex-row gap-3 pt-4 sm:pt-5 items-stretch">
                             <button 
                                 type="button"
                                 onClick={() => setIsPayoutOpen(true)}

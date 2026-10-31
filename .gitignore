@@ -29,3 +29,6 @@ build/
 Thumbs.db
 .idea/
 .vscode/settings.json
+
+# Private delivery evidence (serve through authenticated API only)
+/backend/private_delivery_proofs/

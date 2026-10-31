@@ -1,10 +1,11 @@
+import { registrationNameError, validName, nameInputAllowed, NAME_ERROR } from '../utils/nameValidation';
 import { Logo } from '../components/Logo';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Mail, AlertCircle, Lock, ArrowRight,
     ShieldCheck, MailCheck, Eye, EyeOff, X,
-    ChevronLeft, User, Smartphone, Tag
+    ChevronLeft, Smartphone, Tag
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PasswordStrength } from '../components/PasswordStrength';
@@ -191,8 +192,8 @@ const Register = () => {
                 body: JSON.stringify({
                     email,
                     name: `${firstName} ${lastName}`.trim(),
-                    first_name: firstName,
-                    last_name: lastName,
+                    first_name: firstName.trim(),
+                    last_name: lastName.trim(),
                     gender,
                     phone,
                     role: 'customer'
@@ -225,6 +226,8 @@ const Register = () => {
     const nextStep = async () => {
         setError('');
         if (step === 1) {
+            const nameError = registrationNameError(firstName, middleName, lastName);
+            if (nameError) return setError(nameError);
             if (!firstName || !lastName || !phone || !birthdate || !gender) {
                 setError('Please fill in all required fields.');
                 return;
@@ -317,9 +320,9 @@ const Register = () => {
                     email,
                     password,
                     otp: otpCode,
-                    first_name: firstName,
-                    last_name: lastName,
-                    middle_name: middleName,
+                    first_name: firstName.trim(),
+                    last_name: lastName.trim(),
+                    middle_name: middleName.trim(),
                     suffix,
                     phone,
                     birthdate,
@@ -368,15 +371,14 @@ const Register = () => {
                                         First Name <span className="text-brand-dark">*<span className="sr-only"> (required)</span></span>
                                     </label>
                                     <div className="relative flex items-center min-h-[52px] sm:min-h-[56px] border border-accent-brown/15 focus-within:border-brand-dark focus-within:ring-2 focus-within:ring-brand-dark/20 rounded-2xl transition-all bg-[#F7F6F2] overflow-hidden">
-                                        <User className="w-5 h-5 text-accent-brown/40 group-focus-within:text-brand-dark transition-colors shrink-0 ml-4 mr-3" aria-hidden="true" />
                                         <input
                                             id="reg-first-name"
                                             type="text"
-                                            value={firstName}
-                                            onChange={e => setFirstName(e.target.value)}
+                                            value={firstName} onBlur={() => { if (!validName(firstName, true)) setError(NAME_ERROR); }} pattern="[\p{L}\p{M} ]+" title={NAME_ERROR}
+                                            onChange={e => { if (!nameInputAllowed(e.target.value)) { setError(NAME_ERROR); return; } setFirstName(e.target.value); setError(current => current === NAME_ERROR ? '' : current); }}
                                             placeholder="Juan"
                                             autoComplete="given-name"
-                                            className="w-full bg-transparent py-3.5 pr-4 text-accent-brown font-bold text-base placeholder:text-slate-500 outline-none leading-normal"
+                                            className="w-full bg-transparent py-3.5 px-4 text-accent-brown font-bold text-base placeholder:text-slate-500 outline-none leading-normal"
                                         />
                                     </div>
                                 </div>
@@ -388,8 +390,8 @@ const Register = () => {
                                         <input
                                             id="reg-last-name"
                                             type="text"
-                                            value={lastName}
-                                            onChange={e => setLastName(e.target.value)}
+                                            value={lastName} onBlur={() => { if (!validName(lastName, true)) setError(NAME_ERROR); }} pattern="[\p{L}\p{M} ]+" title={NAME_ERROR}
+                                            onChange={e => { if (!nameInputAllowed(e.target.value)) { setError(NAME_ERROR); return; } setLastName(e.target.value); setError(current => current === NAME_ERROR ? '' : current); }}
                                             placeholder="Dela Cruz"
                                             autoComplete="family-name"
                                             className="w-full bg-transparent py-3.5 px-4 text-accent-brown font-bold text-base placeholder:text-slate-500 outline-none leading-normal"
@@ -409,8 +411,8 @@ const Register = () => {
                                         <input
                                             id="reg-middle-name"
                                             type="text"
-                                            value={middleName}
-                                            onChange={e => setMiddleName(e.target.value)}
+                                            value={middleName} onBlur={() => { if (!validName(middleName, false)) setError(NAME_ERROR); }} pattern="[\p{L}\p{M} ]+" title={NAME_ERROR}
+                                            onChange={e => { if (!nameInputAllowed(e.target.value)) { setError(NAME_ERROR); return; } setMiddleName(e.target.value); setError(current => current === NAME_ERROR ? '' : current); }}
                                             placeholder="Optional"
                                             autoComplete="additional-name"
                                             className="w-full bg-transparent py-3.5 px-4 text-accent-brown font-bold text-base placeholder:text-slate-500 outline-none leading-normal"
@@ -550,6 +552,14 @@ const Register = () => {
                                 </svg>
                                 <span>Sign Up with Google</span>
                             </button>
+                            <div className="text-center">
+                        <Link
+                            to="/login"
+                            className="min-h-[44px] inline-flex items-center text-sm sm:text-base font-bold text-brand-dark hover:text-accent-brown transition-colors underline underline-offset-4 tracking-normal not-italic"
+                        >
+                            {MAIN_LANDING_TEXT.registerPage.logInInstead}
+                        </Link>
+                            </div>
                         </div>
                     </motion.div>
                 );
@@ -857,12 +867,6 @@ const Register = () => {
                         >
                             <Logo className="auth-logo w-16 h-16" />
                         </Link>
-                        <Link
-                            to="/login"
-                            className="min-h-[44px] inline-flex items-center text-sm sm:text-base font-bold text-brand-dark hover:text-accent-brown transition-colors underline underline-offset-4 tracking-normal not-italic"
-                        >
-                            {MAIN_LANDING_TEXT.registerPage.logInInstead}
-                        </Link>
                     </div>
 
                     {/* Progress Bar (3 Equal Steps) */}
@@ -892,6 +896,8 @@ const Register = () => {
                             {renderStep()}
                         </AnimatePresence>
                     </form>
+
+                    {step !== 1 && <div className="text-center mt-4"><Link to="/login" className="min-h-11 inline-flex items-center text-sm font-bold text-brand-dark underline underline-offset-4">{MAIN_LANDING_TEXT.registerPage.logInInstead}</Link></div>}
 
                     {/* Back Link Row */}
                     <div className="auth-footer mt-8 text-center pt-5 border-t border-accent-brown/10">

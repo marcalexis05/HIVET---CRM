@@ -15,8 +15,9 @@ import {
 import { APIProvider, useMap, AdvancedMarker, InfoWindow, Map } from '@vis.gl/react-google-maps';
 import ModernModal from '../../components/ModernModal';
 import QrCodeModal from '../../components/QrCodeModal';
+import DeliveryProof, { EvidencePhoto } from '../../components/DeliveryProof';
 import Pagination from '../../components/Pagination';
-import { toTitleCase, toSentenceCase, formatName } from '../../utils/textFormatters';
+import { toTitleCase, toSentenceCase, formatName, formatOrderReference } from '../../utils/textFormatters';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -35,6 +36,14 @@ interface OrderItem {
 
 interface Order {
     id: number;
+    order_reference?: string;
+    proof_of_delivery_url?: string | null;
+    customer_received_at?: string | null;
+    receipt_points?: number | null;
+    can_confirm_received?: boolean;
+    can_request_return?: boolean;
+    customer_action_deadline?: string | null;
+    customer_action_expired?: boolean;
     status: string;
     total_amount: number;
     fulfillment_method: string;
@@ -367,33 +376,53 @@ const CustomerOrders = () => {
     const [returnPhotos, setReturnPhotos] = useState<string[]>([]);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [submittingReturn, setSubmittingReturn] = useState(false);
+    const [returnError, setReturnError] = useState('');
+    const [receivingOrder, setReceivingOrder] = useState<number | null>(null);
+    const [receiptMessage, setReceiptMessage] = useState('');
+    const [receiptError, setReceiptError] = useState('');
+    const [actionClock, setActionClock] = useState(Date.now());
+    useEffect(() => { const timer = setInterval(() => setActionClock(Date.now()), 30000); return () => clearInterval(timer); }, []);
+    const actionExpired = (order: Order) => !!order.customer_action_expired || (!!order.customer_action_deadline && actionClock >= Date.parse(order.customer_action_deadline));
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file) return;
-
+        if (!file || !selectedOrder) return;
+        if (returnPhotos.length >= 4) { setReturnError('Upload up to four photos.'); return; }
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 8 * 1024 * 1024) {
+            setReturnError('Use a JPG, PNG or WebP supply photo smaller than 8 MB.'); return;
+        }
+        setReturnError('');
         setUploadingImage(true);
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('order_id', String(selectedOrder.id));
 
         try {
             const resp = await fetch(`${API}/api/orders/refund/upload`, {
                 method: 'POST',
+                headers: { Authorization: `Bearer ${localStorage.getItem('hivet_token')}` },
                 body: formData
             });
             if (resp.ok) {
                 const data = await resp.json();
-                setReturnPhotos(prev => [...prev, data.url]);
-            }
+                setReturnPhotos(prev => [...prev, data.url].slice(0, 4));
+            } else { const data = await resp.json(); setReturnError(data.detail || 'Photo upload failed.'); }
         } catch (err) {
-            console.error('Upload failed', err);
+            setReturnError('Photo upload failed. Check your connection and try again.');
         } finally {
             setUploadingImage(false);
+            e.target.value = "";
         }
     };
 
     const submitReturnRequest = async () => {
-        if (!selectedOrder || !returnReason) return;
+        if (!selectedOrder || submittingReturn || uploadingImage) return;
+        if (actionExpired(selectedOrder)) { setReturnError("The 3-day refund request period has ended."); return; }
+        if (returnReason.trim().length < 10 || returnReason.trim().length > 1000 || !/\p{L}/u.test(returnReason)) {
+            setReturnError('Explain the supply issue using 10 to 1000 characters.'); return;
+        }
+        if (!returnPhotos.length) { setReturnError('Add at least one photo of the supply.'); return; }
+        setReturnError('');
         setSubmittingReturn(true);
         try {
             const resp = await fetch(`${API}/api/orders/${selectedOrder.id}/return`, {
@@ -403,7 +432,7 @@ const CustomerOrders = () => {
                     'Authorization': `Bearer ${localStorage.getItem('hivet_token')}`
                 },
                 body: JSON.stringify({
-                    reason: returnReason,
+                    reason: returnReason.trim(),
                     photos: returnPhotos
                 })
             });
@@ -412,9 +441,12 @@ const CustomerOrders = () => {
                 setReturnReason('');
                 setReturnPhotos([]);
                 fetchOrders();
+            } else {
+                const data = await resp.json();
+                setReturnError(typeof data.detail === 'string' ? data.detail : 'Provide a clear reason and at least one supply photo.');
             }
         } catch (err) {
-            console.error('Failed to submit return', err);
+            setReturnError('Could not submit the request. Check your connection and try again.');
         } finally {
             setSubmittingReturn(false);
         }
@@ -474,7 +506,7 @@ const CustomerOrders = () => {
     const [qrData, setQrData] = useState('');
     const [qrStatus, setQrStatus] = useState<'pending' | 'succeeded' | 'expired' | 'processing'>('pending');
 
-    const tabs = ['All', 'Pending', 'Processing', 'Completed', 'Cancelled', 'Payment Pending', 'Returns'];
+    const tabs = ['All', 'Pending', 'Processing', 'Completed', 'Cancelled', 'Payment Pending', 'Returns', 'Order received'];
     const activeTabRef = useRef<HTMLButtonElement | null>(null);
     const statusTabsContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -618,6 +650,24 @@ const CustomerOrders = () => {
         }
     };
 
+    const confirmOrderReceived = async (order: Order) => {
+        if (receivingOrder !== null) return;
+        setReceivingOrder(order.id); setReceiptError(''); setReceiptMessage('');
+        try {
+            const response = await fetch(`${API}/api/orders/${order.id}/received`, {
+                method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('hivet_token')}` }
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || 'Could not confirm receipt.');
+            setOrders(prev => prev.map(row => row.id === order.id ? { ...row, customer_received_at: data.customer_received_at, receipt_points: data.receipt_points, can_confirm_received: false } : row));
+            setSelectedOrder(current => current?.id === order.id ? { ...current, customer_received_at: data.customer_received_at, can_confirm_received: false } : current);
+            setReceiptMessage(data.message);
+            window.dispatchEvent(new CustomEvent('hivet-loyalty-updated'));
+        } catch (error) {
+            setReceiptError(error instanceof Error ? error.message : 'Could not confirm receipt. Please try again.');
+        } finally { setReceivingOrder(null); }
+    };
+
     const handlePayExistingOrder = (order: Order) => {
         const checkoutItems = order.items.map(item => ({
             ...item,
@@ -632,13 +682,14 @@ const CustomerOrders = () => {
 
     const filteredOrders = orders.filter(o => {
         let matchesStatus = activeTab === 'All' || o.status === activeTab;
+        if (activeTab === 'Order received') matchesStatus = !!o.customer_received_at;
         if (activeTab === 'Returns') {
             matchesStatus = !!o.return_status;
         }
 
         const matchesFulfillment = fulfillmentFilter === 'All' || o.fulfillment_method === fulfillmentFilter;
         const matchesSearch = searchQuery === '' ||
-            `HV-2026-${o.id.toString().padStart(6, '0')}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            formatOrderReference(o).toLowerCase().includes(searchQuery.toLowerCase()) ||
             o.items.some(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
         return matchesStatus && matchesFulfillment && matchesSearch;
     });
@@ -679,6 +730,8 @@ const CustomerOrders = () => {
     return (
         <APIProvider apiKey={MAPS_API_KEY}>
             <DashboardLayout title="" hideHeader={isDetailsModalOpen || isCancelModalOpen || showReturnModal} hideFooter={isDetailsModalOpen || isCancelModalOpen || showReturnModal}>
+                {receiptMessage && <p role="status" className="mb-4 p-3 text-sm text-emerald-700 bg-emerald-50 rounded-xl">{receiptMessage}</p>}
+                {receiptError && <p role="alert" className="mb-4 p-3 text-sm text-red-600 bg-red-50 rounded-xl">{receiptError}</p>}
                 <div className="max-w-[1920px] mx-auto px-3.5 sm:px-6 lg:px-8 space-y-6 sm:space-y-10 pb-36 sm:pb-32 pb-[calc(env(safe-area-inset-bottom,0px)+8rem)]">
 
 
@@ -746,6 +799,7 @@ const CustomerOrders = () => {
                                 {tabs.map((tab) => {
                                     const count = tab === 'All'
                                         ? orders.length
+                                        : tab === 'Order received' ? orders.filter(o => !!o.customer_received_at).length
                                         : tab === 'Returns'
                                             ? orders.filter(o => !!o.return_status).length
                                             : orders.filter(o => o.status === tab).length;
@@ -837,7 +891,7 @@ const CustomerOrders = () => {
                                                 <div className="text-left sm:text-right">
                                                     <p className="text-[11px] font-bold text-black/50">Order Number</p>
                                                     <p className="text-xs sm:text-sm font-black text-accent-brown tracking-wider break-all mt-0.5">
-                                                        HV-2026-{order.id.toString().padStart(6, '0')}
+                                                        {formatOrderReference(order)}
                                                     </p>
                                                 </div>
                                             </div>
@@ -845,16 +899,13 @@ const CustomerOrders = () => {
                                             {/* CORE IDENTITY LAYER: Product Image & Details */}
                                             <div className="flex items-start sm:items-center gap-3.5 sm:gap-5 mb-4 relative z-10">
                                                 <div className="w-16 h-16 xs:w-20 xs:h-20 sm:w-24 sm:h-24 bg-slate-50 rounded-2xl sm:rounded-[1.75rem] flex items-center justify-center border border-accent-brown/5 overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-300 p-2 sm:p-3">
-                                                    <img
-                                                        src={order.items[0]?.image}
-                                                        alt={order.items[0]?.name || 'Order Item'}
-                                                        className="w-full h-full object-contain"
-                                                    />
+                                                    {order.items[0]?.image ? <img src={order.items[0].image} alt={order.items[0]?.name || 'Supply'} className="w-full h-full object-contain" onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement?.querySelector('[data-photo-fallback]')?.classList.remove('hidden'); }} /> : null}
+                                                    <Package data-photo-fallback aria-label="Item photo unavailable" className={`w-8 h-8 text-slate-300 ${order.items[0]?.image ? 'hidden' : ''}`} />
                                                 </div>
 
                                                 <div className="flex-1 min-w-0">
                                                     <h3 className="text-base sm:text-lg font-black text-accent-brown tracking-tight leading-snug group-hover:text-brand transition-colors line-clamp-2 overflow-hidden text-ellipsis">
-                                                        {formatName(order.items[0]?.name)}
+                                                        {formatName(order.items[0]?.name) || 'Item details unavailable'}
                                                     </h3>
                                                     {order.items.length > 1 && (
                                                         <p className="text-xs font-bold text-brand mt-0.5">
@@ -920,7 +971,7 @@ const CustomerOrders = () => {
                                                 </div>
 
                                                 {/* Action Buttons */}
-                                                <div className="flex flex-nowrap items-center gap-2 self-stretch sm:self-auto justify-end">
+                                                <div className="flex flex-wrap items-center gap-2 self-stretch sm:self-auto justify-end">
                                                     {order.status === 'Cancelled' && (
                                                         <motion.button
                                                             whileHover={{ scale: 1.05 }}
@@ -948,7 +999,14 @@ const CustomerOrders = () => {
                                                         </motion.button>
                                                     )}
 
-                                                    {order.status === 'Completed' && !order.return_status && (
+                                                    {order.can_confirm_received && !actionExpired(order) && <button type="button" disabled={receivingOrder !== null} onClick={e => { e.stopPropagation(); void confirmOrderReceived(order); }} className="min-h-[44px] px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                                                        {receivingOrder === order.id ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                                                        {receivingOrder === order.id ? 'Confirming...' : 'Order received'}
+                                                    </button>}
+                                                    {['Completed', 'Delivered'].includes(order.status) && actionExpired(order) && <span className="px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50 rounded-xl">3-day receipt/refund period ended</span>}
+                                                    {order.customer_received_at && <span className="px-3 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 rounded-xl">Order received</span>}
+
+                                                    {order.can_request_return && !actionExpired(order) && (
                                                         <motion.button
                                                             whileHover={{ scale: 1.02 }}
                                                             whileTap={{ scale: 0.98 }}
@@ -957,6 +1015,7 @@ const CustomerOrders = () => {
                                                                 e.stopPropagation(); 
                                                                 returnOpenerRef.current = e.currentTarget;
                                                                 setSelectedOrder(order);
+                                                                setReturnReason(''); setReturnPhotos([]); setReturnError('');
                                                                 setShowReturnModal(true);
                                                             }}
                                                             className="min-h-[44px] flex-1 sm:flex-initial px-2.5 xs:px-4 py-2.5 bg-black text-white rounded-xl flex items-center justify-center gap-1.5 xs:gap-2 text-[11px] xs:text-xs font-bold whitespace-nowrap hover:bg-black/80 transition-all shadow-sm shrink-0"
@@ -1065,7 +1124,7 @@ const CustomerOrders = () => {
                                                                     Tracking number
                                                                 </p>
                                                                 <p className="text-xs sm:text-sm font-black text-accent-brown tracking-wider break-all leading-tight">
-                                                                    HV-2026-{order.id.toString().padStart(6, '0')}
+                                                                    {formatOrderReference(order)}
                                                                 </p>
                                                             </div>
                                                         </div>
@@ -1156,6 +1215,7 @@ const CustomerOrders = () => {
 
                                                 {/* Items List */}
                                                 <div className="lg:flex-1 lg:overflow-y-auto px-4 sm:px-6 py-3 space-y-2.5 no-scrollbar">
+                                                    {order.items.length === 0 && <p className="text-sm text-slate-500">This older order has no saved item details.</p>}
                                                     {order.items.map((item, idx) => (
                                                         <div key={idx} className="flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 bg-white rounded-2xl border border-accent-brown/10 hover:border-brand/30 transition-all shadow-sm">
                                                             <div className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-50 rounded-xl p-2 shrink-0 flex items-center justify-center border border-accent-brown/5">
@@ -1197,6 +1257,8 @@ const CustomerOrders = () => {
                                                         </div>
                                                     ))}
                                                 </div>
+
+                                                <div className="px-4 sm:px-6 pb-4"><DeliveryProof url={order.proof_of_delivery_url} /></div>
 
                                                 {/* Settlement Footer */}
                                                 <div className="p-4 sm:p-6 bg-accent-peach/5 border-t border-accent-brown/10 shrink-0 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
@@ -1307,7 +1369,7 @@ const CustomerOrders = () => {
                                                     Request a Return
                                                 </h2>
                                                 <p className="text-sm font-bold text-accent-brown/70 mt-1 break-words">
-                                                    Order HV-{new Date(selectedOrder?.created_at || '').getFullYear()}-{selectedOrder?.id.toString().padStart(6, '0')}
+                                                    Order {formatOrderReference(selectedOrder)}
                                                 </p>
                                             </div>
 
@@ -1331,14 +1393,16 @@ const CustomerOrders = () => {
                                     <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-6 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-8 relative">
                                         {/* Left Column: Reason for request */}
                                         <div className="space-y-2 flex flex-col">
+                                            {returnError && <p role="alert" className="text-sm text-red-600">{returnError}</p>}
                                             <label htmlFor="return-reason-input" className="text-sm font-bold text-accent-brown block">
                                                 Reason for request <span className="text-rose-500 font-bold ml-0.5" aria-hidden="true">*</span>
                                             </label>
                                             <textarea 
                                                 id="return-reason-input"
                                                 value={returnReason}
-                                                onChange={e => setReturnReason(e.target.value)}
-                                                placeholder="Please provide a detailed explanation..."
+                                                onChange={e => { setReturnReason(e.target.value); setReturnError(''); }}
+                                                minLength={10} maxLength={1000}
+                                                placeholder="Describe the supply issue (10–1000 characters)..."
                                                 rows={5}
                                                 className="w-full flex-1 bg-slate-50 border border-slate-200 rounded-2xl p-3.5 sm:p-4 text-base font-medium text-accent-brown placeholder:text-slate-400 outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 transition-all min-h-[140px] sm:min-h-[160px] resize-y shadow-inner"
                                                 required
@@ -1366,11 +1430,7 @@ const CustomerOrders = () => {
                                                         key={i}
                                                         className="aspect-square min-h-[72px] sm:min-h-[88px] rounded-2xl border border-slate-200 overflow-hidden relative group shadow-sm bg-slate-50"
                                                     >
-                                                        <img
-                                                            src={url}
-                                                            alt={`Evidence photo ${i + 1}`}
-                                                            className="w-full h-full object-cover"
-                                                        />
+                                                        <EvidencePhoto url={url} alt="Supply refund evidence" className="h-full" expandable={false} />
                                                         <button 
                                                             type="button"
                                                             onClick={() => setReturnPhotos(prev => prev.filter((_, idx) => idx !== i))}
@@ -1409,7 +1469,7 @@ const CustomerOrders = () => {
                                                         <input
                                                             id="return-photo-upload"
                                                             type="file"
-                                                            accept="image/*"
+                                                            accept="image/jpeg,image/png,image/webp"
                                                             onChange={handleImageUpload}
                                                             className="sr-only"
                                                             disabled={uploadingImage}
@@ -1437,10 +1497,10 @@ const CustomerOrders = () => {
                                         <button 
                                             type="button"
                                             onClick={submitReturnRequest}
-                                            disabled={!returnReason.trim() || returnPhotos.length === 0 || submittingReturn}
-                                            aria-disabled={!returnReason.trim() || returnPhotos.length === 0 || submittingReturn}
+                                            disabled={returnReason.trim().length < 10 || returnPhotos.length === 0 || submittingReturn || uploadingImage || !!(selectedOrder && actionExpired(selectedOrder))}
+                                            aria-disabled={returnReason.trim().length < 10 || returnPhotos.length === 0 || submittingReturn || uploadingImage}
                                             className={`w-full xs:w-[65%] min-h-[48px] sm:min-h-[52px] px-6 py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md focus-visible:ring-2 focus-visible:ring-brand focus:outline-none ${
-                                                !returnReason.trim() || returnPhotos.length === 0 || submittingReturn
+                                                returnReason.trim().length < 10 || returnPhotos.length === 0 || submittingReturn || uploadingImage
                                                     ? 'bg-slate-200 text-slate-500 cursor-not-allowed shadow-none'
                                                     : 'bg-brand hover:bg-brand-dark text-white shadow-brand/20 active:scale-[0.98]'
                                             }`}
@@ -1678,7 +1738,7 @@ const CustomerOrders = () => {
                     onClose={() => setQrModalOpen(false)}
                     qrData={qrData}
                     amount={selectedOrder?.total_amount || 0}
-                    reference={`HV-2026-${(selectedOrder?.id || 0).toString().padStart(6, '0')}`}
+                    reference={formatOrderReference(selectedOrder)}
                     status={qrStatus}
                 />
             </DashboardLayout>

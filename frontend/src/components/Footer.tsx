@@ -73,7 +73,7 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-10 mb-8">
                     {/* Prestigious Branding */}
                     <div className="md:col-span-5 space-y-3 sm:space-y-4">
-                        <Link to="/" className="flex items-center gap-3 group w-fit">
+                        <Link to={variant === 'business' ? '/for-clinics' : variant === 'rider' ? '/for-riders' : '/'} className="flex items-center gap-3 group w-fit">
                             <Logo className="w-20 h-20 shrink-0 group-hover:scale-105 transition-transform" />
                             {(isBusiness || isRider) && <span className="text-lg font-bold">{isBusiness ? 'for Clinics' : 'for Riders'}</span>}
                         </Link>
@@ -169,9 +169,9 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
             <AnimatePresence>
                 {activeSection && (
                     <div role="dialog" aria-modal="true" aria-labelledby="footer-info-title" className="pwa-dialog-overlay fixed inset-0 z-[100] flex items-center justify-center p-6">
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setActiveSection(null)} className="absolute inset-0 bg-black/95 backdrop-blur-3xl" />
-                        <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} className="pwa-dialog-panel pwa-info-panel relative w-full max-w-2xl bg-[#111] rounded-[2rem] sm:rounded-[3rem] p-6 sm:p-10 lg:p-16 border border-white/10 shadow-2xl overflow-hidden" >
-                            <button aria-label="Close information" onClick={() => setActiveSection(null)} className="absolute top-5 right-5 sm:top-8 sm:right-8 w-10 h-10 sm:w-12 sm:h-12 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-white hover:bg-brand hover:text-accent-brown transition-all" >
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setActiveSection(null)} className="absolute inset-0 bg-transparent" />
+                        <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} className="pwa-dialog-panel pwa-info-panel relative w-full max-w-2xl bg-white text-accent-brown rounded-[2rem] sm:rounded-[3rem] p-6 sm:p-10 lg:p-16 border border-accent-brown/10 shadow-2xl overflow-hidden" >
+                            <button aria-label="Close information" onClick={() => setActiveSection(null)} className="absolute top-5 right-5 sm:top-8 sm:right-8 w-10 h-10 sm:w-12 sm:h-12 bg-slate-50 border border-accent-brown/10 rounded-full flex items-center justify-center text-accent-brown hover:bg-brand hover:text-accent-brown transition-all" >
                                 <X className="w-6 h-6" />
                             </button>
                             <div className="space-y-10">
@@ -184,10 +184,10 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
                                     </div>
                                     <div className="space-y-2">
                                         <p className="text-xs font-bold text-brand">Help & Information</p>
-                                        <h3 id="footer-info-title" className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight">{legalContent[activeSection].title}</h3>
+                                        <h3 id="footer-info-title" className="text-2xl sm:text-3xl lg:text-4xl font-black text-accent-brown tracking-tight">{legalContent[activeSection].title}</h3>
                                     </div>
                                 </div>
-                                <p className="text-base sm:text-lg text-white/60 leading-relaxed italic font-medium">"{legalContent[activeSection].content}"</p>
+                                <p className="text-base sm:text-lg text-slate-600 leading-relaxed italic font-medium">"{legalContent[activeSection].content}"</p>
                                 
                                 {(activeSection === 'Direct Line' || activeSection === 'Technical Help' || activeSection === 'Customer Support') && (
                                     <div className="flex flex-col sm:flex-row gap-4">
@@ -199,7 +199,7 @@ export function Footer({ variant = 'main', className = '' }: FooterProps) {
                                                 setIsCopied(true);
                                                 setTimeout(() => setIsCopied(false), 2000);
                                             }}
-                                            className="flex-1 bg-white/5 border border-white/10 text-white py-5 rounded-2xl font-bold text-xs hover:bg-white/10 transition-all flex items-center justify-center gap-3"
+                                            className="flex-1 bg-slate-50 border border-accent-brown/10 text-accent-brown py-5 rounded-2xl font-bold text-xs hover:bg-slate-100 transition-all flex items-center justify-center gap-3"
                                         >
                                             {isCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                                             {isCopied ? 'Copied to Clipboard' : 'Copy Phone Number'}

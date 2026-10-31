@@ -42,6 +42,7 @@ const CustomerCatalog = () => {
     const typeChipsContainerRef = useRef<HTMLDivElement>(null);
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
+    const [catalogError, setCatalogError] = useState("");
     const [itemQuantities, setItemQuantities] = useState<Record<number, number>>({});
 
     useEffect(() => {
@@ -79,14 +80,15 @@ const CustomerCatalog = () => {
 
     const fetchProducts = async () => {
         setLoading(true);
+        setCatalogError("");
         try {
             const prodResp = await fetch(`${API}/api/catalog`);
-            if (prodResp.ok) {
-                const data = await prodResp.json();
-                setProducts(data);
-            }
+            if (!prodResp.ok) throw new Error("Could not load products.");
+            const data = await prodResp.json();
+            if (!Array.isArray(data)) throw new Error("Invalid catalog response.");
+            setProducts(data);
         } catch (err) {
-            console.error('Fetch error:', err);
+            setCatalogError('Could not load the Store. Check your connection and try again.');
         } finally {
             setLoading(false);
         }
@@ -389,6 +391,11 @@ const CustomerCatalog = () => {
                             {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
                                 <div key={i} className="aspect-[3/4] bg-white rounded-3xl sm:rounded-[3rem] border border-accent-brown/5 animate-pulse"></div>
                             ))}
+                        </div>
+                    ) : catalogError ? (
+                        <div role="alert" className="bg-white p-8 rounded-3xl border border-accent-brown/10 text-center space-y-4">
+                            <p className="text-slate-600">{catalogError}</p>
+                            <button type="button" onClick={() => void fetchProducts()} className="min-h-11 px-6 rounded-xl bg-brand text-white font-bold">Retry</button>
                         </div>
                     ) : filteredProducts.length === 0 ? (
                         <motion.div 

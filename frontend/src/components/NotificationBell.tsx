@@ -20,6 +20,9 @@ export interface NotificationBellProps {
     markAllAsRead: () => void;
     deleteNotification: (id: number) => void;
     variant?: 'customer' | 'portal';
+    error?: string;
+    removeAll: () => void;
+    busy?: boolean;
 }
 
 export const NotificationBell: React.FC<NotificationBellProps> = ({
@@ -29,6 +32,9 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
     markAllAsRead,
     deleteNotification,
     variant = 'portal',
+    error,
+    removeAll,
+    busy = false,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
@@ -195,7 +201,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
                                 )}
 
                                 {/* Panel Header */}
-                                <div className="p-4 sm:p-5 border-b border-accent-brown/5 flex items-center justify-between bg-accent-peach/10 shrink-0">
+                                <div className="p-4 sm:p-5 border-b border-accent-brown/5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 bg-accent-peach/10 shrink-0">
                                     <div className="flex items-center gap-2">
                                         <Bell className="w-4 h-4 text-brand" />
                                         <h3 className="font-black text-black text-sm italic">
@@ -207,16 +213,17 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
                                             </span>
                                         )}
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="w-full sm:w-auto flex flex-wrap items-center justify-end gap-2" aria-busy={busy}>
                                         {unreadCount > 0 && (
                                             <button
                                                 type="button"
-                                                onClick={markAllAsRead}
+                                                onClick={markAllAsRead} disabled={busy}
                                                 className="text-xs font-bold text-black hover:underline bg-white px-3 py-1.5 rounded-full shadow-xs cursor-pointer active:scale-95 transition-transform"
                                             >
                                                 Mark all as read
                                             </button>
                                         )}
+                                        {notifications.length > 0 && <button type="button" onClick={removeAll} disabled={busy} className="text-xs font-bold text-red-600 bg-white px-3 py-1.5 rounded-full shadow-xs disabled:opacity-50">Remove all</button>}
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -232,6 +239,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
                                     </div>
                                 </div>
 
+                                {error && <p role="alert" className="px-4 py-3 text-sm text-red-600 bg-red-50">{error}</p>}
                                 {/* Scrolling Notifications List */}
                                 <div className="flex-1 overflow-y-auto no-scrollbar divide-y divide-brand-dark/5">
                                     {notifications?.length === 0 ? (

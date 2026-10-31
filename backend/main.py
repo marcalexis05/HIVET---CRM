@@ -39,7 +39,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from dotenv import load_dotenv
 from sms_service import send_sms, mask_phone
-from sms_templates import format_customer_forgot_password_sms, format_customer_registration_sms
+from auth_sessions import (SessionBase, AuthSession, AccountAccessLock, canonical_role,
+                           account_disabled, issue_session, read_session, permitted_roles)
+from input_validation import (validate_person_name, validate_weight, nonnegative,
+                              validate_catalog_json, validate_distribution)
+from sms_templates import (format_customer_forgot_password_sms, format_customer_registration_sms,
+                           format_order_confirmation_sms, format_reservation_confirmation_sms)
 from email_templates import send_forgot_password_email
 from jose import JWTError, jwt
 from passlib.hash import pbkdf2_sha256
@@ -47,6 +52,12 @@ from passlib.hash import pbkdf2_sha256
 from sqlalchemy import create_engine, Column, String, Text, DateTime, text, Integer, Boolean, Float, ForeignKey, UniqueConstraint, func, inspect, or_, and_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from starlette.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse
+from order_actions import customer_action_window
+from refund_evidence import save_evidence, evidence_path, validate_evidence
+from delivery_proofs import MAX_PROOF_BYTES, proof_path, write_proof, delivery_proof_url
+from order_references import format_order_reference, compact_order_references_in_text, mask_pickup_serial
 from account_ids import create_id_registry, install_id_assignment, backfill_account_ids, read_account_id
 from dateutil.relativedelta import relativedelta
 
@@ -690,7 +701,17 @@ install_id_assignment(BusinessProfile, public_id_registry, 'CL')
 install_id_assignment(RiderProfile, public_id_registry, 'RD')
 
 # Recreate the schema
+class CustomerOrderReceipt(Base):
+    __tablename__ = "customer_order_receipts"
+    order_id = Column(Integer, ForeignKey("orders.id"), primary_key=True)
+    customer_id = Column(Integer, nullable=False)
+    received_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    points_awarded = Column(Integer, default=0, nullable=False)
+    previous_points_awarded = Column(Integer, default=0, nullable=False)
+
+
 Base.metadata.create_all(bind=engine)
+SessionBase.metadata.create_all(bind=engine)
 backfill_account_ids(engine, public_id_registry, [(BusinessProfile.__table__, 'CL'), (RiderProfile.__table__, 'RD')])
 
 
@@ -775,7 +796,8 @@ if "return_requests" in inspector.get_table_names():
         
         # FIX: Drop NOT NULL on legacy columns that might exist
         for legacy_col in ["reservation_id", "branch_id", "rider_id"]:
-            if legacy_col in rr_cols:
+            legacy_column = next((column for column in inspector.get_columns("return_requests") if column["name"] == legacy_col), None)
+            if legacy_column and not legacy_column.get("nullable", True):
                 try:
                     conn.execute(text(f"ALTER TABLE return_requests ALTER COLUMN {legacy_col} DROP NOT NULL"))
                 except Exception:
@@ -826,14 +848,10 @@ if "rider_profiles" in inspector.get_table_names():
         if "picture" not in rider_cols:
             conn.execute(text("ALTER TABLE rider_profiles ADD COLUMN picture VARCHAR"))
         
-        # Make customer_id nullable for new standalone riders
-        # Postgres syntax: ALTER TABLE rider_profiles ALTER COLUMN customer_id DROP NOT NULL
-        # (We do it unconditionally since dropping a NOT NULL that's already dropped is fine or easy to ignore error, 
-        # but safely we can just run it)
-        try:
+        # Avoid taking an exclusive table lock once this legacy migration is applied.
+        customer_column = next((column for column in inspector.get_columns("rider_profiles") if column["name"] == "customer_id"), None)
+        if customer_column and not customer_column.get("nullable", True):
             conn.execute(text("ALTER TABLE rider_profiles ALTER COLUMN customer_id DROP NOT NULL"))
-        except Exception as e:
-            print("Note: Could not drop NOT NULL on customer_id, might already be dropped or not exist:", e)
 
         if "license_document_url" not in rider_cols:
             conn.execute(text("ALTER TABLE rider_profiles ADD COLUMN license_document_url VARCHAR"))
@@ -976,12 +994,13 @@ def generate_referral_code(length: int = 8) -> str:
             return code
 
 def create_access_token(data: dict) -> str:
-    payload = data.copy()
-    payload["exp"] = datetime.utcnow() + timedelta(days=TOKEN_EXPIRE_DAYS)
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return issue_session(SessionLocal, data, SECRET_KEY, ALGORITHM, TOKEN_EXPIRE_DAYS)
 
 def decode_token(token: str) -> dict:
-    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    return read_session(SessionLocal, token, SECRET_KEY, ALGORITHM, {
+        'customer': Customer, 'business': BusinessProfile, 'rider': RiderProfile,
+        'super_admin': SuperAdminUser, 'system_admin': SystemAdminUser,
+    })
 
 def get_loyalty_tier(points: int) -> dict:
     if points <= 1000:
@@ -995,12 +1014,15 @@ def get_loyalty_tier(points: int) -> dict:
 
 async def get_current_user(request: Request) -> dict:
     """Extract and validate the JWT from the Authorization header."""
+    validated = getattr(request.state, "auth", None)
+    if validated is not None:
+        return validated
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     token = auth_header.split(" ", 1)[1]
     try:
-        payload = decode_token(token)
+        payload = await run_in_threadpool(decode_token, token)
         return payload
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -1102,6 +1124,23 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Hi-Vet CRM API", lifespan=lifespan)
+
+@app.middleware("http")
+async def validate_portal_session(request: Request, call_next):
+    if request.method != 'OPTIONS':
+        allowed = permitted_roles(request.url.path, request.method)
+        header = request.headers.get('Authorization', '')
+        if allowed is not None or header.startswith('Bearer '):
+            try:
+                if not header.startswith('Bearer '):
+                    raise JWTError('Your session has expired. Please log in again.')
+                payload = await run_in_threadpool(decode_token, header.split(' ', 1)[1])
+                if allowed is not None and payload['role'] not in allowed:
+                    return JSONResponse(status_code=403, content={'detail': 'You do not have access to this portal.'})
+                request.state.auth = payload
+            except (JWTError, ValueError, KeyError):
+                return JSONResponse(status_code=401, content={'detail': 'Your session has expired. Please log in again.'})
+    return await call_next(request)
 
 app.add_middleware(
     CORSMiddleware,
@@ -1327,6 +1366,26 @@ class ProductCreate(BaseModel):
     # Dynamic distribution: {branch_id: stock_value}
     inventory_distribution: Optional[dict] = None 
 
+    _weight = field_validator('weight', mode='before')(validate_weight)
+    _distribution = field_validator('inventory_distribution')(validate_distribution)
+
+    @field_validator('price', 'stock', 'loyalty_points')
+    @classmethod
+    def valid_numbers(cls, value, info):
+        return nonnegative(value, info.field_name, info.field_name != 'price') if value is not None else value
+
+    @field_validator('name')
+    @classmethod
+    def valid_product_name(cls, value):
+        if not value.strip():
+            raise ValueError('Enter a product name.')
+        return value.strip()
+
+    @field_validator('variants_json', 'sizes_json')
+    @classmethod
+    def valid_options(cls, value, info):
+        return validate_catalog_json(value, info.field_name)
+
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
@@ -1342,6 +1401,15 @@ class ProductUpdate(BaseModel):
     sizes_json: Optional[str] = None
     loyalty_points: Optional[int] = None
     inventory_distribution: Optional[dict] = None
+
+    _weight = field_validator('weight', mode='before')(validate_weight)
+    _distribution = field_validator('inventory_distribution')(validate_distribution)
+    _numbers = field_validator('price', 'stock', 'loyalty_points')(ProductCreate.valid_numbers.__func__)
+    @field_validator('name')
+    @classmethod
+    def valid_name(cls, value):
+        return ProductCreate.valid_product_name(value) if value is not None else value
+    _options = field_validator('variants_json', 'sizes_json')(ProductCreate.valid_options.__func__)
 
 class OrderItemCreate(BaseModel):
     id: int
@@ -1556,7 +1624,7 @@ class BusinessAnalyticsData(BaseModel):
 async def delete_account(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Soft delete the current user's account and related entities."""
     user_id = int(current_user["sub"])
-    role = current_user.get("role")
+    role = canonical_role(current_user.get("role"))
     
     if role == "customer":
         target = db.query(Customer).filter(Customer.id == user_id).first()
@@ -1573,8 +1641,30 @@ async def delete_account(db: Session = Depends(get_db), current_user: dict = Dep
         raise HTTPException(status_code=404, detail="Account not found.")
         
     target.is_deleted = True
+    db.query(AuthSession).filter(AuthSession.role == role, AuthSession.account_id == user_id).update({'revoked': True})
     db.commit()
-    return {"message": "Account deactivated successfully."}
+    return {"message": "Account deactivated successfully. Records and ongoing transactions are preserved."}
+
+def deliver_customer_sms(phone: str, message: str, purpose: str):
+    """An SMS outage must never undo or fail a customer's saved transaction."""
+    try:
+        return send_sms(phone, message, purpose=purpose)
+    except Exception as exc:
+        print(f"[CUSTOMER SMS] {purpose} | Failed: {type(exc).__name__}")
+        return {"success": False}
+
+
+def queue_customer_sms(db: Session, background_tasks: BackgroundTasks, customer_id: int, message: str, purpose: str):
+    try:
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if customer and customer.phone:
+            # Pass scalar values, never a request-scoped database session, into the task.
+            background_tasks.add_task(deliver_customer_sms, customer.phone, message, purpose)
+        else:
+            print(f"[CUSTOMER SMS] {purpose} | No customer mobile number")
+    except Exception as exc:
+        print(f"[CUSTOMER SMS] {purpose} | Could not queue: {type(exc).__name__}")
+
 
 def add_notification(db: Session, user_id: int, n_type: str, title: str, desc: str, link: str = None, role: str = "customer"):
     """Adds a notification for either a customer or a business owner."""
@@ -1623,7 +1713,7 @@ async def get_business_orders(
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        payload = decode_token(auth_header.split(" ", 1)[1])
+        payload = getattr(request.state, "auth", None) or decode_token(auth_header.split(" ", 1)[1])
         business_id = int(payload["sub"])
         role = payload.get("role")
         if role != "business":
@@ -1661,12 +1751,8 @@ async def get_business_orders(
         
         customer_name = customer.first_name + " " + customer.last_name if customer.first_name and customer.last_name else customer.name or "Guest"
         
-        # Generate HV-style reference ID: HV-2026-000001-8963
-        year = order.created_at.year
-        order_suffix = str(order.created_at.timestamp()).split('.')[0][-4:]
         order_id_num = int(order.id)
-        padded_id = "{:06d}".format(order_id_num)
-        hv_ref = f"HV-{year}-{padded_id}-{order_suffix}"
+        hv_ref = format_order_reference(order)
         
         orders_response.append({
             "id": hv_ref, # HV-style reference ID
@@ -1687,6 +1773,7 @@ async def get_business_orders(
             "pickup_pin": delivery.pickup_pin if delivery else None,
             "customer_pin": delivery.customer_pin if delivery else None,
             "delivery_status": delivery.status if delivery else None,
+            "proof_of_delivery_url": delivery_proof_url(delivery),
             "serial_number": order_item.serial_number or f"HV-SN-{order.id}-{order_item.id}-{(int(order.created_at.timestamp()) % 10000)}",
             "item_id": order_item.id,
             "image": order_item.image or product.image,
@@ -1733,7 +1820,7 @@ async def update_business_order_status(order_id: int, body: BusinessOrderStatusU
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        payload = decode_token(auth_header.split(" ", 1)[1])
+        payload = getattr(request.state, "auth", None) or decode_token(auth_header.split(" ", 1)[1])
         business_id = int(payload["sub"])
         role = payload.get("role")
         if role != "business":
@@ -1752,6 +1839,10 @@ async def update_business_order_status(order_id: int, body: BusinessOrderStatusU
         raise HTTPException(status_code=403, detail="Not authorized to edit this order")
 
     previous_status = order.status
+    if body.status in {"Completed", "Delivered"} and previous_status not in {"Completed", "Delivered"} and not order.delivered_at:
+        order.delivered_at = datetime.utcnow()
+    if order.fulfillment_method == "delivery" and body.status in {"Completed", "Delivered"} and previous_status not in {"Completed", "Delivered"}:
+        raise HTTPException(400, "The rider must upload delivery proof and complete this delivery first.")
     order.status = body.status
     
     # Restore stock if cancelled (only if it was already completed/deducted)
@@ -1763,40 +1854,7 @@ async def update_business_order_status(order_id: int, body: BusinessOrderStatusU
     if body.status in fulfillment_states and previous_status not in fulfillment_states:
         reduce_stock(db, order_id)
 
-    # Award loyalty points ONLY when status changes to 'Completed' for the first time
-    if body.status == "Completed" and previous_status != "Completed":
-        # Find business profile to get loyalty rates
-        # Primary: Fetch from business_id of the requester (since they own this order)
-        biz = db.query(BusinessProfile).filter(BusinessProfile.id == business_id).first()
-        
-        items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
-        total_loyalty_points = 0
-        
-        for item in items:
-            # Use item-specific fixed points if available, otherwise calculate from price
-            prod = db.query(Product).filter(Product.id == item.product_id).first()
-            if prod:
-                # 1. Use points captured at order time (if set)
-                if item.loyalty_points and item.loyalty_points > 0:
-                    points = item.loyalty_points * item.quantity
-                elif prod and prod.loyalty_points > 0:
-                    # 2. Use current product points
-                    points = prod.loyalty_points * item.quantity
-                else:
-                    # No points if not in catalog
-                    points = 0
-                total_loyalty_points += points
-
-        if total_loyalty_points > 0:
-            customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
-            if customer:
-                customer.loyalty_points += total_loyalty_points
-                year = order.created_at.year if order.created_at else 2026
-                db.add(LoyaltyHistory(
-                    customer_id=order.customer_id,
-                    description=f"Purchase Reward (HV-{year}-{order.id:06d})",
-                    points=total_loyalty_points
-                ))
+    # Product reward points are credited only after customer receipt confirmation.
 
     db.commit()
 
@@ -1805,7 +1863,7 @@ async def update_business_order_status(order_id: int, body: BusinessOrderStatusU
     add_notification(
         db, order.customer_id, "System",
         f"Order Status: {body.status}",
-        f"Your order HV-{year}-{order.id:06d} has been updated to '{body.status}' by the clinic.",
+        f"Your order {format_order_reference(order)} has been updated to '{body.status}' by the clinic.",
         "/dashboard/customer/orders"
     )
 
@@ -1899,7 +1957,8 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
                 # Link Google ID to existing manual account
                 customer.google_id = google_id
                 if not customer.picture:
-                    customer.picture = picture
+                    # Keep the existing customer profile picture.
+                    pass
                 db.commit()
                 db.refresh(customer)
             else:
@@ -1920,6 +1979,8 @@ async def google_callback(request: Request, code: str, state: Optional[str] = No
         return RedirectResponse(url=f"{dest_frontend}/login?error=db_error")
 
     # 4. Issue JWT
+    if canonical_role(customer.role) != 'customer' or account_disabled(db, customer, 'customer'):
+        return RedirectResponse(url=f"{dest_frontend}/login?error=google_auth_failed")
     token = create_access_token({
         "sub": str(customer.id),
         "email": customer.email,
@@ -2898,6 +2959,7 @@ async def verify_email_change(body: EmailChangeVerifyRequest, request: Request, 
 
     # Generate new JWT token with updated email
     token_data = {
+        "sid": payload.get("sid"),
         "sub": str(user.id),
         "email": user.email,
         "role": getattr(user, 'role', role),
@@ -2941,8 +3003,8 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     otp: str
-    first_name: str = ""
-    last_name: str = ""
+    first_name: str = Field(min_length=1)
+    last_name: str = Field(min_length=1)
     middle_name: str = ""
     suffix: str = ""
     phone: str = ""
@@ -2998,6 +3060,22 @@ class RegisterRequest(BaseModel):
     home_lng: Optional[float] = None
     is_18_above: Optional[bool] = False
     has_android_6: Optional[bool] = False
+
+    @field_validator('first_name', 'middle_name', 'last_name')
+    @classmethod
+    def valid_registration_name(cls, value, info):
+        value = validate_person_name(value)
+        if info.field_name != 'middle_name' and not value:
+            raise ValueError('Enter your first and last name.')
+        return value
+
+    @field_validator('role')
+    @classmethod
+    def valid_registration_role(cls, value):
+        role = canonical_role(value)
+        if role not in {'customer', 'business', 'rider'}:
+            raise ValueError('Invalid registration role.')
+        return role
 
 @app.post("/api/auth/register", status_code=201)
 async def register_customer(body: RegisterRequest, db: Session = Depends(get_db)):
@@ -3260,19 +3338,37 @@ os.makedirs(PRODUCT_UPLOAD_DIR, exist_ok=True)
 os.makedirs(REFUND_UPLOAD_DIR, exist_ok=True)
 
 @app.post("/api/orders/refund/upload")
-async def upload_refund_photo(file: UploadFile = File(...)):
-    """Upload a refund evidence photo."""
-    ext = os.path.splitext(file.filename)[1].lower() if file.filename else ".jpg"
-    if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
-        raise HTTPException(status_code=400, detail="Invalid file type")
-    
-    unique_name = f"refund_{uuid.uuid4().hex}{ext}"
-    file_path = os.path.join(REFUND_UPLOAD_DIR, unique_name)
-    
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
-    return {"url": f"http://localhost:8000/{REFUND_UPLOAD_DIR}/{unique_name}"}
+async def upload_refund_photo(order_id: int = Form(...), file: UploadFile = File(...), db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "customer":
+        raise HTTPException(403, "Customer access required")
+    customer_id = int(current_user["sub"])
+    order = db.query(Order).filter(Order.id == order_id, Order.customer_id == customer_id).first()
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if order.status not in {"Completed", "Delivered"}:
+        raise HTTPException(400, "Refund evidence is available only after delivery or completed pickup.")
+    if customer_action_window(order)["customer_action_expired"]:
+        raise HTTPException(400, "The 3-day refund request period has ended.")
+    content = await file.read(MAX_PROOF_BYTES + 1)
+    return {"url": save_evidence(customer_id, order_id, content)}
+
+
+@app.get("/api/orders/{order_id}/refund-photo/{filename}")
+async def view_refund_photo(order_id: int, filename: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(404, "Order not found")
+    role, account_id = current_user.get("role"), int(current_user["sub"])
+    allowed = role == "customer" and order.customer_id == account_id
+    if role == "business":
+        allowed = order.clinic_id == account_id or db.query(OrderItem).join(Product, OrderItem.product_id == Product.id).filter(OrderItem.order_id == order_id, Product.business_id == account_id).first() is not None
+    if not allowed:
+        raise HTTPException(403, "You cannot view these refund photos.")
+    path = evidence_path(order.customer_id, order.id, f"/api/orders/{order.id}/refund-photo/{filename}")
+    if not path:
+        raise HTTPException(404, "Refund photo not found")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+
 
 @app.post("/api/business/upload-document")
 async def upload_compliance_document(
@@ -3313,7 +3409,7 @@ async def get_public_catalog(db: Session = Depends(get_db)):
     """Fetch all products across all clinics for the user marketplace."""
     results = db.query(Product, BusinessProfile.clinic_name)\
         .join(BusinessProfile, Product.business_id == BusinessProfile.id)\
-        .filter(Product.is_archived == False)\
+        .filter(Product.is_archived.is_not(True))\
         .order_by(Product.created_at.desc()).all()
     
     catalog = []
@@ -3428,7 +3524,7 @@ async def get_business_catalog(
     import json
     
     # Base query: Only active (non-archived) products
-    query = db.query(Product).filter(Product.business_id == business_id, Product.is_archived == False)
+    query = db.query(Product).filter(Product.business_id == business_id, Product.is_archived.is_not(True))
     products = query.order_by(Product.created_at.desc()).all()
     
     for p in products:
@@ -4033,6 +4129,7 @@ async def get_booked_slots(clinic_id: int, date: str, db: Session = Depends(get_
 async def create_reservation(
     body: ReservationCreate,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -4292,6 +4389,9 @@ async def create_reservation(
             is_business=True
         ))
 
+    queue_customer_sms(db, background_tasks, customer_id,
+                       format_reservation_confirmation_sms(tracking_id, new_res.date, new_res.time, new_res.status),
+                       "reservation_created")
     return {"reservation": _reservation_to_dict(new_res, customer_name=customer_name)}
 
 @app.patch("/api/reservations/{reservation_id}/cancel")
@@ -5325,13 +5425,8 @@ async def get_business_recent_orders(
     seen_orders = set()
     for item, order, customer in recent_order_items:
         if order.id not in seen_orders and len(results) < 5:
-            # Generate HV-style reference ID: HV-2026-000001-8963
-            year = order.created_at.year
-            order_suffix = str(order.created_at.timestamp()).split('.')[0][-4:]
-            # Ensure we get a proper integer value
             order_id_num = int(order.id)
-            padded_id = "{:06d}".format(order_id_num)
-            hv_ref = f"HV-{year}-{padded_id}-{order_suffix}"
+            hv_ref = format_order_reference(order)
             
             results.append({
                 "id": hv_ref,
@@ -6441,46 +6536,68 @@ async def get_admin_alerts(
 
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    email: str = ""
+    password: str = ""
 
 
 @app.post("/api/auth/login")
+@app.post("/api/auth/login/customer")
 async def login_customer(body: LoginRequest, db: Session = Depends(get_db)):
-    """Local login for customers, businesses, riders, and admins."""
+    return await authenticate_portal(body, db, {'customer'})
 
-    
+
+@app.post("/api/auth/login/clinic")
+@app.post("/api/auth/login/business")
+async def login_clinic(body: LoginRequest, db: Session = Depends(get_db)):
+    return await authenticate_portal(body, db, {'business'})
+
+
+@app.post("/api/auth/login/rider")
+async def login_rider(body: LoginRequest, db: Session = Depends(get_db)):
+    return await authenticate_portal(body, db, {'rider'})
+
+
+@app.post("/api/auth/login/admin")
+async def login_admin(body: LoginRequest, db: Session = Depends(get_db)):
+    return await authenticate_portal(body, db, {'super_admin', 'system_admin'})
+
+
+@app.post("/api/auth/logout")
+async def logout_session(request: Request, db: Session = Depends(get_db)):
+    payload = await get_current_user(request)
+    session = db.get(AuthSession, payload['sid'])
+    if session:
+        session.revoked = True
+        db.commit()
+    return {"message": "Logged out"}
+
+
+async def authenticate_portal(body: LoginRequest, db: Session, allowed_roles: set):
+    """The endpoint fixes the allowed role; request data cannot expand it."""
+    if not body.email.strip() or not body.password.strip():
+        raise HTTPException(status_code=400, detail="Please enter your username and password.")
+    invalid = "Invalid username or password for this login portal."
+    models = {'customer': Customer, 'business': BusinessProfile, 'rider': RiderProfile,
+              'super_admin': SuperAdminUser, 'system_admin': SystemAdminUser}
     user = None
-    is_rider = False
-
-    # 1. Check rider_profiles first (standalone auth, not in customer table)
-    rider_user = db.query(RiderProfile).filter(RiderProfile.email == body.email).first()
-    if rider_user and rider_user.password_hash:
-        is_rider = True
-        user = rider_user
-
-    # 2. Check customer table
-    if not user:
-        user = db.query(Customer).filter(Customer.email == body.email).first()
-    # 3. Check business table
-    if not user:
-        user = db.query(BusinessProfile).filter(BusinessProfile.email == body.email).first()
-    # 4. Check super admin
-    if not user:
-        user = db.query(SuperAdminUser).filter(SuperAdminUser.email == body.email).first()
-    # 5. Check system admin
-    if not user:
-        user = db.query(SystemAdminUser).filter(SystemAdminUser.email == body.email).first()
-
+    for role in allowed_roles:
+        model = models[role]
+        candidate = db.query(model).filter(func.lower(model.email) == body.email.strip().lower()).first()
+        if candidate and canonical_role(getattr(candidate, 'role', None)) in allowed_roles:
+            user = candidate
+            break
     if not user or not user.password_hash:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-
-    # Block deactivated accounts
-    if getattr(user, 'is_deleted', False):
-        raise HTTPException(status_code=401, detail="This account has been deactivated.")
-
-    if not pbkdf2_sha256.verify(body.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=401, detail=invalid)
+    try:
+        valid_password = pbkdf2_sha256.verify(body.password, user.password_hash)
+    except (ValueError, TypeError):
+        valid_password = False
+    if not valid_password:
+        raise HTTPException(status_code=401, detail=invalid)
+    verified_role = canonical_role(user.role)
+    if account_disabled(db, user, verified_role):
+        raise HTTPException(status_code=403, detail="Your account is inactive. Please contact support.")
+    is_rider = verified_role == 'rider'
 
     # Block accounts that are not yet approved
     if getattr(user, 'role', '') == "business":
@@ -6917,6 +7034,7 @@ async def update_profile(body: ProfileUpdate, request: Request, db: Session = De
     
     # Generate new token with updated info
     token_data = {
+        "sid": payload.get("sid"),
         "sub": str(user.id),
         "email": user.email,
         "role": getattr(user, 'role', role),
@@ -7054,7 +7172,7 @@ async def get_customer_dashboard_stats(request: Request, db: Session = Depends(g
 
 
         recent_order = {
-            "id": f"HV-2026-{recent_order_obj.id:06d}",
+            "id": format_order_reference(recent_order_obj),
             "status": recent_order_obj.status,
             "item_summary": f"{items[0].product_name} ({len(items)} Items)" if items else "Order Items",
             "location": location_display,
@@ -7180,7 +7298,7 @@ async def get_customer_dashboard_stats(request: Request, db: Session = Depends(g
             "id": n.id,
             "type": n.type,
             "title": n.title,
-            "desc": n.description,
+            "desc": compact_order_references_in_text(n.description),
             "created_at": str(n.created_at)
         } for n in unread_notifs],
         "unread_count": unread_count,
@@ -7293,6 +7411,7 @@ async def update_password(body: PasswordUpdate, request: Request, db: Session = 
     
     # Return fresh token
     token = create_access_token({
+        "sid": payload.get("sid"),
         "sub": str(customer.id),
         "email": customer.email,
         "role": customer.role,
@@ -7761,7 +7880,7 @@ def reduce_stock(db: Session, order_id: int): # HIVET STOCKS SYNC ENGINE V2.2
         db.rollback()
 
 @app.post("/api/orders", status_code=201)
-async def create_order(body: OrderCreate, request: Request, db: Session = Depends(get_db)):
+async def create_order(body: OrderCreate, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -7843,6 +7962,7 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
 
     # --- NEW: Shipping Fee Calculation & Delivery Logic ---
     calc_shipping_fee = 0.0
+    branch = None
     if body.fulfillmentMethod == "delivery":
         # We need the branch/clinic location to calculate distance
         branch = None
@@ -7962,7 +8082,7 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
             add_notification(
                 db, p.business_id, "System",
                 "New Incoming Order!",
-                f"You have a new order (HV-{year}-{new_order.id:06d}) awaiting processing. Shipping Fee: ₱{new_order.shipping_fee:,.2f}.",
+                f"You have a new order ({format_order_reference(new_order)}) awaiting processing. Shipping Fee: ₱{new_order.shipping_fee:,.2f}.",
                 "/dashboard/business/orders",
                 role="business"
             )
@@ -7972,7 +8092,7 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
     add_notification(
         db, customer_id, "System",
         "Order Placed successfully",
-        f"Your order HV-{year}-{new_order.id:06d} (Shipping: ₱{new_order.shipping_fee:,.2f}) has been received and is now pending clinic processing.",
+        f"Your order {format_order_reference(new_order)} (Shipping: ₱{new_order.shipping_fee:,.2f}) has been received and is now pending clinic processing.",
         "/dashboard/customer/orders"
     )
     db.commit()
@@ -7980,13 +8100,16 @@ async def create_order(body: OrderCreate, request: Request, db: Session = Depend
     add_notification(
         db, customer_id, "System", 
         "Order Placed!", 
-        f"Your order HV-{year}-{new_order.id:06d} has been successfully placed. Shipping: ₱{new_order.shipping_fee:,.2f}.",
+        f"Your order {format_order_reference(new_order)} has been successfully placed. Shipping: ₱{new_order.shipping_fee:,.2f}.",
         "/dashboard/customer/orders"
     )
     
+    queue_customer_sms(db, background_tasks, customer_id,
+                       format_order_confirmation_sms(format_order_reference(new_order), new_order.total_amount, new_order.status),
+                       "order_created")
     return {"order_id": new_order.id}
 @app.post("/api/payments/paymongo/checkout")
-async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Session = Depends(get_db)):
+async def create_paymongo_checkout(body: OrderCreate, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Create a PayMongo Checkout Session and persist order as 'Payment Pending'."""
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -8198,7 +8321,7 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
                 "payment_method_types": enabled_methods,
                 "success_url": f"{FRONTEND_URL}/dashboard/customer/checkout/success?order_id={new_order.id}",
                 "cancel_url": f"{FRONTEND_URL}/dashboard/customer/checkout",
-                "description": f"Payment for Order HV-{year}-{new_order.id:06d} at {clinic_name}",
+                "description": f"Payment for Order {format_order_reference(new_order)} at {clinic_name}",
                 "send_email_receipt": False, # Disable static PayMongo receipts
                 "show_description": True,
                 "show_line_items": True,
@@ -8228,7 +8351,7 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
                             "payment_method_allowed": ["qrph"],
                             "payment_method_options": {"card": {"request_three_d_secure": "any"}},
                             "currency": "PHP",
-                            "description": f"Payment for Order HV-{year}-{new_order.id:06d} at {clinic_name}",
+                            "description": f"Payment for Order {format_order_reference(new_order)} at {clinic_name}",
                             "statement_descriptor": clinic_name[:22]
                         }
                     }
@@ -8289,10 +8412,13 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
 
                 # Notify
                 if body.clinic_id:
-                    add_notification(db, body.clinic_id, "System", "New Potential Order!", f"A customer is initiating payment for order HV-{year}-{new_order.id:06d} via QRPh. Shipping: ₱{new_order.shipping_fee:,.2f}.", "/dashboard/business/orders", role="business")
-                add_notification(db, customer_id, "System", "Order Processed", f"Your order HV-{year}-{new_order.id:06d} is pending payment. Shipping: ₱{new_order.shipping_fee:,.2f}. Scan the QR code to complete.", "/dashboard/customer/orders")
+                    add_notification(db, body.clinic_id, "System", "New Potential Order!", f"A customer is initiating payment for order {format_order_reference(new_order)} via QRPh. Shipping: ₱{new_order.shipping_fee:,.2f}.", "/dashboard/business/orders", role="business")
+                add_notification(db, customer_id, "System", "Order Processed", f"Your order {format_order_reference(new_order)} is pending payment. Shipping: ₱{new_order.shipping_fee:,.2f}. Scan the QR code to complete.", "/dashboard/customer/orders")
 
-                return {"qr_code": qr_image_url, "intent_id": intent_id}
+                queue_customer_sms(db, background_tasks, customer_id,
+                                   format_order_confirmation_sms(format_order_reference(new_order), new_order.total_amount, new_order.status),
+                                   "order_created")
+                return {"qr_code": qr_image_url, "intent_id": intent_id, "order_reference": format_order_reference(new_order)}
 
             # --- BRANCH: HOSTED CHECKOUT (GCASH/MAYA/DEFAULTS) ---
             response = await client.post(
@@ -8315,9 +8441,12 @@ async def create_paymongo_checkout(body: OrderCreate, request: Request, db: Sess
             db.commit()
 
             if body.clinic_id:
-                add_notification(db, body.clinic_id, "System", "New Potential Order!", f"A customer is initiating payment for order HV-{year}-{new_order.id:06d}. Shipping: ₱{new_order.shipping_fee:,.2f}.", "/dashboard/business/orders", role="business")
-            add_notification(db, customer_id, "System", "Order Processed", f"Your order HV-{year}-{new_order.id:06d} is pending payment. Shipping: ₱{new_order.shipping_fee:,.2f}. Please complete the checkout.", "/dashboard/customer/orders")
+                add_notification(db, body.clinic_id, "System", "New Potential Order!", f"A customer is initiating payment for order {format_order_reference(new_order)}. Shipping: ₱{new_order.shipping_fee:,.2f}.", "/dashboard/business/orders", role="business")
+            add_notification(db, customer_id, "System", "Order Processed", f"Your order {format_order_reference(new_order)} is pending payment. Shipping: ₱{new_order.shipping_fee:,.2f}. Please complete the checkout.", "/dashboard/customer/orders")
 
+            queue_customer_sms(db, background_tasks, customer_id,
+                               format_order_confirmation_sms(format_order_reference(new_order), new_order.total_amount, new_order.status),
+                               "order_created")
             return {"checkout_url": checkout_url}
             
         except HTTPException as he:
@@ -8420,7 +8549,7 @@ def send_clinic_order_receipt(db: Session, order_id: int):
                     <span class="section-label">Your Clinic</span>
                     <div class="info-block">
                         <h4 class="info-title">{clinic_name}</h4>
-                        <p class="info-subtitle">Order Reference: HV-{year}-{order.id:06d}</p>
+                        <p class="info-subtitle">Order Reference: {format_order_reference(order)}</p>
                     </div>
                     
                     <span class="section-label">Inventory Items</span>
@@ -8446,7 +8575,7 @@ def send_clinic_order_receipt(db: Session, order_id: int):
                 </div>
                 
                 <div class="footer-info">
-                    <p class="ref-text">REF: HV-{year}-{order.id:06d}</p>
+                    <p class="ref-text">REF: {format_order_reference(order)}</p>
                     <p class="copyright">HI-VET &bull; COMPANION HEALTH SYSTEMS &copy; 2026</p>
                 </div>
             </div>
@@ -8459,7 +8588,7 @@ def send_clinic_order_receipt(db: Session, order_id: int):
         msg = MIMEMultipart()
         msg['From'] = f"{clinic_name} <{clinic_email}>"
         msg['To'] = customer.email
-        msg['Subject'] = f"Success! Your receipt from {clinic_name} (HV-{year}-{order.id:06d})"
+        msg['Subject'] = f"Success! Your receipt from {clinic_name} ({format_order_reference(order)})"
         msg.attach(MIMEText(html, 'html'))
         
         # Using Port 587 with STARTTLS
@@ -8710,7 +8839,7 @@ async def retry_order_payment(body: dict, request: Request, db: Session = Depend
                 "payment_method_types": enabled_methods,
                 "success_url": f"{FRONTEND_URL}/dashboard/customer/checkout/success?order_id={order.id}",
                 "cancel_url": f"{FRONTEND_URL}/dashboard/customer/orders",
-                "description": f"Payment for Order HV-{year}-{order.id:06d} at {clinic_name}",
+                "description": f"Payment for Order {format_order_reference(order)} at {clinic_name}",
                 "send_email_receipt": False,
                 "show_description": True,
                 "show_line_items": True,
@@ -8738,7 +8867,7 @@ async def retry_order_payment(body: dict, request: Request, db: Session = Depend
                             "amount": total_centavos,
                             "payment_method_allowed": ["qrph"],
                             "currency": "PHP",
-                            "description": f"Payment for Order HV-{year}-{order.id:06d} at {clinic_name}",
+                            "description": f"Payment for Order {format_order_reference(order)} at {clinic_name}",
                             "statement_descriptor": clinic_name[:22]
                         }
                     }
@@ -8790,7 +8919,7 @@ async def retry_order_payment(body: dict, request: Request, db: Session = Depend
                 order.paymongo_qr_data = qr_image_url
                 db.commit()
 
-                return {"qr_code": qr_image_url, "intent_id": intent_id}
+                return {"qr_code": qr_image_url, "intent_id": intent_id, "order_reference": format_order_reference(order)}
 
             # --- BRANCH: HOSTED ---
             response = await client.post(
@@ -8873,7 +9002,7 @@ async def confirm_paymongo_payment(order_id: int, request: Request, db: Session 
                 add_notification(
                     db, p.business_id, "System",
                     "Order Payment Received!",
-                    f"Order HV-{year}-{order.id:06d} has been successfully paid by the customer.",
+                    f"Order {format_order_reference(order)} has been successfully paid by the customer.",
                     "/dashboard/business/orders",
                     role="business"
                 )
@@ -8882,7 +9011,7 @@ async def confirm_paymongo_payment(order_id: int, request: Request, db: Session 
         add_notification(
             db, customer_id, "System", 
             "Payment Received!", 
-            f"Your payment for order HV-{year}-{order.id:06d} was successful. Check your email for the receipt.",
+            f"Your payment for order {format_order_reference(order)} was successful. Check your email for the receipt.",
             "/dashboard/customer/orders"
         )
     
@@ -8894,7 +9023,7 @@ async def get_orders(request: Request, db: Session = Depends(get_db)):
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
     try:
-        payload = decode_token(auth_header.split(" ", 1)[1])
+        payload = getattr(request.state, "auth", None) or decode_token(auth_header.split(" ", 1)[1])
         customer_id = int(payload["sub"])
     except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
@@ -8903,6 +9032,7 @@ async def get_orders(request: Request, db: Session = Depends(get_db)):
         Order.customer_id == customer_id,
         Order.is_customer_deleted == False
     ).order_by(Order.created_at.desc()).all()
+    receipts = {receipt.order_id: receipt for receipt in db.query(CustomerOrderReceipt).filter(CustomerOrderReceipt.customer_id == customer_id).all()}
     results = []
     for o in orders:
         items = db.query(OrderItem).filter(OrderItem.order_id == o.id).all()
@@ -8936,6 +9066,9 @@ async def get_orders(request: Request, db: Session = Depends(get_db)):
 
         results.append({
             "id": o.id,
+            "order_reference": format_order_reference(o),
+            **order_receipt_details(db, o, receipts),
+            "proof_of_delivery_url": delivery_proof_url(db.query(Delivery).filter(Delivery.order_id == o.id).first()),
             "status": o.status,
             "total_amount": o.total_amount,
             "fulfillment_method": o.fulfillment_method,
@@ -9044,7 +9177,7 @@ async def cancel_order(order_id: int, body: CancelOrderRequest, request: Request
     add_notification(
         db, customer_id, "System", 
         "Order Cancelled", 
-        f"Your order HV-{year}-{order.id:06d} was successfully cancelled.",
+        f"Your order {format_order_reference(order)} was successfully cancelled.",
         "/dashboard/customer/orders"
     )
     
@@ -9058,7 +9191,7 @@ async def cancel_order(order_id: int, body: CancelOrderRequest, request: Request
             add_notification(
                 db, p.business_id, "System",
                 "Order Cancelled by Customer",
-                f"Customer has cancelled order HV-{year}-{order.id:06d}.",
+                f"Customer has cancelled order {format_order_reference(order)}.",
                 "/dashboard/business/orders",
                 role="business"
             )
@@ -9102,7 +9235,7 @@ async def get_notifications(request: Request, db: Session = Depends(get_db)):
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
     try:
-        payload = decode_token(auth_header.split(" ", 1)[1])
+        payload = getattr(request.state, "auth", None) or decode_token(auth_header.split(" ", 1)[1])
         user_id = int(payload["sub"])
         role = payload.get("role", "customer")
     except (JWTError, ValueError):
@@ -9118,7 +9251,7 @@ async def get_notifications(request: Request, db: Session = Depends(get_db)):
             "id": n.id,
             "type": n.type,
             "title": n.title,
-            "desc": n.description,
+            "desc": compact_order_references_in_text(n.description),
             "link": n.link,
             "read": n.is_read,
             "created_at": str(n.created_at)
@@ -9131,7 +9264,7 @@ async def mark_notification_read(n_id: str, request: Request, db: Session = Depe
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
     try:
-        payload = decode_token(auth_header.split(" ", 1)[1])
+        payload = getattr(request.state, "auth", None) or decode_token(auth_header.split(" ", 1)[1])
         user_id = int(payload["sub"])
         role = payload.get("role", "customer")
     except (JWTError, ValueError):
@@ -9166,7 +9299,7 @@ async def mark_all_read(request: Request, db: Session = Depends(get_db)):
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
     try:
-        payload = decode_token(auth_header.split(" ", 1)[1])
+        payload = getattr(request.state, "auth", None) or decode_token(auth_header.split(" ", 1)[1])
         user_id = int(payload["sub"])
         role = payload.get("role", "customer")
     except (JWTError, ValueError):
@@ -9180,13 +9313,34 @@ async def mark_all_read(request: Request, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "All notifications marked as read"}
 
+@app.delete("/api/notifications/all")
+async def delete_all_notifications(request: Request, db: Session = Depends(get_db)):
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    try:
+        payload = getattr(request.state, "auth", None) or decode_token(auth_header.split(" ", 1)[1])
+        user_id = int(payload["sub"])
+        role = payload.get("role", "customer")
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    if role == "business":
+        db.query(Notification).filter(Notification.business_id == user_id).delete(synchronize_session=False)
+    else:
+        db.query(Notification).filter(Notification.customer_id == user_id).delete(synchronize_session=False)
+
+    db.commit()
+    return {"message": "All notifications deleted"}
+
+
 @app.delete("/api/notifications/{n_id}")
 async def delete_notification(n_id: str, request: Request, db: Session = Depends(get_db)):
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
     try:
-        payload = decode_token(auth_header.split(" ", 1)[1])
+        payload = getattr(request.state, "auth", None) or decode_token(auth_header.split(" ", 1)[1])
         user_id = int(payload["sub"])
         role = payload.get("role", "customer")
     except (JWTError, ValueError):
@@ -9214,26 +9368,6 @@ async def delete_notification(n_id: str, request: Request, db: Session = Depends
     db.delete(notif)
     db.commit()
     return {"message": "Notification deleted"}
-
-@app.delete("/api/notifications/all")
-async def delete_all_notifications(request: Request, db: Session = Depends(get_db)):
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-    try:
-        payload = decode_token(auth_header.split(" ", 1)[1])
-        user_id = int(payload["sub"])
-        role = payload.get("role", "customer")
-    except (JWTError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    if role == "business":
-        db.query(Notification).filter(Notification.business_id == user_id).delete(synchronize_session=False)
-    else:
-        db.query(Notification).filter(Notification.customer_id == user_id).delete(synchronize_session=False)
-        
-    db.commit()
-    return {"message": "All notifications deleted"}
 
 # ---------------------------------------------------------------------------
 # Routes â€“ Loyalty
@@ -9442,16 +9576,16 @@ async def get_admin_users(request: Request, db: Session = Depends(get_db)):
     except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
         
-    # Basic role check - only 'super_admin' can see all users
-    is_admin = db.query(SuperAdminUser).filter(SuperAdminUser.id == admin_id).first()
-    if not is_admin:
+    role = payload.get('role')
+    model = SuperAdminUser if role == 'super_admin' else SystemAdminUser if role == 'system_admin' else None
+    if model is None or not db.get(model, admin_id):
         raise HTTPException(status_code=403, detail="Not authorized")
-
     customers = db.query(Customer).filter(Customer.is_deleted == False).all()
-    businesses = db.query(BusinessProfile).filter(BusinessProfile.is_deleted == False).all()
-    riders = db.query(RiderProfile).filter(RiderProfile.is_deleted == False).all()
-    super_admins = db.query(SuperAdminUser).all()
-    system_admins = db.query(SystemAdminUser).all()
+    # System admins retain the existing customer-records view, without all-account access.
+    businesses = db.query(BusinessProfile).filter(BusinessProfile.is_deleted == False).all() if role == 'super_admin' else []
+    riders = db.query(RiderProfile).filter(RiderProfile.is_deleted == False).all() if role == 'super_admin' else []
+    super_admins = db.query(SuperAdminUser).all() if role == 'super_admin' else []
+    system_admins = db.query(SystemAdminUser).all() if role == 'super_admin' else []
 
     results = []
     
@@ -9470,6 +9604,9 @@ async def get_admin_users(request: Request, db: Session = Depends(get_db)):
             "email": u.email,
             "role": display_role,
             "status": "Active",
+            "phone": u.phone,
+            "loyalty_points": u.loyalty_points or 0,
+            "last_active_at": u.last_active.isoformat() + "Z" if u.last_active else None,
             "lastActive": last_active_str
         })
 
@@ -9536,7 +9673,7 @@ async def get_admin_users(request: Request, db: Session = Depends(get_db)):
             "name": sa.name or sa.first_name or sa.email.split('@')[0],
             "email": sa.email,
             "role": "System Admin",
-            "status": "Active",
+            "status": "Deactivated" if account_disabled(db, sa, 'system_admin') else "Active",
             "lastActive": last_active_str
         })
     
@@ -9582,7 +9719,7 @@ async def get_admin_riders(request: Request, db: Session = Depends(get_db)):
 
 @app.delete("/api/admin/users/{user_id}")
 async def delete_platform_user(user_id: str, request: Request, db: Session = Depends(get_db)):
-    """Permanently delete a user, rider, or partner by their formatted ID (e.g., CST-0001)."""
+    """Deactivate an account while preserving its records and transactions."""
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing token")
@@ -9594,7 +9731,7 @@ async def delete_platform_user(user_id: str, request: Request, db: Session = Dep
         raise HTTPException(status_code=401, detail="Invalid token")
         
     if role != "super_admin":
-        raise HTTPException(status_code=403, detail="Only Super Admins can delete accounts")
+        raise HTTPException(status_code=403, detail="Only Super Admins can deactivate accounts")
 
     # Parse prefix and integer ID
     try:
@@ -9616,19 +9753,18 @@ async def delete_platform_user(user_id: str, request: Request, db: Session = Dep
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Perform soft-delete if the model supports it
+    role = canonical_role(getattr(target, 'role', None))
+    if not role or role == 'super_admin':
+        raise HTTPException(status_code=403, detail="This account cannot be deactivated here.")
     if hasattr(target, 'is_deleted'):
         target.is_deleted = True
-        # If business, archive products
-        if isinstance(target, BusinessProfile):
-            db.query(Product).filter(Product.business_id == target.id).update({"is_archived": True})
-        db.commit()
-        return {"message": f"Successfully deactivated {user_id} (Soft-deleted)"}
-    else:
-        # Fallback for models without soft-delete flag
-        db.delete(target)
-        db.commit()
-        return {"message": f"Successfully deleted {user_id}"}
+    if not db.get(AccountAccessLock, (role, target.id)):
+        db.add(AccountAccessLock(role=role, account_id=target.id))
+    if isinstance(target, BusinessProfile):
+        db.query(Product).filter(Product.business_id == target.id).update({"is_archived": True})
+    db.query(AuthSession).filter(AuthSession.role == role, AuthSession.account_id == target.id).update({'revoked': True})
+    db.commit()
+    return {"message": f"Successfully deactivated {user_id}. Records have been preserved."}
 
 @app.post("/api/admin/users/{user_id}/suspend")
 async def toggle_user_suspension(user_id: str, request: Request, db: Session = Depends(get_db)):
@@ -10024,8 +10160,13 @@ async def get_admin_analytics(request: Request, db: Session = Depends(get_db)):
     }
 
 @app.get("/api/payments/paymongo/status/{intent_id}")
-async def get_paymongo_status(intent_id: str, db: Session = Depends(get_db)):
+async def get_paymongo_status(intent_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Poll for PaymentIntent status and update order/reservation if paid."""
+    customer_id = int(current_user['sub'])
+    owned_order = db.query(Order).filter(Order.paymongo_intent_id == intent_id, Order.customer_id == customer_id).first()
+    owned_reservation = db.query(Reservation).filter(Reservation.paymongo_intent_id == intent_id, Reservation.customer_id == customer_id).first()
+    if not owned_order and not owned_reservation:
+        raise HTTPException(status_code=404, detail='Payment not found')
     import base64
     auth_header_val = base64.b64encode(f"{PAYMONGO_SECRET_KEY}:".encode()).decode()
 
@@ -10050,7 +10191,7 @@ async def get_paymongo_status(intent_id: str, db: Session = Depends(get_db)):
                     order.status = "Pending"
                     # Add notification
                     year = order.created_at.year if order.created_at else 2026
-                    add_notification(db, order.customer_id, "System", "Payment Received!", f"Your payment for order HV-{year}-{order.id:06d} has been confirmed.", "/dashboard/customer/orders")
+                    add_notification(db, order.customer_id, "System", "Payment Received!", f"Your payment for order {format_order_reference(order)} has been confirmed.", "/dashboard/customer/orders")
                     db.commit()
                     return {"status": "succeeded", "type": "order", "id": order.id}
                 
@@ -10101,7 +10242,7 @@ async def broadcast_delivery(body: DeliveryBroadcastRequest, db: Session = Depen
     
     # Notify business
     year = order.created_at.year if order.created_at else 2026
-    add_notification(db, int(current_user["sub"]), "Logistics", "Broadcast Sent", f"Delivery for Order HV-{year}-{order.id:06d} is now visible to nearby riders.", "/dashboard/business/orders", role="business")
+    add_notification(db, int(current_user["sub"]), "Logistics", "Broadcast Sent", f"Delivery for Order {format_order_reference(order)} is now visible to nearby riders.", "/dashboard/business/orders", role="business")
     
     return {
         "message": "Broadcast sent to nearby riders",
@@ -10131,21 +10272,92 @@ async def get_rider_wallet(db: Session = Depends(get_db), current_user: dict = D
         "remittance_balance": wallet.remittance_balance
     }
 
-@app.post("/api/orders/{order_id}/return")
-async def request_order_return(order_id: int, body: dict, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    """Customer requests a return/refund for an order."""
+def order_product_points(db, order):
+    points = 0
+    for item in db.query(OrderItem).filter(OrderItem.order_id == order.id).all():
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        per_item = item.loyalty_points if item.loyalty_points and item.loyalty_points > 0 else (product.loyalty_points if product else 0)
+        points += max(0, int(per_item or 0)) * max(0, int(item.quantity or 0))
+    return points
+
+
+def previous_order_points(db, order):
+    year = order.created_at.year if order.created_at else datetime.utcnow().year
+    references = {format_order_reference(order), f"HV-{year}-{order.id:06d}"}
+    descriptions = {text for reference in references for text in (f"Purchase Reward ({reference})", f"Earned points from Order {reference}")}
+    return sum(max(0, row.points) for row in db.query(LoyaltyHistory).filter(LoyaltyHistory.customer_id == order.customer_id, LoyaltyHistory.description.in_(descriptions), LoyaltyHistory.created_at >= (order.created_at or datetime.min)).all())
+
+
+def order_receipt_details(db, order, receipts=None):
+    receipt = receipts.get(order.id) if receipts is not None else db.get(CustomerOrderReceipt, order.id)
+    window = customer_action_window(order)
+    return {
+        **window,
+        "customer_received_at": receipt.received_at.isoformat() if receipt else None,
+        "receipt_points": receipt.points_awarded if receipt else None,
+        "can_confirm_received": not receipt and not window["customer_action_expired"] and order.status in {"Completed", "Delivered"} and (order.return_status or "").lower() not in {"requested", "pending", "approved", "refunded"},
+    }
+
+
+@app.post("/api/orders/{order_id}/received")
+async def confirm_order_received(order_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "customer":
+        raise HTTPException(403, "Customer access required")
     customer_id = int(current_user["sub"])
-    order = db.query(Order).filter(Order.id == order_id, Order.customer_id == customer_id).first()
+    order = db.query(Order).filter(Order.id == order_id, Order.customer_id == customer_id).with_for_update().first()
+    if not order:
+        raise HTTPException(404, "Order not found")
+    receipt = db.get(CustomerOrderReceipt, order.id)
+    if receipt:
+        return {"message": "Order receipt was already confirmed.", "points_awarded": 0, **order_receipt_details(db, order)}
+    if order.status not in {"Completed", "Delivered"}:
+        raise HTTPException(400, "Confirm receipt only after the order is delivered or pickup is completed.")
+    if customer_action_window(order)["customer_action_expired"]:
+        raise HTTPException(400, "The 3-day period for confirming receipt has ended.")
+    if (order.return_status or "").lower() in {"requested", "pending", "approved", "refunded"}:
+        raise HTTPException(400, "Resolve the return or refund request before confirming receipt.")
+    customer = db.query(Customer).filter(Customer.id == customer_id).with_for_update().first()
+    previous_points = previous_order_points(db, order)
+    points = 0 if previous_points else order_product_points(db, order)
+    receipt = CustomerOrderReceipt(order_id=order.id, customer_id=customer_id, points_awarded=points, previous_points_awarded=previous_points)
+    db.add(receipt)
+    if points:
+        customer.loyalty_points = (customer.loyalty_points or 0) + points
+        db.add(LoyaltyHistory(customer_id=customer_id, description=f"Order received ({format_order_reference(order)})", points=points))
+    db.commit()
+    return {"message": "Order received. Reward points were already credited." if previous_points else f"Order received. You earned {points} points.", "points_awarded": points, **order_receipt_details(db, order)}
+
+
+class OrderReturnRequest(BaseModel):
+    reason: str = Field(min_length=10, max_length=1000)
+    photos: List[str] = Field(min_length=1, max_length=4)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def validate_reason(cls, value):
+        if not isinstance(value, str) or not any(c.isalpha() for c in value):
+            raise ValueError("Explain the supply issue using 10 to 1000 characters.")
+        return value.strip()
+
+
+@app.post("/api/orders/{order_id}/return")
+async def request_order_return(order_id: int, body: OrderReturnRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Customer requests a return/refund for an order."""
+    if current_user.get("role") != "customer":
+        raise HTTPException(403, "Customer access required")
+    customer_id = int(current_user["sub"])
+    order = db.query(Order).filter(Order.id == order_id, Order.customer_id == customer_id).with_for_update().first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
         
-    if order.status != "Completed":
+    if order.status not in {"Completed", "Delivered"}:
         raise HTTPException(status_code=400, detail="Only completed orders can be returned")
         
-    reason = body.get("reason")
-    photos = body.get("photos") # List of URLs
-    if not reason:
-        raise HTTPException(status_code=400, detail="Reason is required")
+    if customer_action_window(order)["customer_action_expired"]:
+        raise HTTPException(400, "The 3-day refund request period has ended.")
+    reason = body.reason
+    photos = body.photos
+    validate_evidence(customer_id, order.id, photos)
         
     # Check for existing request
     existing = db.query(ReturnRequest).filter(ReturnRequest.order_id == order_id).first()
@@ -10169,7 +10381,7 @@ async def request_order_return(order_id: int, body: dict, db: Session = Depends(
     
     # Notify Clinic
     year = order.created_at.year if order.created_at else 2026
-    add_notification(db, order.clinic_id, "System", "New Return Request", f"A customer is requesting a return for Order HV-{year}-{order.id:06d}.", "/dashboard/business/orders", role="business")
+    add_notification(db, order.clinic_id, "System", "New Return Request", f"A customer is requesting a return for Order {format_order_reference(order)}.", "/dashboard/business/orders", role="business")
     
     db.commit()
 
@@ -10177,7 +10389,7 @@ async def request_order_return(order_id: int, body: dict, db: Session = Depends(
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     clinic = db.query(BusinessProfile).filter(BusinessProfile.id == order.clinic_id).first()
     if customer and clinic:
-        order_ref = f"HV-{year}-{order.id:06d}"
+        order_ref = format_order_reference(order)
         send_return_request_emails(
             customer.email, 
             customer.name or customer.first_name or "Valued Customer",
@@ -10215,7 +10427,7 @@ async def handle_return_request(order_id: int, body: dict, db: Session = Depends
     if customer:
         order_items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
         # Generate full Order ID: HV-2026-000178
-        full_order_id = f"HV-{order.created_at.year}-{order.id:06d}"
+        full_order_id = format_order_reference(order)
         send_return_status_email(customer.email, customer.name, full_order_id, action, order_items, req.reason)
         
     # Add notification for customer
@@ -10348,6 +10560,7 @@ async def get_rider_earnings_history(db: Session = Depends(get_db), current_user
 
         history.append({
             "id": d.order_id,
+            "order_reference": format_order_reference(order) if order else None,
             "amount": d.delivery_fee or 0.0,
             "status": "Completed",
             "date": d.created_at.strftime("%b %d, %Y %I:%M %p") if d.created_at else "N/A",
@@ -10490,6 +10703,7 @@ async def get_rider_orders_all(db: Session = Depends(get_db), current_user: dict
             
         all_orders.append({
             "id": o.id,
+            "order_reference": format_order_reference(o),
             "status": "Available",
             "total_amount": o.total_amount,
             "delivery_address": o.delivery_address,
@@ -10518,6 +10732,7 @@ async def get_rider_orders_all(db: Session = Depends(get_db), current_user: dict
 
         all_orders.append({
             "id": o.id,
+            "order_reference": format_order_reference(o),
             "status": d.status.title(),
             "total_amount": o.total_amount,
             "delivery_address": o.delivery_address,
@@ -10546,6 +10761,9 @@ async def get_available_jobs(db: Session = Depends(get_db), current_user: dict =
     ).all()
     
     print(f"DEBUG: Found {len(orders)} total delivery orders.")
+    delivery_fees = dict(db.query(Delivery.order_id, Delivery.delivery_fee).filter(
+        Delivery.order_id.in_([order.id for order in orders])
+    ).all()) if orders else {}
     results = []
     for o in orders:
         # Determine Pickup Location and Address
@@ -10620,7 +10838,10 @@ async def get_available_jobs(db: Session = Depends(get_db), current_user: dict =
 
         results.append({
             "id": o.id,
+            "order_reference": format_order_reference(o),
             "total_amount": o.total_amount,
+            "shipping_fee": o.shipping_fee if o.shipping_fee is not None else 0.0,
+            "delivery_fee": delivery_fees[o.id] if delivery_fees.get(o.id) is not None else (o.shipping_fee if o.shipping_fee is not None else 0.0),
             "delivery_address": o.delivery_address,
             "delivery_lat": o.delivery_lat,
             "delivery_lng": o.delivery_lng,
@@ -10712,17 +10933,19 @@ async def get_ongoing_job(db: Session = Depends(get_db), current_user: dict = De
     for it in items:
         p = db.query(Product).filter(Product.id == it.product_id).first()
         item_list.append({
-            "name": p.name if p else "Product", 
+            "name": it.product_name or (p.name if p else "Product"),
             "quantity": it.quantity,
-            "image_url": p.image if p else (it.image if hasattr(it, 'image') else None),
-            "serial_number": it.serial_number or f"HV-SN-{order.id}-{it.id}-{(int(order.created_at.timestamp()) % 10000)}"
+            "image_url": it.image or (p.image if p else None),
+            "serial_number": mask_pickup_serial(it.serial_number or f"HV-SN-{order.id}-{it.id}-{(int(order.created_at.timestamp()) % 10000)}")
         })
 
-    primary_sn = item_list[0]["serial_number"] if item_list else f"HV-SN-{order.id}"
+    primary_sn = item_list[0]["serial_number"] if item_list else mask_pickup_serial(f"HV-SN-{order.id}")
 
     return {
         "order": {
             "id": order.id,
+            "order_reference": format_order_reference(order),
+            "proof_of_delivery_url": delivery_proof_url(db.query(Delivery).filter(Delivery.order_id == order.id).first()),
             "status": order.status,
             "delivery_address": order.delivery_address,
             "delivery_lat": order.delivery_lat,
@@ -10777,29 +11000,76 @@ async def accept_delivery_task(delivery_id: int, db: Session = Depends(get_db), 
         reduce_stock(db, order.id)
         
     db.commit()
-    return {"message": "Task accepted", "pickup_pin": delivery.pickup_pin}
+    return {"message": "Task accepted. Ask the clinic for the full serial number to confirm pickup."}
+
+
+def assigned_delivery(delivery_id: int, db: Session, current_user: dict):
+    if current_user.get("role") != "rider":
+        raise HTTPException(403, "Rider access required")
+    rider = db.query(RiderProfile).filter(RiderProfile.id == int(current_user["sub"])).first()
+    if not rider:
+        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == int(current_user["sub"])).first()
+    if not rider:
+        raise HTTPException(403, "Rider profile not found")
+    delivery = db.query(Delivery).filter(Delivery.id == delivery_id).with_for_update().first()
+    if not delivery:
+        delivery = db.query(Delivery).filter(Delivery.order_id == delivery_id, Delivery.rider_id == rider.id).with_for_update().first()
+    if not delivery:
+        raise HTTPException(404, "Delivery record not found")
+    if delivery.rider_id != rider.id:
+        raise HTTPException(403, "Not assigned to this delivery")
+    return delivery
+
+
+@app.post("/api/rider/deliveries/{delivery_id}/proof")
+async def upload_delivery_proof(delivery_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    delivery = assigned_delivery(delivery_id, db, current_user)
+    order = db.query(Order).filter(Order.id == delivery.order_id).first()
+    if not order or order.status != "Picked Up" or delivery.status != "out_for_delivery":
+        raise HTTPException(400, "Upload delivery proof after pickup and before completing the order.")
+    content = await file.read(MAX_PROOF_BYTES + 1)
+    old_path = proof_path(delivery)
+    name, path = write_proof(delivery, content)
+    try:
+        delivery.proof_of_delivery_url = name
+        db.commit()
+    except Exception:
+        db.rollback()
+        path.unlink(missing_ok=True)
+        raise
+    if old_path:
+        old_path.unlink(missing_ok=True)
+    return {"proof_of_delivery_url": delivery_proof_url(delivery)}
+
+
+@app.get("/api/deliveries/{delivery_id}/proof")
+async def view_delivery_proof(delivery_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    delivery = db.query(Delivery).filter(Delivery.id == delivery_id).first()
+    order = db.query(Order).filter(Order.id == delivery.order_id).first() if delivery else None
+    if not order:
+        raise HTTPException(404, "Delivery not found")
+    role, account_id = current_user.get("role"), int(current_user["sub"])
+    allowed = role == "customer" and order.customer_id == account_id
+    if role == "business":
+        allowed = order.clinic_id == account_id or db.query(OrderItem).join(Product, OrderItem.product_id == Product.id).filter(OrderItem.order_id == order.id, Product.business_id == account_id).first() is not None
+    elif role == "rider":
+        rider = db.query(RiderProfile).filter(RiderProfile.id == account_id).first()
+        if not rider:
+            rider = db.query(RiderProfile).filter(RiderProfile.customer_id == account_id).first()
+        allowed = rider is not None and delivery.rider_id == rider.id
+    if not allowed:
+        raise HTTPException(403, "You cannot view this delivery photo.")
+    path = proof_path(delivery)
+    if not path:
+        raise HTTPException(404, "Delivery photo not found")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
 
 
 @app.patch("/api/rider/tasks/{delivery_id}/status")
 async def update_delivery_status(delivery_id: int, body: DeliveryStepUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Move the delivery through stages with PIN validation."""
-    if current_user.get("role") != "rider":
-        raise HTTPException(status_code=403, detail="Rider access required")
-    
-    rider_id = int(current_user["sub"])
-    # Frontend may pass Order ID or Delivery ID
-    delivery = db.query(Delivery).filter(
-        or_(Delivery.id == delivery_id, Delivery.order_id == delivery_id)
-    ).first()
-    
-    if not delivery:
-        raise HTTPException(status_code=404, detail="Delivery record not found")
-        
-    if delivery.rider_id != rider_id:
-        # Check customer_id link (Legacy)
-        rider = db.query(RiderProfile).filter(RiderProfile.customer_id == rider_id).first()
-        if not rider or delivery.rider_id != rider.id:
-            raise HTTPException(status_code=403, detail="Not assigned to this delivery")
+    delivery = assigned_delivery(delivery_id, db, current_user)
+    rider_id = delivery.rider_id
 
     new_status = body.status or body.new_status
     
@@ -10809,6 +11079,9 @@ async def update_delivery_status(delivery_id: int, body: DeliveryStepUpdate, db:
     elif new_status in ["Delivered", "Completed", "completed"]:
         new_status = "completed"
     
+
+    if delivery.status == "completed" and new_status != "completed":
+        raise HTTPException(400, "A completed delivery cannot be reopened by the rider.")
 
     if new_status == "out_for_delivery":
         order = db.query(Order).filter(Order.id == delivery.order_id).first()
@@ -10827,12 +11100,12 @@ async def update_delivery_status(delivery_id: int, body: DeliveryStepUpdate, db:
             valid_sns.append(sn.upper().strip())
         
         # Fallback to pickup_pin if no serial numbers found (for legacy orders)
-        if delivery.pickup_pin:
+        if delivery.pickup_pin and not valid_sns:
             valid_sns.append(delivery.pickup_pin.upper().strip())
             
         input_code = body.pin.upper().strip() if body.pin else ""
         if input_code not in valid_sns:
-            raise HTTPException(status_code=400, detail="Invalid Verification Code. Please enter the Serial Number printed on the product.")
+            raise HTTPException(status_code=400, detail="Invalid serial number. Ask the clinic for the full serial number and try again.")
         
         delivery.status = "out_for_delivery"
         if order.status != "Picked Up":
@@ -10840,9 +11113,16 @@ async def update_delivery_status(delivery_id: int, body: DeliveryStepUpdate, db:
             order.picked_up_at = datetime.utcnow()
             
     elif new_status == "completed":
-        # No PIN required for final delivery to customer
+        order = db.query(Order).filter(Order.id == delivery.order_id).with_for_update().first()
+        if not order:
+            raise HTTPException(404, "Order not found")
+        if order.status == "Completed" and delivery.status == "completed":
+            return {"message": "Order already completed"}
+        if order.status != "Picked Up" or delivery.status != "out_for_delivery":
+            raise HTTPException(400, "Verify pickup before completing the delivery.")
+        if not proof_path(delivery):
+            raise HTTPException(400, "Upload a delivery photo before completing this order.")
         delivery.status = "completed"
-        order = db.query(Order).filter(Order.id == delivery.order_id).first()
         if order:
             # Fallback: only reduce if it skipped all earlier processing triggers
             if order.status == "Pending":
@@ -10872,24 +11152,12 @@ async def update_delivery_status(delivery_id: int, body: DeliveryStepUpdate, db:
                 
                 db.add(wallet)
                 
-                # Award loyalty points
-                items = db.query(OrderItem).filter(OrderItem.order_id == order.id).all()
-                total_points = 0
-                for item in items:
-                    prod = db.query(Product).filter(Product.id == item.product_id).first()
-                    if item.loyalty_points and item.loyalty_points > 0:
-                        total_points += item.loyalty_points * item.quantity
-                    elif prod and prod.loyalty_points > 0:
-                        total_points += prod.loyalty_points * item.quantity
-                
-                if total_points > 0:
-                    cust = db.query(Customer).filter(Customer.id == order.customer_id).first()
-                    if cust:
-                        if cust.loyalty_points is None: cust.loyalty_points = 0
-                        cust.loyalty_points += total_points
-                        year = order.created_at.year if order.created_at else 2026
-                        db.add(LoyaltyHistory(customer_id=cust.id, description=f"Earned points from Order HV-{year}-{order.id:06d}", points=total_points))
-        
+                # Customer confirmation now controls product reward points.
+
+        reference = format_order_reference(order)
+        message = f"Order {reference} was delivered. The rider's delivery photo is available in Order Details."
+        db.add(Notification(customer_id=order.customer_id, type="Delivery", title="Delivery photo received", description=message, link="/dashboard/customer/orders"))
+        db.add(Notification(business_id=order.clinic_id, type="Delivery", title="Delivery photo received", description=message, link="/dashboard/business/orders"))
         db.commit()
         return {"message": "Order marked as completed"}
 
@@ -10901,6 +11169,7 @@ async def update_delivery_status(delivery_id: int, body: DeliveryStepUpdate, db:
         if order:
             order.rider_id = None
             order.status = "Processing"
+        delivery.proof_of_delivery_url = None
         db.commit()
         return {"message": "Task released back to pool"}
 
@@ -10911,6 +11180,7 @@ async def update_delivery_status(delivery_id: int, body: DeliveryStepUpdate, db:
         if order:
             order.status = "Processing"
             order.picked_up_at = None
+        delivery.proof_of_delivery_url = None
         db.commit()
         return {"message": "Pickup status reverted"}
 
@@ -10944,7 +11214,7 @@ async def get_optional_user(request: Request):
         return None
     token = auth_header.split(" ")[1]
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = decode_token(token)
         return payload
     except:
         return None

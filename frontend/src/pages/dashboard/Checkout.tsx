@@ -13,6 +13,7 @@ import { Map, AdvancedMarker, InfoWindow, useMap } from '@vis.gl/react-google-ma
 import MapPickerModal from '../../components/MapPickerModal';
 import ModernModal from '../../components/ModernModal';
 import QrCodeModal from '../../components/QrCodeModal';
+import { formatOrderReference } from '../../utils/textFormatters';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -146,6 +147,7 @@ const Checkout = () => {
     // QRPh Payment State
     const [showQrModal, setShowQrModal] = useState(false);
     const [qrData, setQrData] = useState('');
+    const [qrReference, setQrReference] = useState('');
     const [qrStatus, setQrStatus] = useState<'pending' | 'succeeded' | 'expired' | 'processing'>('pending');
     const pollingInterval = useRef<any>(null);
 
@@ -215,7 +217,7 @@ const Checkout = () => {
 
         pollingInterval.current = setInterval(async () => {
             try {
-                const res = await fetch(`${API}/api/payments/paymongo/status/${intentId}`);
+                const res = await fetch(`${API}/api/payments/paymongo/status/${intentId}`, { headers: { Authorization: `Bearer ${user?.token}` } });
                 if (res.ok) {
                     const data = await res.json();
                     if (data.status === 'succeeded') {
@@ -513,6 +515,7 @@ const Checkout = () => {
                     const data = await res.json();
                     if (selectedPayment === 'qrph' && data.qr_code) {
                         setQrData(data.qr_code);
+                        setQrReference(data.order_reference || formatOrderReference(payingOrder));
                         setShowQrModal(true);
                         startPolling(data.intent_id);
                     } else if (data.checkout_url) {
@@ -563,6 +566,7 @@ const Checkout = () => {
 
                     if (selectedPayment === 'qrph' && data.qr_code) {
                         setQrData(data.qr_code);
+                        setQrReference(data.order_reference || formatOrderReference(payingOrder));
                         setShowQrModal(true);
                         startPolling(data.intent_id);
                     } else if (data.checkout_url) {
@@ -1811,7 +1815,7 @@ const Checkout = () => {
                 onClose={() => setShowQrModal(false)}
                 qrData={qrData}
                 amount={totalAmount + shippingFee - (appliedVoucher?.discount || 0)}
-                reference={`HV-2026-${(user?.id || 0).toString().padStart(6, '0')}`}
+                reference={qrReference}
                 status={qrStatus}
             />
         </DashboardLayout>

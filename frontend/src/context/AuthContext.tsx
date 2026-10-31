@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { checkSavedSession } from '../utils/sessionCheck';
 
 type Role = 'super_admin' | 'system_admin' | 'customer' | 'business' | 'rider' | null;
 
@@ -27,7 +28,7 @@ interface AuthContextType {
     isLoading: boolean;
     login: (email: string, role: Role, name: string) => void;
     loginWithToken: (token: string) => void;
-    logout: () => void;
+    logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -62,10 +63,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Rehydrate session from localStorage on first load
     useEffect(() => {
+        let cancelled = false;
+        const controller = new AbortController();
+        setIsLoading(true);
+        const restoreSession = async () => {
         const stored = localStorage.getItem('hivet_token');
         if (stored) {
             const payload = parseJwt(stored);
             if (payload && typeof payload.exp === 'number' && payload.exp * 1000 > Date.now()) {
+                const status = await checkSavedSession(stored, controller.signal);
+                if (cancelled || localStorage.getItem('hivet_token') !== stored) return;
+                if (status === 'invalid') {
+                    localStorage.removeItem('hivet_token');
+                    setUser(null); setIsLoading(false);
+                    return;
+                }
+                // Retain the existing saved offline view when the network is unavailable.
+                if (cancelled) return;
                 let role = payload.role as Role;
                 if ((payload.role as string) === 'user') role = 'customer';
                 if ((payload.role as string) === 'admin') role = 'super_admin';
@@ -91,7 +105,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 localStorage.removeItem('hivet_token');
             }
         }
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
+        };
+        void restoreSession();
+        return () => { cancelled = true; controller.abort(); };
+    }, []);
+
+    useEffect(() => {
+        const syncLogout = (event: StorageEvent) => {
+            if (event.key === 'hivet_token' && !event.newValue) setUser(null);
+        };
+        window.addEventListener('storage', syncLogout);
+        return () => window.removeEventListener('storage', syncLogout);
     }, []);
 
     const login = (email: string, role: Role, name: string) => {
@@ -99,6 +124,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const loginWithToken = (token: string) => {
+        setIsLoading(false);
         const payload = parseJwt(token);
         if (!payload) return;
         localStorage.setItem('hivet_token', token);
@@ -125,9 +151,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
     };
 
-    const logout = () => {
-        localStorage.removeItem('hivet_token');
-        setUser(null);
+    const logout = async () => {
+        const token = localStorage.getItem('hivet_token');
+        try {
+            if (token) await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/auth/logout`, {
+                method: 'POST', headers: { Authorization: `Bearer ${token}` }
+            });
+        } catch {
+            // Always clear local access when the network is unavailable.
+        } finally {
+            localStorage.removeItem('hivet_token');
+            setUser(null);
+            // Complete navigation before a protected-route redirect can win the logout race.
+            window.location.replace('/');
+        }
     };
 
     return (

@@ -399,7 +399,7 @@ const AdminCustomers = () => {
                             className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-50 rounded-xl transition-all text-left group"
                         >
                             <Trash2 className="w-3.5 h-3.5 text-red-300 group-hover:text-red-500" />
-                            Delete Account
+                            Deactivate Account
                         </button>
                     </motion.div>
                 </div>
@@ -424,11 +424,11 @@ const AdminCustomers = () => {
                         </div>
                         
                         <h3 className="text-xl font-black text-accent-brown leading-tight mb-2 uppercase tracking-tight">
-                            {confirmModal.type === 'delete' ? 'Delete User Account?' : 'Update User Status?'}
+                            {confirmModal.type === 'delete' ? 'Deactivate User Account?' : 'Update User Status?'}
                         </h3>
                         <p className="text-sm font-medium text-accent-brown/60 mb-8">
                             {confirmModal.type === 'delete' 
-                                ? `You are about to permanently remove user ${confirmModal.user?.id}. This action cannot be undone.` 
+                                ? `Deactivate user ${confirmModal.user?.id}? Account access will be disabled. Records and ongoing transactions will be preserved.`
                                 : `Do you want to toggle the suspension status for user ${confirmModal.user?.id}?`}
                         </p>
 
@@ -443,7 +443,7 @@ const AdminCustomers = () => {
                                 onClick={() => confirmModal.user && (confirmModal.type === 'delete' ? handleDelete(confirmModal.user) : handleSuspend(confirmModal.user))}
                                 className={`flex-1 py-4 rounded-2xl text-xs font-black uppercase tracking-widest text-white shadow-lg transition-all ${confirmModal.type === 'delete' ? 'bg-red-500 shadow-red-200 hover:bg-red-600' : 'bg-amber-500 shadow-amber-200 hover:bg-amber-600'}`}
                             >
-                                {confirmModal.type === 'delete' ? 'Delete Now' : 'Confirm'}
+                                {confirmModal.type === 'delete' ? 'Deactivate Now' : 'Confirm'}
                             </button>
                         </div>
                     </motion.div>

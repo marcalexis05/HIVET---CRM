@@ -409,8 +409,8 @@ const AdminRiders = () => {
                                 if (rider) {
                                     setModal({
                                         isOpen: true,
-                                        title: 'Delete Rider Account?',
-                                        message: `You are about to permanently remove ${rider.name}. This action cannot be undone.`,
+                                        title: 'Deactivate Rider Account?',
+                                        message: `Deactivate ${rider.name}? Records and ongoing deliveries will be preserved.`,
                                         type: 'danger',
                                         onConfirm: () => handleAction('delete', rider)
                                     });
@@ -419,7 +419,7 @@ const AdminRiders = () => {
                             className="w-full px-4 py-2.5 text-left flex items-center gap-3 hover:bg-red-50 transition-colors group"
                         >
                             <Trash2 className="w-4 h-4 text-red-300 group-hover:text-red-500" />
-                            <span className="text-xs font-bold text-red-400 group-hover:text-red-600">Delete Account</span>
+                            <span className="text-xs font-bold text-red-400 group-hover:text-red-600">Deactivate Account</span>
                         </button>
                     </motion.div>
                 </div>

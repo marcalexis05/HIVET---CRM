@@ -1,3 +1,4 @@
+import { dismissNotification, markNotificationRead, markAllNotificationsRead, removeAllNotifications } from '../utils/notifications';
 import React, { useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
@@ -47,6 +48,16 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     const navigate = useNavigate();
     const location = useLocation();
     const [isCartOpen, setIsCartOpen] = useState(false);
+    const [accountOpen, setAccountOpen] = useState(false);
+    const accountRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const close = (event: PointerEvent) => { if (!accountRef.current?.contains(event.target as Node)) setAccountOpen(false); };
+        const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setAccountOpen(false); };
+        document.addEventListener('pointerdown', close);
+        document.addEventListener('keydown', escape);
+        return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape); };
+    }, []);
+    useEffect(() => { setAccountOpen(false); }, [location.pathname]);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
     const [isShortScreen, setIsShortScreen] = useState(() => typeof window !== 'undefined' && window.innerHeight < 520);
@@ -54,6 +65,10 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem('hivet_sidebar_collapsed') === 'true');
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
     const [notifications, setNotifications] = useState<any[]>([]);
+    const [notificationError, setNotificationError] = useState('');
+    const [notificationBusy, setNotificationBusy] = useState(false);
+    const notificationRevision = useRef(0);
+    const dismissedNotifications = useRef(new Set<string>());
 
     useEffect(() => {
         const role = user?.role === 'business' ? 'business' : user?.role === 'rider' ? 'rider' : 'customer';
@@ -61,6 +76,31 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     }, [user?.role]);
 
     const isCustomer = user?.role === 'customer';
+    const customerName = [user?.first_name?.trim(), user?.last_name?.trim()].filter(Boolean).join(' ') || user?.name || 'My Account';
+    const [customerTier, setCustomerTier] = useState<string | null>(null);
+    useEffect(() => {
+        setCustomerTier(null);
+        if (!isCustomer || !user?.token || hideHeader) return;
+        const mobileView = window.matchMedia('(max-width: 1023px)');
+        let controller: AbortController | undefined;
+        const loadTier = () => {
+            controller?.abort();
+            if (!mobileView.matches) return;
+            const requestController = new AbortController();
+            controller = requestController;
+            fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/loyalty`, {
+                headers: { Authorization: `Bearer ${user.token}` },
+                signal: requestController.signal,
+            })
+                .then(response => response.ok ? response.json() : null)
+                .then(data => { if (typeof data?.tier === 'string' && !requestController.signal.aborted) setCustomerTier(data.tier); })
+                .catch(() => { /* Keep a neutral label while loyalty data is unavailable. */ });
+        };
+        loadTier();
+        mobileView.addEventListener('change', loadTier);
+        window.addEventListener('hivet-loyalty-updated', loadTier);
+        return () => { controller?.abort(); mobileView.removeEventListener('change', loadTier); window.removeEventListener('hivet-loyalty-updated', loadTier); };
+    }, [isCustomer, user?.token, hideHeader]);
     const isRider = user?.role === 'rider';
     const shouldReduceMotion = useReducedMotion();
     const isRtl = typeof document !== 'undefined' && (document.dir === 'rtl' || document.documentElement.dir === 'rtl');
@@ -201,6 +241,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
     };
 
     const fetchNotifications = async () => {
+        const revision = notificationRevision.current;
         const token = localStorage.getItem('hivet_token');
         if (!token) return;
         const isAdmin = ['super_admin', 'system_admin'].includes(user?.role || '');
@@ -212,7 +253,8 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
             });
             if (res.ok) {
                 const data = await res.json();
-                setNotifications(data.notifications);
+                if (revision !== notificationRevision.current) return;
+                setNotifications((data.notifications || []).filter((n: any) => !dismissedNotifications.current.has(String(n.id))));
             }
         } catch (err) {
             console.error('Failed to fetch notifications:', err);
@@ -253,51 +295,68 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
         .reduce((sum, i) => sum + (Number(i.price) * i.quantity), 0);
 
     const markAsRead = async (id: number) => {
-        const token = localStorage.getItem('hivet_token');
         try {
-            await fetch(`http://localhost:8000/api/notifications/${id}/read`, {
-                method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-        } catch (err) {
-            console.error('Failed to mark read:', err);
-        }
+            await markNotificationRead(id);
+            setNotifications(prev => prev.map(n => String(n.id) === String(id) ? { ...n, read: true } : n));
+            setNotificationError('');
+        } catch (error) { setNotificationError(error instanceof Error ? error.message : 'Could not mark notification as read.'); }
     };
 
     const markAllAsRead = async () => {
-        const token = localStorage.getItem('hivet_token');
+        if (notificationBusy) return;
+        setNotificationBusy(true); setNotificationError('');
         try {
-            await fetch(`http://localhost:8000/api/notifications/read-all`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            await markAllNotificationsRead();
             setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-        } catch (err) {
-            console.error('Failed to mark all read:', err);
-        }
+        } catch (error) { setNotificationError(error instanceof Error ? error.message : 'Could not mark all notifications as read.'); }
+        finally { setNotificationBusy(false); }
+    };
+
+    useEffect(() => {
+        const refresh = () => { notificationRevision.current += 1; void fetchNotifications(); };
+        window.addEventListener('hivet-notifications-changed', refresh);
+        return () => window.removeEventListener('hivet-notifications-changed', refresh);
+    }, []);
+
+    const deleteAllNotifications = async () => {
+        if (notificationBusy) return;
+        setNotificationBusy(true); setNotificationError('');
+        const previousNotifications = notifications;
+        const ids = notifications.map(n => String(n.id));
+        ids.forEach(id => dismissedNotifications.current.add(id));
+        setNotifications([]);
+        try {
+            await removeAllNotifications();
+        } catch (error) {
+            ids.forEach(id => dismissedNotifications.current.delete(id));
+            setNotifications(prev => [...prev, ...previousNotifications.filter(n => !prev.some(p => String(p.id) === String(n.id)))]);
+            setNotificationError(error instanceof Error ? error.message : 'Could not remove notifications.');
+            await fetchNotifications();
+        } finally { setNotificationBusy(false); }
     };
 
     const deleteNotification = async (id: number) => {
-        const token = localStorage.getItem('hivet_token');
+        const key = String(id);
+        const removedNotification = notifications.find(n => String(n.id) === key);
+        if (dismissedNotifications.current.has(key)) return;
+        dismissedNotifications.current.add(key);
+        setNotificationError('');
+        setNotifications(prev => prev.filter(n => String(n.id) !== key));
         try {
-            const res = await fetch(`http://localhost:8000/api/notifications/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                setNotifications(prev => prev.filter(n => n.id !== id));
-            }
-        } catch (err) {
-            console.error('Failed to delete notification:', err);
+            await dismissNotification(id);
+        } catch (error) {
+            dismissedNotifications.current.delete(key);
+            if (removedNotification) setNotifications(prev => prev.some(n => String(n.id) === key) ? prev : [...prev, removedNotification]);
+            setNotificationError(error instanceof Error ? error.message : 'Could not remove this notification.');
+            await fetchNotifications();
         }
     };
 
     const unreadCount = notifications.filter(n => !n.read).length;
 
-    const handleLogout = () => {
-        logout();
-        navigate('/login');
+    const handleLogout = async () => {
+        await logout();
+        navigate('/', { replace: true });
     };
 
     useEffect(() => {
@@ -344,8 +403,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
         { name: 'Clinic Map', path: '/dashboard/customer/map', icon: MapPin },
         { name: 'Rewards', path: '/dashboard/customer/loyalty', icon: Award },
         { name: 'Notifications', path: '/dashboard/customer/alerts', icon: Bell },
-        { name: 'Account', path: '/dashboard/customer/account', icon: UserCircle },
-    ];
+            ];
 
     const superAdminLinks = [
         { name: 'Dashboard', path: '/dashboard/admin', icon: LayoutDashboard },
@@ -502,21 +560,7 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                     </nav>
 
                     <div className={`mt-auto transition-all ${isCollapsed ? 'p-4' : 'p-6'}`}>
-                        <div className={`bg-accent-peach/5 p-4 rounded-3xl border border-accent-peach/10 relative group overflow-hidden ${isCollapsed ? 'flex justify-center' : ''}`}>
-                            <div className="flex items-center gap-3 relative z-10">
-                                <div className="w-10 h-10 rounded-xl bg-white border border-brand/5 shadow-sm flex items-center justify-center text-accent-brown overflow-hidden shrink-0">
-                                    {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : <UserCircle className="w-full h-full opacity-20 p-2" />}
-                                </div>
-                                {!isCollapsed && (
-                                    <motion.div initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} className="min-w-0 flex-1 overflow-hidden">
-                                        <p className="text-[11px] font-black text-accent-brown truncate leading-none mb-1 text-xs">{user?.clinic_name || user?.name || 'My Account'}</p>
-                                        <p className="text-xs font-medium text-slate-500 truncate">{user?.email}</p>
-                                    </motion.div>
-                                )}
-                            </div>
-                            <div className="absolute inset-0 bg-brand/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
-                        </div>
-                        <button onClick={() => setIsLogoutModalOpen(true)} className={`w-full mt-4 py-4 rounded-2xl flex items-center justify-center gap-3 text-red-500 bg-red-50 hover:bg-red-500 hover:text-white transition-all font-bold text-xs shadow-sm ${isCollapsed ? 'px-0' : 'px-4'}`}>
+                        <button onClick={() => setIsLogoutModalOpen(true)} className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 text-red-500 bg-red-50 hover:bg-red-500 hover:text-white transition-all font-bold text-xs shadow-sm ${isCollapsed ? 'px-0' : 'px-4'}`}>
                             <LogOut className="w-4 h-4 shrink-0" /> 
                             {!isCollapsed && <span>{user?.role === 'business' ? CLINIC_TEXT.nav.logOutPortal : 'Log Out'}</span>}
                         </button>
@@ -575,6 +619,9 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                     markAsRead={markAsRead}
                                     markAllAsRead={markAllAsRead}
                                     deleteNotification={deleteNotification}
+                                    error={notificationError}
+                                    removeAll={deleteAllNotifications}
+                                    busy={notificationBusy}
                                     variant="portal"
                                 />
 
@@ -608,6 +655,9 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                     markAsRead={markAsRead}
                                     markAllAsRead={markAllAsRead}
                                     deleteNotification={deleteNotification}
+                                    error={notificationError}
+                                    removeAll={deleteAllNotifications}
+                                    busy={notificationBusy}
                                     variant="portal"
                                 />
                                 {branchAction && <div className="hidden xl:block">{branchAction}</div>}
@@ -652,6 +702,9 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                     markAsRead={markAsRead}
                                     markAllAsRead={markAllAsRead}
                                     deleteNotification={deleteNotification}
+                                    error={notificationError}
+                                    removeAll={deleteAllNotifications}
+                                    busy={notificationBusy}
                                     variant="portal"
                                 />
                                 {branchAction && <div className="hidden xl:block">{branchAction}</div>}
@@ -757,30 +810,25 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
             {/* Top Navigation Bar */}
             {!hideHeader && (
                 <AppTopHeader as="nav" position="fixed" surface="customer" className="h-[calc(4.5rem+env(safe-area-inset-top,0px))] sm:h-[calc(5.5rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)]">
-                    <div className="max-w-[1920px] mx-auto px-4 sm:px-8 h-full flex items-center justify-between gap-6">
+                    <div className="max-w-[1920px] mx-auto px-4 sm:px-8 h-full flex items-center justify-between gap-3 lg:gap-6">
                         {/* Profile Avatar & User Info (or Brand for non-customers) */}
                         {isCustomer ? (
-                            <Link
-                                to="/dashboard/customer/account"
-                                className="flex items-center gap-2.5 sm:gap-3.5 shrink min-w-0 max-w-[calc(100vw-130px)] xs:max-w-none group transition-all"
-                                title="View Account Profile"
-                            >
-                                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-brand/10 border-2 border-brand/30 overflow-hidden flex items-center justify-center text-brand-dark font-black text-xs sm:text-sm shadow-sm group-hover:scale-105 group-hover:border-brand transition-all shrink-0">
+                            <>
+                                <Link to="/dashboard/customer" aria-label="Hi-Vet home" className="hidden lg:flex shrink-0 items-center">
+                                    <Logo className="w-12 h-12 sm:w-16 sm:h-16" />
+                                </Link>
+                                <Link to="/dashboard/customer/account" aria-label={`View ${customerName}'s profile`} className="lg:hidden flex items-center gap-2.5 min-h-11 min-w-0 flex-1 text-accent-brown">
                                     {user?.avatar ? (
-                                        <img src={user?.avatar} alt={user?.name || 'User Profile'} className="w-full h-full object-cover" />
+                                        <img src={user.avatar} alt="" className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover border border-brand/20 shrink-0" />
                                     ) : (
-                                        (user?.name || user?.email || 'U').slice(0, 2).toUpperCase()
+                                        <UserCircle className="w-10 h-10 sm:w-11 sm:h-11 text-brand-dark shrink-0" />
                                     )}
-                                </div>
-                                <div className="flex flex-col min-w-0">
-                                    <h2 className="text-sm sm:text-lg font-black text-accent-brown tracking-tight leading-tight truncate group-hover:text-brand-dark transition-colors">
-                                        {formatName(user?.name) || 'My Profile'}
-                                    </h2>
-                                    <p className="text-xs mt-0.5 font-bold text-black/60 truncate">
-                                        Bronze Elite Member
-                                    </p>
-                                </div>
-                            </Link>
+                                    <span className="min-w-0 flex flex-col gap-0.5">
+                                        <span className="truncate text-sm sm:text-base font-bold" title={customerName}>{formatName(customerName)}</span>
+                                        <span className="truncate text-xs font-semibold text-brand-dark">{customerTier ? `${formatName(customerTier)} Member` : 'Loyalty Member'}</span>
+                                    </span>
+                                </Link>
+                            </>
                         ) : (
                             <div className="flex items-center gap-2.5 sm:gap-3.5 shrink-0 transition-opacity">
                                 <div className="w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center shrink-0">
@@ -840,18 +888,26 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                                 markAsRead={markAsRead}
                                 markAllAsRead={markAllAsRead}
                                 deleteNotification={deleteNotification}
+                                    error={notificationError}
+                                    removeAll={deleteAllNotifications}
+                                    busy={notificationBusy}
                                 variant="customer"
                             />
 
-                            <div className="hidden lg:flex items-center">
-                                <motion.button
-                                    whileHover={{ scale: 1.1, rotate: -5 }}
-                                    whileTap={{ scale: 0.9, rotate: 5 }}
-                                    onClick={() => setIsLogoutModalOpen(true)}
-                                    className="w-10 h-10 sm:w-12 sm:h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center hover:bg-red-500 hover:text-white hover:shadow-xl hover:shadow-red-500/20 transition-all cursor-pointer shrink-0"
-                                >
-                                    <LogOut className="w-4.5 h-4.5 sm:w-5 h-5" />
-                                </motion.button>
+                            <div ref={accountRef} className="hidden lg:block relative">
+                                <button type="button" aria-label="Account" aria-expanded={accountOpen} aria-controls="customer-account-menu" onClick={() => setAccountOpen(open => !open)} className="min-h-11 flex items-center gap-1.5 px-2 sm:px-4 rounded-xl text-accent-brown font-bold text-xs sm:text-sm hover:bg-brand/5">
+                                    {user?.avatar ? (
+                                        <img src={user.avatar} alt="" className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-brand/20 shrink-0" />
+                                    ) : (
+                                        <UserCircle className="w-7 h-7 sm:w-8 sm:h-8 shrink-0" />
+                                    )}
+                                    <span>Account</span><ChevronRight className={`w-3 h-3 transition-transform ${accountOpen ? '-rotate-90' : 'rotate-90'}`} />
+                                </button>
+                                {accountOpen && <div id="customer-account-menu" className="absolute right-0 top-full mt-2 w-48 rounded-2xl border border-accent-brown/10 bg-white shadow-xl p-2 z-50">
+                                    <Link to="/dashboard/customer/account" onClick={() => setAccountOpen(false)} className="block p-3 rounded-xl hover:bg-brand/5 text-sm font-semibold">My Profile</Link>
+                                    <button type="button" onClick={() => { setAccountOpen(false); window.dispatchEvent(new CustomEvent('open-support-bot')); }} className="block w-full text-left p-3 rounded-xl hover:bg-brand/5 text-sm font-semibold">Help &amp; Support</button>
+                                    <button onClick={() => { setAccountOpen(false); setIsLogoutModalOpen(true); }} className="w-full text-left p-3 rounded-xl hover:bg-red-50 text-red-500 text-sm font-semibold">Log Out</button>
+                                </div>}
                             </div>
                         </div>
                     </div>
@@ -981,9 +1037,9 @@ const DashboardLayout = ({ children, title, hideHeader = false, hideFooter = fal
                             }}
                             className={`lg:hidden fixed ${
                                 isRtl
-                                    ? 'left-0 rounded-r-[24px] rounded-l-none border-r border-y shadow-[10px_0_30px_rgba(0,0,0,0.12)]'
-                                    : 'right-0 rounded-l-[24px] rounded-r-none border-l border-y shadow-[-10px_0_30px_rgba(0,0,0,0.12)]'
-                            } bottom-[calc(4rem+8px+env(safe-area-inset-bottom,0px))] max-h-[calc(100vh-5rem-env(safe-area-inset-bottom,0px)-16px)] z-[51] bg-white border-slate-200/90 select-none overflow-hidden flex flex-col pointer-events-auto`}
+                                    ? 'left-0 rounded-tr-[24px] rounded-b-none rounded-l-none border-r border-t shadow-[10px_0_30px_rgba(0,0,0,0.12)]'
+                                    : 'right-0 rounded-tl-[24px] rounded-b-none rounded-r-none border-l border-t shadow-[-10px_0_30px_rgba(0,0,0,0.12)]'
+                            } bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] max-h-[calc(100vh-5rem-env(safe-area-inset-bottom,0px)-16px)] z-[51] bg-white border-slate-200/90 select-none overflow-hidden flex flex-col pointer-events-auto`}
                         >
                             {/* Scrollable list of 5 rows with 12px padding */}
                             <div className="flex flex-col gap-1 p-3 overflow-y-auto max-h-full no-scrollbar">

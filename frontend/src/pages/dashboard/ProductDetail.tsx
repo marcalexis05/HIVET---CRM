@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 ﻿/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
@@ -17,10 +18,20 @@ import { toTitleCase, toSentenceCase, formatName } from '../../utils/textFormatt
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+function ProductDetailLayout({ children, title }: { children: ReactNode; title?: string }) {
+    const { user } = useAuth();
+    return user ? <DashboardLayout title={title || ''}>{children}</DashboardLayout> : (
+        <main className="min-h-screen bg-accent-peach/20 px-4 sm:px-8 py-8">
+            <Link to="/catalog" className="inline-flex items-center gap-2 mb-6 font-bold text-brand"><ChevronLeft className="w-5 h-5" />Back to Store</Link>
+            {children}
+        </main>
+    );
+}
+
 const ProductDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { addToCart, triggerFlyAnimation } = useCart();
+    const { addToCart, triggerFlyAnimation, requestCartAccess } = useCart();
 
     const [product, setProduct] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -69,12 +80,12 @@ const ProductDetail = () => {
             setLoading(true);
             try {
                 const pUrl = selectedBranchId
-                    ? `http://localhost:8000/api/catalog/${id}?branch_id=${selectedBranchId}`
-                    : `http://localhost:8000/api/catalog/${id}`;
+                    ? `${API}/api/catalog/${id}?branch_id=${selectedBranchId}`
+                    : `${API}/api/catalog/${id}`;
                     
                 const [pResp, rResp] = await Promise.all([
                     fetch(pUrl),
-                    fetch(`http://localhost:8000/api/catalog/${id}/reviews`)
+                    fetch(`${API}/api/catalog/${id}/reviews`)
                 ]);
                 
                 if (pResp.ok) {
@@ -112,7 +123,7 @@ const ProductDetail = () => {
         const checkPurchaseStatus = async () => {
             if (!token || !id) return;
             try {
-                const resp = await fetch(`http://localhost:8000/api/orders/check-purchased/${id}`, {
+                const resp = await fetch(`${API}/api/orders/check-purchased/${id}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (resp.ok) {
@@ -220,6 +231,7 @@ const ProductDetail = () => {
         try {
             const resp = await fetch(`${API}/api/business/upload-product-image`, {
                 method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
                 body: formData
             });
             if (resp.ok) {
@@ -238,7 +250,7 @@ const ProductDetail = () => {
         if (!token) return;
         setSubmittingReview(true);
         try {
-            const resp = await fetch(`http://localhost:8000/api/catalog/${id}/reviews`, {
+            const resp = await fetch(`${API}/api/catalog/${id}/reviews`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -405,30 +417,30 @@ const ProductDetail = () => {
 
     if (loading && !product) {
         return (
-            <DashboardLayout title="Loading...">
+            <ProductDetailLayout title="Loading...">
                 <div className="flex flex-col items-center justify-center py-40 gap-4 opacity-40">
                     <Loader2 className="w-12 h-12 animate-spin text-accent-brown" />
                     <p className="font-bold text-xs text-accent-brown">Syncing details...</p>
                 </div>
-            </DashboardLayout>
+            </ProductDetailLayout>
         );
     }
 
     if (!product) {
         return (
-            <DashboardLayout title="Not Found">
+            <ProductDetailLayout title="Not Found">
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                     <h2 className="text-2xl font-black text-accent-brown mb-4">Product Not Found</h2>
-                    <button onClick={() => navigate('/dashboard/customer/catalog')} className="bg-accent-brown text-white px-8 py-3 rounded-xl font-bold text-xs hover:bg-black transition-all">
+                    <button onClick={() => navigate(user ? '/dashboard/customer/catalog' : '/catalog')} className="bg-accent-brown text-white px-8 py-3 rounded-xl font-bold text-xs hover:bg-black transition-all">
                         Back to Store
                     </button>
                 </div>
-            </DashboardLayout>
+            </ProductDetailLayout>
         );
     }
 
     const handleAddToCart = (e: React.MouseEvent) => {
-        if (!product) return;
+        if (!product || !requestCartAccess()) return;
         triggerFlyAnimation(e, product.image);
         addToCart({
             id: product.id,
@@ -447,7 +459,7 @@ const ProductDetail = () => {
     };
 
     const handleBuyNow = () => {
-        if (!product) return;
+        if (!product || !requestCartAccess()) return;
         const checkoutItem = {
             id: product.id,
             business_id: product.business_id,
@@ -472,14 +484,14 @@ const ProductDetail = () => {
     };
 
     return (
-        <DashboardLayout title="">
+        <ProductDetailLayout title="">
             <div className="bg-white min-h-screen">
                 <div className="max-w-[1300px] mx-auto px-4 md:px-8 py-4 transition-all">
                     
                     {/* Navigation Trail */}
                     <div className="flex items-center justify-between mb-6">
                         <nav className="flex items-center gap-3 text-xs font-semibold text-black/50">
-                            <Link to="/dashboard/customer/catalog" className="hover:text-brand transition-all">Store</Link>
+                            <Link to={user ? "/dashboard/customer/catalog" : "/catalog"} className="hover:text-brand transition-all">Store</Link>
                             <span>/</span>
                             <span className="text-black font-semibold">{toTitleCase(product.category)}</span>
                             <span>/</span>
@@ -676,6 +688,7 @@ const ProductDetail = () => {
                                             </button>
                                             <button 
                                                 onClick={handleAddToCart}
+                                                aria-label="Add to Cart"
                                                 className={`w-14 h-14 border-2 rounded-xl flex items-center justify-center transition-all active:scale-95 ${added ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-white border-gray-100 text-accent-brown hover:border-brand hover:text-brand shadow-sm'}`}
                                             >
                                                 {added ? <CheckCircle2 className="w-5 h-5 animate-pulse" /> : <ShoppingCart className="w-5 h-5" />}
@@ -848,7 +861,7 @@ const ProductDetail = () => {
             </AnimatePresence>
 
             <ModernModal isOpen={modal.isOpen} onClose={() => setModal(m => ({ ...m, isOpen: false }))} onConfirm={modal.onConfirm} title={modal.title} message={modal.message} type={modal.type} />
-        </DashboardLayout>
+        </ProductDetailLayout>
     );
 };
 

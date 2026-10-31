@@ -23,14 +23,15 @@ interface GranularAddress {
 }
 
 const DetailInput: React.FC<{ label: string, value: string, onChange: (v: string) => void, placeholder: string }> = ({ label, value, onChange, placeholder }) => (
-    <div className="space-y-2 group">
-        <label className="text-xs font-semibold text-slate-500 pl-1 group-focus-within:text-[#EE4D2D] transition-colors">{label}</label>
+    <div className="min-w-0 space-y-2 group">
+        <label className="block text-xs font-semibold text-slate-500 pl-1 group-focus-within:text-[#EE4D2D] transition-colors">{label}</label>
         <input 
             type="text" 
             value={value} 
             onChange={(e) => onChange(e.target.value)} 
             placeholder={placeholder}
-            className="w-full bg-[#fcfcfc] border-2 border-gray-50 hover:border-[#EE4D2D]/20 hover:bg-white focus:border-[#EE4D2D]/30 focus:bg-white rounded-[1.25rem] py-4 px-5 text-[13px] font-black text-gray-800 outline-none transition-all placeholder:text-gray-200 cursor-text" 
+            aria-label={label}
+            className="w-full bg-[#fcfcfc] border-2 border-gray-50 hover:border-[#EE4D2D]/20 hover:bg-white focus:border-[#EE4D2D]/30 focus:bg-white rounded-[1.25rem] min-h-12 py-3 px-3 text-base sm:py-4 sm:px-5 sm:text-[13px] font-black text-gray-800 outline-none transition-all placeholder:text-slate-400 cursor-text"
         />
     </div>
 );
@@ -75,32 +76,34 @@ const DetailSelect: React.FC<{
 
     if (readOnly) {
         return (
-            <div className="space-y-2 group">
-                <label className="text-xs font-semibold text-slate-500 pl-1">{label}</label>
-                <div className="w-full bg-[#f8f8f8] border-2 border-gray-50 rounded-[1.25rem] py-4 px-5 text-[13px] font-black text-gray-800 cursor-default select-none flex items-center justify-between">
-                    <span className={displayName ? 'text-gray-800' : 'text-gray-300'}>
+            <div className="min-w-0 space-y-2 group">
+                <label className="block text-xs font-semibold text-slate-500 pl-1">{label}</label>
+                <div className="w-full bg-[#f8f8f8] border-2 border-gray-50 rounded-[1.25rem] min-h-12 py-3 px-3 text-base sm:py-4 sm:px-5 sm:text-[13px] font-black text-gray-800 cursor-default select-none flex items-center justify-between gap-3">
+                    <span className={`min-w-0 flex-1 break-words ${displayName ? 'text-gray-800' : 'text-gray-400'}`}>
                         {loading ? `Loading ${label}...` : (displayName || `—`)}
                     </span>
-                    <span className="text-slate-400 text-[11px] font-medium">Auto-filled</span>
+                    <span className="shrink-0 text-slate-400 text-[11px] font-medium">Auto-filled</span>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="space-y-2 relative" ref={dropdownRef}>
-            <label className="text-xs font-semibold text-slate-500 pl-1 group-focus-within:text-[#EE4D2D] transition-colors">{label}</label>
+        <div className="min-w-0 space-y-2 relative" ref={dropdownRef}>
+            <label className="block text-xs font-semibold text-slate-500 pl-1 group-focus-within:text-[#EE4D2D] transition-colors">{label}</label>
             <div className="relative">
                 <button
                     type="button"
                     onClick={() => !disabled && setIsOpen(!isOpen)}
-                    className={`w-full bg-[#fcfcfc] border-2 transition-all rounded-[1.25rem] py-4 px-5 text-[13px] font-black text-left flex items-center justify-between outline-none active:scale-[0.98]
+                    className={`w-full bg-[#fcfcfc] border-2 transition-all rounded-[1.25rem] min-h-12 py-3 px-3 text-base sm:py-4 sm:px-5 sm:text-[13px] font-black text-left flex items-center justify-between outline-none active:scale-[0.98]
                         ${isOpen ? 'border-[#EE4D2D]/20 bg-white ring-4 ring-[#EE4D2D]/5 shadow-sm' : 'border-gray-50 hover:border-[#EE4D2D]/20 hover:bg-white'}
                         ${disabled ? 'opacity-30 cursor-not-allowed bg-[#f5f5f5]' : 'cursor-pointer'}
                     `}
                     disabled={disabled}
+                    aria-label={`${label}: ${displayName || `Select ${label}`}`}
+                    aria-expanded={isOpen}
                 >
-                    <span className={`truncate mr-2 ${displayName ? 'text-gray-800' : 'text-gray-300'}`}>
+                    <span className={`min-w-0 flex-1 truncate mr-2 ${displayName ? 'text-gray-800' : 'text-gray-300'}`}>
                         {loading ? `Loading ${label}...` : (displayName || `Select ${label}`)}
                     </span>
                     <ChevronLeft size={16} className={`transition-all duration-300 shrink-0 ${isOpen ? 'rotate-90 text-[#EE4D2D]' : '-rotate-90 text-gray-300'}`} />
@@ -120,7 +123,7 @@ const DetailSelect: React.FC<{
                                 onClick={(e) => e.stopPropagation()}
                             />
                         </div>
-                        <div className="max-h-[280px] overflow-y-auto custom-scrollbar overflow-x-hidden p-2">
+                        <div className="max-h-[280px] overflow-y-auto overscroll-contain touch-pan-y custom-scrollbar overflow-x-hidden p-2">
                             {filteredOptions.length > 0 ? (
                                 filteredOptions.map((opt) => {
                                     const isSelected = isBarangay ? value === opt.name : value === opt.code;
@@ -504,18 +507,18 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
         switch (step) {
             case 'selection':
                 return (
-                    <div className="flex-grow flex flex-col lg:flex-row bg-[#F5F5F5] overflow-hidden">
-                        <div className="w-full lg:w-[450px] flex flex-col bg-white border-r border-gray-100">
-                            <div className="p-4 flex items-center gap-3">
-                                <button onClick={onClose} className="text-[#EE4D2D] hover:scale-110 active:scale-90 transition-transform">
+                    <div className="flex-1 min-h-0 min-w-0 flex flex-col lg:flex-row bg-[#F5F5F5] overflow-hidden">
+                        <div className="w-full flex-1 min-h-0 min-w-0 lg:flex-none lg:w-[450px] flex flex-col bg-white border-r border-gray-100">
+                            <div className="shrink-0 p-4 pt-[max(1rem,env(safe-area-inset-top))] flex items-center gap-3">
+                                <button aria-label="Close address picker" onClick={onClose} className="shrink-0 w-11 h-11 flex items-center justify-center text-[#EE4D2D] hover:scale-110 active:scale-90 transition-transform">
                                 <X size={24} />
                             </button>
-                                <div className="flex-grow flex items-center bg-[#F1F1F1] rounded-lg px-3 py-2 gap-2">
+                                <div className="flex-1 min-w-0 flex items-center bg-[#F1F1F1] rounded-lg px-3 py-2 gap-2">
                                     <Search size={18} className="text-gray-400" />
-                                    <input type="text" placeholder="Search Region" className="bg-transparent border-none outline-none text-sm w-full font-bold" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                                    <input type="text" placeholder="Search Region" className="bg-transparent border-none outline-none text-base sm:text-sm min-w-0 w-full font-bold" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                                 </div>
                             </div>
-                            <div className="flex-grow overflow-y-auto no-scrollbar">
+                            <div role="region" aria-label="Region list" tabIndex={0} className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] pb-[env(safe-area-inset-bottom)]">
                                 <div className="p-4 bg-[#F5F5F5] text-xs font-bold text-slate-500">Select Region</div>
                                 {loadingRegions && <div className="p-12 flex flex-col items-center gap-4 justify-center"><div className="w-8 h-8 border-4 border-orange-100 border-t-orange-500 rounded-full animate-spin" /></div>}
                                 {regions.filter(r => r.name.toLowerCase().includes(searchQuery.toLowerCase())).map((r) => (
@@ -534,7 +537,7 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
                 );
             case 'map':
                 return (
-                    <div className="flex-grow flex flex-col relative overflow-hidden">
+                    <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden">
                         <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY} libraries={['marker', 'places']}>
                             <Map mapId={import.meta.env.VITE_GOOGLE_MAPS_ID} defaultCenter={{ lat: Number(markerLocation.lat), lng: Number(markerLocation.lng) }} defaultZoom={18} disableDefaultUI={true} gestureHandling='greedy' style={{ width: '100%', height: '100%' }}>
                                 <MapContent inputRef={inputRef} setMarkerLocation={setMarkerLocation} setAddress={setAddress} updateReverseGeocode={handleReverseGeocode} setComponents={setComponents} setMapInstance={setMapInstance} setGranular={setGranular} />
@@ -662,42 +665,42 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
                 );
             case 'details':
                 return (
-                    <div className="flex-grow flex flex-col bg-white overflow-hidden">
-                        <div className="p-6 border-b border-gray-50 flex items-center gap-4 bg-white">
-                            <button onClick={() => setStep('selection')} className="w-10 h-10 flex items-center justify-center bg-gray-50 rounded-xl hover:bg-[#EE4D2D]/10 hover:text-[#EE4D2D] active:scale-90 transition-all"><X size={20}/></button>
-                            <h3 className="text-xl font-bold text-gray-800 tracking-tighter">Finalize Address Details</h3>
+                    <div className="flex-1 min-h-0 min-w-0 flex flex-col bg-white overflow-hidden">
+                        <div className="shrink-0 p-4 sm:p-6 pt-[max(1rem,env(safe-area-inset-top))] border-b border-gray-50 flex items-center gap-3 sm:gap-4 bg-white">
+                            <button aria-label="Back to region selection" onClick={() => setStep('selection')} className="shrink-0 w-10 h-10 flex items-center justify-center bg-gray-50 rounded-xl hover:bg-[#EE4D2D]/10 hover:text-[#EE4D2D] active:scale-90 transition-all"><X size={20}/></button>
+                            <h3 className="text-lg sm:text-xl font-bold text-gray-800 tracking-tighter">Finalize Address Details</h3>
                         </div>
-                        <div className="flex-grow overflow-y-auto p-8 space-y-8 no-scrollbar">
-                            <div className="space-y-6">
+                        <div role="region" aria-label="Address details" tabIndex={0} className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y p-4 sm:p-8 space-y-5 sm:space-y-8">
+                            <div className="space-y-4 sm:space-y-6">
                                 <h4 className="text-xs font-bold text-slate-400">PSGC Standardized Area</h4>
-                                <div className="grid grid-cols-2 gap-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                                     <DetailSelect label="Region" options={regions} value={selectedRegion} readOnly={true} onChange={(v, n) => { setSelectedRegion(v); updateField('region', n); }} />
                                     <DetailSelect label="Province" options={selectedRegion === '1300000000' ? [{ code: 'NCR', name: 'Metro Manila' }] : provinces} value={selectedRegion === '1300000000' ? 'NCR' : selectedProvince} disabled={!selectedRegion || selectedRegion === '1300000000'} loading={loadingPSGC.provinces} onChange={(v, n) => { setSelectedProvince(v); setSelectedCity(''); updateField('province', n); }} />
                                 </div>
-                                <div className="grid grid-cols-2 gap-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                                     <DetailSelect label="City / Municipality" options={cities} value={selectedCity} disabled={!selectedRegion} loading={loadingPSGC.cities} onChange={(v, n) => { setSelectedCity(v); updateField('city', n); updateField('barangay', ''); }} />
                                     <DetailSelect label="Barangay" options={barangays} value={granular.barangay} isBarangay disabled={!selectedCity} loading={loadingPSGC.barangays} onChange={(_v, n) => updateField('barangay', n)} />
                                 </div>
                             </div>
-                            <div className="space-y-6">
+                            <div className="space-y-4 sm:space-y-6">
                                 <h4 className="text-xs font-bold text-slate-400">Building & Street Details</h4>
-                                <div className="grid grid-cols-2 gap-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                                     <DetailInput label="HOUSE NUMBER / FLOOR" value={granular.houseNumber} onChange={v => updateField('houseNumber', v)} placeholder="e.g. 123" />
                                     <DetailInput label="BLOCK & LOT" value={granular.blockNumber} onChange={v => updateField('blockNumber', v)} placeholder="Blk 1 Lot 2" />
                                 </div>
-                                <div className="grid grid-cols-2 gap-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                                     <DetailInput label="STREET / ROAD" value={granular.street} onChange={v => updateField('street', v)} placeholder="Street Name" />
                                     <DetailInput label="VILLAGE / SUBDIVISION" value={granular.subdivision} onChange={v => updateField('subdivision', v)} placeholder="Building/Subd" />
                                 </div>
-                                <div className="grid grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
                                     <DetailInput label="Sitio" value={granular.sitio} onChange={v => updateField('sitio', v)} placeholder="Sitio" />
                                     <DetailInput label="District" value={granular.district} onChange={v => updateField('district', v)} placeholder="District" />
                                     <DetailInput label="ZIP" value={granular.zip} onChange={v => updateField('zip', v)} placeholder="ZIP" />
                                 </div>
                             </div>
                         </div>
-                        <div className="p-8 border-t border-gray-50 flex bg-white">
-                            <button onClick={() => setStep('map')} className="flex-grow bg-[#EE4D2D] text-white py-4 rounded-2xl font-bold text-sm shadow-xl shadow-orange-500/30 transition-all hover:bg-[#d43d22] hover:shadow-xl active:scale-[0.99]">Verify Exact Google Map Location</button>
+                        <div className="shrink-0 p-4 sm:p-8 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-gray-50 flex bg-white">
+                            <button onClick={() => setStep('map')} className="w-full min-h-12 bg-[#EE4D2D] text-white px-4 py-4 rounded-2xl font-bold text-sm shadow-xl shadow-orange-500/30 transition-all hover:bg-[#d43d22] hover:shadow-xl active:scale-[0.99]">Verify Exact Google Map Location</button>
                         </div>
                     </div>
                 );
@@ -707,8 +710,8 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({ isOpen, onClose, onSele
     if (!isOpen) return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-2xl p-4 lg:p-0 transition-opacity">
-            <div className="bg-white w-full max-w-6xl h-full lg:h-[90vh] lg:rounded-[3rem] overflow-hidden shadow-[0_0_150px_rgba(0,0,0,0.5)] flex flex-col animate-in zoom-in-95 duration-300">
+        <div role="dialog" aria-modal="true" aria-label="Choose address" className="fixed inset-0 h-[100dvh] z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-2xl p-0 sm:p-4 lg:p-0 transition-opacity">
+            <div className="bg-white w-full min-h-0 max-w-6xl max-h-full h-full lg:h-[90dvh] sm:rounded-[2rem] lg:rounded-[3rem] overflow-hidden shadow-[0_0_150px_rgba(0,0,0,0.5)] flex flex-col animate-in zoom-in-95 duration-300">
                 {renderStep()}
             </div>
         </div>,

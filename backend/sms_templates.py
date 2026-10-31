@@ -1,6 +1,20 @@
 import unicodedata
 import re
 
+
+def format_order_confirmation_sms(order_number: str, total_amount: float, status: str) -> str:
+    return clean_text_for_sms(
+        f"Hi-Vet: Order {order_number} received. Total PHP {total_amount:,.2f}. "
+        f"Status: {status}. View your order in Hi-Vet."
+    )
+
+
+def format_reservation_confirmation_sms(reference: str, date: str, time: str, status: str) -> str:
+    return clean_text_for_sms(
+        f"Hi-Vet: Reservation {reference} received for {date} at {time}. "
+        f"Status: {status}. View booking details in Hi-Vet."
+    )
+
 def clean_text_for_sms(text: str) -> str:
     """Removes accents, non-ASCII characters, and keeps plain single-line SMS compatible text."""
     if not text:

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Loader2, PawPrint, X } from 'lucide-react';
+import { Loader2, PawPrint, X, ChevronDown } from 'lucide-react';
 
 export interface SavedPet {
     name: string;
@@ -90,9 +90,12 @@ export function AddPetDialog({ open, token, onClose, onAdded }: AddPetDialogProp
                 </div>
                 <div className="space-y-1.5">
                     <label htmlFor="new-pet-type" className="block text-sm font-semibold">Pet type <span className="text-brand">*</span></label>
-                    <select id="new-pet-type" value={type} onChange={event => setType(event.target.value)} disabled={saving} className={fieldClass}>
+                    <div className="relative">
+                    <select id="new-pet-type" value={type} onChange={event => setType(event.target.value)} disabled={saving} className={`${fieldClass} appearance-none pr-10 cursor-pointer`}>
                         {['Dog', 'Cat', 'Bird', 'Rabbit', 'Other'].map(type => <option key={type}>{type}</option>)}
                     </select>
+                    <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-brand" />
+                    </div>
                 </div>
                 <div className="space-y-1.5">
                     <label htmlFor="new-pet-breed" className="block text-sm font-semibold">Breed <span className="font-normal text-slate-500">(optional)</span></label>

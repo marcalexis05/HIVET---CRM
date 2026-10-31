@@ -75,7 +75,7 @@ def send_sms(phone: str, message: str, purpose: str = "general") -> Dict[str, An
 
     # Check test / development mode switch
     if not is_sms_enabled():
-        print(f"[SMS TEST MODE] {now_iso} | {purpose} | {masked} | Message: {message}")
+        print(f"[SMS TEST MODE] {now_iso} | {purpose} | {masked} | Delivery disabled")
         return {"success": True, "test_mode": True, "masked_phone": masked}
 
     api_key = os.getenv("TEXTBEE_API_KEY", "").strip()
